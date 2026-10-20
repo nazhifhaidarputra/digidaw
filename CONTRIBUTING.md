@@ -48,7 +48,7 @@ DigiDAW follows a feature-driven modular structure. Keep domain logic, UI screen
 | `karbeat-plugins` | First-party plugin implementations and manifest export. |
 | `karbeat-host-api` | Low-level contracts for hosting external plugins. |
 | `karbeat-host` | Format-independent async host client, service, and static executor router. |
-| `karbeat-vst3`, `karbeat-clap`, `karbeat-lv2` | Plugin format executors. LV2 is hosted on Linux through `lilv` and `lv2-sys`. Unfinished formats, and formats on platforms they do not support, keep concrete "unsupported" stubs. |
+| `karbeat-vst3`, `karbeat-clap`, `karbeat-lv2` | Plugin format executors. LV2 is hosted on Linux through `lilv` and `lv2-sys`, and CLAP on Linux and Windows through `clack-host`. VST3 and CLAP modules are probed by the `digidaw-plugin-scanner` helper, because loading them runs plugin code. Unfinished formats, and formats on platforms they do not support, keep concrete "unsupported" stubs. |
 | `karbeat-plugin-api`, `karbeat-plugin-types`, `karbeat-macros`, `karbeat-utils` | Plugin ecosystem and shared support crates. |
 
 Within the Rust workspace, respect crate boundaries:

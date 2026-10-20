@@ -60,11 +60,21 @@ pub struct ModuleScanner<'a> {
     pub probe: &'a ModuleProbe<'a>,
 }
 
-/// Builds the probe that runs the isolated scanner helper for each module.
+/// Builds the probe that runs the isolated scanner helper for each `format` module.
 pub fn helper_probe(
     helper: &Path,
+    format: PluginFormat,
 ) -> impl Fn(&Path, Duration, &AtomicBool) -> Result<Vec<PluginDescriptor>, HostError> + Sync + '_ {
-    move |module, timeout, cancelled| probe_module(helper, module, timeout, cancelled)
+    move |module, timeout, cancelled| probe_module(helper, format, module, timeout, cancelled)
+}
+
+/// Value of the helper's `--format` argument for `format`.
+pub const fn format_argument(format: PluginFormat) -> &'static str {
+    match format {
+        PluginFormat::Vst3 => "vst3",
+        PluginFormat::Lv2 => "lv2",
+        PluginFormat::Clap => "clap",
+    }
 }
 
 /// Result file written by one isolated helper process after probing a module.
@@ -439,11 +449,12 @@ pub fn module_fingerprint(path: &Path) -> Result<u64, HostError> {
     Ok(hash.finish())
 }
 
-/// Probes one VST3 module in an isolated helper process.
+/// Probes one `format` module in an isolated helper process.
 ///
 /// Cancelling or timing out always kills and reaps the child before returning.
 pub fn probe_module(
     helper: &Path,
+    format: PluginFormat,
     module: &Path,
     timeout: Duration,
     cancelled: &AtomicBool,
@@ -458,6 +469,8 @@ pub fn probe_module(
         .arg(module)
         .arg("--result")
         .arg(&result_path)
+        .arg("--format")
+        .arg(format_argument(format))
         .stdin(Stdio::null())
         .stdout(Stdio::null())
         .stderr(Stdio::null())
@@ -504,10 +517,12 @@ pub fn probe_module(
     }
     let module = fs::canonicalize(module)?;
     if response.plugins.iter().any(|p| {
-        p.identity.format != PluginFormat::Vst3
+        p.identity.format != format
             || p.path != module
-            || p.identity.native_id.len() != 32
-            || !p.identity.native_id.bytes().all(|c| c.is_ascii_hexdigit())
+            || p.identity.native_id.is_empty()
+            || (format == PluginFormat::Vst3
+                && (p.identity.native_id.len() != 32
+                    || !p.identity.native_id.bytes().all(|c| c.is_ascii_hexdigit())))
     }) {
         return Err(HostError::Scanner(
             "probe returned an invalid descriptor".into(),
@@ -899,7 +914,10 @@ mod tests {
         let cancel = AtomicBool::new(false);
         let mut progress = Vec::new();
         let result = scan(
-            &vst3_scanner(&helper_probe(Path::new("unused-helper"))),
+            &vst3_scanner(&helper_probe(
+                Path::new("unused-helper"),
+                PluginFormat::Vst3,
+            )),
             &settings,
             &mut cache,
             false,
@@ -914,7 +932,10 @@ mod tests {
         assert_eq!(progress[1].completed, progress[1].total);
         cache.modules.get_mut(&paths[1]).unwrap().quarantine = Some("crashed".into());
         let result = scan(
-            &vst3_scanner(&helper_probe(Path::new("unused-helper"))),
+            &vst3_scanner(&helper_probe(
+                Path::new("unused-helper"),
+                PluginFormat::Vst3,
+            )),
             &settings,
             &mut cache,
             false,
@@ -932,7 +953,10 @@ mod tests {
     fn cancelled_discovery_reports_cancellation_without_spawning_a_helper() {
         let cancel = AtomicBool::new(true);
         let result = scan(
-            &vst3_scanner(&helper_probe(Path::new("missing-helper"))),
+            &vst3_scanner(&helper_probe(
+                Path::new("missing-helper"),
+                PluginFormat::Vst3,
+            )),
             &ScanSettings::default(),
             &mut ScanCache::default(),
             false,
@@ -944,6 +968,7 @@ mod tests {
         assert!(matches!(
             probe_module(
                 Path::new("missing-helper"),
+                PluginFormat::Vst3,
                 Path::new("missing.vst3"),
                 Duration::ZERO,
                 &cancel
@@ -993,7 +1018,7 @@ mod tests {
         let mut cache = ScanCache::default();
         let cancel = AtomicBool::new(false);
         let result = scan(
-            &vst3_scanner(&helper_probe(&helper)),
+            &vst3_scanner(&helper_probe(&helper, PluginFormat::Vst3)),
             &settings,
             &mut cache,
             false,
@@ -1005,7 +1030,7 @@ mod tests {
         fs::write(&module, b"changed module").unwrap();
         fs::write(&response_path, b"malformed response").unwrap();
         let result = scan(
-            &vst3_scanner(&helper_probe(&helper)),
+            &vst3_scanner(&helper_probe(&helper, PluginFormat::Vst3)),
             &settings,
             &mut cache,
             false,
@@ -1018,7 +1043,7 @@ mod tests {
         assert_eq!(cache.modules[&module].plugins.len(), 2);
         fs::write(&response_path, serde_json::to_vec(&response).unwrap()).unwrap();
         let result = scan(
-            &vst3_scanner(&helper_probe(&helper)),
+            &vst3_scanner(&helper_probe(&helper, PluginFormat::Vst3)),
             &settings,
             &mut cache,
             false,
@@ -1028,7 +1053,7 @@ mod tests {
         .unwrap();
         assert_eq!(result.failures.len(), 1);
         let result = scan(
-            &vst3_scanner(&helper_probe(&helper)),
+            &vst3_scanner(&helper_probe(&helper, PluginFormat::Vst3)),
             &settings,
             &mut cache,
             true,
@@ -1042,7 +1067,16 @@ mod tests {
         let mut invalid = response;
         invalid.plugins[0].identity.native_id = "not-a-class-id".into();
         fs::write(&response_path, serde_json::to_vec(&invalid).unwrap()).unwrap();
-        assert!(probe_module(&helper, &module, Duration::from_secs(1), &cancel).is_err());
+        assert!(
+            probe_module(
+                &helper,
+                PluginFormat::Vst3,
+                &module,
+                Duration::from_secs(1),
+                &cancel
+            )
+            .is_err()
+        );
     }
 
     #[test]
@@ -1155,7 +1189,7 @@ mod tests {
         };
         let mut progress = Vec::new();
         let result = scan_modules(
-            &vst3_scanner(&helper_probe(helper)),
+            &vst3_scanner(&helper_probe(helper, PluginFormat::Vst3)),
             &settings,
             cache,
             retry,
@@ -1309,7 +1343,7 @@ mod tests {
                 cancel.store(true, Ordering::Relaxed);
             });
             scan_modules(
-                &vst3_scanner(&helper_probe(&helper)),
+                &vst3_scanner(&helper_probe(&helper, PluginFormat::Vst3)),
                 &settings,
                 &mut cache,
                 false,
@@ -1350,6 +1384,43 @@ mod tests {
 
     #[cfg(unix)]
     #[test]
+    fn helpers_are_told_the_format_and_clap_ids_need_not_be_class_ids() {
+        use std::os::unix::fs::PermissionsExt;
+        let root = tempfile::tempdir().unwrap();
+        let module = root.path().join("Synth.clap");
+        fs::write(&module, b"module").unwrap();
+        let helper = root.path().join("probe");
+        // Answers only when asked for CLAP, so any other format fails the probe.
+        fs::write(
+            &helper,
+            "#!/bin/sh\n[ \"$5\" = --format ] && [ \"$6\" = clap ] && cat \"$2.json\" > \"$4\"\n",
+        )
+        .unwrap();
+        fs::set_permissions(&helper, fs::Permissions::from_mode(0o700)).unwrap();
+        let mut plugin = descriptor(&module, 1);
+        plugin.identity = PluginIdentity {
+            format: PluginFormat::Clap,
+            native_id: "org.example.synth".into(),
+        };
+        let response = ProbeResponse {
+            version: SCANNER_PROTOCOL_VERSION,
+            plugins: vec![plugin.clone()],
+            error: None,
+        };
+        fs::write(
+            module.with_extension("clap.json"),
+            serde_json::to_vec(&response).unwrap(),
+        )
+        .unwrap();
+        let cancel = AtomicBool::new(false);
+        let probe =
+            |format| probe_module(&helper, format, &module, Duration::from_secs(5), &cancel);
+        assert_eq!(probe(PluginFormat::Clap).unwrap(), [plugin]);
+        assert!(probe(PluginFormat::Vst3).is_err());
+    }
+
+    #[cfg(unix)]
+    #[test]
     fn crashed_hung_and_malformed_helpers_are_contained() {
         use std::os::unix::fs::PermissionsExt;
         let root = tempfile::tempdir().unwrap();
@@ -1364,6 +1435,7 @@ mod tests {
             assert!(
                 probe_module(
                     &helper,
+                    PluginFormat::Vst3,
                     root.path(),
                     Duration::from_millis(30),
                     &AtomicBool::new(false)
@@ -1374,6 +1446,7 @@ mod tests {
         assert!(
             probe_module(
                 &helper,
+                PluginFormat::Vst3,
                 root.path(),
                 Duration::from_secs(30),
                 &AtomicBool::new(true)

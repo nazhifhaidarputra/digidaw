@@ -56,7 +56,7 @@ These are features which have been or have not been implemented. All unimplement
 - [x] Logging for end-user
 - [x] VST3 Host (Done for Linux and Windows)
 - [ ] AU Host support
-- [ ] CLAP Host support
+- [x] CLAP Host support (For Linux and Windows)
 - [x] LV2 Host (Done for Linux)
 - [ ] MacOS version
 - [ ] iOS version

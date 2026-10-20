@@ -56,7 +56,7 @@ impl Vst3Executor {
             &karbeat_host_api::scanner::ModuleScanner {
                 format: PluginFormat::Vst3,
                 extension: "vst3",
-                probe: &karbeat_host_api::scanner::helper_probe(&helper),
+                probe: &karbeat_host_api::scanner::helper_probe(&helper, PluginFormat::Vst3),
             },
             &settings,
             &mut cache,

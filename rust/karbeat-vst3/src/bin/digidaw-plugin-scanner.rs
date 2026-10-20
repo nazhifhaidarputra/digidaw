@@ -1,7 +1,24 @@
 use std::{fs::File, path::PathBuf, process::ExitCode};
 
-use karbeat_host_api::scanner::{ProbeResponse, SCANNER_PROTOCOL_VERSION};
+use karbeat_host_api::{
+    HostError, PluginDescriptor, PluginFormat,
+    scanner::{ProbeResponse, SCANNER_PROTOCOL_VERSION, format_argument},
+};
 use karbeat_vst3::module::Vst3Module;
+
+/// Loads one module of `format` in this disposable process and lists its plugin classes.
+fn probe(
+    format: PluginFormat,
+    module: &std::path::Path,
+) -> Result<Vec<PluginDescriptor>, HostError> {
+    match format {
+        PluginFormat::Vst3 => Vst3Module::load(module).and_then(|module| module.descriptors()),
+        PluginFormat::Clap => karbeat_clap::probe_module(module),
+        PluginFormat::Lv2 => Err(HostError::Unsupported(
+            "LV2 bundles are read without a helper process",
+        )),
+    }
+}
 
 fn run() -> Result<(), Box<dyn std::error::Error>> {
     #[cfg(target_os = "windows")]
@@ -15,10 +32,22 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
         return Err("expected --result".into());
     }
     let result_path = PathBuf::from(arguments.next().ok_or("missing result path")?);
+    // Older hosts omit the format, which then means VST3.
+    let format = match arguments.next() {
+        None => PluginFormat::Vst3,
+        Some(flag) if flag == "--format" => {
+            let name = arguments.next().ok_or("missing format")?;
+            [PluginFormat::Vst3, PluginFormat::Clap]
+                .into_iter()
+                .find(|format| name == format_argument(*format))
+                .ok_or("unsupported format")?
+        }
+        Some(_) => return Err("expected --format".into()),
+    };
     if arguments.next().is_some() {
         return Err("unexpected arguments".into());
     }
-    let response = match Vst3Module::load(&module).and_then(|module| module.descriptors()) {
+    let response = match probe(format, &module) {
         Ok(plugins) => ProbeResponse {
             version: SCANNER_PROTOCOL_VERSION,
             plugins,

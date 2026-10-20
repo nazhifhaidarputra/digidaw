@@ -10,6 +10,8 @@ license = "GPL 3.0"
 vst3 = "0.3.0"
 karbeat-plugin-api.workspace = true
 karbeat-host-api.workspace = true
+# The plugin scanner helper also probes CLAP modules.
+karbeat-clap.workspace = true
 karbeat-utils.workspace = true
 libloading.workspace = true
 serde_json.workspace = true
