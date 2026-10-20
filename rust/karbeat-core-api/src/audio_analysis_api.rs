@@ -77,10 +77,15 @@ struct RenderBasis {
 
 impl RenderBasis {
     /// Whether the project tempo shapes the render: a fit, or a refresh of a source that
-    /// stretches to the project tempo.
+    /// stretches to the project tempo offline.
     fn follows_tempo(&self) -> bool {
+        let realtime = self
+            .before
+            .edits
+            .as_ref()
+            .is_some_and(|edits| edits.realtime);
         matches!(self.purpose, RenderPurpose::Fit { .. })
-            || self.before.sample_mode == AudioSampleMode::Stretch
+            || (self.before.sample_mode == AudioSampleMode::Stretch && !realtime)
     }
 
     /// Whether the render still matches its source and the project tempo.
@@ -257,7 +262,8 @@ fn pending(
 /// Prepares fitting a source to the project tempo.
 ///
 /// The source tempo is the detected tempo when tempo detection ran, else the source's stored
-/// tempo. `warp` stretches beat by beat and requires detected beats.
+/// tempo. `warp` stretches beat by beat and requires detected beats and offline stretching.
+/// With realtime stretching the fit only sets the tempo, and playback follows it.
 pub fn begin_fit_to_tempo(
     ctx: &DawContext,
     source_id: AudioSourceId,
@@ -290,7 +296,13 @@ pub fn begin_fit_to_tempo(
         .as_ref()
         .map(|edited| edited.edits.clone())
         .unwrap_or_default();
-    edits.time_ratio = source_bpm / target_bpm;
+    anyhow::ensure!(
+        !warp || !edits.realtime,
+        "Beat-by-beat fitting needs offline stretching"
+    );
+    if !edits.realtime {
+        edits.time_ratio = source_bpm / target_bpm;
+    }
     edits.warp = warp;
     Ok(pending(
         ctx,
@@ -304,8 +316,8 @@ pub fn begin_fit_to_tempo(
 /// Frames copied per block when a render needs no stretching.
 const COPY_BLOCK_FRAMES: usize = 8192;
 
-/// The recipe a source should be rendered with now: in [`AudioSampleMode::Stretch`], its
-/// time ratio fits the source to the project tempo.
+/// The recipe a source should be rendered with now: in [`AudioSampleMode::Stretch`] with
+/// offline stretching, its time ratio fits the source to the project tempo.
 fn current_recipe(waveform: &AudioWaveform, target_bpm: f32) -> WaveformEdits {
     let edits = waveform
         .edited
@@ -315,6 +327,7 @@ fn current_recipe(waveform: &AudioWaveform, target_bpm: f32) -> WaveformEdits {
     match waveform.original_bpm {
         Some(source_bpm)
             if waveform.sample_mode == AudioSampleMode::Stretch
+                && !edits.realtime
                 && BPM_RANGE.contains(&source_bpm)
                 && BPM_RANGE.contains(&target_bpm) =>
         {
@@ -418,13 +431,15 @@ pub fn set_sample_mode(
             .or(Some(project_bpm).filter(|bpm| BPM_RANGE.contains(bpm))),
     };
     if mode != AudioSampleMode::Stretch
-        && let Some(edited) = &mut waveform.edited
+        && let Some(edited) = &waveform.edited
         && edited.edits.stretches()
     {
-        edited.edits.time_ratio = 1.0;
-        edited.edits.warp = false;
-        edited.buffer = None;
-        edited.gain = 1.0;
+        let edits = WaveformEdits {
+            time_ratio: 1.0,
+            warp: false,
+            ..edited.edits.clone()
+        };
+        replace_edits(&mut waveform.edited, edits);
     }
     if waveform
         .edited
@@ -489,6 +504,39 @@ pub fn set_waveform_pitch(
     })
 }
 
+/// Sets whether a source shifts its pitch and follows the tempo in real time, or renders them
+/// offline, as one undoable step. Returns whether it needs a render.
+///
+/// Realtime playback starts at once; offline, the original audio plays until the render
+/// arrives. Beat-by-beat fitting only applies offline.
+pub fn set_waveform_realtime(
+    ctx: &mut DawContext,
+    source_id: AudioSourceId,
+    realtime: bool,
+) -> anyhow::Result<bool> {
+    change_edits(ctx, source_id, "Change Stretch Rendering", |current| {
+        if current.realtime == realtime {
+            return current;
+        }
+        WaveformEdits {
+            realtime,
+            // Realtime playback derives the tempo ratio itself; offline renders refit it.
+            time_ratio: 1.0,
+            ..current
+        }
+    })
+}
+
+/// Stores `edits` as the recipe, keeping the loaded render when `edits` renders the same audio,
+/// such as after a realtime pitch change.
+fn replace_edits(edited: &mut Option<EditedWaveform>, edits: WaveformEdits) {
+    let render = edited
+        .take()
+        .filter(|current| current.edits.rendered_part() == edits.rendered_part())
+        .unwrap_or_default();
+    *edited = (edits != WaveformEdits::default()).then(|| EditedWaveform { edits, ..render });
+}
+
 /// Replaces a source's edit recipe with `change(current)` as one undoable step named `label`.
 /// Returns whether it needs a render.
 fn change_edits(
@@ -515,10 +563,7 @@ fn change_edits(
     let waveform = Arc::make_mut(entry);
     let previous = tempo_state(waveform);
     waveform.normalized = edits.normalize;
-    waveform.edited = (edits != WaveformEdits::default()).then(|| EditedWaveform {
-        edits,
-        ..EditedWaveform::default()
-    });
+    replace_edits(&mut waveform.edited, edits);
     ctx.push_history(SourceTempoChanged::new(source_id, previous, label));
     ctx.broadcast_audio_source(source_id);
     Ok(begin_refresh_render(ctx, source_id)?.is_some())
@@ -807,8 +852,9 @@ impl RenderSink<'_> {
     }
 }
 
-/// Renders the recipe: reverse, then time stretch and pitch shift with Rubber Band, then
-/// invert; normalizing sets a playback gain from the rendered peak. Holds no project lock.
+/// Renders the recipe: reverse, then time stretch and pitch shift with Rubber Band unless they
+/// play in real time, then invert; normalizing sets a playback gain from the rendered peak.
+/// Holds no project lock.
 ///
 /// Long audio is stretched in chunks on the shared compute pool. `cancelled` is polled
 /// between blocks, and the render also stops once [`cancel_stale_renders`] finds it stale.
@@ -848,7 +894,7 @@ pub fn execute_render(
             failed: &write_failed,
         };
         let pitch_scale = 2_f64.powf(f64::from(pending.edits.pitch_semitones) / 12.0);
-        if pending.edits.stretches() || (pitch_scale - 1.0).abs() > f64::EPSILON {
+        if pending.edits.renders_stretch() {
             let key_frames = if pending.edits.warp {
                 warp_key_frames(&pending, input.len() / channels)
             } else {

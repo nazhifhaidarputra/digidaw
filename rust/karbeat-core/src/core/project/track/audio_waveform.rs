@@ -44,8 +44,11 @@ pub struct WaveformEdits {
     /// Time-stretch ratio; 1.0 keeps the original length.
     pub time_ratio: f32,
     /// Stretch beat by beat so every detected beat lands on the grid, instead of by one
-    /// constant ratio. Needs a [`BeatGrid`] on the waveform.
+    /// constant ratio. Needs a [`BeatGrid`] on the waveform, and an offline render.
     pub warp: bool,
+    /// Shift the pitch and follow the tempo while playing, through a realtime stretcher,
+    /// instead of rendering them offline. The offline render then only holds the other edits.
+    pub realtime: bool,
 }
 
 impl Default for WaveformEdits {
@@ -58,6 +61,7 @@ impl Default for WaveformEdits {
             preserve_formants: false,
             time_ratio: 1.0,
             warp: false,
+            realtime: false,
         }
     }
 }
@@ -68,13 +72,45 @@ impl WaveformEdits {
         (self.time_ratio - 1.0).abs() > f32::EPSILON || self.warp
     }
 
+    /// Whether the recipe shifts the pitch.
+    pub fn shifts_pitch(&self) -> bool {
+        self.pitch_semitones.abs() > f32::EPSILON
+    }
+
+    /// Whether the offline render stretches the audio in time or shifts its pitch.
+    pub fn renders_stretch(&self) -> bool {
+        !self.realtime && (self.stretches() || self.shifts_pitch())
+    }
+
     /// Whether the recipe changes the audio, so it needs an offline render.
     pub fn needs_render(&self) -> bool {
-        self.stretches()
-            || self.pitch_semitones.abs() > f32::EPSILON
-            || self.reverse
-            || self.invert
-            || self.normalize
+        self.renders_stretch() || self.reverse || self.invert || self.normalize
+    }
+
+    /// The part of the recipe an offline render depends on: everything but the pitch and time
+    /// edits that play in real time.
+    pub fn rendered_part(&self) -> Self {
+        if !self.realtime {
+            return self.clone();
+        }
+        let identity = Self::default();
+        Self {
+            pitch_semitones: identity.pitch_semitones,
+            preserve_formants: identity.preserve_formants,
+            time_ratio: identity.time_ratio,
+            warp: identity.warp,
+            ..self.clone()
+        }
+    }
+
+    /// Frequency multiplier and formant preservation to apply while playing, if any.
+    pub fn realtime_pitch(&self) -> Option<(f64, bool)> {
+        (self.realtime && self.shifts_pitch()).then(|| {
+            (
+                2_f64.powf(f64::from(self.pitch_semitones) / 12.0),
+                self.preserve_formants,
+            )
+        })
     }
 
     /// Whether `other` differs from this recipe only in the time ratio, which realtime
@@ -271,17 +307,24 @@ impl AudioWaveform {
             .and_then(|edited| edited.buffer.as_ref())
     }
 
-    /// Tempo of the audio playback reads: the render's tempo when a render is loaded, since
-    /// the render stretched `original_bpm` by the recipe's time ratio. `None` when the source
-    /// tempo is unknown.
+    /// Tempo of the audio playback reads: the render's tempo when a render stretched in time
+    /// is loaded, since it stretched `original_bpm` by the recipe's time ratio. `None` when the
+    /// source tempo is unknown.
     pub fn playback_bpm(&self) -> Option<f32> {
         let original = self.original_bpm.filter(|bpm| *bpm > 0.0)?;
         Some(match (&self.edited, self.rendered_buffer()) {
-            (Some(edited), Some(_)) if edited.edits.time_ratio > 0.0 => {
+            (Some(edited), Some(_)) if !edited.edits.realtime && edited.edits.time_ratio > 0.0 => {
                 original / edited.edits.time_ratio
             }
             _ => original,
         })
+    }
+
+    /// Frequency multiplier and formant preservation playback applies in real time, if any.
+    pub fn realtime_pitch(&self) -> Option<(f64, bool)> {
+        self.edited
+            .as_ref()
+            .and_then(|edited| edited.edits.realtime_pitch())
     }
 
     /// Gain to play the active buffer at: the render's normalization gain, else 1.0.

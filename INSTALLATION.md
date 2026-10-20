@@ -46,7 +46,7 @@ The installer:
 - Adds a `digidaw` command in `~/.local/bin` and a DigiDAW entry to your app menu.
 - Checks that every library DigiDAW needs can be found, and lists any that are missing.
 
-Rubber Band, which DigiDAW uses for pitch shifting and time stretching, is built into the app, so you do not need to install it.
+Rubber Band, which DigiDAW uses for offline pitch shifting and time stretching, is built into the app, so you do not need to install it. Real-time stretching uses Signalsmith Stretch, which is compiled into the app from source.
 
 Once installed, launch DigiDAW from your app menu or run `digidaw`. If the command is not found, add `~/.local/bin` to your `PATH`.
 

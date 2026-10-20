@@ -266,8 +266,9 @@ class _EnvelopeReadout extends StatelessWidget {
   }
 }
 
-/// Sample mode and offline edits. Edits render in the background; the
-/// original audio plays until the render is ready.
+/// Sample mode and edits. Edits render in the background and the original
+/// audio plays until the render is ready, except pitch and tempo in realtime
+/// mode, which play through a realtime stretcher at once.
 class _OfflineEditControls extends ConsumerWidget {
   const _OfflineEditControls({required this.sourceId, required this.props});
 
@@ -314,6 +315,12 @@ class _OfflineEditControls extends ConsumerWidget {
       invert: invert ?? props.invert,
       reverse: reverse ?? props.reverse,
     ),
+  );
+
+  Future<void> _setRealtime(WidgetRef ref, bool realtime) => _apply(
+    ref,
+    (ctx) =>
+        setWaveformRealtime(ctx: ctx, sourceId: sourceId, realtime: realtime),
   );
 
   Future<void> _setPitch(
@@ -409,6 +416,19 @@ class _OfflineEditControls extends ConsumerWidget {
             min: -50,
             max: 50,
             onCommit: (value) => _setPitch(ref, cents: coarse + value),
+          ),
+          Tooltip(
+            message: props.realtime
+                ? 'Pitch and tempo play through a realtime stretcher; '
+                      'turn off to render them offline at full quality'
+                : 'Pitch and tempo are rendered offline; turn on to '
+                      'stretch them while playing instead',
+            child: toggle(
+              'Realtime',
+              Icons.bolt,
+              props.realtime,
+              (value) => _setRealtime(ref, value),
+            ),
           ),
           Tooltip(
             message: 'Keep the voice character when shifting pitch',
@@ -535,11 +555,16 @@ class _TempoControlsState extends ConsumerState<_TempoControls> {
       (null, final bpm?) => '${bpm.toStringAsFixed(1)} BPM (as placed)',
       (null, null) => 'Tempo unknown',
     };
+    final followsLive =
+        props.realtime && props.sampleMode == UiAudioSampleMode.stretch;
     final status = rendering || (props.fitted && !props.renderReady)
         ? 'Rendering…'
         : props.fitted
         ? (props.warp ? 'Fitted beat by beat' : 'Fitted to project tempo')
+        : followsLive
+        ? 'Follows the project tempo in real time'
         : null;
+    final canWarp = grid != null && !props.realtime;
     Widget busy() => const SizedBox.square(
       dimension: 14,
       child: CircularProgressIndicator(strokeWidth: 2),
@@ -570,7 +595,7 @@ class _TempoControlsState extends ConsumerState<_TempoControls> {
                     (ctx) => startFitToTempo(
                       ctx: ctx,
                       sourceId: sourceId,
-                      warp: _warp && grid != null,
+                      warp: _warp && canWarp,
                     ),
                   ),
             icon: rendering ? busy() : const Icon(Icons.timer, size: 16),
@@ -579,13 +604,15 @@ class _TempoControlsState extends ConsumerState<_TempoControls> {
           Tooltip(
             message: grid == null
                 ? 'Detect the tempo first'
+                : props.realtime
+                ? 'Beat by beat needs offline stretching'
                 : 'Stretch beat by beat so every beat lands on the grid',
             child: FilterChip(
               label: const Text('Beat by beat'),
-              selected: _warp && grid != null,
-              onSelected: grid == null
-                  ? null
-                  : (selected) => setState(() => _warp = selected),
+              selected: _warp && canWarp,
+              onSelected: canWarp
+                  ? (selected) => setState(() => _warp = selected)
+                  : null,
             ),
           ),
           if (status != null)

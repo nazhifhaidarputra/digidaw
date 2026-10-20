@@ -13,7 +13,7 @@ members = [
     "karbeat-plugin-api",
     "karbeat-utils",
     "karbeat-macros",
-    "karbeat-plugin-types", "karbeat-vst3", "karbeat-clap", "karbeat-lv2",
+    "karbeat-plugin-types", "karbeat-vst3", "karbeat-clap", "karbeat-lv2", "karbeat-signalsmith",
 ]
 
 [workspace.package]
@@ -27,6 +27,7 @@ karbeat-core-api = { path = "karbeat-core-api" }
 karbeat-analysis = { path = "karbeat-analysis" }
 karbeat-dsp = { path = "karbeat-dsp" }
 karbeat-rb = { path = "karbeat-rb" }
+karbeat-signalsmith = { path = "karbeat-signalsmith" }
 karbeat-host = { path = "karbeat-host" }
 karbeat-host-api = { path = "karbeat-host-api" }
 karbeat-vst3 = { path = "karbeat-vst3" }
@@ -73,6 +74,7 @@ criterion = { version = "0.5", default-features = false, features = ["cargo_benc
 heck = "0.5.0"
 bindgen = "0.72.1"
 pkg-config = "0.3.33"
+cc = "1.2.63"
 rubato = "4.0.0"
 raw-window-handle = "0.6.2"
 libloading = "0.8.9"

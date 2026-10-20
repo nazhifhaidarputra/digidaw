@@ -2,7 +2,9 @@
 //!
 //! [`backend`] defines the algorithm-neutral traits; the `Default*` aliases below pick the
 //! implementation every consumer uses. Swapping the algorithm means implementing those
-//! traits and changing the aliases. The current implementation is the Rubber Band Library.
+//! traits and changing the aliases. Real-time stretching and pitch shifting use Signalsmith
+//! Stretch, which is cheap enough to run per clip; offline renders use the Rubber Band Library
+//! for its quality and key-frame support.
 //!
 //! [`stretch_offline`] renders a whole input with the default offline stretcher; not real-time
 //! safe, so run it on a background worker. [`stretch_offline_parallel`] splits long input into
@@ -13,14 +15,15 @@ use std::fmt;
 pub mod backend;
 mod parallel;
 pub mod rubberband;
+pub mod signalsmith;
 
 pub use backend::{LivePitchShifter, OfflineTimeStretcher, RealtimeTimeStretcher};
 pub use parallel::{PARALLEL_MIN_SECONDS, stretch_offline_parallel};
 
 /// The real-time, fixed-block pitch shifter.
-pub type DefaultLivePitchShifter = rubberband::RubberBandLiveShifter;
+pub type DefaultLivePitchShifter = signalsmith::SignalsmithLiveShifter;
 /// The real-time time stretcher used by the audio engine.
-pub type DefaultRealtimeStretcher = rubberband::RubberBandRealtimeStretcher;
+pub type DefaultRealtimeStretcher = signalsmith::SignalsmithRealtimeStretcher;
 /// The offline time stretcher used by background renders.
 pub type DefaultOfflineStretcher = rubberband::RubberBandOfflineStretcher;
 
