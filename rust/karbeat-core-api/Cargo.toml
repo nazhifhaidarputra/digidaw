@@ -37,6 +37,8 @@ triple_buffer.workspace = true
 hound.workspace = true
 slotmap.workspace = true
 karbeat-vst3.workspace = true
+karbeat-clap.workspace = true
+karbeat-lv2.workspace = true
 rmp-serde.workspace = true
 shuttle.workspace = true
 
@@ -52,3 +54,8 @@ workspace = true
 [[test]]
 name = "vst3_core"
 harness = false
+
+[[test]]
+name = "lv2_core"
+harness = false
+

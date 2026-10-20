@@ -120,6 +120,9 @@ void main() {
         () => container.read(pluginSettingsProvider).isInitialized,
       ),
     );
+    // The default directory list can push the scan button below the viewport.
+    await tester.ensureVisible(find.byKey(const ValueKey('scan-plugins')));
+    await tester.pump();
     await tester.tap(find.byKey(const ValueKey('scan-plugins')));
     await _stage('start plugin scan', tester.pump());
     await _stage(

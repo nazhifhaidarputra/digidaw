@@ -24,7 +24,13 @@ use std::{
 };
 
 fn workflow(descriptor: PluginDescriptor) {
-    let mut ctx = DawContext::new();
+    let host = karbeat_host::PluginHostService::start(
+        karbeat_vst3::Vst3Executor,
+        karbeat_clap::ClapExecutor,
+        karbeat_lv2::Lv2Executor,
+    )
+    .unwrap();
+    let mut ctx = DawContext::with_external_plugins(host);
     ctx.audio_runtime_settings.write().requested_dsp.sample_rate = 48_000;
     let (sender, commands) = rtrb::RingBuffer::new(256);
     let (feedback, responses) = rtrb::RingBuffer::new(256);

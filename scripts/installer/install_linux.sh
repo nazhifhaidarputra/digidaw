@@ -2,7 +2,7 @@
 # Installs DigiDAW from an extracted release archive for the current user.
 #
 # Installs the shared libraries the app links against through the system package manager
-# (GTK 3, ALSA, FFTW, libsamplerate), copies the app to ~/.local/share/digidaw, and adds a
+# (GTK 3, ALSA, FFTW, libsamplerate, lilv), copies the app to ~/.local/share/digidaw, and adds a
 # `digidaw` launcher and a desktop menu entry with its icon. Rubber Band is linked into the app, so it is
 # not installed here. build_linux.sh ships this script in the archive as install.sh, next to
 # uninstall.sh, which stays in the install folder to remove the app later.
@@ -24,19 +24,19 @@ echo -e "\033[1;36m==> [DigiDAW Install] Installing runtime libraries...\033[0m"
 if command -v apt-get >/dev/null 2>&1; then
     echo -e "\033[1;33m==> Detected Debian/Ubuntu. Installing packages via apt...\033[0m"
     sudo apt-get update
-    sudo apt-get install -y libgtk-3-0 libasound2 libfftw3-double3 libsamplerate0
+    sudo apt-get install -y libgtk-3-0 libasound2 libfftw3-double3 libsamplerate0 liblilv-0-0
 elif command -v dnf >/dev/null 2>&1; then
     echo -e "\033[1;33m==> Detected Fedora/RHEL. Installing packages via dnf...\033[0m"
-    sudo dnf install -y gtk3 alsa-lib fftw-libs-double libsamplerate
+    sudo dnf install -y gtk3 alsa-lib fftw-libs-double libsamplerate lilv-libs
 elif command -v pacman >/dev/null 2>&1; then
     echo -e "\033[1;33m==> Detected Arch Linux. Installing packages via pacman...\033[0m"
-    sudo pacman -S --needed --noconfirm gtk3 alsa-lib fftw libsamplerate
+    sudo pacman -S --needed --noconfirm gtk3 alsa-lib fftw libsamplerate lilv
 elif command -v zypper >/dev/null 2>&1; then
     echo -e "\033[1;33m==> Detected openSUSE. Installing packages via zypper...\033[0m"
-    sudo zypper install -y libgtk-3-0 libasound2 libfftw3-3 libsamplerate0
+    sudo zypper install -y libgtk-3-0 libasound2 libfftw3-3 libsamplerate0 liblilv-0-0
 else
     echo -e "\033[1;33m==> WARNING: No supported package manager found (apt/dnf/pacman/zypper).\033[0m"
-    echo -e "Please manually install GTK 3, ALSA, FFTW 3 (double precision), and libsamplerate."
+    echo -e "Please manually install GTK 3, ALSA, FFTW 3 (double precision), libsamplerate, and lilv."
 fi
 
 echo -e "\033[1;36m==> [DigiDAW Install] Copying app to $INSTALL_DIR...\033[0m"
