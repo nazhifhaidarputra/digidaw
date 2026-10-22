@@ -455,6 +455,14 @@ pub enum AudioCommand {
         /// Parameter target whose manual-edit gesture ends.
         target: AutomationTarget,
     },
+    /// Marks a parameter as changed by user input outside the plugin parameter command.
+    ///
+    /// Automation and modulation ignore the target until the transport seeks or toggles
+    /// playback, matching the behavior of `SetParameter` and `BeginEdit`.
+    MarkParameterManual {
+        /// Parameter target that takes over from automation.
+        target: AutomationTarget,
+    },
 
     // =========== TELEMETRY RELATED =====================
     /// Enables selected named telemetry buffers for one plugin.

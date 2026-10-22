@@ -262,11 +262,13 @@ impl PluginController for Lv2PluginHost {
         value: f64,
     ) -> Result<(), HostError> {
         validate_normalized(parameter, value)?;
-        self.instance(id)?
+        let shared = self
+            .instance(id)?
             .exchange
             .parameter(parameter)
-            .ok_or(HostError::InvalidParameter(parameter))?
-            .set(value, EDIT_CHANGED);
+            .ok_or(HostError::InvalidParameter(parameter))?;
+        shared.set(value, EDIT_CHANGED);
+        shared.mark_user_edited();
         Ok(())
     }
 

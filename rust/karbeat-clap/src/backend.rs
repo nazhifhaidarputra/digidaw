@@ -265,11 +265,12 @@ impl PluginController for ClapPluginHost {
         if instance.parameter(parameter)?.read_only {
             return Err(HostError::InvalidParameter(parameter));
         }
-        instance
+        let shared = instance
             .exchange
             .parameter(parameter)
-            .ok_or(HostError::InvalidParameter(parameter))?
-            .set(value, EDIT_CHANGED);
+            .ok_or(HostError::InvalidParameter(parameter))?;
+        shared.set(value, EDIT_CHANGED);
+        shared.mark_user_edited();
         Ok(())
     }
 

@@ -451,6 +451,9 @@ impl ParameterOutput<'_> {
                 .value
                 .store(parameter.to_normalized(plain).to_bits(), Ordering::Release);
         }
+        if edit & (EDIT_BEGIN | EDIT_CHANGED) != 0 {
+            shared.mark_user_edited();
+        }
         shared.edits.fetch_or(edit, Ordering::Relaxed);
     }
 }
@@ -700,6 +703,10 @@ mod tests {
         assert_eq!(
             shared.edits.load(Ordering::Acquire),
             EDIT_BEGIN | EDIT_CHANGED
+        );
+        assert!(
+            shared.is_user_edited(),
+            "plugin-editor gestures must suspend modulation"
         );
 
         let mut queue = InputQueue::new();

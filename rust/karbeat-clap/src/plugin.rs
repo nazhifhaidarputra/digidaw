@@ -564,6 +564,7 @@ impl ClapInstance {
             shared.value.store(normalized.to_bits(), Ordering::Release);
             shared.pending.store(false, Ordering::Release);
             if report && (previous - normalized).abs() > f64::EPSILON {
+                shared.mark_user_edited();
                 shared.edits.fetch_or(EDIT_CHANGED, Ordering::Relaxed);
             }
         }

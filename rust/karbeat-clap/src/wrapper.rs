@@ -427,6 +427,7 @@ impl AudioPlugin for ClapProcessor {
             && let Some(parameter) = self.exchange.parameter(id)
         {
             parameter.set(f64::from(value).clamp(0.0, 1.0), 0);
+            parameter.mark_user_edited();
         }
     }
     fn get_parameter(&self, id: u32) -> f32 {
@@ -435,9 +436,19 @@ impl AudioPlugin for ClapProcessor {
             .map_or(0.0, |parameter| single(parameter.get()))
     }
     fn apply_automation(&mut self, id: u32, value: f32) {
-        self.set_parameter(id, value);
+        if value.is_finite()
+            && let Some(parameter) = self.exchange.parameter(id)
+            && !parameter.is_user_edited()
+        {
+            parameter.set(f64::from(value).clamp(0.0, 1.0), 0);
+        }
     }
     fn clear_automation(&mut self, _id: u32) {}
+    fn clear_parameter_overrides(&mut self) {
+        for parameter in &self.exchange.parameters {
+            parameter.clear_user_edited();
+        }
+    }
     fn default_parameters(&self) -> karbeat_plugin_api::traits::HashMap<u32, f32> {
         self.specs
             .iter()

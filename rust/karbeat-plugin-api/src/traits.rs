@@ -159,6 +159,13 @@ pub trait AudioPlugin: Any + Send {
     fn apply_automation(&mut self, id: u32, value: f32);
     fn clear_automation(&mut self, id: u32);
 
+    /// Releases every parameter that a user changed by hand.
+    ///
+    /// The engine calls this when the transport seeks or playback starts/stops. Built-in plugins
+    /// clear the override flag on each [`karbeat_plugin_types::Param`]; hosted plugins forward it
+    /// to their format wrapper so native-editor edits also return to automation.
+    fn clear_parameter_overrides(&mut self) {}
+
     fn default_parameters(&self) -> HashMap<u32, f32>;
 
     fn static_parameter_specs() -> Vec<ParameterSpec>
@@ -195,6 +202,9 @@ pub trait AudioPlugin: Any + Send {
                 for (id, value) in saved_params {
                     self.set_parameter(id, value);
                 }
+                // Restoring a project is not a user edit. Let automation drive the parameters
+                // again as soon as the transport resets, instead of muting every restored value.
+                self.clear_parameter_overrides();
             }
             Err(err) => {
                 log::error!("Failed to deserialize Plugin state: {}", err);

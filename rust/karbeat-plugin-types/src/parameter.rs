@@ -410,6 +410,11 @@ pub struct Param<T: ParamType> {
 
     is_automated: bool,
 
+    /// Set when the user changed this parameter by hand. Automation and modulation are ignored
+    /// until the transport seeks or playback starts/stops.
+    #[serde(default)]
+    manually_overridden: bool,
+
     pub bounds: ParamBounds<T>,
 
     pub smoother: T::Smoother,
@@ -444,6 +449,31 @@ impl<T: ParamType> Param<T> {
         }
     }
 
+    /// Sets the base value from a user edit and suspends automation for this parameter.
+    pub fn set_base_manual(&mut self, value: T) {
+        self.manually_overridden = true;
+        self.set_base(value);
+    }
+
+    /// Sets the base value from a user edit and suspends automation for this parameter.
+    pub fn set_base_manual_from_f64(&mut self, raw_value: f64) {
+        self.manually_overridden = true;
+        self.set_base_from_f64(raw_value);
+    }
+
+    /// Clear the manual override so automation and modulation can drive this parameter again.
+    ///
+    /// The engine calls this when the transport seeks or playback starts/stops, matching the
+    /// point where a user edit stops taking precedence over automation.
+    pub fn clear_manual_override(&mut self) {
+        self.manually_overridden = false;
+    }
+
+    /// Whether the user changed this parameter by hand since the last transport reset.
+    pub fn is_manually_overridden(&self) -> bool {
+        self.manually_overridden
+    }
+
     pub fn is_automated(&self) -> bool {
         self.is_automated
     }
@@ -470,12 +500,18 @@ impl<T: ParamType> Param<T> {
     /// Apply an automation frame from the sequencer.
     /// This modifies `current_value` but leaves `base_value` untouched.
     pub fn apply_automation(&mut self, automated_val: T) {
+        if self.manually_overridden {
+            return;
+        }
         let denormalized = self.denormalize(NormalizedF64::new(automated_val.to_f64()));
         self.current_value = T::from_f64_clamped(denormalized.to_f64(), &self.bounds);
         T::update_smoother_target(&mut self.smoother, self.current_value);
     }
 
     pub fn apply_automation_from_f64(&mut self, automated_val: f64) {
+        if self.manually_overridden {
+            return;
+        }
         let denormalized = self.denormalize(NormalizedF64::new(automated_val));
         self.current_value = T::from_f64_clamped(denormalized.to_f64(), &self.bounds);
         T::update_smoother_target(&mut self.smoother, self.current_value);
@@ -599,6 +635,7 @@ impl Param<f32> {
             current_value: default_clamped,
             bounds: ParamBounds::Continuous { min, max, step },
             is_automated: false,
+            manually_overridden: false,
             smoother: f32::create_smoother(default_clamped),
         }
     }
@@ -624,6 +661,7 @@ impl Param<f64> {
             current_value: default_clamped,
             bounds: ParamBounds::Continuous { min, max, step },
             is_automated: false,
+            manually_overridden: false,
             smoother: f64::create_smoother(default_clamped),
         }
     }
@@ -649,6 +687,7 @@ impl Param<i32> {
             current_value: default_clamped,
             bounds: ParamBounds::Discrete { min, max, step },
             is_automated: false,
+            manually_overridden: false,
             smoother: i32::create_smoother(default_clamped),
         }
     }
@@ -665,6 +704,7 @@ impl Param<bool> {
             current_value: default,
             bounds: ParamBounds::Toggle,
             is_automated: false,
+            manually_overridden: false,
             smoother: bool::create_smoother(default),
         }
     }
@@ -684,6 +724,7 @@ impl Param<usize> {
                 labels: labels.iter().map(|s| s.to_string()).collect(),
             },
             is_automated: false,
+            manually_overridden: false,
             smoother: usize::create_smoother(default),
         }
     }
@@ -704,6 +745,7 @@ impl<T: EnumParam> Param<T> {
                 labels: T::variants().iter().map(|s| s.to_string()).collect(),
             },
             is_automated: false,
+            manually_overridden: false,
             smoother: T::create_smoother(default),
         }
     }
@@ -719,6 +761,8 @@ pub trait AutoParams {
     }
     fn auto_apply_automation<V: ParamType>(&mut self, prefix_hash: u32, id: u32, value: V) -> bool;
     fn auto_clear_automation(&mut self, prefix_hash: u32, id: u32) -> bool;
+    /// Clears the manual override on every parameter so automation can drive it again.
+    fn auto_clear_parameter_overrides(&mut self, prefix_hash: u32);
     fn auto_get_parameter_specs(&self, prefix_hash: u32, prefix_str: &str) -> Vec<ParameterSpec>;
 }
 
@@ -890,5 +934,68 @@ impl SmoothableParam for Param<f64> {
     #[inline(always)]
     fn next_smoothed(&mut self) -> f64 {
         self.smoother.next()
+    }
+}
+
+#[cfg(test)]
+mod manual_override_tests {
+    use super::*;
+
+    #[test]
+    fn user_changes_suspend_automation_until_the_override_is_cleared() {
+        let mut gain = Param::new_f32(1, "Gain", "", 0.0, -60.0, 6.0, 0.1);
+
+        gain.set_base_manual(-12.0);
+        assert!(gain.is_manually_overridden());
+
+        // Normalized 1.0 maps to the maximum: automation must not overwrite the hand edit.
+        gain.apply_automation_from_f64(1.0);
+        assert_eq!(gain.get(), -12.0);
+        assert_eq!(gain.get_base(), -12.0);
+
+        gain.clear_manual_override();
+        assert!(!gain.is_manually_overridden());
+
+        gain.apply_automation_from_f64(1.0);
+        assert_eq!(gain.get(), 6.0);
+        assert_eq!(gain.get_base(), -12.0);
+    }
+
+    #[test]
+    fn clearing_automation_keeps_the_manual_override() {
+        let mut mode = Param::new_i32(2, "Mode", "", 0, 0, 3, 1);
+
+        mode.set_base_manual(2);
+        mode.apply_automation_from_f64(3.0);
+        assert_eq!(mode.get(), 2);
+
+        mode.clear_automation();
+        assert_eq!(mode.get(), 2);
+        assert!(mode.is_manually_overridden());
+
+        mode.apply_automation_from_f64(3.0);
+        assert_eq!(mode.get(), 2);
+    }
+
+    #[test]
+    fn plain_base_updates_are_not_treated_as_user_edits() {
+        let mut gain = Param::new_f32(4, "Gain", "", 0.0, -60.0, 6.0, 0.1);
+
+        // Engine initialization, state restore, and DSP setup use the plain setter.
+        gain.set_base(3.0);
+        gain.set_base_from_f64(-3.0);
+        assert!(!gain.is_manually_overridden());
+    }
+
+    #[test]
+    fn restored_base_values_can_be_released_without_waiting_for_a_transport_event() {
+        let mut pan = Param::new_f32(3, "Pan", "", 0.0, -1.0, 1.0, 0.01);
+
+        pan.set_base_manual_from_f64(0.5);
+        assert!(pan.is_manually_overridden());
+
+        pan.clear_manual_override();
+        pan.apply_automation_from_f64(0.0);
+        assert_eq!(pan.get(), -1.0);
     }
 }

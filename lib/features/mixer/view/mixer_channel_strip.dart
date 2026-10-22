@@ -6,11 +6,14 @@ import 'package:karbeat/app/providers/notification_provider.dart';
 import 'package:karbeat/app/providers/project_provider.dart';
 import 'package:karbeat/core/utils/logger.dart';
 import 'package:karbeat/core/widgets/channel_toggle_button.dart';
+import 'package:karbeat/core/widgets/context_menu.dart';
 import 'package:karbeat/core/widgets/db_level_meter.dart';
 import 'package:karbeat/core/widgets/digidaw_plugin_widgets/widgets.dart';
 import 'package:karbeat/core/widgets/fine_grained_input.dart';
 import 'package:karbeat/core/widgets/rainbow_sparkle.dart';
 import 'package:karbeat/features/mixer/services/mixer_channel_targets.dart';
+import 'package:karbeat/features/track/models/automation_lane_clipboard.dart';
+import 'package:karbeat/features/track/services/automation_editor_service.dart';
 import 'package:karbeat/src/rust/api/automation.dart';
 import 'package:karbeat/src/rust/api/mixer.dart';
 import 'package:karbeat/src/rust/api/project.dart' show DawContext;
@@ -338,6 +341,11 @@ class _MixerChannelStripState extends ConsumerState<MixerChannelStrip> {
   }
 }
 
+/// Range the engine normalizes volume automation over. The fader itself stops
+/// at -60 dB, where it reads as silence, so its displayed range is narrower.
+const _volumeAutomationMinDb = -100.0;
+const _volumeAutomationMaxDb = 6.0;
+
 /// Fader volume in dB, with the bottom of the range shown as silence.
 String formatChannelVolume(double volumeDb) {
   if (volumeDb <= -60.0) return '-∞ dB';
@@ -348,6 +356,42 @@ String formatChannelVolume(double volumeDb) {
 String formatChannelPan(double pan) {
   if (pan == 0) return 'C';
   return pan < 0 ? 'L${(-pan * 100).round()}' : 'R${(pan * 100).round()}';
+}
+
+/// Copy and paste actions for a parameter value in the normalized 0..1 domain.
+///
+/// The clipboard is the automation editor's value clipboard: automation
+/// points and parameter controls store the same normalized value.
+List<DawContextAction> _normalizedValueActions({
+  required WidgetRef ref,
+  required double value,
+  required double min,
+  required double max,
+  required ValueChanged<double> onChanged,
+}) {
+  if (max <= min) return const [];
+  final clipboard = ref.watch(
+    automationEditorProvider.select((state) => state.clipboard),
+  );
+  final normalized = ((value - min) / (max - min)).clamp(0.0, 1.0);
+
+  return [
+    DawContextAction(
+      title: 'Copy normalized value',
+      icon: Icons.copy,
+      onTap: () => ref
+          .read(automationEditorProvider.notifier)
+          .copyNormalizedValue(normalized),
+    ),
+    if (clipboard case AutomationLanePointClipboardValue(
+      :final normalizedValue,
+    ))
+      DawContextAction(
+        title: 'Paste normalized value (${normalizedValue.toStringAsFixed(2)})',
+        icon: Icons.content_paste,
+        onTap: () => onChanged(min + normalizedValue * (max - min)),
+      ),
+  ];
 }
 
 // =========================================================
@@ -405,6 +449,13 @@ class _PanKnob extends ConsumerWidget {
               max: spec.max,
               step: spec.step == 0.0 ? 0.01 : spec.step,
               onChanged: onChanged,
+              extraActions: _normalizedValueActions(
+                ref: ref,
+                value: value,
+                min: spec.min,
+                max: spec.max,
+                onChanged: onChanged,
+              ),
               onAddAutomation: () async {
                 AppLogger.info(
                   "Create automation for ${spec.name} (ID: ${spec.id})",
@@ -491,6 +542,13 @@ class _VolumeFader extends ConsumerWidget {
             max: spec.max,
             step: spec.step == 0.0 ? 0.1 : spec.step,
             onChanged: onChanged,
+            extraActions: _normalizedValueActions(
+              ref: ref,
+              value: value,
+              min: _volumeAutomationMinDb,
+              max: _volumeAutomationMaxDb,
+              onChanged: onChanged,
+            ),
             onAddAutomation: () async {
               AppLogger.info(
                 "Create automation for ${spec.name} (ID: ${spec.id})",

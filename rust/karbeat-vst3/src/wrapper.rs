@@ -714,6 +714,7 @@ impl AudioPlugin for Vst3Processor {
         if value.is_finite() {
             if let Some(parameter) = self.exchange.parameter(id) {
                 parameter.set(f64::from(value).clamp(0.0, 1.0), 0);
+                parameter.mark_user_edited();
             }
         }
     }
@@ -723,9 +724,19 @@ impl AudioPlugin for Vst3Processor {
             .map_or(0.0, |p| narrow_sample(p.get()))
     }
     fn apply_automation(&mut self, id: u32, value: f32) {
-        self.set_parameter(id, value);
+        if value.is_finite()
+            && let Some(parameter) = self.exchange.parameter(id)
+            && !parameter.is_user_edited()
+        {
+            parameter.set(f64::from(value).clamp(0.0, 1.0), 0);
+        }
     }
     fn clear_automation(&mut self, _id: u32) {}
+    fn clear_parameter_overrides(&mut self) {
+        for parameter in &self.exchange.parameters {
+            parameter.clear_user_edited();
+        }
+    }
     fn default_parameters(&self) -> karbeat_plugin_api::traits::HashMap<u32, f32> {
         self.specs
             .iter()
@@ -1029,6 +1040,70 @@ mod tests {
         exchange.parameter(77).unwrap().set(0.5, 0);
         dsp.flush(&exchange).unwrap();
         assert_eq!(exchange.process_error.load(Ordering::Acquire), kResultFalse);
+    }
+
+    fn endpoint_with_exchange(exchange: Arc<ParameterExchange>) -> Vst3Processor {
+        let processor = ComWrapper::new(FlushProcessor(Cell::new(None)));
+        let dsp = Dsp::new(
+            processor.to_com_ptr::<IAudioProcessor>().unwrap(),
+            ProcessingConfig {
+                sample_rate: 48_000.0,
+                max_block_size: 32,
+                main_input_channels: 0,
+                main_output_channels: 1,
+                sidechain_channels: 0,
+                offline: false,
+            },
+            vec![],
+            vec![plan(BusRole::Main, 1)],
+            &[77],
+            false,
+        );
+        Vst3Processor {
+            slot: Arc::new(ProcessorSlot {
+                gate: ProcessingGate::default(),
+                dsp: UnsafeCell::new(dsp),
+                latency: AtomicU32::new(0),
+                tail: AtomicU32::new(0),
+                endpoint_alive: AtomicBool::new(true),
+            }),
+            exchange,
+            descriptor: karbeat_host_api::PluginDescriptor {
+                identity: karbeat_host_api::PluginIdentity {
+                    format: karbeat_host_api::PluginFormat::Vst3,
+                    native_id: "fixture".into(),
+                },
+                path: "fixture.vst3".into(),
+                name: "Fixture".into(),
+                vendor: String::new(),
+                version: "1".into(),
+                kind: karbeat_host_api::PluginKind::Instrument,
+            },
+            specs: Vec::new(),
+            bypass: false,
+            reset_pending: false,
+            latency_seen: 0,
+            bypass_delay: karbeat_host_api::bypass::BypassDelay::new(1, 0).unwrap(),
+        }
+    }
+
+    #[test]
+    fn manual_parameter_edits_win_over_automation_until_released() {
+        let exchange = ParameterExchange::new(&[(77, 0.0)]);
+        let mut endpoint = endpoint_with_exchange(exchange);
+
+        endpoint.set_parameter(77, 0.25);
+        assert!((endpoint.get_parameter(77) - 0.25).abs() < 1e-6);
+
+        endpoint.apply_automation(77, 1.0);
+        assert!(
+            (endpoint.get_parameter(77) - 0.25).abs() < 1e-6,
+            "automation must not overwrite a hand edit"
+        );
+
+        endpoint.clear_parameter_overrides();
+        endpoint.apply_automation(77, 1.0);
+        assert!((endpoint.get_parameter(77) - 1.0).abs() < 1e-6);
     }
 
     fn render_notes(endpoint: &mut Vst3Processor, midi: &[karbeat_plugin_api::prelude::MidiEvent]) {

@@ -309,6 +309,7 @@ unsafe extern "C" fn write_port(
             && value.is_finite()
         {
             parameter.set(control.to_normalized(value), EDIT_CHANGED);
+            parameter.mark_user_edited();
         }
         return;
     }
@@ -371,6 +372,9 @@ unsafe extern "C" fn port_touched(handle: *mut c_void, port: u32, grabbed: bool)
     let controller = unsafe { &*handle.cast::<EditorController>() };
     if let Some((_, parameter)) = controller.control(port) {
         let edit = if grabbed { EDIT_BEGIN } else { EDIT_END };
+        if grabbed {
+            parameter.mark_user_edited();
+        }
         parameter.edits.fetch_or(edit, Ordering::Relaxed);
     }
 }

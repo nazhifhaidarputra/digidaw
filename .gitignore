@@ -65,6 +65,7 @@ client_secret*.json
 TODOS.md
 REQUEST.md
 GUIDELINE.md
+AGENTS.md
 
 # Local implementation handoff plans
 .phases/

@@ -877,6 +877,7 @@ impl AudioEngine {
         self.transport.song.is_playing = false;
         self.transport.pattern.is_playing = false;
         self.stop_all_active_generators();
+        self.release_manual_parameter_overrides();
 
         self.reset_playhead();
         self.reset_pattern_state();
@@ -2140,6 +2141,32 @@ impl AudioEngine {
                     self.retire_graph_state(RetiredGraphState::Automation(lane));
                 }
             }
+        }
+    }
+
+    /// Releases every manual parameter override so automation and modulation resume.
+    ///
+    /// Called on transport seek and play/stop, which is the point where a user edit stops
+    /// taking precedence over automation. Runs on the audio thread, but only on transport
+    /// commands, and performs no heap allocation.
+    pub(super) fn release_manual_parameter_overrides(&mut self) {
+        self.modulation.suspended_targets.clear();
+
+        for (_, generator) in self.plugin_state.generators.iter_mut() {
+            generator.plugin.clear_parameter_overrides();
+        }
+        for chain in self
+            .plugin_state
+            .track_effects
+            .iter_mut()
+            .chain(self.plugin_state.bus_effects.iter_mut())
+        {
+            for effect in chain {
+                effect.plugin.clear_parameter_overrides();
+            }
+        }
+        for effect in &mut self.plugin_state.master_effects {
+            effect.plugin.clear_parameter_overrides();
         }
     }
 

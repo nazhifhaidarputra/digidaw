@@ -327,6 +327,23 @@ void main() {
     expect(state.contextPointId, isNull);
   });
 
+  test('normalized values are shared between parameters and points', () async {
+    final container = await createProjectContainer();
+    final editor = container.read(automationEditorProvider.notifier);
+
+    editor.copyNormalizedValue(1.4);
+    expect(
+      container.read(automationEditorProvider).clipboard,
+      const AutomationLanePointClipboard.value(normalizedValue: 1.0),
+    );
+
+    expect(editor.copyPointValue(laneId: 1, pointId: 10).isOk(), isTrue);
+    expect(
+      container.read(automationEditorProvider).clipboard,
+      const AutomationLanePointClipboard.value(normalizedValue: 0.25),
+    );
+  });
+
   test('pasting with an empty clipboard is a no-op', () async {
     final container = ProviderContainer();
     addTearDown(container.dispose);

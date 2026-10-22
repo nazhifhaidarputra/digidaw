@@ -330,6 +330,7 @@ impl PluginController for Vst3PluginHost {
             })?;
         }
         param.set(value, 2);
+        param.mark_user_edited();
         Ok(())
     }
     fn normalized_to_plain(

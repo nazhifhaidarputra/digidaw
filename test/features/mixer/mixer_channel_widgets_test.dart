@@ -4,15 +4,22 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:karbeat/app/providers/project_provider.dart';
+import 'package:karbeat/core/widgets/digidaw_plugin_widgets/widgets.dart';
 import 'package:karbeat/features/mixer/view/mixer_channel_context_menu.dart';
+import 'package:karbeat/features/mixer/view/mixer_channel_strip.dart';
 import 'package:karbeat/features/mixer/view/mixer_effect_rack.dart';
+import 'package:karbeat/features/track/models/automation_lane_clipboard.dart';
+import 'package:karbeat/features/track/services/automation_editor_service.dart';
 import 'package:karbeat/src/rust/api/automation.dart';
 import 'package:karbeat/src/rust/api/mixer.dart';
 import 'package:karbeat/src/rust/api/pattern.dart';
 import 'package:karbeat/src/rust/api/project.dart';
+import 'package:karbeat/src/rust/frb_generated.dart';
 import 'package:mocktail/mocktail.dart';
 
 class _MockDawContext extends Mock implements DawContext {}
+
+class _MockRustLibApi extends Mock implements RustLibApi {}
 
 UiMixerChannel _channel({
   double volume = 0,
@@ -127,6 +134,19 @@ Future<void> _openMenu(WidgetTester tester, UiMixerChannelTarget target) async {
 }
 
 void main() {
+  final api = _MockRustLibApi();
+
+  setUpAll(() {
+    registerFallbackValue(_MockDawContext());
+    RustLib.initMock(api: api);
+    when(
+      () => api.crateApiMixerGetTrackMixerChannelSpecs(
+        ctx: any(named: 'ctx'),
+        trackId: any(named: 'trackId'),
+      ),
+    ).thenAnswer((_) async => null);
+  });
+
   testWidgets('a track strip menu summarises the channel', (tester) async {
     await _openMenu(tester, const UiMixerChannelTarget.track(2));
 
@@ -166,6 +186,67 @@ void main() {
     expect(find.textContaining('Output:'), findsNothing);
     expect(find.text('Mute'), findsOneWidget);
     expect(find.text('Routing…'), findsNothing);
+  });
+
+  testWidgets('a mixer parameter shares its normalized value with automation', (
+    tester,
+  ) async {
+    await _pump(
+      tester,
+      const MixerChannelStrip(target: UiMixerChannelTarget.track(2)),
+    );
+
+    await tester.tap(
+      find.byType(DigidawParameterKnob),
+      buttons: kSecondaryMouseButton,
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Copy normalized value'), findsOneWidget);
+    expect(find.textContaining('Paste normalized value'), findsNothing);
+
+    await tester.tap(find.text('Copy normalized value'));
+    await tester.pumpAndSettle();
+
+    final container = ProviderScope.containerOf(
+      tester.element(find.byType(MixerChannelStrip)),
+    );
+    expect(
+      container.read(automationEditorProvider).clipboard,
+      const AutomationLanePointClipboard.value(normalizedValue: 0.5),
+    );
+
+    await tester.tap(
+      find.byType(DigidawParameterKnob),
+      buttons: kSecondaryMouseButton,
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('Paste normalized value (0.50)'), findsOneWidget);
+  });
+
+  testWidgets('the fader copies the engine-normalized volume', (tester) async {
+    await _pump(
+      tester,
+      const MixerChannelStrip(target: UiMixerChannelTarget.track(2)),
+    );
+
+    await tester.tap(find.byType(Slider).last, buttons: kSecondaryMouseButton);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Copy normalized value'));
+    await tester.pumpAndSettle();
+
+    final container = ProviderScope.containerOf(
+      tester.element(find.byType(MixerChannelStrip)),
+    );
+    final clipboard = container.read(automationEditorProvider).clipboard;
+    expect(
+      clipboard,
+      isA<AutomationLanePointClipboardValue>().having(
+        (value) => value.normalizedValue,
+        'normalizedValue',
+        closeTo(97 / 106, 1e-9),
+      ),
+    );
   });
 
   testWidgets('the effect rack is titled with the channel name', (

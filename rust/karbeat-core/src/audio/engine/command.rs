@@ -106,6 +106,7 @@ impl AudioEngine {
                     }
                 }
 
+                self.release_manual_parameter_overrides();
                 self.emit_current_playback_position();
             }
             AudioCommand::SetLooping(val) => {
@@ -124,6 +125,7 @@ impl AudioEngine {
                 self.transport.song.playhead_samples = samples;
                 self.recalculate_beat_bar();
                 self.transport.song.last_emitted_samples = self.transport.song.playhead_samples;
+                self.release_manual_parameter_overrides();
                 self.evaluate_pre_block_modulations(0);
                 self.emit_current_playback_position();
             }
@@ -866,6 +868,7 @@ impl AudioEngine {
                         }
                     }
                 }
+                self.release_manual_parameter_overrides();
                 self.emit_current_playback_position();
             }
             AudioCommand::TogglePatternPlayback {
@@ -906,12 +909,14 @@ impl AudioEngine {
                     }
                 }
 
+                self.release_manual_parameter_overrides();
                 self.emit_current_playback_position();
             }
             AudioCommand::StopPatternPlayback => {
                 self.transport.pattern.is_playing = false;
                 self.stop_all_active_generators();
                 self.reset_pattern_state();
+                self.release_manual_parameter_overrides();
                 self.emit_current_playback_position();
             }
             AudioCommand::SetPatternPlayhead(samples) => {
@@ -919,6 +924,7 @@ impl AudioEngine {
                 self.transport.pattern.playhead_samples = samples;
                 self.transport.pattern.last_emitted_samples = samples;
                 self.recalculate_pattern_beat_bar();
+                self.release_manual_parameter_overrides();
                 self.emit_current_playback_position();
             }
             AudioCommand::SetPatternLoop(region) => {
@@ -1275,6 +1281,9 @@ impl AudioEngine {
                 self.recalculate_max_sample_index();
             }
             AudioCommand::BeginEdit { target } => {
+                // Suspend automation as soon as the user grabs a control, before the first
+                // value arrives through SetParameter.
+                self.modulation.suspended_targets.insert(target.clone());
                 self.handle_parameter_edit(&target, true);
             }
             AudioCommand::EndEdit { target } => {
@@ -1308,6 +1317,9 @@ impl AudioEngine {
             }
             AudioCommand::SetMixerTelemetrySubscription { active } => {
                 self.telemetry.mixer_snapshot_active = active
+            }
+            AudioCommand::MarkParameterManual { target } => {
+                self.modulation.suspended_targets.insert(target);
             }
             AudioCommand::ResumeAutomation { target } => {
                 self.modulation.suspended_targets.remove(&target);

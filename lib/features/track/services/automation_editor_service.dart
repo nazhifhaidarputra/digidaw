@@ -52,6 +52,18 @@ class AutomationEditorNotifier extends Notifier<AutomationLaneEditorState> {
   // POINT ACTIONS
   // =========================================================================
 
+  /// Stores [normalizedValue] in the editor clipboard.
+  ///
+  /// Automation points and parameter controls share this clipboard because
+  /// both address their values in the same normalized 0..1 domain.
+  void copyNormalizedValue(double normalizedValue) {
+    state = state.copyWith(
+      clipboard: AutomationLanePointClipboard.value(
+        normalizedValue: normalizedValue.clamp(0.0, 1.0),
+      ),
+    );
+  }
+
   /// Stores the point's normalized value in the editor clipboard.
   Result<double> copyPointValue({required int laneId, required int pointId}) {
     final point = _findPoint(laneId: laneId, pointId: pointId);
@@ -61,11 +73,7 @@ class AutomationEditorNotifier extends Notifier<AutomationLaneEditorState> {
       );
     }
 
-    state = state.copyWith(
-      clipboard: AutomationLanePointClipboard.value(
-        normalizedValue: point.value,
-      ),
-    );
+    copyNormalizedValue(point.value);
     return Result.ok(point.value);
   }
 

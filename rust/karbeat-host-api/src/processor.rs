@@ -207,6 +207,9 @@ impl AudioPlugin for HostedProcessor {
     fn clear_automation(&mut self, id: u32) {
         self.inner.clear_automation(id);
     }
+    fn clear_parameter_overrides(&mut self) {
+        self.inner.clear_parameter_overrides();
+    }
     fn begin_parameter_edit(&mut self, id: u32) {
         self.inner.begin_parameter_edit(id);
     }
@@ -239,6 +242,7 @@ impl AudioPlugin for HostedProcessor {
     }
     fn set_state(&mut self, state: &[u8]) {
         self.inner.set_state(state);
+        self.inner.clear_parameter_overrides();
     }
     fn as_any(&self) -> &dyn std::any::Any {
         self

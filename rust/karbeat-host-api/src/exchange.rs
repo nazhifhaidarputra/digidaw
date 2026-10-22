@@ -22,6 +22,9 @@ pub struct ParameterValue {
     pub pending: AtomicBool,
     /// Accumulated `EDIT_*` flags since the control owner last drained them.
     pub edits: AtomicU8,
+    /// Set when the user moved this parameter outside the engine (for example in the plugin's
+    /// native editor). Automation and modulation are ignored until the transport resets.
+    manual_override: AtomicBool,
 }
 
 impl ParameterValue {
@@ -35,6 +38,21 @@ impl ParameterValue {
         self.value.store(value.to_bits(), Ordering::Release);
         self.pending.store(true, Ordering::Release);
         self.edits.fetch_or(edit, Ordering::Relaxed);
+    }
+
+    /// Marks the parameter as changed by hand outside the engine's modulation path.
+    pub fn mark_user_edited(&self) {
+        self.manual_override.store(true, Ordering::Release);
+    }
+
+    /// Returns whether automation and modulation must leave this parameter alone.
+    pub fn is_user_edited(&self) -> bool {
+        self.manual_override.load(Ordering::Acquire)
+    }
+
+    /// Lets automation and modulation drive the parameter again.
+    pub fn clear_user_edited(&self) {
+        self.manual_override.store(false, Ordering::Release);
     }
 }
 
@@ -61,6 +79,7 @@ impl ParameterExchange {
                     value: AtomicU64::new(value.to_bits()),
                     pending: AtomicBool::new(false),
                     edits: AtomicU8::new(0),
+                    manual_override: AtomicBool::new(false),
                 })
                 .collect(),
             restart: AtomicI32::new(0),
@@ -101,5 +120,19 @@ mod tests {
             EDIT_BEGIN | EDIT_CHANGED
         );
         assert!((exchange.parameter(3).unwrap().get() - 0.25).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn user_edits_are_tracked_per_parameter_and_can_be_released() {
+        let exchange = ParameterExchange::new(&[(3, 0.25), (9, 0.5)]);
+        let parameter = exchange.parameter(9).unwrap();
+
+        assert!(!parameter.is_user_edited());
+        parameter.mark_user_edited();
+        assert!(parameter.is_user_edited());
+        assert!(!exchange.parameter(3).unwrap().is_user_edited());
+
+        parameter.clear_user_edited();
+        assert!(!parameter.is_user_edited());
     }
 }

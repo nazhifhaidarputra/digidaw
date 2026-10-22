@@ -28,6 +28,7 @@ impl IComponentHandlerTrait for ComponentHandler {
             return kInvalidArgument;
         };
         param.edits.fetch_or(1, Ordering::Relaxed);
+        param.mark_user_edited();
         kResultOk
     }
     unsafe fn performEdit(&self, id: u32, value: f64) -> tresult {
@@ -40,6 +41,7 @@ impl IComponentHandlerTrait for ComponentHandler {
         // Controllers that normalize in single precision can overshoot the range by a rounding
         // error at either end; dropping the edit would leave the processor on the old value.
         param.set(value.clamp(0.0, 1.0), 2);
+        param.mark_user_edited();
         kResultOk
     }
     unsafe fn endEdit(&self, id: u32) -> tresult {
@@ -352,6 +354,7 @@ mod tests {
         assert_eq!(unsafe { handler.performEdit(7, 1.000_000_1) }, kResultOk);
         assert!((parameter.get() - 1.0).abs() < f64::EPSILON);
         assert!(parameter.pending.load(Ordering::Acquire));
+        assert!(parameter.is_user_edited());
         // SAFETY: As above.
         assert_eq!(unsafe { handler.performEdit(7, -0.000_000_1) }, kResultOk);
         assert!(parameter.get().abs() < f64::EPSILON);

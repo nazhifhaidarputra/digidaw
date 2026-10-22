@@ -24,6 +24,8 @@ pub fn prepare_builtin_plugin(
         // defaults, so applying them as well would undo every restored edit.
         prepared.set_state(&plugin.plugin_state);
     }
+    // Applying saved values is not a user edit. Automation must be able to drive them again.
+    prepared.clear_parameter_overrides();
     prepared.prepare(sample_rate as f32, block_size.max(512));
     let bus = BusConfig {
         name: "Main".into(),
