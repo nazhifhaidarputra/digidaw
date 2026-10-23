@@ -1,12 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:file_picker/file_picker.dart';
 import 'package:karbeat/app/providers/blocking_task_provider.dart';
 import 'package:karbeat/app/providers/project_provider.dart';
 import 'package:karbeat/app/providers/workspace_state.dart';
 import 'package:karbeat/features/setting/view/setting_screen.dart';
 import 'package:karbeat/features/source/services/audio_source_import.dart';
 import 'package:karbeat/features/workspace/services/project_file_actions.dart';
+import 'package:karbeat/features/workspace/services/project_file_dialogs.dart';
 import 'package:karbeat/features/workspace/view/unsaved_changes_guard.dart';
 import 'package:karbeat/shared/enums/global.dart';
 
@@ -72,22 +72,17 @@ class DawToolbarMenuGroupFactory {
         shortcut: 'Ctrl+O',
         callback: (context, ref) async {
           if (!await confirmDiscardUnsavedChanges(context, ref)) return;
-          final result = await FilePicker.pickFiles(
-            type: FileType.custom,
-            allowedExtensions: projectFileExtensions,
-          );
-          if (result != null && result.files.single.path != null) {
-            final path = result.files.single.path!;
-            final project = ref.read(projectProvider.notifier);
+          final path = await pickProjectFileToOpen();
+          if (path == null) return;
+          final project = ref.read(projectProvider.notifier);
 
-            // Await the Rust Shadow Load & Swap behind the global blocking overlay.
-            await ref
-                .read(blockingTaskProvider.notifier)
-                .run(
-                  label: 'Loading project...',
-                  task: () => project.loadProject(path),
-                );
-          }
+          // Await the Rust Shadow Load & Swap behind the global blocking overlay.
+          await ref
+              .read(blockingTaskProvider.notifier)
+              .run(
+                label: 'Loading project...',
+                task: () => project.loadProject(path),
+              );
         },
       ),
       DawToolbarMenuAction(

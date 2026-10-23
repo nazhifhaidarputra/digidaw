@@ -1,10 +1,8 @@
-import 'package:file_picker/file_picker.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:karbeat/app/providers/blocking_task_provider.dart';
 import 'package:karbeat/app/providers/project_provider.dart';
+import 'package:karbeat/features/workspace/services/project_file_dialogs.dart';
 import 'package:karbeat/src/rust/api/serialization.dart' as serialization_api;
-
-const projectFileExtensions = ['karbeat', 'dgdaw'];
 
 /// Saves the current project behind the blocking overlay.
 ///
@@ -13,12 +11,7 @@ const projectFileExtensions = ['karbeat', 'dgdaw'];
 Future<bool> saveCurrentProject(WidgetRef ref, {bool saveAs = false}) async {
   var path = ref.read(projectProvider).value?.currentFilePath;
   if (saveAs || path == null) {
-    path = await FilePicker.saveFile(
-      dialogTitle: 'Save Project As...',
-      fileName: 'untitled.dgdaw',
-      type: FileType.custom,
-      allowedExtensions: projectFileExtensions,
-    );
+    path = await pickProjectFileToSave();
   }
   if (path == null) return false;
 
