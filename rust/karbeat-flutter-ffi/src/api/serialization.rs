@@ -1,6 +1,7 @@
 use crate::api::context::{DawContext, ProjectOperationGuard};
 use crate::api::jobs::run_job;
 use crate::api::project::UiApplicationState;
+use crate::frb_generated::StreamSink;
 use flutter_rust_bridge::frb;
 use karbeat_core::core::project::ApplicationState;
 use karbeat_core_api::{
@@ -112,4 +113,10 @@ fn new_blank_project_blocking(
 #[frb(sync)]
 pub fn is_project_saved(ctx: &DawContext) -> bool {
     mitigation_api::is_project_saved(&ctx.read())
+}
+
+/// Streams whether the current project has no unsaved changes: the status right now, then
+/// every change. A new subscription replaces the old one.
+pub fn subscribe_project_saved(ctx: &DawContext, sink: StreamSink<bool>) {
+    ctx.set_save_status_listener(Box::new(move |saved| sink.add(saved).is_ok()));
 }

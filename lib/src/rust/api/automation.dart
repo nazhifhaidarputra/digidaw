@@ -10,7 +10,8 @@ import 'plugin.dart';
 import 'project.dart';
 part 'automation.freezed.dart';
 
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `try_from`
+// These functions are ignored because they are not marked as `pub`: `narrow`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `try_from`
 
 /// Fetch the list of (modulation_id, automation_id, automation_lane) where
 /// the target is the given track id
@@ -32,19 +33,19 @@ Future<List<(int, int, AutomationLaneDto)>> getAutomationLanesForBus({
   busId: busId,
 );
 
+/// Creates an automation lane for `target`.
+///
+/// `initial_value` is the parameter's current value in its own unit; the parameter normalizes
+/// it. `None` starts the lane on the value stored in the project.
 Future<(AutomationLaneDto, ModulationLinkDto)> addAutomationLane({
   required DawContext ctx,
   required AutomationTargetDto target,
   required String label,
-  required double min,
-  required double max,
-  required double initialValue,
+  double? initialValue,
 }) => RustLib.instance.api.crateApiAutomationAddAutomationLane(
   ctx: ctx,
   target: target,
   label: label,
-  min: min,
-  max: max,
   initialValue: initialValue,
 );
 
@@ -67,16 +68,12 @@ Future<AutomationLaneDto> addAutomationLaneForTrack({
   required int trackId,
   required AutomationTargetDto target,
   required String label,
-  required double min,
-  required double max,
-  required double initialValue,
+  double? initialValue,
 }) => RustLib.instance.api.crateApiAutomationAddAutomationLaneForTrack(
   ctx: ctx,
   trackId: trackId,
   target: target,
   label: label,
-  min: min,
-  max: max,
   initialValue: initialValue,
 );
 
@@ -85,16 +82,12 @@ Future<AutomationLaneDto> addAutomationLaneForBus({
   required int busId,
   required AutomationTargetDto target,
   required String label,
-  required double min,
-  required double max,
-  required double initialValue,
+  double? initialValue,
 }) => RustLib.instance.api.crateApiAutomationAddAutomationLaneForBus(
   ctx: ctx,
   busId: busId,
   target: target,
   label: label,
-  min: min,
-  max: max,
   initialValue: initialValue,
 );
 
@@ -146,7 +139,8 @@ Future<AutomationLaneDto> removeAutomationPoint({
   id: id,
 );
 
-Future<int> updateAutomationPoint({
+/// Changes the supplied fields of one automation point and returns the updated lane.
+Future<AutomationLaneDto> updateAutomationPoint({
   required DawContext ctx,
   required int automationId,
   required int id,
@@ -154,6 +148,7 @@ Future<int> updateAutomationPoint({
   double? value,
   double? tension,
   AutomationCurveTypeDto? curveType,
+  BezierHandlesDto? handles,
 }) => RustLib.instance.api.crateApiAutomationUpdateAutomationPoint(
   ctx: ctx,
   automationId: automationId,
@@ -162,7 +157,110 @@ Future<int> updateAutomationPoint({
   value: value,
   tension: tension,
   curveType: curveType,
+  handles: handles,
 );
+
+/// Copies the curve of a lane between two ticks. Returned points have times relative to the
+/// range start; a point is added on each edge the range cuts through a segment.
+Future<List<AutomationPointDto>> copyAutomationRange({
+  required DawContext ctx,
+  required int automationId,
+  required int startTick,
+  required int endTick,
+}) => RustLib.instance.api.crateApiAutomationCopyAutomationRange(
+  ctx: ctx,
+  automationId: automationId,
+  startTick: startTick,
+  endTick: endTick,
+);
+
+/// Removes every point of a lane between two ticks as one undo step.
+Future<AutomationLaneDto> deleteAutomationRange({
+  required DawContext ctx,
+  required int automationId,
+  required int startTick,
+  required int endTick,
+}) => RustLib.instance.api.crateApiAutomationDeleteAutomationRange(
+  ctx: ctx,
+  automationId: automationId,
+  startTick: startTick,
+  endTick: endTick,
+);
+
+/// Pastes a copied curve at `at_tick` as one undo step, replacing the points under it.
+///
+/// `length_ticks` is the length of the copied range; `target_length` stretches the curve to
+/// another length.
+Future<AutomationLaneDto> pasteAutomationPoints({
+  required DawContext ctx,
+  required int automationId,
+  required int atTick,
+  required List<AutomationPointDto> points,
+  required int lengthTicks,
+  int? targetLength,
+}) => RustLib.instance.api.crateApiAutomationPasteAutomationPoints(
+  ctx: ctx,
+  automationId: automationId,
+  atTick: atTick,
+  points: points,
+  lengthTicks: lengthTicks,
+  targetLength: targetLength,
+);
+
+/// Formats a lane's normalized value in the unit of the parameter it automates.
+String automationValueText({
+  required DawContext ctx,
+  required int automationId,
+  required double normalized,
+}) => RustLib.instance.api.crateApiAutomationAutomationValueText(
+  ctx: ctx,
+  automationId: automationId,
+  normalized: normalized,
+);
+
+/// Parses text typed in the unit of a lane's parameter into a normalized lane value.
+double parseAutomationValue({
+  required DawContext ctx,
+  required int automationId,
+  required String text,
+}) => RustLib.instance.api.crateApiAutomationParseAutomationValue(
+  ctx: ctx,
+  automationId: automationId,
+  text: text,
+);
+
+/// Samples a lane's curve at `sample_count` evenly spaced ticks from `start_tick` to `end_tick`
+/// inclusive. `points` must be in lane order. Returns no samples for a lane without points.
+Float32List sampleAutomationCurve({
+  required List<AutomationPointDto> points,
+  required double startTick,
+  required double endTick,
+  required int sampleCount,
+}) => RustLib.instance.api.crateApiAutomationSampleAutomationCurve(
+  points: points,
+  startTick: startTick,
+  endTick: endTick,
+  sampleCount: sampleCount,
+);
+
+/// Value at the time midpoint of every segment of a lane, one entry per pair of consecutive
+/// points. Editors place each segment's tension handle on it.
+Float32List automationSegmentMidpoints({
+  required List<AutomationPointDto> points,
+}) => RustLib.instance.api.crateApiAutomationAutomationSegmentMidpoints(
+  points: points,
+);
+
+/// Describes which segment controls a curve type responds to.
+AutomationCurveTraitsDto automationCurveTraits({
+  required AutomationCurveTypeDto curveType,
+}) => RustLib.instance.api.crateApiAutomationAutomationCurveTraits(
+  curveType: curveType,
+);
+
+/// Step or cycle count that `tension` selects for count-driven curve types.
+int automationTensionCount({required double tension}) => RustLib.instance.api
+    .crateApiAutomationAutomationTensionCount(tension: tension);
 
 /// Get all modulations in the project
 Future<Map<int, ModulationLinkDto>> getAllLinkedModulationParams({
@@ -234,7 +332,31 @@ Future<ModulationSourceDto?> getModulationSource({
   id: id,
 );
 
-enum AutomationCurveTypeDto { linear, exponential, step }
+/// Which segment controls a curve type responds to, so editors stay generic over curve types.
+@freezed
+sealed class AutomationCurveTraitsDto with _$AutomationCurveTraitsDto {
+  const factory AutomationCurveTraitsDto({
+    required bool supportsTension,
+    required bool tensionInverted,
+    required bool tensionIsCount,
+    required bool usesHandles,
+  }) = _AutomationCurveTraitsDto;
+}
+
+enum AutomationCurveTypeDto {
+  linear,
+  exponential,
+  step,
+  logarithmic,
+  sCurve,
+  bezier,
+  stairs,
+  smoothStairs,
+  pulse,
+  wave,
+  triangle,
+  halfSine,
+}
 
 @freezed
 sealed class AutomationLaneDto with _$AutomationLaneDto {
@@ -243,8 +365,6 @@ sealed class AutomationLaneDto with _$AutomationLaneDto {
     required String label,
     required List<AutomationPointDto> points,
     required bool enabled,
-    required double min,
-    required double max,
     required double defaultValue,
   }) = _AutomationLaneDto;
 }
@@ -257,6 +377,7 @@ sealed class AutomationPointDto with _$AutomationPointDto {
     required double value,
     required AutomationCurveTypeDto curveType,
     required double tension,
+    BezierHandlesDto? handles,
   }) = _AutomationPointDto;
 }
 
@@ -278,6 +399,18 @@ sealed class AutomationTargetDto with _$AutomationTargetDto {
   }) = AutomationTargetDto_Bus;
   const factory AutomationTargetDto.master(MasterAutomationTargetDto field0) =
       AutomationTargetDto_Master;
+}
+
+/// Control handles of a Bezier segment. `x` is a fraction of the segment's duration and `y` a
+/// normalized lane value, both 0.0 to 1.0.
+@freezed
+sealed class BezierHandlesDto with _$BezierHandlesDto {
+  const factory BezierHandlesDto({
+    required double x1,
+    required double y1,
+    required double x2,
+    required double y2,
+  }) = _BezierHandlesDto;
 }
 
 @freezed

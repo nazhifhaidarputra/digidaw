@@ -350,9 +350,9 @@ pub fn karbeat_plugin(_attr: TokenStream, item: TokenStream) -> TokenStream {
             if id == ::karbeat_utils::hash::hash_str_from(prefix_hash, #id_str) {
                 let any_val = &value as &dyn ::std::any::Any;
                 if let ::core::option::Option::Some(v) = any_val.downcast_ref::<#ty>() {
-                    self.#field.set_base(*v);
+                    self.#field.set_base_manual(*v);
                 } else {
-                    self.#field.set_base_from_f64(value.to_f64());
+                    self.#field.set_base_manual_from_f64(value.to_f64());
                 }
                 return true;
             }
@@ -522,6 +522,30 @@ pub fn karbeat_plugin(_attr: TokenStream, item: TokenStream) -> TokenStream {
                 if self.#f.auto_clear_automation(child_hash, id) {
                     return true;
                 }
+            }
+        }
+    });
+
+    let clear_override_arms = params.iter().map(|p| {
+        let field = &p.field_name;
+        quote! {
+            self.#field.clear_manual_override();
+        }
+    });
+
+    let nested_clear_override_stmts = nested_fields.iter().map(|(f, is_iterable, prefix)| {
+        if *is_iterable {
+            quote! {
+                for (i, item) in self.#f.iter_mut().enumerate() {
+                    let child_prefix = format!("{}{}/", #prefix, i);
+                    let child_hash = ::karbeat_utils::hash::hash_str_from(_prefix_hash, &child_prefix);
+                    item.auto_clear_parameter_overrides(child_hash);
+                }
+            }
+        } else {
+            quote! {
+                let child_hash = ::karbeat_utils::hash::hash_str_from(_prefix_hash, #prefix);
+                self.#f.auto_clear_parameter_overrides(child_hash);
             }
         }
     });
@@ -777,6 +801,11 @@ pub fn karbeat_plugin(_attr: TokenStream, item: TokenStream) -> TokenStream {
                     false
                 }
 
+                fn auto_clear_parameter_overrides(&mut self, _prefix_hash: u32) {
+                    #(#clear_override_arms)*
+                    #(#nested_clear_override_stmts)*
+                }
+
                 fn auto_get_parameter_specs(&self, prefix_hash: u32, prefix_str: &str) -> Vec<karbeat_plugin_types::parameter::ParameterSpec> {
                     let mut specs = Vec::new();
                     #(#spec_pushes)*
@@ -898,9 +927,9 @@ pub fn derive_auto_params(input: TokenStream) -> TokenStream {
             if id == ::karbeat_utils::hash::hash_str_from(prefix_hash, #id_str) {
                 let any_val = &value as &dyn ::std::any::Any;
                 if let ::core::option::Option::Some(v) = any_val.downcast_ref::<#ty>() {
-                    self.#fname.set_base(*v);
+                    self.#fname.set_base_manual(*v);
                 } else {
-                    self.#fname.set_base_from_f64(value.to_f64());
+                    self.#fname.set_base_manual_from_f64(value.to_f64());
                 }
                 return true;
             }
@@ -930,6 +959,13 @@ pub fn derive_auto_params(input: TokenStream) -> TokenStream {
                 self.#fname.clear_automation();
                 return true;
             }
+        }
+    });
+
+    let clear_override_arms = param_fields.iter().map(|(f, _, _)| {
+        let fname = &f.ident;
+        quote! {
+            self.#fname.clear_manual_override();
         }
     });
 
@@ -968,6 +1004,10 @@ pub fn derive_auto_params(input: TokenStream) -> TokenStream {
                 fn auto_clear_automation(&mut self, prefix_hash: u32, id: u32) -> bool {
                     #(#clear_arms)*
                     false
+                }
+
+                fn auto_clear_parameter_overrides(&mut self, _prefix_hash: u32) {
+                    #(#clear_override_arms)*
                 }
 
                 fn auto_get_parameter_specs(&self, prefix_hash: u32) -> ::std::vec::Vec<::karbeat_plugin_types::parameter::ParameterSpec> {
@@ -1152,6 +1192,7 @@ pub fn auto_param(args: TokenStream, item: TokenStream) -> TokenStream {
     let mut has_get_current_parameter = false;
     let mut has_apply_automation = false;
     let mut has_clear_automation = false;
+    let mut has_clear_parameter_overrides = false;
     let mut has_default_parameters = false;
     let mut has_get_parameter_specs = false;
     let mut has_static_parameter_specs = false;
@@ -1174,6 +1215,9 @@ pub fn auto_param(args: TokenStream, item: TokenStream) -> TokenStream {
             }
             if name == "clear_automation" {
                 has_clear_automation = true;
+            }
+            if name == "clear_parameter_overrides" {
+                has_clear_parameter_overrides = true;
             }
             if name == "default_parameters" {
                 has_default_parameters = true;
@@ -1243,6 +1287,15 @@ pub fn auto_param(args: TokenStream, item: TokenStream) -> TokenStream {
                 if self.auto_clear_automation(::karbeat_utils::hash::FNV_OFFSET, id) {
                     #on_change
                 }
+            }
+        };
+        item_impl.items.push(syn::ImplItem::Fn(method));
+    }
+
+    if !has_clear_parameter_overrides {
+        let method: syn::ImplItemFn = syn::parse_quote! {
+            fn clear_parameter_overrides(&mut self) {
+                self.auto_clear_parameter_overrides(::karbeat_utils::hash::FNV_OFFSET);
             }
         };
         item_impl.items.push(syn::ImplItem::Fn(method));

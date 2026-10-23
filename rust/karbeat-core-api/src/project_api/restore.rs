@@ -397,16 +397,13 @@ pub(super) fn commit_replace(ctx: &mut DawContext, completed: CompletedProjectRe
                 registry.insert_plugin_consumer(target, output);
             }
         }
-        ctx.hosted_targets.insert(
-            target,
-            karbeat_core::context::HostedTargetState::Active(instance),
-        );
+        ctx.activate_hosted_target(target, instance);
     }
     ctx.external_plugin_failures = completed.missing;
     for (target, reason) in &ctx.external_plugin_failures {
         ctx.hosted_targets.insert(
             *target,
-            karbeat_core::context::HostedTargetState::Failed(reason.clone()),
+            karbeat_core::context::HostedTargetState::failed(reason.clone()),
         );
     }
     ctx.app_state = completed.staged;

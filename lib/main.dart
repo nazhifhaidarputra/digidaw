@@ -23,6 +23,7 @@ Future<void> main() async {
 
     await windowManager.setMinimumSize(const Size(1000, 600));
     await windowManager.setAspectRatio(16 / 9);
+    await windowManager.maximize();
   } else {
     if (kIsWeb) {
       throw Exception("This app is not compatible with Web");

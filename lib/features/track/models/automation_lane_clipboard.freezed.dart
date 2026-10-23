@@ -55,12 +55,13 @@ extension AutomationLanePointClipboardPatterns on AutomationLanePointClipboard {
 /// }
 /// ```
 
-@optionalTypeArgs TResult maybeMap<TResult extends Object?>({TResult Function( AutomationLanePointClipboardEmpty value)?  empty,TResult Function( AutomationLanePointClipboardValue value)?  value,required TResult orElse(),}){
+@optionalTypeArgs TResult maybeMap<TResult extends Object?>({TResult Function( AutomationLanePointClipboardEmpty value)?  empty,TResult Function( AutomationLanePointClipboardValue value)?  value,TResult Function( AutomationLanePointClipboardCurve value)?  curve,required TResult orElse(),}){
 final _that = this;
 switch (_that) {
 case AutomationLanePointClipboardEmpty() when empty != null:
 return empty(_that);case AutomationLanePointClipboardValue() when value != null:
-return value(_that);case _:
+return value(_that);case AutomationLanePointClipboardCurve() when curve != null:
+return curve(_that);case _:
   return orElse();
 
 }
@@ -78,12 +79,13 @@ return value(_that);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult map<TResult extends Object?>({required TResult Function( AutomationLanePointClipboardEmpty value)  empty,required TResult Function( AutomationLanePointClipboardValue value)  value,}){
+@optionalTypeArgs TResult map<TResult extends Object?>({required TResult Function( AutomationLanePointClipboardEmpty value)  empty,required TResult Function( AutomationLanePointClipboardValue value)  value,required TResult Function( AutomationLanePointClipboardCurve value)  curve,}){
 final _that = this;
 switch (_that) {
 case AutomationLanePointClipboardEmpty():
 return empty(_that);case AutomationLanePointClipboardValue():
-return value(_that);case _:
+return value(_that);case AutomationLanePointClipboardCurve():
+return curve(_that);case _:
   throw StateError('Unexpected subclass');
 
 }
@@ -100,12 +102,13 @@ return value(_that);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult? mapOrNull<TResult extends Object?>({TResult? Function( AutomationLanePointClipboardEmpty value)?  empty,TResult? Function( AutomationLanePointClipboardValue value)?  value,}){
+@optionalTypeArgs TResult? mapOrNull<TResult extends Object?>({TResult? Function( AutomationLanePointClipboardEmpty value)?  empty,TResult? Function( AutomationLanePointClipboardValue value)?  value,TResult? Function( AutomationLanePointClipboardCurve value)?  curve,}){
 final _that = this;
 switch (_that) {
 case AutomationLanePointClipboardEmpty() when empty != null:
 return empty(_that);case AutomationLanePointClipboardValue() when value != null:
-return value(_that);case _:
+return value(_that);case AutomationLanePointClipboardCurve() when curve != null:
+return curve(_that);case _:
   return null;
 
 }
@@ -122,11 +125,12 @@ return value(_that);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult maybeWhen<TResult extends Object?>({TResult Function()?  empty,TResult Function( double normalizedValue)?  value,required TResult orElse(),}) {final _that = this;
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>({TResult Function()?  empty,TResult Function( double normalizedValue)?  value,TResult Function( IList<AutomationPointDto> points,  int lengthTicks)?  curve,required TResult orElse(),}) {final _that = this;
 switch (_that) {
 case AutomationLanePointClipboardEmpty() when empty != null:
 return empty();case AutomationLanePointClipboardValue() when value != null:
-return value(_that.normalizedValue);case _:
+return value(_that.normalizedValue);case AutomationLanePointClipboardCurve() when curve != null:
+return curve(_that.points,_that.lengthTicks);case _:
   return orElse();
 
 }
@@ -144,11 +148,12 @@ return value(_that.normalizedValue);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult when<TResult extends Object?>({required TResult Function()  empty,required TResult Function( double normalizedValue)  value,}) {final _that = this;
+@optionalTypeArgs TResult when<TResult extends Object?>({required TResult Function()  empty,required TResult Function( double normalizedValue)  value,required TResult Function( IList<AutomationPointDto> points,  int lengthTicks)  curve,}) {final _that = this;
 switch (_that) {
 case AutomationLanePointClipboardEmpty():
 return empty();case AutomationLanePointClipboardValue():
-return value(_that.normalizedValue);case _:
+return value(_that.normalizedValue);case AutomationLanePointClipboardCurve():
+return curve(_that.points,_that.lengthTicks);case _:
   throw StateError('Unexpected subclass');
 
 }
@@ -165,11 +170,12 @@ return value(_that.normalizedValue);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>({TResult? Function()?  empty,TResult? Function( double normalizedValue)?  value,}) {final _that = this;
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>({TResult? Function()?  empty,TResult? Function( double normalizedValue)?  value,TResult? Function( IList<AutomationPointDto> points,  int lengthTicks)?  curve,}) {final _that = this;
 switch (_that) {
 case AutomationLanePointClipboardEmpty() when empty != null:
 return empty();case AutomationLanePointClipboardValue() when value != null:
-return value(_that.normalizedValue);case _:
+return value(_that.normalizedValue);case AutomationLanePointClipboardCurve() when curve != null:
+return curve(_that.points,_that.lengthTicks);case _:
   return null;
 
 }
@@ -269,6 +275,74 @@ class _$AutomationLanePointClipboardValueCopyWithImpl<$Res>
   return _then(AutomationLanePointClipboardValue(
 normalizedValue: null == normalizedValue ? _self.normalizedValue : normalizedValue // ignore: cast_nullable_to_non_nullable
 as double,
+  ));
+}
+
+
+}
+
+/// @nodoc
+
+
+class AutomationLanePointClipboardCurve implements AutomationLanePointClipboard {
+  const AutomationLanePointClipboardCurve({required this.points, required this.lengthTicks});
+  
+
+ final  IList<AutomationPointDto> points;
+ final  int lengthTicks;
+
+/// Create a copy of AutomationLanePointClipboard
+/// with the given fields replaced by the non-null parameter values.
+@JsonKey(includeFromJson: false, includeToJson: false)
+@pragma('vm:prefer-inline')
+$AutomationLanePointClipboardCurveCopyWith<AutomationLanePointClipboardCurve> get copyWith => _$AutomationLanePointClipboardCurveCopyWithImpl<AutomationLanePointClipboardCurve>(this, _$identity);
+
+
+
+@override
+bool operator ==(Object other) {
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is AutomationLanePointClipboardCurve&&const DeepCollectionEquality().equals(other.points, points)&&(identical(other.lengthTicks, lengthTicks) || other.lengthTicks == lengthTicks));
+}
+
+
+@override
+int get hashCode => Object.hash(runtimeType,const DeepCollectionEquality().hash(points),lengthTicks);
+
+@override
+String toString() {
+  return 'AutomationLanePointClipboard.curve(points: $points, lengthTicks: $lengthTicks)';
+}
+
+
+}
+
+/// @nodoc
+abstract mixin class $AutomationLanePointClipboardCurveCopyWith<$Res> implements $AutomationLanePointClipboardCopyWith<$Res> {
+  factory $AutomationLanePointClipboardCurveCopyWith(AutomationLanePointClipboardCurve value, $Res Function(AutomationLanePointClipboardCurve) _then) = _$AutomationLanePointClipboardCurveCopyWithImpl;
+@useResult
+$Res call({
+ IList<AutomationPointDto> points, int lengthTicks
+});
+
+
+
+
+}
+/// @nodoc
+class _$AutomationLanePointClipboardCurveCopyWithImpl<$Res>
+    implements $AutomationLanePointClipboardCurveCopyWith<$Res> {
+  _$AutomationLanePointClipboardCurveCopyWithImpl(this._self, this._then);
+
+  final AutomationLanePointClipboardCurve _self;
+  final $Res Function(AutomationLanePointClipboardCurve) _then;
+
+/// Create a copy of AutomationLanePointClipboard
+/// with the given fields replaced by the non-null parameter values.
+@pragma('vm:prefer-inline') $Res call({Object? points = null,Object? lengthTicks = null,}) {
+  return _then(AutomationLanePointClipboardCurve(
+points: null == points ? _self.points : points // ignore: cast_nullable_to_non_nullable
+as IList<AutomationPointDto>,lengthTicks: null == lengthTicks ? _self.lengthTicks : lengthTicks // ignore: cast_nullable_to_non_nullable
+as int,
   ));
 }
 

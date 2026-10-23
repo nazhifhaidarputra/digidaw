@@ -294,4 +294,27 @@ mod tests {
         assert!((out_l[2] - 1.0).abs() < 1e-4);
         assert!((out_l[4] - 0.5).abs() < 1e-4);
     }
+
+    #[test]
+    fn manual_edits_take_over_until_the_engine_releases_them() {
+        let mut plugin = DigidawDelay::default();
+        let spec = plugin
+            .get_parameter_specs()
+            .into_iter()
+            .find(|spec| spec.path == "delay/wet_mix")
+            .expect("wet mix parameter");
+
+        plugin.set_parameter(spec.id, 0.25);
+        assert!((plugin.get_current_parameter(spec.id) - 0.25).abs() < 1e-4);
+
+        plugin.apply_automation(spec.id, 1.0);
+        assert!(
+            (plugin.get_current_parameter(spec.id) - 0.25).abs() < 1e-4,
+            "automation must not overwrite the hand edit"
+        );
+
+        plugin.clear_parameter_overrides();
+        plugin.apply_automation(spec.id, 1.0);
+        assert!((plugin.get_current_parameter(spec.id) - 1.0).abs() < 1e-4);
+    }
 }

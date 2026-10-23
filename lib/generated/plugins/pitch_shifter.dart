@@ -9,16 +9,16 @@ class PitchShifterSpecs {
   static const String name = 'Pitch Shifter';
   static const bool isSynth = false;
 
-  static const UiPluginParameter enginePitchRatio = UiPluginParameter(
-    id: 1749825986,
-    path: 'engine/pitch_ratio',
-    name: 'Pitch Ratio',
+  static const UiPluginParameter enginePitchCents = UiPluginParameter(
+    id: 3127562262,
+    path: 'engine/pitch_cents',
+    name: 'Pitch Cents',
     group: 'Pitcher',
-    value: 1.0,
-    min: 0.5,
-    max: 2.0,
-    defaultValue: 1.0,
-    step: 0.001,
+    value: 0.0,
+    min: -2400.0,
+    max: 2400.0,
+    defaultValue: 0.0,
+    step: 1.0,
     paramType: UiParameterType.float,
     choices: [],
   );
@@ -37,5 +37,5 @@ class PitchShifterSpecs {
     choices: [],
   );
 
-  static const List<UiPluginParameter> allParameters = [enginePitchRatio, enginePreserveFormants];
+  static const List<UiPluginParameter> allParameters = [enginePitchCents, enginePreserveFormants];
 }

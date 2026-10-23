@@ -1,4 +1,4 @@
-package com.example.karbeat
+package app.digidaw.Digidaw
 
 import io.flutter.embedding.android.FlutterActivity
 import android.os.Bundle

@@ -147,16 +147,7 @@ class _RecoveryCard extends ConsumerWidget {
                 ),
                 const SizedBox(width: 8),
                 FilledButton.tonal(
-                  onPressed: busy
-                      ? null
-                      : () async {
-                          final recovered = await notifier.recover();
-                          if (recovered.isOk()) {
-                            await updateProjectWindowTitle(
-                              recovery.originalPath,
-                            );
-                          }
-                        },
+                  onPressed: busy ? null : () => unawaited(notifier.recover()),
                   child: const Text('Recover'),
                 ),
               ],

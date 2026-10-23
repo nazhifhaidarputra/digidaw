@@ -16,7 +16,8 @@ mod tests {
 
     use crate::audio_analysis_api::{
         begin_fit_to_tempo, begin_refresh_render, cancel_stale_renders, commit_beat_grid,
-        commit_render, execute_render, set_sample_mode, set_waveform_edits, sources_needing_render,
+        commit_render, execute_render, set_sample_mode, set_waveform_edits, set_waveform_pitch,
+        set_waveform_realtime, sources_needing_render,
     };
     use crate::clip_api::{batch_resize_clips, resize_clip};
     use crate::test::helpers::{add_dc_audio_source, make_ctx};
@@ -375,6 +376,117 @@ mod tests {
         crate::undo(&mut ctx).unwrap();
         assert!(source(&ctx, id).edited.is_none());
         assert!(!set_waveform_edits(&mut ctx, id, false, false, false).unwrap());
+    }
+
+    /// A one-second stereo 440 Hz sine source.
+    fn sine_source(ctx: &mut DawContext) -> AudioSourceId {
+        let samples: Vec<f32> = (0..48_000)
+            .flat_map(|frame| {
+                let value = (frame as f32 * 440.0 * std::f32::consts::TAU / 48_000.0).sin() * 0.5;
+                [value, value]
+            })
+            .collect();
+        let bytes: &[u8] = bytemuck::cast_slice(&samples);
+        let mut map = memmap2::MmapOptions::new()
+            .len(bytes.len())
+            .map_anon()
+            .unwrap();
+        map.copy_from_slice(bytes);
+        let buffer = Arc::new(map.make_read_only().unwrap());
+        ctx.app_state
+            .asset_library
+            .source_map
+            .insert_with_key(|id| {
+                Arc::new(AudioWaveform {
+                    id: Some(id),
+                    buffer: Some(buffer),
+                    sample_rate: 48_000,
+                    channels: 2,
+                    ..AudioWaveform::default()
+                })
+            })
+    }
+
+    /// Rising zero crossings of the left channel in the middle half second.
+    fn middle_crossings(interleaved: &[f32]) -> usize {
+        let left: Vec<f32> = interleaved.iter().step_by(2).copied().collect();
+        left[12_000..36_000]
+            .windows(2)
+            .filter(|pair| pair[0] < 0.0 && pair[1] >= 0.0)
+            .count()
+    }
+
+    #[test]
+    fn pitch_edit_renders_and_is_undoable() {
+        let mut ctx = make_ctx();
+        let id = sine_source(&mut ctx);
+        assert!(set_waveform_pitch(&mut ctx, id, 1200.0, false).unwrap());
+        refresh(&mut ctx, id);
+
+        let output = rendered(&ctx, id);
+        let frames = output.len() / 2;
+        assert!(frames.abs_diff(48_000) <= 480, "{frames} frames");
+        // An octave up doubles the 220 crossings of 440 Hz over half a second.
+        let crossings = middle_crossings(&output);
+        assert!((400..=480).contains(&crossings), "{crossings} crossings");
+
+        assert!(set_waveform_pitch(&mut ctx, id, 10_000.0, true).unwrap());
+        let edits = &source(&ctx, id).edited.as_ref().unwrap().edits;
+        assert_eq!(edits.pitch_semitones, 24.0);
+        assert!(edits.preserve_formants);
+        assert!(set_waveform_pitch(&mut ctx, id, f32::NAN, false).is_err());
+
+        crate::undo(&mut ctx).unwrap();
+        let edits = &source(&ctx, id).edited.as_ref().unwrap().edits;
+        assert_eq!(edits.pitch_semitones, 12.0);
+        crate::undo(&mut ctx).unwrap();
+        assert!(source(&ctx, id).edited.is_none());
+    }
+
+    #[test]
+    fn realtime_pitch_plays_live_and_keeps_the_other_edits_rendered() {
+        let mut ctx = make_ctx();
+        let id = sine_source(&mut ctx);
+        assert!(!set_waveform_realtime(&mut ctx, id, true).unwrap());
+        assert!(set_waveform_edits(&mut ctx, id, false, false, true).unwrap());
+        refresh(&mut ctx, id);
+        let reversed = rendered(&ctx, id);
+
+        // The pitch plays live: nothing renders, and the reverse render stays loaded.
+        assert!(!set_waveform_pitch(&mut ctx, id, 700.0, true).unwrap());
+        assert_eq!(rendered(&ctx, id), reversed);
+        assert!(sources_needing_render(&ctx).is_empty());
+        let (scale, formants) = source(&ctx, id).realtime_pitch().unwrap();
+        assert!((scale - 2_f64.powf(7.0 / 12.0)).abs() < 1e-9);
+        assert!(formants);
+
+        // Offline, the pitch joins the render; the original plays until it arrives.
+        assert!(set_waveform_realtime(&mut ctx, id, false).unwrap());
+        assert!(source(&ctx, id).edited.as_ref().unwrap().buffer.is_none());
+        assert_eq!(source(&ctx, id).realtime_pitch(), None);
+        refresh(&mut ctx, id);
+        assert_ne!(rendered(&ctx, id), reversed);
+
+        crate::undo(&mut ctx).unwrap();
+        assert!(source(&ctx, id).edited.as_ref().unwrap().edits.realtime);
+        assert!(!set_waveform_realtime(&mut ctx, id, true).unwrap());
+    }
+
+    #[test]
+    fn realtime_fit_sets_the_tempo_without_rendering() {
+        let (mut ctx, id) = setup();
+        assert!(!set_waveform_realtime(&mut ctx, id, true).unwrap());
+        assert!(begin_fit_to_tempo(&ctx, id, true).is_err());
+        fit(&mut ctx, id, false);
+        let waveform = source(&ctx, id);
+        assert_eq!(waveform.sample_mode, AudioSampleMode::Stretch);
+        assert!(waveform.edited.as_ref().unwrap().buffer.is_none());
+        // Playback stretches 120 BPM audio to the 100 BPM project live.
+        assert!((waveform.tempo_rate(100.0) - 100.0 / 120.0).abs() < 1e-6);
+
+        // Tempo changes need no render either.
+        ctx.app_state.transport.bpm = 150.0;
+        assert!(sources_needing_render(&ctx).is_empty());
     }
 
     #[test]

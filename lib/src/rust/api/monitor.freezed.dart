@@ -14,7 +14,7 @@ T _$identity<T>(T value) => value;
 /// @nodoc
 mixin _$PerformanceMetricsDTO {
 
- double get osCpuUsage; double get ramUsageMb; double get totalRamMb; double get dspHeadroom;
+ double get osCpuUsage; double get ramUsageMb; double get totalRamMb; double get dspHeadroom; int get pdcLatencySamples;
 /// Create a copy of PerformanceMetricsDTO
 /// with the given fields replaced by the non-null parameter values.
 @JsonKey(includeFromJson: false, includeToJson: false)
@@ -25,16 +25,16 @@ $PerformanceMetricsDTOCopyWith<PerformanceMetricsDTO> get copyWith => _$Performa
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is PerformanceMetricsDTO&&(identical(other.osCpuUsage, osCpuUsage) || other.osCpuUsage == osCpuUsage)&&(identical(other.ramUsageMb, ramUsageMb) || other.ramUsageMb == ramUsageMb)&&(identical(other.totalRamMb, totalRamMb) || other.totalRamMb == totalRamMb)&&(identical(other.dspHeadroom, dspHeadroom) || other.dspHeadroom == dspHeadroom));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is PerformanceMetricsDTO&&(identical(other.osCpuUsage, osCpuUsage) || other.osCpuUsage == osCpuUsage)&&(identical(other.ramUsageMb, ramUsageMb) || other.ramUsageMb == ramUsageMb)&&(identical(other.totalRamMb, totalRamMb) || other.totalRamMb == totalRamMb)&&(identical(other.dspHeadroom, dspHeadroom) || other.dspHeadroom == dspHeadroom)&&(identical(other.pdcLatencySamples, pdcLatencySamples) || other.pdcLatencySamples == pdcLatencySamples));
 }
 
 
 @override
-int get hashCode => Object.hash(runtimeType,osCpuUsage,ramUsageMb,totalRamMb,dspHeadroom);
+int get hashCode => Object.hash(runtimeType,osCpuUsage,ramUsageMb,totalRamMb,dspHeadroom,pdcLatencySamples);
 
 @override
 String toString() {
-  return 'PerformanceMetricsDTO(osCpuUsage: $osCpuUsage, ramUsageMb: $ramUsageMb, totalRamMb: $totalRamMb, dspHeadroom: $dspHeadroom)';
+  return 'PerformanceMetricsDTO(osCpuUsage: $osCpuUsage, ramUsageMb: $ramUsageMb, totalRamMb: $totalRamMb, dspHeadroom: $dspHeadroom, pdcLatencySamples: $pdcLatencySamples)';
 }
 
 
@@ -45,7 +45,7 @@ abstract mixin class $PerformanceMetricsDTOCopyWith<$Res>  {
   factory $PerformanceMetricsDTOCopyWith(PerformanceMetricsDTO value, $Res Function(PerformanceMetricsDTO) _then) = _$PerformanceMetricsDTOCopyWithImpl;
 @useResult
 $Res call({
- double osCpuUsage, double ramUsageMb, double totalRamMb, double dspHeadroom
+ double osCpuUsage, double ramUsageMb, double totalRamMb, double dspHeadroom, int pdcLatencySamples
 });
 
 
@@ -62,13 +62,14 @@ class _$PerformanceMetricsDTOCopyWithImpl<$Res>
 
 /// Create a copy of PerformanceMetricsDTO
 /// with the given fields replaced by the non-null parameter values.
-@pragma('vm:prefer-inline') @override $Res call({Object? osCpuUsage = null,Object? ramUsageMb = null,Object? totalRamMb = null,Object? dspHeadroom = null,}) {
+@pragma('vm:prefer-inline') @override $Res call({Object? osCpuUsage = null,Object? ramUsageMb = null,Object? totalRamMb = null,Object? dspHeadroom = null,Object? pdcLatencySamples = null,}) {
   return _then(_self.copyWith(
 osCpuUsage: null == osCpuUsage ? _self.osCpuUsage : osCpuUsage // ignore: cast_nullable_to_non_nullable
 as double,ramUsageMb: null == ramUsageMb ? _self.ramUsageMb : ramUsageMb // ignore: cast_nullable_to_non_nullable
 as double,totalRamMb: null == totalRamMb ? _self.totalRamMb : totalRamMb // ignore: cast_nullable_to_non_nullable
 as double,dspHeadroom: null == dspHeadroom ? _self.dspHeadroom : dspHeadroom // ignore: cast_nullable_to_non_nullable
-as double,
+as double,pdcLatencySamples: null == pdcLatencySamples ? _self.pdcLatencySamples : pdcLatencySamples // ignore: cast_nullable_to_non_nullable
+as int,
   ));
 }
 
@@ -150,10 +151,10 @@ return $default(_that);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( double osCpuUsage,  double ramUsageMb,  double totalRamMb,  double dspHeadroom)?  $default,{required TResult orElse(),}) {final _that = this;
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( double osCpuUsage,  double ramUsageMb,  double totalRamMb,  double dspHeadroom,  int pdcLatencySamples)?  $default,{required TResult orElse(),}) {final _that = this;
 switch (_that) {
 case _PerformanceMetricsDTO() when $default != null:
-return $default(_that.osCpuUsage,_that.ramUsageMb,_that.totalRamMb,_that.dspHeadroom);case _:
+return $default(_that.osCpuUsage,_that.ramUsageMb,_that.totalRamMb,_that.dspHeadroom,_that.pdcLatencySamples);case _:
   return orElse();
 
 }
@@ -171,10 +172,10 @@ return $default(_that.osCpuUsage,_that.ramUsageMb,_that.totalRamMb,_that.dspHead
 /// }
 /// ```
 
-@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( double osCpuUsage,  double ramUsageMb,  double totalRamMb,  double dspHeadroom)  $default,) {final _that = this;
+@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( double osCpuUsage,  double ramUsageMb,  double totalRamMb,  double dspHeadroom,  int pdcLatencySamples)  $default,) {final _that = this;
 switch (_that) {
 case _PerformanceMetricsDTO():
-return $default(_that.osCpuUsage,_that.ramUsageMb,_that.totalRamMb,_that.dspHeadroom);}
+return $default(_that.osCpuUsage,_that.ramUsageMb,_that.totalRamMb,_that.dspHeadroom,_that.pdcLatencySamples);}
 }
 /// A variant of `when` that fallback to returning `null`
 ///
@@ -188,10 +189,10 @@ return $default(_that.osCpuUsage,_that.ramUsageMb,_that.totalRamMb,_that.dspHead
 /// }
 /// ```
 
-@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( double osCpuUsage,  double ramUsageMb,  double totalRamMb,  double dspHeadroom)?  $default,) {final _that = this;
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( double osCpuUsage,  double ramUsageMb,  double totalRamMb,  double dspHeadroom,  int pdcLatencySamples)?  $default,) {final _that = this;
 switch (_that) {
 case _PerformanceMetricsDTO() when $default != null:
-return $default(_that.osCpuUsage,_that.ramUsageMb,_that.totalRamMb,_that.dspHeadroom);case _:
+return $default(_that.osCpuUsage,_that.ramUsageMb,_that.totalRamMb,_that.dspHeadroom,_that.pdcLatencySamples);case _:
   return null;
 
 }
@@ -203,13 +204,14 @@ return $default(_that.osCpuUsage,_that.ramUsageMb,_that.totalRamMb,_that.dspHead
 
 
 class _PerformanceMetricsDTO implements PerformanceMetricsDTO {
-  const _PerformanceMetricsDTO({required this.osCpuUsage, required this.ramUsageMb, required this.totalRamMb, required this.dspHeadroom});
+  const _PerformanceMetricsDTO({required this.osCpuUsage, required this.ramUsageMb, required this.totalRamMb, required this.dspHeadroom, required this.pdcLatencySamples});
   
 
 @override final  double osCpuUsage;
 @override final  double ramUsageMb;
 @override final  double totalRamMb;
 @override final  double dspHeadroom;
+@override final  int pdcLatencySamples;
 
 /// Create a copy of PerformanceMetricsDTO
 /// with the given fields replaced by the non-null parameter values.
@@ -221,16 +223,16 @@ _$PerformanceMetricsDTOCopyWith<_PerformanceMetricsDTO> get copyWith => __$Perfo
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is _PerformanceMetricsDTO&&(identical(other.osCpuUsage, osCpuUsage) || other.osCpuUsage == osCpuUsage)&&(identical(other.ramUsageMb, ramUsageMb) || other.ramUsageMb == ramUsageMb)&&(identical(other.totalRamMb, totalRamMb) || other.totalRamMb == totalRamMb)&&(identical(other.dspHeadroom, dspHeadroom) || other.dspHeadroom == dspHeadroom));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is _PerformanceMetricsDTO&&(identical(other.osCpuUsage, osCpuUsage) || other.osCpuUsage == osCpuUsage)&&(identical(other.ramUsageMb, ramUsageMb) || other.ramUsageMb == ramUsageMb)&&(identical(other.totalRamMb, totalRamMb) || other.totalRamMb == totalRamMb)&&(identical(other.dspHeadroom, dspHeadroom) || other.dspHeadroom == dspHeadroom)&&(identical(other.pdcLatencySamples, pdcLatencySamples) || other.pdcLatencySamples == pdcLatencySamples));
 }
 
 
 @override
-int get hashCode => Object.hash(runtimeType,osCpuUsage,ramUsageMb,totalRamMb,dspHeadroom);
+int get hashCode => Object.hash(runtimeType,osCpuUsage,ramUsageMb,totalRamMb,dspHeadroom,pdcLatencySamples);
 
 @override
 String toString() {
-  return 'PerformanceMetricsDTO(osCpuUsage: $osCpuUsage, ramUsageMb: $ramUsageMb, totalRamMb: $totalRamMb, dspHeadroom: $dspHeadroom)';
+  return 'PerformanceMetricsDTO(osCpuUsage: $osCpuUsage, ramUsageMb: $ramUsageMb, totalRamMb: $totalRamMb, dspHeadroom: $dspHeadroom, pdcLatencySamples: $pdcLatencySamples)';
 }
 
 
@@ -241,7 +243,7 @@ abstract mixin class _$PerformanceMetricsDTOCopyWith<$Res> implements $Performan
   factory _$PerformanceMetricsDTOCopyWith(_PerformanceMetricsDTO value, $Res Function(_PerformanceMetricsDTO) _then) = __$PerformanceMetricsDTOCopyWithImpl;
 @override @useResult
 $Res call({
- double osCpuUsage, double ramUsageMb, double totalRamMb, double dspHeadroom
+ double osCpuUsage, double ramUsageMb, double totalRamMb, double dspHeadroom, int pdcLatencySamples
 });
 
 
@@ -258,13 +260,14 @@ class __$PerformanceMetricsDTOCopyWithImpl<$Res>
 
 /// Create a copy of PerformanceMetricsDTO
 /// with the given fields replaced by the non-null parameter values.
-@override @pragma('vm:prefer-inline') $Res call({Object? osCpuUsage = null,Object? ramUsageMb = null,Object? totalRamMb = null,Object? dspHeadroom = null,}) {
+@override @pragma('vm:prefer-inline') $Res call({Object? osCpuUsage = null,Object? ramUsageMb = null,Object? totalRamMb = null,Object? dspHeadroom = null,Object? pdcLatencySamples = null,}) {
   return _then(_PerformanceMetricsDTO(
 osCpuUsage: null == osCpuUsage ? _self.osCpuUsage : osCpuUsage // ignore: cast_nullable_to_non_nullable
 as double,ramUsageMb: null == ramUsageMb ? _self.ramUsageMb : ramUsageMb // ignore: cast_nullable_to_non_nullable
 as double,totalRamMb: null == totalRamMb ? _self.totalRamMb : totalRamMb // ignore: cast_nullable_to_non_nullable
 as double,dspHeadroom: null == dspHeadroom ? _self.dspHeadroom : dspHeadroom // ignore: cast_nullable_to_non_nullable
-as double,
+as double,pdcLatencySamples: null == pdcLatencySamples ? _self.pdcLatencySamples : pdcLatencySamples // ignore: cast_nullable_to_non_nullable
+as int,
   ));
 }
 

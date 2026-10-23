@@ -28,9 +28,11 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
   late ScrollController _rulerController; // Controller 1: Top Ruler
   late ScrollController _trackContentController; // Controller 2: Bottom Content
 
-  // Sample Browser scroll controller (not linked with other scroll controller like the header and audio slot)
+  // Right panel scroll controllers (browser and source list tabs).
   late ScrollController _browserPanelController;
-  ProviderSubscription<bool>? _browserPanelSubscription;
+  late ScrollController _sourcePanelController;
+  ProviderSubscription<bool>? _rightPanelSubscription;
+  ProviderSubscription<bool>? _mixerPanelSubscription;
   late final DawContext _dawContext;
 
   late MultiSplitViewController _trackSplitViewController;
@@ -60,17 +62,17 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
     super.initState();
     _dawContext = ref.read(projectProvider.notifier).dawContext;
     _trackOrderController = ValueNotifier(List.unmodifiable(widget.trackIds));
-    final browserExpanded = ref.read(
-      workspaceStateProvider.select(
-        (state) => state.browserPanelState.isExpanded,
-      ),
+    final rightPanelExpanded = ref.read(
+      workspaceStateProvider.select((state) => state.isRightPanelExpanded),
     );
     _trackSplitViewController = MultiSplitViewController(
       areas: [
+        if (ref.read(mixerChannelPanelTargetProvider) != null)
+          _mixerPanelArea(),
         Area(size: widget.headerWidth, min: 160, max: 300, data: 'header'),
         Area(min: 200, data: 'timeline'),
-        if (browserExpanded)
-          Area(size: 300, min: 220, max: 480, data: 'browser'),
+        if (rightPanelExpanded)
+          Area(size: 300, min: 220, max: 480, data: 'rightPanel'),
       ],
     );
 
@@ -82,14 +84,31 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
     _rulerController = _horizontalControllers.addAndGet();
     _trackContentController = _horizontalControllers.addAndGet();
     _browserPanelController = ScrollController();
+    _sourcePanelController = ScrollController();
     _trackContentController.addListener(_handleScrollExpansion);
     HardwareKeyboard.instance.addHandler(_handleKeyEvents);
-    _browserPanelSubscription = ref.listenManual<bool>(
-      workspaceStateProvider.select(
-        (state) => state.browserPanelState.isExpanded,
-      ),
-      (_, isExpanded) => _setBrowserPanelExpanded(isExpanded),
+    _rightPanelSubscription = ref.listenManual<bool>(
+      workspaceStateProvider.select((state) => state.isRightPanelExpanded),
+      (_, isExpanded) => _setRightPanelExpanded(isExpanded),
     );
+    _mixerPanelSubscription = ref.listenManual<bool>(
+      mixerChannelPanelTargetProvider.select((target) => target != null),
+      (_, isOpen) => _setMixerPanelOpen(isOpen),
+    );
+  }
+
+  Area _mixerPanelArea() =>
+      Area(size: 350, min: 300, max: 520, data: 'mixerPanel');
+
+  /// Shows or hides the mixer channel panel at the far left.
+  void _setMixerPanelOpen(bool isOpen) {
+    final areas = _trackSplitViewController.areas;
+    final panelIndex = areas.indexWhere((area) => area.data == 'mixerPanel');
+    if (isOpen && panelIndex == -1) {
+      _trackSplitViewController.areas = [_mixerPanelArea(), ...areas];
+    } else if (!isOpen && panelIndex != -1) {
+      _trackSplitViewController.removeAreaAt(panelIndex);
+    }
   }
 
   @override
@@ -101,16 +120,16 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
     }
   }
 
-  void _setBrowserPanelExpanded(bool isExpanded) {
-    final browserIndex = _trackSplitViewController.areas.indexWhere(
-      (area) => area.data == 'browser',
+  void _setRightPanelExpanded(bool isExpanded) {
+    final panelIndex = _trackSplitViewController.areas.indexWhere(
+      (area) => area.data == 'rightPanel',
     );
-    if (isExpanded && browserIndex == -1) {
+    if (isExpanded && panelIndex == -1) {
       _trackSplitViewController.addArea(
-        Area(size: 300, min: 220, max: 480, data: 'browser'),
+        Area(size: 300, min: 220, max: 480, data: 'rightPanel'),
       );
-    } else if (!isExpanded && browserIndex != -1) {
-      _trackSplitViewController.removeAreaAt(browserIndex);
+    } else if (!isExpanded && panelIndex != -1) {
+      _trackSplitViewController.removeAreaAt(panelIndex);
     }
   }
 
@@ -128,7 +147,8 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
 
   @override
   void dispose() {
-    _browserPanelSubscription?.close();
+    _rightPanelSubscription?.close();
+    _mixerPanelSubscription?.close();
     _trackOrderController.dispose();
     _trackSplitViewController.dispose();
     _trackContentController.removeListener(_handleScrollExpansion);
@@ -137,6 +157,7 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
     _rulerController.dispose();
     _trackContentController.dispose();
     _browserPanelController.dispose();
+    _sourcePanelController.dispose();
     unawaited(_stopBrowserPreviews());
     HardwareKeyboard.instance.removeHandler(_handleKeyEvents);
     super.dispose();
@@ -249,7 +270,7 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
           _mousePos = localPosition;
         });
         break;
-      case ToolSelection.pointer:
+      case ToolSelection.panSelect:
       case ToolSelection.slice:
       default:
         break;
@@ -345,20 +366,19 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
             ),
             const SizedBox(width: 16),
             TextButton.icon(
-              onPressed: () => ref
-                  .read(workspaceStateProvider.notifier)
-                  .toggleBrowserPanel(),
+              onPressed: () =>
+                  ref.read(workspaceStateProvider.notifier).toggleRightPanel(),
               icon: Icon(
-                Icons.library_music,
+                Icons.vertical_split,
                 size: 16,
-                color: workspaceState.browserPanelState.isExpanded
+                color: workspaceState.isRightPanelExpanded
                     ? colors.primary
                     : colors.onSurfaceVariant,
               ),
               label: Text(
-                'Samples',
+                'Right Panel',
                 style: TextStyle(
-                  color: workspaceState.browserPanelState.isExpanded
+                  color: workspaceState.isRightPanelExpanded
                       ? colors.primary
                       : colors.onSurfaceVariant,
                   fontSize: 12,
@@ -613,6 +633,17 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
                   TrackHeader(
                     trackId: trackId,
                     itemHeight: height,
+                    isSelected: ref.watch(
+                      mixerChannelPanelTargetProvider.select(
+                        (target) =>
+                            target == UiMixerChannelTarget.track(trackId),
+                      ),
+                    ),
+                    onSelect: () => ref
+                        .read(trackListStateProvider.notifier)
+                        .selectMixerChannel(
+                          UiMixerChannelTarget.track(trackId),
+                        ),
                     onDragStarted: () => _startTrackDrag(trackId),
                     onDragEnded: _endTrackDrag,
                   ),
@@ -725,34 +756,28 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
             .watch(automationProvider)
             .isMasterAutomationDrawerOpened;
         final trackColor = colors.tertiary;
-
-        if (lanes.isEmpty) return const SizedBox();
+        const target = UiMixerChannelTarget.master();
 
         return Column(
           children: [
-            // A small header to visually separate the Master track
-            Container(
-              height: 30,
-              alignment: Alignment.centerLeft,
-              padding: const EdgeInsets.only(left: 10),
-              color: colors.surfaceContainerLow,
-              child: Text(
-                "Master Track",
-                style: TextStyle(
-                  color: colors.onSurface,
-                  fontSize: 12,
-                  fontWeight: FontWeight.bold,
-                ),
+            // Always shown, so the master can be selected for the mixer panel
+            MixerChannelContextMenu(
+              target: target,
+              child: _ChannelTitleRow(
+                title: "Master Track",
+                target: target,
+                rainbow: true,
               ),
             ),
-            AutomationExpandBar(
-              isExpanded: isExpanded,
-              laneCount: lanes.length,
-              trackColor: trackColor,
-              onTap: () => ref
-                  .read(automationProvider.notifier)
-                  .toggleMasterAutomationDrawer(),
-            ),
+            if (lanes.isNotEmpty)
+              AutomationExpandBar(
+                isExpanded: isExpanded,
+                laneCount: lanes.length,
+                trackColor: trackColor,
+                onTap: () => ref
+                    .read(automationProvider.notifier)
+                    .toggleMasterAutomationDrawer(),
+              ),
             if (isExpanded)
               ...lanes.map(
                 (entry) => Padding(
@@ -774,9 +799,6 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
     if (tempo <= 0 || sampleRate <= 0) return;
     final safeTicks = ticks < 0 ? 0 : ticks;
     final samples = (safeTicks * (60.0 / tempo) * (sampleRate / 960.0)).round();
-    AppLogger.info(
-      "[UI Seek] safeTicks=$safeTicks, tempo=$tempo, sr=$sampleRate -> samples=$samples",
-    );
     ref.read(transportProvider.notifier).seekTo(samples);
   }
 
@@ -890,7 +912,7 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
                       },
                       child: ScrollConfiguration(
                         behavior:
-                            (selectedTool == ToolSelection.pointer &&
+                            (selectedTool == ToolSelection.panSelect &&
                                 !isPlacing)
                             ? DragScrollBehavior()
                             : ScrollConfiguration.of(context).copyWith(
@@ -1170,21 +1192,20 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
         final trackColor = Theme.of(context).colorScheme.tertiary;
         final sr = ref.read(transportProvider).value?.sampleRate ?? 48000;
 
-        if (lanes.isEmpty) return const SizedBox();
-
         return Column(
           children: [
             // Empty space to perfectly align with the "Master Track" title block on the left
-            const SizedBox(height: 30),
+            const SizedBox(height: _ChannelTitleRow.height),
             // AutomationExpandBar is duplicated here as a spacer to keep the layout aligned with the header side
-            AutomationExpandBar(
-              isExpanded: isExpanded,
-              laneCount: lanes.length,
-              trackColor: trackColor,
-              onTap: () => ref
-                  .read(automationProvider.notifier)
-                  .toggleMasterAutomationDrawer(),
-            ),
+            if (lanes.isNotEmpty)
+              AutomationExpandBar(
+                isExpanded: isExpanded,
+                laneCount: lanes.length,
+                trackColor: trackColor,
+                onTap: () => ref
+                    .read(automationProvider.notifier)
+                    .toggleMasterAutomationDrawer(),
+              ),
             if (isExpanded)
               ...lanes.map(
                 (entry) => Padding(
@@ -1297,47 +1318,29 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
                   busAutomationExpandedProvider(busId),
                 );
                 final trackColor = bus.color.fromRGBorRGBAtoColor();
-
-                if (lanes.isEmpty) return const SizedBox.shrink();
+                final target = UiMixerChannelTarget.bus(busId);
 
                 return Column(
                   children: [
-                    // Bus Title Header
-                    ContextMenuWrapper(
-                      title: 'Bus $busId',
-                      header: Column(children: [Text(bus.name)]),
-                      actions: busIdentityActions(
-                        context: context,
-                        ref: ref,
-                        busId: busId,
-                        name: bus.name,
+                    // Bus Title Header: always shown, so the bus can be
+                    // selected for the mixer panel
+                    MixerChannelContextMenu(
+                      target: target,
+                      child: _ChannelTitleRow(
+                        title: bus.name,
+                        target: target,
                         color: trackColor,
                       ),
-                      child: Container(
-                        height: 30,
-                        alignment: Alignment.centerLeft,
-                        padding: const EdgeInsets.only(left: 10),
-                        color: trackColor,
-                        child: Text(
-                          bus.name,
-                          style: TextStyle(
-                            color: trackColor.computeLuminance() > 0.5
-                                ? Colors.black
-                                : Colors.white,
-                            fontSize: 12,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
+                    ),
+                    if (lanes.isNotEmpty)
+                      AutomationExpandBar(
+                        isExpanded: isExpanded,
+                        laneCount: lanes.length,
+                        trackColor: trackColor,
+                        onTap: () => ref
+                            .read(automationProvider.notifier)
+                            .toggleBusAutomationExpanded(busId),
                       ),
-                    ),
-                    AutomationExpandBar(
-                      isExpanded: isExpanded,
-                      laneCount: lanes.length,
-                      trackColor: trackColor,
-                      onTap: () => ref
-                          .read(automationProvider.notifier)
-                          .toggleBusAutomationExpanded(busId),
-                    ),
                     if (isExpanded)
                       ...lanes.map(
                         (entry) => Padding(
@@ -1384,21 +1387,20 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
                   busAutomationExpandedProvider(busId),
                 );
 
-                if (lanes.isEmpty) return const SizedBox.shrink();
-
                 return Column(
                   children: [
                     // Empty space to perfectly align with the Bus Title block on the left
-                    const SizedBox(height: 30),
+                    const SizedBox(height: _ChannelTitleRow.height),
                     // AutomationExpandBar is duplicated here as a spacer to keep layout aligned
-                    AutomationExpandBar(
-                      isExpanded: isExpanded,
-                      laneCount: lanes.length,
-                      trackColor: trackColor,
-                      onTap: () => ref
-                          .read(automationProvider.notifier)
-                          .toggleBusAutomationExpanded(busId),
-                    ),
+                    if (lanes.isNotEmpty)
+                      AutomationExpandBar(
+                        isExpanded: isExpanded,
+                        laneCount: lanes.length,
+                        trackColor: trackColor,
+                        onTap: () => ref
+                            .read(automationProvider.notifier)
+                            .toggleBusAutomationExpanded(busId),
+                      ),
                     if (isExpanded)
                       ...lanes.map(
                         (entry) => Padding(
@@ -1440,15 +1442,18 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
               areaClipBehavior: Clip.none,
               builder: (context, area) {
                 switch (area.data) {
+                  case 'mixerPanel':
+                    return const MixerChannelSidePanel();
                   case 'header':
                     return _buildHeaderArea();
                   case 'timeline':
                     // Areas paint in reverse order, so without a clip the
                     // playhead and cut line overflow onto the browser panel.
                     return ClipRect(child: _buildTimelineArea(context));
-                  case 'browser':
-                    return SampleBrowserPanel(
-                      scrollController: _browserPanelController,
+                  case 'rightPanel':
+                    return RightSidePanel(
+                      browserScrollController: _browserPanelController,
+                      sourceScrollController: _sourcePanelController,
                     );
                   default:
                     return const SizedBox();
@@ -1519,6 +1524,79 @@ class AutomationExpandBar extends StatelessWidget {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+/// Title row of the master or a bus in the header column. Tapping it shows
+/// the channel in the mixer channel panel.
+class _ChannelTitleRow extends ConsumerWidget {
+  static const double height = 30;
+
+  final String title;
+  final UiMixerChannelTarget target;
+
+  /// Background of the row; ignored when [rainbow] is set.
+  final Color? color;
+
+  /// Paints the animated master rainbow behind the title.
+  final bool rainbow;
+
+  const _ChannelTitleRow({
+    required this.title,
+    required this.target,
+    this.color,
+    this.rainbow = false,
+  });
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final colors = Theme.of(context).colorScheme;
+    final isSelected = ref.watch(
+      mixerChannelPanelTargetProvider.select((shown) => shown == target),
+    );
+    final background = color ?? colors.surfaceContainerLow;
+    final foreground = rainbow || background.computeLuminance() > 0.5
+        ? Colors.black
+        : Colors.white;
+
+    final row = Container(
+      height: height,
+      padding: const EdgeInsets.only(left: 10, right: 8),
+      decoration: BoxDecoration(color: rainbow ? null : background),
+      foregroundDecoration: isSelected
+          ? BoxDecoration(
+              border: Border(left: BorderSide(color: colors.primary, width: 3)),
+            )
+          : null,
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              title,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                color: foreground,
+                fontSize: 12,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ),
+          if (isSelected) Icon(Icons.tune, size: 14, color: foreground),
+        ],
+      ),
+    );
+
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: () => ref
+            .read(trackListStateProvider.notifier)
+            .selectMixerChannel(target),
+        child: rainbow ? RainbowSparkle(child: row) : row,
       ),
     );
   }

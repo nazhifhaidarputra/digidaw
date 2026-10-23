@@ -41,12 +41,12 @@ DigiDAW is currently released for **Linux x64 only**, as it is the only platform
 
 The installer:
 
-- Installs GTK 3, ALSA, FFTW, and libsamplerate with your package manager (apt, dnf, pacman, or zypper). On other distributions, install them yourself before running DigiDAW.
+- Installs GTK 3, ALSA, FFTW, libsamplerate, and lilv (the LV2 plugin library) with your package manager (apt, dnf, pacman, or zypper). On RHEL and its rebuilds, enable EPEL first so `lilv-libs` is available; on immutable Fedora systems, layer the packages with `rpm-ostree`. On other distributions, install them yourself before running DigiDAW.
 - Copies DigiDAW to `~/.local/share/digidaw`.
 - Adds a `digidaw` command in `~/.local/bin` and a DigiDAW entry to your app menu.
 - Checks that every library DigiDAW needs can be found, and lists any that are missing.
 
-Rubber Band, which DigiDAW uses for pitch shifting and time stretching, is built into the app, so you do not need to install it.
+Rubber Band, which DigiDAW uses for offline pitch shifting and time stretching, is built into the app, so you do not need to install it. Real-time stretching uses Signalsmith Stretch, which is compiled into the app from source.
 
 Once installed, launch DigiDAW from your app menu or run `digidaw`. If the command is not found, add `~/.local/bin` to your `PATH`.
 
@@ -93,7 +93,7 @@ From the repository root, run:
 
 The script:
 
-1. Installs the build dependencies with your package manager: clang, CMake, Ninja, Meson, pkg-config, and the GTK 3, ALSA, JACK, Rubber Band, FFTW, and libsamplerate development packages.
+1. Installs the build dependencies with your package manager: clang, CMake, Ninja, Meson, pkg-config, and the GTK 3, ALSA, JACK, Rubber Band, FFTW, libsamplerate, and lilv development packages.
 2. Builds Rubber Band 4.0 from source as a static library in `build/rubberband`, so the app does not depend on the distribution's Rubber Band. This only happens the first time, or after `build/` is cleaned.
 3. Installs `flutter_rust_bridge_codegen` if it is missing, and regenerates the Flutter Rust Bridge bindings.
 4. Downloads the tempo detection models into `assets/models`.

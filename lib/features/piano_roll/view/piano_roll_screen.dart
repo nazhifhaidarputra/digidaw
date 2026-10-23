@@ -15,6 +15,7 @@ import 'package:karbeat/features/piano_roll/view/scrollable_virtual_keyboard.dar
 import 'package:karbeat/features/piano_roll/view/note_param_editor.dart';
 import 'package:karbeat/features/piano_roll/view/pattern_ruler.dart';
 import 'package:karbeat/features/piano_roll/view/piano_roll_actions.dart';
+import 'package:karbeat/features/plugins/services/plugin_ui_launcher.dart';
 import 'package:karbeat/features/track/view/playhead.dart';
 import 'package:karbeat/core/widgets/shortcut_focus_anchor.dart';
 import 'package:karbeat/shared/enums/global.dart';
@@ -22,6 +23,7 @@ import 'package:karbeat/shared/models/grid.dart';
 import 'package:karbeat/shared/models/piano_key.dart';
 import 'package:karbeat/src/rust/api/audio.dart';
 import 'package:karbeat/src/rust/api/pattern.dart';
+import 'package:karbeat/src/rust/api/plugin.dart';
 import 'package:karbeat/src/rust/api/project.dart';
 import 'package:karbeat/src/rust/api/transport.dart';
 import 'package:karbeat/core/utils/formatter.dart';
@@ -1490,6 +1492,13 @@ class _PianoRollToolbar extends ConsumerWidget {
     final selectedTool = pianoRollState.tool;
     final generators = projectState.value?.generators ?? const IMapConst({});
     final previewGeneratorId = pianoRollState.previewGeneratorId;
+    // Samplers have no plugin screen, so only plugin generators can be opened.
+    final previewPlugin = previewGeneratorId == null
+        ? null
+        : switch (generators[previewGeneratorId]?.instanceType) {
+            UiGeneratorInstanceType_Plugin(:final field0) => field0,
+            _ => null,
+          };
 
     // Watch the transport stream directly via Riverpod
     final positionAsync = ref.watch(transportPositionStreamProvider);
@@ -1748,6 +1757,23 @@ class _PianoRollToolbar extends ConsumerWidget {
                   }
                 }
               },
+            ),
+            IconButton(
+              icon: Icon(Icons.open_in_new, color: colors.onSurfaceVariant),
+              onPressed: previewGeneratorId != null && previewPlugin != null
+                  ? () => openPluginInterface(
+                      context: context,
+                      ref: ref,
+                      target: UiPluginTarget.generator(previewGeneratorId),
+                      registryId: previewPlugin.registryId,
+                      instanceId: previewGeneratorId,
+                      pluginName: previewPlugin.name,
+                    )
+                  : null,
+              tooltip: previewPlugin == null
+                  ? 'Choose a plugin generator to open its screen'
+                  : 'Open plugin screen',
+              iconSize: 20,
             ),
           ],
         ),

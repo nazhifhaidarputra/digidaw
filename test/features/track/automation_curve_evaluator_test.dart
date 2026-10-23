@@ -2,88 +2,19 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:karbeat/features/track/services/automation_curve_evaluator.dart';
 import 'package:karbeat/src/rust/api/automation.dart';
 
-AutomationPointDto _point(
-  int ticks,
-  double value, {
-  int? id,
-  AutomationCurveTypeDto curve = AutomationCurveTypeDto.linear,
-  double tension = 0,
-}) => AutomationPointDto(
-  id: id ?? ticks,
-  timeTicks: ticks,
-  value: value,
-  curveType: curve,
-  tension: tension,
-);
+AutomationPointDto _point(int ticks, double value, {required int id}) =>
+    AutomationPointDto(
+      id: id,
+      timeTicks: ticks,
+      value: value,
+      curveType: AutomationCurveTypeDto.linear,
+      tension: 0,
+    );
 
 void main() {
-  // Expected values mirror the Rust tests in
-  // rust/karbeat-core/src/core/project/automation.rs.
-  test('holds the first and last values outside the points', () {
-    final points = [_point(100, 0.2), _point(200, 0.8)];
-
-    expect(evaluateAutomationPoints(points, 0), 0.2);
-    expect(evaluateAutomationPoints(points, 5000), 0.8);
-    expect(evaluateAutomationPoints(const [], 10), isNull);
-  });
-
-  test('linear tension bends the segment like the engine', () {
-    expect(
-      evaluateAutomationPoints([_point(0, 0), _point(100, 1)], 50),
-      closeTo(0.5, 1e-9),
-    );
-    expect(
-      evaluateAutomationPoints([_point(0, 0, tension: 1), _point(100, 1)], 25),
-      closeTo(0.5, 1e-9),
-    );
-    expect(
-      evaluateAutomationPoints([_point(0, 0, tension: -1), _point(100, 1)], 50),
-      closeTo(0.25, 1e-9),
-    );
-  });
-
-  test('step holds until the next point regardless of tension', () {
-    final points = [
-      _point(0, 0.1, curve: AutomationCurveTypeDto.step, tension: 0.9),
-      _point(100, 0.9),
-    ];
-
-    expect(evaluateAutomationPoints(points, 99), 0.1);
-    expect(evaluateAutomationPoints(points, 100), 0.9);
-    expect(automationSegmentSupportsTension(points.first), isFalse);
-  });
-
-  test('exponential segments follow a geometric ramp', () {
-    final from = _point(0, 0.1, curve: AutomationCurveTypeDto.exponential);
-
-    expect(evaluateAutomationSegment(from, 0.9, 0.5), closeTo(0.3, 1e-9));
-  });
-
-  test('dragging up always raises the curve midpoint', () {
-    final rising = _point(0, 0.2);
-    final falling = _point(0, 0.8);
-    final exponential = _point(
-      0,
-      0.2,
-      curve: AutomationCurveTypeDto.exponential,
-    );
-
-    for (final (from, to) in [
-      (rising, 0.8),
-      (falling, 0.2),
-      (exponential, 0.8),
-    ]) {
-      final direction = automationTensionDirection(from, to);
-      final base = evaluateAutomationSegment(from, to, 0.5);
-      final bent = evaluateAutomationSegment(
-        from.copyWith(tension: 0.5 * direction),
-        to,
-        0.5,
-      );
-      expect(bent, greaterThan(base));
-    }
-  });
-
+  // Curve shapes are tested where they are computed, in
+  // rust/karbeat-core/src/core/project/automation.rs. These tests cover the
+  // point ordering the editor previews, which mirrors `AutomationLane`.
   group('points sharing a tick', () {
     final c = _point(0, 1.0, id: 1);
     final a = _point(100, 0.5, id: 2);
@@ -96,9 +27,6 @@ void main() {
       final points = placeAutomationPoint([c, a, d], b);
 
       expect(ids(points), [1, 2, 4, 3]);
-      expect(evaluateAutomationPoints(points, 50), closeTo(0.75, 1e-9));
-      expect(evaluateAutomationPoints(points, 100), 0.0);
-      expect(evaluateAutomationPoints(points, 150), closeTo(0.5, 1e-9));
     });
 
     test('editing a point on its tick keeps its position', () {
@@ -122,5 +50,19 @@ void main() {
 
       expect(ids(moved), [1, 2, 4, 3]);
     });
+  });
+
+  test('the index after a tick counts every point at or before it', () {
+    final points = [
+      _point(0, 0, id: 1),
+      _point(100, 0, id: 2),
+      _point(100, 1, id: 3),
+      _point(200, 1, id: 4),
+    ];
+
+    expect(automationIndexAfterTick(points, -1), 0);
+    expect(automationIndexAfterTick(points, 100), 3);
+    expect(automationIndexAfterTick(points, 150.5), 3);
+    expect(automationIndexAfterTick(points, 500), 4);
   });
 }

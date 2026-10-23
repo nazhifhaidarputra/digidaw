@@ -244,12 +244,13 @@ class AutomationNotifier extends Notifier<AutomationDataState> {
   // BACKEND INTERACTION
   // =========================================================================
 
+  /// Creates an automation lane for [target]. [initialValue] is the
+  /// parameter's current value in its own unit; the parameter normalizes it
+  /// in Rust, and the lane itself only holds normalized values.
   Future<AsyncValue<void>> handleAddAutomationForTarget({
     required AutomationTargetDto target,
     required String label,
-    required double min,
-    required double max,
-    required double initialValue,
+    double? initialValue,
   }) async {
     final projectData = ref.read(projectProvider).value;
 
@@ -269,13 +270,11 @@ class AutomationNotifier extends Notifier<AutomationDataState> {
         ctx: _ctx,
         target: target,
         label: label,
-        min: min,
-        max: max,
         initialValue: initialValue,
       );
 
       AppLogger.debug(
-        "Add automation lane for $target with $min - $max initial value: $initialValue",
+        "Add automation lane for $target with initial value: $initialValue",
       );
 
       // Fetch the generated source based on the new link
@@ -327,9 +326,7 @@ class AutomationNotifier extends Notifier<AutomationDataState> {
     final result = await handleAddAutomationForTarget(
       target: automationTargetForPluginParameter(target, parameter.id),
       label: parameter.name,
-      min: parameter.min,
-      max: parameter.max,
-      initialValue: parameter.value.clamp(parameter.min, parameter.max),
+      initialValue: parameter.value,
     );
     if (result.hasValue) _revealDrawerFor(target);
     return result;
@@ -546,82 +543,96 @@ class AutomationNotifier extends Notifier<AutomationDataState> {
     double? value,
     double? tension,
     AutomationCurveTypeDto? curveType,
-  }) async {
-    final projectData = ref.read(projectProvider).value;
+    BezierHandlesDto? handles,
+  }) => _applyLaneEdit(
+    automationLaneId,
+    () => updateAutomationPoint(
+      ctx: _ctx,
+      automationId: automationLaneId,
+      id: pointId,
+      timeTicks: timeTicks,
+      value: value,
+      tension: tension,
+      curveType: curveType,
+      handles: handles,
+    ),
+  );
 
+  /// Copies the curve of a lane between two ticks, with times relative to
+  /// [startTick]. Null when the copy failed; the user is notified.
+  Future<IList<AutomationPointDto>?> copyRange({
+    required int laneId,
+    required int startTick,
+    required int endTick,
+  }) async {
+    final copied = await ref.guardApi(
+      () => copyAutomationRange(
+        ctx: _ctx,
+        automationId: laneId,
+        startTick: startTick,
+        endTick: endTick,
+      ),
+    );
+    return copied.value?.toIList();
+  }
+
+  /// Removes every point of a lane between two ticks as one undo step.
+  Future<void> deleteRange({
+    required int laneId,
+    required int startTick,
+    required int endTick,
+  }) => _applyLaneEdit(
+    laneId,
+    () => deleteAutomationRange(
+      ctx: _ctx,
+      automationId: laneId,
+      startTick: startTick,
+      endTick: endTick,
+    ),
+  );
+
+  /// Pastes a copied curve at [atTick] as one undo step, replacing the points
+  /// under it. [targetLength] stretches the curve to another length.
+  Future<void> pastePoints({
+    required int laneId,
+    required int atTick,
+    required IList<AutomationPointDto> points,
+    required int lengthTicks,
+    int? targetLength,
+  }) => _applyLaneEdit(
+    laneId,
+    () => pasteAutomationPoints(
+      ctx: _ctx,
+      automationId: laneId,
+      atTick: atTick,
+      points: points.unlockView,
+      lengthTicks: lengthTicks,
+      targetLength: targetLength,
+    ),
+  );
+
+  /// Runs a Rust lane edit and publishes the lane it returns, keeping the
+  /// backend mutation and the project state update paired.
+  Future<void> _applyLaneEdit(
+    int laneId,
+    Future<AutomationLaneDto> Function() edit,
+  ) async {
+    final result = await ref.guardApi(edit);
+    final lane = result.value;
+    if (lane == null) {
+      if (result.hasError) AppLogger.error(result.error.toString());
+      return;
+    }
+
+    final projectData = ref.read(projectProvider).value;
     if (projectData == null) {
       AppLogger.error("Project state is missing");
       ref.notifyError('Project state is missing');
       return;
     }
-
-    final updateRes = await ref.guardApi(() async {
-      return await updateAutomationPoint(
-        ctx: _ctx,
-        automationId: automationLaneId,
-        id: pointId,
-        timeTicks: timeTicks,
-        value: value,
-        tension: tension,
-        curveType: curveType,
-      );
-    });
-
-    if (updateRes.hasError) {
-      if (updateRes.error != null) {
-        AppLogger.error(
-          "Error when calling update automation point to Rust: ${updateRes.error.toString()}",
-        );
-        return;
-      }
-    }
-
-    if (!updateRes.hasValue) return;
-
-    final newIndex = updateRes.value!;
-
-    final lane = projectData.automationPool[automationLaneId];
-    if (lane == null) {
-      AppLogger.error("Automation lane $automationLaneId not found in pool.");
-      return;
-    }
-
-    // Copy the points for mutation
-    final updatedPoints = List<AutomationPointDto>.from(lane.points);
-
-    final oldIndex = updatedPoints.indexWhere((p) => p.id == pointId);
-    if (oldIndex == -1) {
-      AppLogger.error("Point ID $pointId not found in lane $automationLaneId.");
-      return;
-    }
-
-    // Construct the updated point containing the new coordinates
-    final oldPoint = updatedPoints[oldIndex];
-
-    final finalTimeTicks = timeTicks ?? oldPoint.timeTicks;
-    final finalValue = value ?? oldPoint.value;
-    final finalTension = tension ?? oldPoint.tension;
-    final finalCurveType = curveType ?? oldPoint.curveType;
-
-    final newPoint = oldPoint.copyWith(
-      value: finalValue,
-      timeTicks: finalTimeTicks,
-      tension: finalTension,
-      curveType: finalCurveType,
-    );
-
-    updatedPoints.removeAt(oldIndex);
-
-    final safeInsertIndex = newIndex.clamp(0, updatedPoints.length);
-    updatedPoints.insert(safeInsertIndex, newPoint);
-
-    final updatedLane = lane.copyWith(points: updatedPoints);
-    final updatedPool = projectData.automationPool.add(
-      automationLaneId,
-      updatedLane,
-    );
-
-    ref.read(projectProvider.notifier).updateAutomations(pool: updatedPool);
+    ref
+        .read(projectProvider.notifier)
+        .updateAutomations(pool: projectData.automationPool.add(laneId, lane));
   }
 }
 

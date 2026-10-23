@@ -160,8 +160,8 @@ pub trait PluginEditorManager {
     fn close_editor(&mut self, instance: HostInstanceId) -> Result<(), HostError>;
 }
 
-/// Implemented by Vst3PluginHost; future Lv2PluginHost, ClapPluginHost and AuPluginHost
-/// implement the same contracts without introducing format switches in the audio engine.
+/// Implemented by Vst3PluginHost, Lv2PluginHost, and ClapPluginHost; a future AuPluginHost
+/// implements the same contracts without introducing format switches in the audio engine.
 pub trait DigidawPluginHost:
     PluginScanner + PluginInstanceManager + PluginController + PluginEditorManager
 {

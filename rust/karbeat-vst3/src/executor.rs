@@ -53,7 +53,11 @@ impl Vst3Executor {
         };
         let progress = request.progress;
         let result = karbeat_host_api::scanner::scan(
-            &helper,
+            &karbeat_host_api::scanner::ModuleScanner {
+                format: PluginFormat::Vst3,
+                extension: "vst3",
+                probe: &karbeat_host_api::scanner::helper_probe(&helper, PluginFormat::Vst3),
+            },
             &settings,
             &mut cache,
             request.retry_quarantined,

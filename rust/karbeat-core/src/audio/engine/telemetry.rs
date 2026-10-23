@@ -121,6 +121,13 @@ pub fn get_current_dsp_load() -> f32 {
     f32::from_bits(DSP_LOAD_PERCENT.load(Ordering::Relaxed))
 }
 
+/// Plugin delay compensation of the realtime engine: the latency of its slowest signal path.
+pub static PDC_LATENCY_SAMPLES: AtomicU32 = AtomicU32::new(0);
+
+pub fn get_current_pdc_latency_samples() -> u32 {
+    PDC_LATENCY_SAMPLES.load(Ordering::Relaxed)
+}
+
 pub fn record_dsp_load(elapsed_seconds: f32, frame_count: usize, sample_rate: u32) {
     if frame_count == 0 || sample_rate == 0 {
         return;

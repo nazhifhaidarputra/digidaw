@@ -1,4 +1,5 @@
 import 'package:karbeat/src/rust/api/project.dart';
+import 'package:karbeat/src/rust/api/track.dart' show UiResizeEdge;
 
 /// ======================================
 /// Clip Time Conversion Utilities
@@ -47,4 +48,76 @@ extension UiClipTickConversion on UiClip {
     if (!isSampleBased) return offsetStart;
     return samplesToTicks(offsetStart, bpm, sampleRate);
   }
+}
+
+/// [clip] after its [edge] is dragged by [deltaTicks], trimming or extending
+/// what it plays. Mirrors the Rust-side `resize_clip_batch`.
+UiClip resizedClip(
+  UiClip clip,
+  UiResizeEdge edge,
+  int deltaTicks,
+  double bpm,
+  int sampleRate,
+) {
+  int newStart = clip.startTime;
+  int newLength = clip.loopLength;
+  int newOffset = clip.offsetStart;
+
+  if (clip.isSampleBased) {
+    final oldLengthTicks = samplesToTicks(clip.loopLength, bpm, sampleRate);
+    final oldEndTick = clip.startTime + oldLengthTicks;
+    if (edge == UiResizeEdge.right) {
+      final newEndTick = (oldEndTick + deltaTicks).clamp(
+        clip.startTime + 10,
+        1 << 62,
+      );
+      newLength = ticksToSamples(newEndTick - clip.startTime, bpm, sampleRate);
+    } else {
+      final newStartTick = (clip.startTime + deltaTicks)
+          .clamp(0, oldEndTick - 10)
+          .toInt();
+      final deltaSamples = ticksToSamples(
+        newStartTick - clip.startTime,
+        bpm,
+        sampleRate,
+      );
+      newStart = newStartTick;
+      newLength = (clip.loopLength - deltaSamples).clamp(1, 1 << 62).toInt();
+      newOffset = (clip.offsetStart + deltaSamples).clamp(0, 1 << 62).toInt();
+    }
+  } else if (edge == UiResizeEdge.right) {
+    final newEnd = (clip.startTime + clip.loopLength + deltaTicks).clamp(
+      clip.startTime + 10,
+      1 << 62,
+    );
+    newLength = newEnd.toInt() - clip.startTime;
+  } else {
+    final oldEnd = clip.startTime + clip.loopLength;
+    newStart = (clip.startTime + deltaTicks).clamp(0, oldEnd - 10).toInt();
+    newLength = oldEnd - newStart;
+    newOffset = (clip.offsetStart + newStart - clip.startTime)
+        .clamp(0, 1 << 62)
+        .toInt();
+  }
+  return clip.copyWith(
+    startTime: newStart,
+    loopLength: newLength,
+    offsetStart: newOffset,
+  );
+}
+
+/// [clip] after its [edge] is dragged by [deltaTicks] with its audio stretched
+/// to the new length. The clip takes the bounds of a plain resize, and its
+/// content offset scales with the length, like the Rust-side `stretched_time`.
+UiClip stretchResizedClip(
+  UiClip clip,
+  UiResizeEdge edge,
+  int deltaTicks,
+  double bpm,
+  int sampleRate,
+) {
+  final resized = resizedClip(clip, edge, deltaTicks, bpm, sampleRate);
+  if (clip.loopLength <= 0) return resized;
+  final factor = resized.loopLength / clip.loopLength;
+  return resized.copyWith(offsetStart: (clip.offsetStart * factor).round());
 }

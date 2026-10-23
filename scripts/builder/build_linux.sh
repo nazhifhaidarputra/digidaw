@@ -27,19 +27,19 @@ DEPS_INSTALLED=false
 if command -v apt-get >/dev/null 2>&1; then
     echo -e "\033[1;33m==> Detected Debian/Ubuntu. Installing packages via apt...\033[0m"
     sudo apt-get update
-    sudo apt-get install -y clang cmake ninja-build meson pkg-config libgtk-3-dev libasound2-dev libjack-jackd2-dev librubberband-dev libfftw3-dev libsamplerate0-dev
+    sudo apt-get install -y clang cmake ninja-build meson pkg-config libgtk-3-dev libasound2-dev libjack-jackd2-dev librubberband-dev libfftw3-dev libsamplerate0-dev liblilv-dev
     DEPS_INSTALLED=true
 elif command -v dnf >/dev/null 2>&1; then
     echo -e "\033[1;33m==> Detected Fedora/RHEL. Installing packages via dnf...\033[0m"
-    sudo dnf install -y clang cmake ninja-build meson pkgconf-pkg-config gtk3-devel alsa-lib-devel jack-audio-connection-kit-devel rubberband-devel fftw-devel libsamplerate-devel
+    sudo dnf install -y clang cmake ninja-build meson pkgconf-pkg-config gtk3-devel alsa-lib-devel jack-audio-connection-kit-devel rubberband-devel fftw-devel libsamplerate-devel lilv-devel
     DEPS_INSTALLED=true
 elif command -v pacman >/dev/null 2>&1; then
     echo -e "\033[1;33m==> Detected Arch Linux. Installing packages via pacman...\033[0m"
-    sudo pacman -Sy --noconfirm clang cmake ninja meson pkgconf gtk3 alsa-lib jack2 rubberband fftw libsamplerate
+    sudo pacman -Sy --noconfirm clang cmake ninja meson pkgconf gtk3 alsa-lib jack2 rubberband fftw libsamplerate lilv
     DEPS_INSTALLED=true
 elif command -v zypper >/dev/null 2>&1; then
     echo -e "\033[1;33m==> Detected openSUSE. Installing packages via zypper...\033[0m"
-    sudo zypper install -y clang cmake ninja meson pkg-config gtk3-devel alsa-devel jack-devel librubberband-devel fftw3-devel libsamplerate-devel
+    sudo zypper install -y clang cmake ninja meson pkg-config gtk3-devel alsa-devel jack-devel librubberband-devel fftw3-devel libsamplerate-devel liblilv-0-devel
     DEPS_INSTALLED=true
 else
     echo -e "\033[1;33m==> No supported package manager found (apt/dnf/pacman/zypper).\033[0m"
@@ -85,6 +85,9 @@ if [ ! -f "$RUBBERBAND_PREFIX/lib/librubberband.a" ]; then
     ninja -C "$RUBBERBAND_DIR/build" install
 fi
 export PKG_CONFIG_PATH="$RUBBERBAND_PREFIX/lib/pkgconfig${PKG_CONFIG_PATH:+:$PKG_CONFIG_PATH}"
+# Ask for the static archive explicitly: the system library folder also ends up on the link
+# line (for FFTW and libsamplerate), and a distro librubberband.so there would otherwise win.
+export RUBBERBAND_STATIC=1
 
 echo -e "\033[1;36m==> [Linux Build] Running Flutter Rust Bridge Codegen...\033[0m"
 flutter_rust_bridge_codegen generate

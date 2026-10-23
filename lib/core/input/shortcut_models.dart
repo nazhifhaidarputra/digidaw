@@ -5,6 +5,19 @@ import 'package:freezed_annotation/freezed_annotation.dart';
 
 part 'shortcut_models.freezed.dart';
 
+/// The workspace view a shortcut is limited to.
+enum ShortcutScope {
+  /// Active in every view.
+  global,
+  trackList,
+  pianoRoll;
+
+  /// Whether shortcuts of this scope and [other] can be active together, and
+  /// so must not share a key.
+  bool overlaps(ShortcutScope other) =>
+      this == global || other == global || this == other;
+}
+
 class DawShortcut {
   const DawShortcut({
     required this.id,
@@ -12,6 +25,7 @@ class DawShortcut {
     required this.category,
     required this.intent,
     required this.defaultKey,
+    this.scope = ShortcutScope.global,
   });
 
   final String id;
@@ -19,6 +33,7 @@ class DawShortcut {
   final String category;
   final Intent intent;
   final SingleActivator defaultKey;
+  final ShortcutScope scope;
 }
 
 @freezed

@@ -28,7 +28,11 @@ class WorkspaceBackground extends ConsumerWidget {
             : Stack(
                 fit: StackFit.expand,
                 children: [
-                  RawImage(image: image, fit: _boxFit(fit)),
+                  RawImage(
+                    image: image,
+                    fit: _boxFit(fit),
+                    filterQuality: FilterQuality.medium,
+                  ),
                   ColoredBox(
                     color: Colors.black.withValues(alpha: overlayOpacity),
                   ),

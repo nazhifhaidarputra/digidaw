@@ -1,0 +1,17 @@
+[package]
+name = "karbeat-rb"
+version.workspace = true
+edition.workspace = true
+license = "GPL-3.0-only"
+description = "Rubber Band Library bindings and safe wrappers for Karbeat"
+links = "rubberband"
+
+[dependencies]
+thiserror.workspace = true
+
+[build-dependencies]
+bindgen.workspace = true
+pkg-config.workspace = true
+
+[lints]
+workspace = true

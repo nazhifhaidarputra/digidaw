@@ -3,6 +3,9 @@ import 'package:freezed_annotation/freezed_annotation.dart';
 
 part 'browser_panel_state.freezed.dart';
 
+/// The tab shown in the track list's unified right-side panel.
+enum RightPanelTab { browser, sources }
+
 @freezed
 abstract class BrowserSample with _$BrowserSample {
   const factory BrowserSample({required String name, required String path}) =
@@ -22,7 +25,6 @@ abstract class FileTree with _$FileTree {
 @freezed
 abstract class BrowserPanelState with _$BrowserPanelState {
   const factory BrowserPanelState({
-    @Default(false) bool isExpanded,
     @Default(false) bool isLoadingDirectory,
     @Default(IMapConst<String, FileTree>({}))
     IMap<String, FileTree> directories,

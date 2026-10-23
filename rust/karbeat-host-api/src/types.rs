@@ -51,9 +51,35 @@ pub struct PluginDescriptor {
 }
 
 /// Runtime-generated host external plugin instance ID handle.
-/// IDs are never reused during a host's lifetime.
+///
+/// IDs are never reused during the process lifetime and are unique across format backends: the
+/// audio engine keys hosted endpoints by this ID alone.
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
 pub struct HostInstanceId(pub u64);
+
+impl HostInstanceId {
+    /// Issues the next process-wide instance ID.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`HostError::InvalidTransition`] once the ID space is exhausted.
+    pub fn allocate() -> Result<Self, HostError> {
+        static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
+        let mut next = NEXT.load(std::sync::atomic::Ordering::Relaxed);
+        loop {
+            let following = next.checked_add(1).ok_or(HostError::InvalidTransition)?;
+            match NEXT.compare_exchange_weak(
+                next,
+                following,
+                std::sync::atomic::Ordering::Relaxed,
+                std::sync::atomic::Ordering::Relaxed,
+            ) {
+                Ok(_) => return Ok(Self(next)),
+                Err(current) => next = current,
+            }
+        }
+    }
+}
 
 /// Runtime instance handle paired with the ABI executor that owns it.
 ///
@@ -256,4 +282,33 @@ pub enum HostError {
     /// Filesystem, process, or state-stream I/O failed.
     #[error("plugin I/O: {0}")]
     Io(#[from] std::io::Error),
+}
+
+#[cfg(test)]
+#[allow(clippy::unwrap_used, reason = "the ID space cannot run out in a test")]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn instance_ids_are_unique_across_threads_and_never_zero() {
+        let workers: Vec<_> = (0..4)
+            .map(|_| {
+                std::thread::spawn(|| {
+                    (0..256)
+                        .map(|_| HostInstanceId::allocate().unwrap())
+                        .collect::<Vec<_>>()
+                })
+            })
+            .collect();
+        let mut ids: Vec<_> = workers
+            .into_iter()
+            .flat_map(|worker| worker.join().unwrap())
+            .map(|id| id.0)
+            .collect();
+        assert!(ids.iter().all(|id| *id != 0));
+        ids.sort_unstable();
+        let issued = ids.len();
+        ids.dedup();
+        assert_eq!(ids.len(), issued);
+    }
 }

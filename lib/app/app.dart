@@ -26,6 +26,7 @@ import 'package:karbeat/features/setting/services/audio_settings_provider.dart';
 import 'package:karbeat/features/setting/services/general_settings_provider.dart';
 import 'package:karbeat/features/setting/services/host_devices_settings_provider.dart';
 import 'package:karbeat/features/setting/services/log_provider.dart';
+import 'package:karbeat/features/setting/services/metronome_sound_provider.dart';
 import 'package:karbeat/features/setting/services/plugin_settings_provider.dart';
 import 'package:karbeat/features/workspace/view/main_screen.dart';
 import 'package:karbeat/src/rust/api/project.dart';
@@ -170,6 +171,8 @@ class _KarbeatAppState extends ConsumerState<KarbeatApp> {
       if (!mounted) return;
       await ref.read(audioSettingsProvider.notifier).initialize(dawContext);
       if (!mounted) return;
+      await ref.read(metronomeSoundProvider.notifier).initialize(dawContext);
+      if (!mounted) return;
       await ref.read(logProvider.notifier).initialize();
       if (!mounted) return;
       await ref
@@ -201,17 +204,22 @@ class _KarbeatAppState extends ConsumerState<KarbeatApp> {
           themeMode: state.themeMode,
           palette: state.colorPalette,
           fontFamily: state.customFontFamily,
+          colorTheme: state.colorTheme,
         ),
       ),
     );
-    final lightTheme = AppTheme.light(
-      appearance.palette,
-      fontFamily: appearance.fontFamily,
-    );
-    final darkTheme = AppTheme.dark(
-      appearance.palette,
-      fontFamily: appearance.fontFamily,
-    );
+    // A loaded colour theme sets its own brightness, so it replaces both the
+    // light and the dark theme.
+    final colorTheme = appearance.colorTheme;
+    final customTheme = colorTheme == null
+        ? null
+        : AppTheme.custom(colorTheme, fontFamily: appearance.fontFamily);
+    final lightTheme =
+        customTheme ??
+        AppTheme.light(appearance.palette, fontFamily: appearance.fontFamily);
+    final darkTheme =
+        customTheme ??
+        AppTheme.dark(appearance.palette, fontFamily: appearance.fontFamily);
     final themeMode = AppTheme.themeMode(appearance.themeMode);
 
     // Handle Rust Initialization Errors

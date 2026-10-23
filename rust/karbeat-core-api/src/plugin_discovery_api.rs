@@ -68,7 +68,7 @@ fn cache_path() -> Result<PathBuf, HostError> {
     Ok(base.join("plugins/vst3-v1.json"))
 }
 
-/// Returns the platform's conventional VST3 search directories.
+/// Returns the platform's conventional search directories for every hosted plugin format.
 pub fn default_scan_paths() -> Vec<PathBuf> {
     karbeat_host::HostClient::global()
         .and_then(|client| futures_lite::future::block_on(client.default_scan_paths_all()))

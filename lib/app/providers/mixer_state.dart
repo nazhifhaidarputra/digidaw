@@ -455,6 +455,9 @@ class MixerNotifier extends Notifier<MixerEditorState> {
   }
 }
 
+/// Channel ID the master bus uses for touched-param tracking.
+const int masterTouchKey = 4294967295;
+
 extension MixerService on MixerNotifier {
   // ------------------------------------------------------------------
   // Fire-and-forget param updates (optimistic)
@@ -496,9 +499,46 @@ extension MixerService on MixerNotifier {
     );
   }
 
+  /// Apply a param change to whichever channel [target] names.
+  void setChannelParam({
+    required mixer_api.UiMixerChannelTarget target,
+    required mixer_api.UiMixerChannelParams param,
+  }) {
+    switch (target) {
+      case mixer_api.UiMixerChannelTarget_Track(:final field0):
+        setMixerChannelParam(trackId: field0, param: param);
+      case mixer_api.UiMixerChannelTarget_Bus(:final field0):
+        setBusChannelParam(busId: field0, param: param);
+      case mixer_api.UiMixerChannelTarget_Master():
+        setMasterBusParam(param: param);
+    }
+  }
+
+  /// Channel ID that [markParamTouched] and [markParamReleased] expect for
+  /// [target].
+  int touchKeyOf(mixer_api.UiMixerChannelTarget target) => switch (target) {
+    mixer_api.UiMixerChannelTarget_Track(:final field0) => field0,
+    mixer_api.UiMixerChannelTarget_Bus(:final field0) => field0,
+    mixer_api.UiMixerChannelTarget_Master() => masterTouchKey,
+  };
+
   // ------------------------------------------------------------------
   // Effect management
   // ------------------------------------------------------------------
+
+  /// Add an effect to the rack of whichever channel [target] names.
+  Future<Result<void>> addEffectToTarget(
+    mixer_api.UiMixerChannelTarget target,
+    int registryId,
+  ) => switch (target) {
+    mixer_api.UiMixerChannelTarget_Track(:final field0) =>
+      addEffectToMixerChannel(field0, registryId),
+    mixer_api.UiMixerChannelTarget_Bus(:final field0) => addEffectToBusChannel(
+      field0,
+      registryId,
+    ),
+    mixer_api.UiMixerChannelTarget_Master() => addEffectToMasterBus(registryId),
+  };
 
   /// Add an effect to a track channel or the master bus.
   ///

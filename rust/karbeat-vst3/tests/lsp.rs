@@ -17,7 +17,8 @@ fn main() {
 )]
 mod lsp {
     use karbeat_host_api::{
-        HostInstanceId, PluginDescriptor, PluginInstanceManager, PluginKind, ProcessingConfig,
+        HostInstanceId, PluginController, PluginDescriptor, PluginInstanceManager, PluginKind,
+        ProcessingConfig,
     };
     use karbeat_plugin_api::prelude::AudioPlugin;
     use karbeat_plugin_api::types::{AudioBuffers, AudioBusBuffer, ProcessContext, ProcessingMode};
@@ -134,6 +135,52 @@ mod lsp {
         Ok((id, energy))
     }
 
+    /// Drives the clipper 24 dB into its ceiling with both protection stages switched off,
+    /// making those edits either while no audio runs (the host flushes them) or while it does,
+    /// and returns the output energy of the final block.
+    fn clipped_energy(
+        host: &mut Vst3PluginHost,
+        descriptor: &PluginDescriptor,
+        idle_edit: bool,
+    ) -> f64 {
+        let id = host.create(descriptor).unwrap();
+        host.prepare(id, &config(descriptor.kind)).unwrap();
+        let parameters = host.parameters(id).unwrap();
+        let edits = [
+            ("Enable input LUFS limitation", 0.0),
+            ("Overdrive protection", 0.0),
+            ("Clipping threshold", 0.5),
+        ]
+        .map(|(name, value)| {
+            let parameter = parameters.iter().find(|spec| spec.name == name);
+            (parameter.unwrap().id, value)
+        });
+        // The native owner captures state before publishing an endpoint, which flushes once.
+        host.save_state(id).unwrap();
+        let mut processor = host.take_processor(id).unwrap();
+        assert!(
+            processor.latency_samples() > 0,
+            "the clipper's lookahead must be known before the first audio block"
+        );
+        if idle_edit {
+            for (parameter, value) in edits {
+                host.set_parameter(id, parameter, value).unwrap();
+            }
+            host.flush_parameters(id).unwrap();
+            host.resume(id).unwrap();
+        } else {
+            host.resume(id).unwrap();
+            for (parameter, value) in edits {
+                host.set_parameter(id, parameter, value).unwrap();
+            }
+        }
+        let energy = render(processor.as_mut(), false);
+        host.suspend(id).unwrap();
+        drop(processor);
+        host.destroy(id).unwrap();
+        energy
+    }
+
     pub(super) fn main() {
         if std::env::var_os("LSP_VST3_PATH").is_none()
             && !std::env::args().any(|arg| arg == "--ignored")
@@ -177,6 +224,24 @@ mod lsp {
         assert!(
             keyed < dry,
             "a loud sidechain must reduce the output: dry {dry}, keyed {keyed}"
+        );
+
+        // LSP reads parameter queues only while rendering frames, so a zero-sample flush
+        // would lose every edit made while the plugin's channel is idle.
+        let clipper = descriptors
+            .iter()
+            .find(|descriptor| descriptor.name == "Clipper Stereo")
+            .unwrap();
+        let (_, untouched) = run(&mut host, clipper, false).unwrap();
+        let live = clipped_energy(&mut host, clipper, false);
+        let idle = clipped_energy(&mut host, clipper, true);
+        assert!(
+            live > untouched * 2.0,
+            "edits made during playback must drive the clipper: {untouched} -> {live}"
+        );
+        assert!(
+            (idle - live).abs() < live * 0.05,
+            "edits made while idle must match edits made during playback: {idle} vs {live}"
         );
     }
 }

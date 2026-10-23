@@ -8,7 +8,6 @@ use crate::{
 pub(super) struct RenderWorkspace {
     pub mix_buffer: Vec<f32>,
     pub bus_buffers: HashMap<BusId, Vec<f32>>,
-    pub bus_temp_buffer: Vec<f32>,
     pub aux_buffers: HashMap<SidechainRoute, Vec<f32>>,
     /// Channel signal after effects and before fader/pan, for pre-fader connections.
     pub pre_fader_buffer: Vec<f32>,
@@ -29,7 +28,6 @@ impl RenderWorkspace {
         Self {
             mix_buffer: Vec::with_capacity(interleaved_samples),
             bus_buffers: HashMap::new(),
-            bus_temp_buffer: Vec::with_capacity(interleaved_samples),
             aux_buffers: HashMap::new(),
             pre_fader_buffer: Vec::with_capacity(interleaved_samples),
             edge_buffer: Vec::with_capacity(interleaved_samples),

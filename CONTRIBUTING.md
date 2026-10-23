@@ -41,12 +41,14 @@ DigiDAW follows a feature-driven modular structure. Keep domain logic, UI screen
 | --- | --- |
 | `karbeat-core` | Project model, commands, file management, and audio engine ownership. |
 | `karbeat-core-api` | UI-independent API layer between the core modules and UI bridges: modules → core API → FFI. |
-| `karbeat-dsp` | DSP primitives. Keep this crate generic and reusable. |
+| `karbeat-dsp` | DSP primitives. Keep this crate generic and reusable. Time stretching and pitch shifting go through the traits in `stretcher/backend.rs`; the `Default*` aliases in `stretcher/mod.rs` pick the algorithm. |
+| `karbeat-rb` | Rubber Band bindings and safe wrappers. The only crate that links native Rubber Band or calls its C API. Used for offline renders. |
+| `karbeat-signalsmith` | Signalsmith Stretch bindings and safe wrappers. Compiles the vendored, header-only library behind a small C shim, and is the only crate that calls it. Used for real-time stretching and pitch shifting. |
 | `karbeat-flutter-ffi` | Flutter-facing DTOs and bridge functions. |
 | `karbeat-plugins` | First-party plugin implementations and manifest export. |
 | `karbeat-host-api` | Low-level contracts for hosting external plugins. |
 | `karbeat-host` | Format-independent async host client, service, and static executor router. |
-| `karbeat-vst3`, `karbeat-clap`, `karbeat-lv2` | Plugin format executors. Unfinished formats keep concrete "unsupported" stubs. |
+| `karbeat-vst3`, `karbeat-clap`, `karbeat-lv2` | Plugin format executors. LV2 is hosted on Linux through `lilv` and `lv2-sys`, and CLAP on Linux and Windows through `clack-host`. VST3 and CLAP modules are probed by the `digidaw-plugin-scanner` helper, because loading them runs plugin code. Unfinished formats, and formats on platforms they do not support, keep concrete "unsupported" stubs. |
 | `karbeat-plugin-api`, `karbeat-plugin-types`, `karbeat-macros`, `karbeat-utils` | Plugin ecosystem and shared support crates. |
 
 Within the Rust workspace, respect crate boundaries:
@@ -55,6 +57,7 @@ Within the Rust workspace, respect crate boundaries:
 * Project domain state goes in `karbeat-core/src/core/project`.
 * Audio callback logic goes in `karbeat-core/src/audio`.
 * Generic DSP goes in `karbeat-dsp`.
+* Rubber Band FFI goes in `karbeat-rb`, and Signalsmith Stretch FFI in `karbeat-signalsmith`. Everything else reaches them through the `karbeat-dsp` stretch and pitch traits.
 * Bridge DTOs and functions go in `karbeat-flutter-ffi`.
 * Plugin implementations go in `karbeat-plugins`.
 
@@ -197,6 +200,11 @@ What to run depends on what you touched:
 | Rust DSP or audio engine | `cd rust && cargo test` plus focused engine and plugin tests |
 | FFI shape | Regenerate the bridge, then run Dart analysis and the relevant Rust tests |
 | Plugin manifest | Regenerate plugin manifests and check that the Flutter registry still maps every custom plugin screen |
+
+Changes to the engine's block pipeline (`rust/karbeat-core/src/audio/engine`) are pinned by reference renders:
+
+* `cargo test -p karbeat-core --lib engine::golden` compares each scenario with the render stored in `rust/karbeat-core/tests/fixtures/engine_golden`. When a change is meant to alter the sound, regenerate the stored renders with `UPDATE_ENGINE_GOLDEN=1` and say so in the pull request.
+* `cargo bench -p karbeat-core --bench engine_block --features bench-support` reports the time per block. Include before and after numbers for performance changes.
 
 If a command can't run because a tool, platform library, or network access is unavailable, say so in your pull request, including the command and the reason.
 

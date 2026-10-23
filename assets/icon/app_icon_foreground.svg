@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <!-- Android adaptive-icon foreground: the waveform inside the 66% safe zone. -->
+  <defs>
+    <linearGradient id="wave" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#7ee8f5"/>
+      <stop offset="1" stop-color="#00a9c4"/>
+    </linearGradient>
+  </defs>
+  <g fill="url(#wave)">
+    <rect x="305.6" y="458.0" width="38.4" height="108.0" rx="19.2"/>
+    <rect x="368.0" y="413.0" width="38.4" height="198.0" rx="19.2"/>
+    <rect x="430.4" y="356.0" width="38.4" height="312.0" rx="19.2"/>
+    <rect x="492.8" y="320.0" width="38.4" height="384.0" rx="19.2"/>
+    <rect x="555.2" y="356.0" width="38.4" height="312.0" rx="19.2"/>
+    <rect x="617.6" y="413.0" width="38.4" height="198.0" rx="19.2"/>
+    <rect x="680.0" y="458.0" width="38.4" height="108.0" rx="19.2"/>
+  </g>
+</svg>

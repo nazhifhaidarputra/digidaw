@@ -27,7 +27,6 @@ pub struct Vst3PluginHost {
     context: ComWrapper<Vst3HostContext>,
     instances: HashMap<HostInstanceId, Vst3Instance>,
     modules: HashMap<PathBuf, Rc<Vst3Module>>,
-    next_id: u64,
 }
 impl Default for Vst3PluginHost {
     fn default() -> Self {
@@ -42,7 +41,6 @@ impl Vst3PluginHost {
             context: ComWrapper::new(Vst3HostContext::default()),
             instances: HashMap::new(),
             modules: HashMap::new(),
-            next_id: 1,
         }
     }
     fn check_thread(&self) -> Result<(), HostError> {
@@ -146,8 +144,7 @@ impl Vst3PluginHost {
     /// in addition to wrong-thread and unknown-instance errors.
     pub fn processing_config(&self, id: HostInstanceId) -> Result<&ProcessingConfig, HostError> {
         self.instance(id)?
-            .config
-            .as_ref()
+            .config()
             .ok_or(HostError::InvalidTransition)
     }
     fn ensure_editor(&mut self, id: HostInstanceId) -> Result<(), HostError> {
@@ -174,7 +171,7 @@ impl PluginScanner for Vst3PluginHost {
 }
 impl PluginInstanceManager for Vst3PluginHost {
     fn is_processing(&self, id: HostInstanceId) -> Result<bool, HostError> {
-        Ok(self.instance(id)?.running)
+        Ok(self.instance(id)?.is_running())
     }
     fn create(&mut self, descriptor: &PluginDescriptor) -> Result<HostInstanceId, HostError> {
         self.check_thread()?;
@@ -222,11 +219,7 @@ impl PluginInstanceManager for Vst3PluginHost {
             .to_com_ptr::<FUnknown>()
             .ok_or(HostError::Unsupported("host context"))?;
         let instance = Vst3Instance::create(module, descriptor, context)?;
-        let id = HostInstanceId(self.next_id);
-        self.next_id = self
-            .next_id
-            .checked_add(1)
-            .ok_or(HostError::InvalidTransition)?;
+        let id = HostInstanceId::allocate()?;
         self.instances.insert(id, instance);
         Ok(id)
     }
@@ -337,6 +330,7 @@ impl PluginController for Vst3PluginHost {
             })?;
         }
         param.set(value, 2);
+        param.mark_user_edited();
         Ok(())
     }
     fn normalized_to_plain(

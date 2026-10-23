@@ -10,8 +10,8 @@ use karbeat_core::audio::writer::{
 use karbeat_core::context::DawContext as CoreDawContext;
 use karbeat_core::core::file_manager::audio_loader::AudioLoader;
 use karbeat_core::core::project::{
-    ApplicationState, CoverArt, CoverImage, EnvelopePoint, Fade, GainEnvelope, PluginInstance,
-    audio_waveform::AudioSampleMode,
+    ApplicationState, CoverArt, CoverImage, EnvelopeCursor, EnvelopePoint, Fade, GainEnvelope,
+    PluginInstance, audio_waveform::AudioSampleMode,
 };
 use karbeat_core::core::project::{
     AudioHardwareConfig, DawSource, ProjectMetadata,
@@ -21,7 +21,7 @@ use karbeat_core::core::project::{
     transport::TransportState,
 };
 use karbeat_core_api::{
-    audio_waveform_api, bounce_api,
+    audio_analysis_api, audio_waveform_api, bounce_api,
     jobs::{JobClass, JobContext, JobKind, JobSpec, JobTarget},
     project_api, track_api,
 };
@@ -360,6 +360,45 @@ pub struct UiGainEnvelope {
     pub points: Vec<UiEnvelopePoint>,
 }
 
+/// Samples the gain of an envelope at `positions`, with the code the audio engine plays.
+///
+/// `positions` are in the envelope's own unit (see [`UiEnvelopePoint::position`]);
+/// `content_start` and `content_length` locate the content the fades are measured against.
+/// The crossfade is not part of the gain and is drawn separately.
+#[frb(sync)]
+pub fn sample_gain_envelope(
+    envelope: UiGainEnvelope,
+    content_start: u64,
+    content_length: u64,
+    positions: Vec<f64>,
+) -> Vec<f32> {
+    let envelope = GainEnvelope::from(envelope);
+    let mut cursor = EnvelopeCursor::default();
+    positions
+        .into_iter()
+        .map(|position| {
+            let position = envelope_position(position);
+            let elapsed = position.saturating_sub(content_start);
+            envelope.fade_gain(elapsed, content_length) * envelope.point_gain(position, &mut cursor)
+        })
+        .collect()
+}
+
+/// Gain of a fade at normalized position `t`, rising from silence (0.0) to unity (1.0).
+#[frb(sync)]
+pub fn fade_gain_at(fade: UiFade, t: f64) -> f32 {
+    Fade::from(fade).gain_at(t)
+}
+
+/// Rounds a drawing position to the envelope's whole-sample unit.
+#[allow(
+    clippy::as_conversions,
+    reason = "float-to-int `as` saturates, so off-content positions clamp to the edges"
+)]
+fn envelope_position(position: f64) -> u64 {
+    position.round() as u64
+}
+
 /// How a waveform's playback responds to tempo.
 #[derive(Clone, Copy, Debug, Serialize)]
 pub enum UiAudioSampleMode {
@@ -511,7 +550,7 @@ pub struct AudioWaveformUiForAudioProperties {
     pub original_bpm: Option<f32>,
     /// Beats found by tempo detection, if it ran.
     pub beat_grid: Option<crate::api::audio_analysis::UiBeatGrid>,
-    /// Whether the source is stretched to the project tempo.
+    /// Whether an offline render stretches the source to the project tempo.
     pub fitted: bool,
     /// Whether the stretch follows each detected beat.
     pub warp: bool,
@@ -519,7 +558,13 @@ pub struct AudioWaveformUiForAudioProperties {
     pub invert: bool,
     /// Whether the audio plays backwards.
     pub reverse: bool,
-    /// Whether the stretched audio is rendered; playback uses the original until it is.
+    /// Pitch shift in cents: 100 per semitone, 1200 per octave.
+    pub pitch_cents: f32,
+    /// Whether the pitch shift preserves formants.
+    pub preserve_formants: bool,
+    /// Whether pitch and tempo play through a realtime stretcher instead of an offline render.
+    pub realtime: bool,
+    /// Whether the edited audio is rendered; playback uses the original until it is.
     pub render_ready: bool,
 }
 
@@ -571,7 +616,7 @@ impl AudioWaveformUiForAudioProperties {
             fitted: value
                 .edited
                 .as_ref()
-                .is_some_and(|edited| edited.edits.stretches()),
+                .is_some_and(|edited| !edited.edits.realtime && edited.edits.stretches()),
             warp: value
                 .edited
                 .as_ref()
@@ -584,6 +629,17 @@ impl AudioWaveformUiForAudioProperties {
                 .edited
                 .as_ref()
                 .is_some_and(|edited| edited.edits.reverse),
+            pitch_cents: value.edited.as_ref().map_or(0.0, |edited| {
+                edited.edits.pitch_semitones * audio_analysis_api::CENTS_PER_SEMITONE
+            }),
+            preserve_formants: value
+                .edited
+                .as_ref()
+                .is_some_and(|edited| edited.edits.preserve_formants),
+            realtime: value
+                .edited
+                .as_ref()
+                .is_some_and(|edited| edited.edits.realtime),
             render_ready: value
                 .edited
                 .as_ref()

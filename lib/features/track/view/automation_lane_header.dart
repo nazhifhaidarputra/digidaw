@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:karbeat/features/track/services/curve_sampler.dart';
 import 'package:karbeat/features/track/view/track_header.dart';
 import 'package:karbeat/src/rust/api/automation.dart';
 
 /// Compact header for an automation lane in a channel drawer.
-class AutomationLaneHeader extends StatelessWidget {
+class AutomationLaneHeader extends ConsumerWidget {
   final AutomationLaneDto lane;
 
   /// What owns the automated parameter, such as the plugin or mixer channel.
@@ -32,8 +34,12 @@ class AutomationLaneHeader extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final colors = Theme.of(context).colorScheme;
+    // The lane is normalized; the automated parameter names its own range.
+    final sampler = ref.watch(curveSamplerProvider);
+    final minText = sampler.valueText(lane.id, 0);
+    final maxText = sampler.valueText(lane.id, 1);
     return Container(
       height: itemHeight,
       decoration: BoxDecoration(
@@ -89,7 +95,7 @@ class AutomationLaneHeader extends StatelessWidget {
                     fontSize: 12,
                   ),
                   Text(
-                    "Min: ${lane.min} | Max: ${lane.max}",
+                    "$minText to $maxText",
                     style: TextStyle(
                       color: colors.onSurfaceVariant,
                       fontSize: 9,

@@ -2,10 +2,90 @@
 
 #[cfg(test)]
 mod tests {
-    use crate::audio_waveform_api;
+    use crate::{audio_waveform_api, clip_api, clipboard_api};
 
-    use crate::test::helpers::{make_ctx, make_seeded_ctx};
-    use karbeat_core::shared::id::{AudioSourceId, TrackId};
+    use crate::test::helpers::{add_dc_audio_source, make_ctx, make_seeded_ctx};
+    use karbeat_core::context::DawContext;
+    use karbeat_core::core::project::{ClipboardContent, clip::ClipSourceType};
+    use karbeat_core::shared::id::{AudioSourceId, ClipId, TrackId};
+
+    /// Clip IDs listed on a track, in track order.
+    fn clips_on(ctx: &DawContext, track: TrackId) -> Vec<ClipId> {
+        ctx.app_state.tracks[track].clips.clone()
+    }
+
+    #[test]
+    fn removing_an_audio_source_deletes_its_clips_and_undoes_in_one_step() {
+        let (mut ctx, audio, midi, _) = make_seeded_ctx();
+        let source = add_dc_audio_source(&mut ctx);
+        let other = add_dc_audio_source(&mut ctx);
+        let mut add = |source: AudioSourceId, start: u32| {
+            clip_api::add_clip(
+                &mut ctx,
+                Some(source.to_u64()),
+                ClipSourceType::Audio,
+                audio,
+                start,
+            )
+            .expect("audio clip")
+            .id
+        };
+        let first = add(source, 0);
+        let kept = add(other, 3_840);
+        let second = add(source, 7_680);
+        clipboard_api::copy_clips(&mut ctx, audio, &[first, kept]);
+        let midi_clips = clips_on(&ctx, midi);
+        let history_depth = ctx.history.undo_stack.len();
+
+        let removed = audio_waveform_api::remove_audio_source(&mut ctx, source).expect("remove");
+
+        assert_eq!(removed, 2);
+        assert!(!ctx.app_state.asset_library.source_map.contains_key(source));
+        assert!(ctx.app_state.asset_library.source_map.contains_key(other));
+        assert_eq!(clips_on(&ctx, audio), [kept]);
+        assert_eq!(clips_on(&ctx, midi), midi_clips);
+        assert!(!ctx.app_state.clips_pool.contains_key(first));
+        assert!(!ctx.app_state.clips_pool.contains_key(second));
+        // Only the clip of the surviving source stays in the clipboard.
+        match &ctx.app_state.clipboard {
+            ClipboardContent::Clips(clips) => assert_eq!(clips.len(), 1),
+            other => panic!("expected copied clips, found {other:?}"),
+        }
+        assert_eq!(ctx.history.undo_stack.len(), history_depth + 1);
+        assert_eq!(ctx.history.undo_label(), Some("Delete Audio Source"));
+
+        for _ in 0..2 {
+            crate::undo(&mut ctx).expect("undo");
+            assert!(ctx.app_state.asset_library.source_map.contains_key(source));
+            assert_eq!(clips_on(&ctx, audio), [first, kept, second]);
+            assert!(ctx.app_state.clips_pool.contains_key(first));
+
+            crate::redo(&mut ctx).expect("redo");
+            assert!(!ctx.app_state.asset_library.source_map.contains_key(source));
+            assert_eq!(clips_on(&ctx, audio), [kept]);
+        }
+    }
+
+    #[test]
+    fn removing_an_unknown_audio_source_changes_nothing() {
+        let (mut ctx, audio, ..) = make_seeded_ctx();
+        let source = add_dc_audio_source(&mut ctx);
+        clip_api::add_clip(
+            &mut ctx,
+            Some(source.to_u64()),
+            ClipSourceType::Audio,
+            audio,
+            0,
+        )
+        .expect("audio clip");
+        let history_depth = ctx.history.undo_stack.len();
+
+        let result = audio_waveform_api::remove_audio_source(&mut ctx, AudioSourceId::from(99999));
+
+        assert!(result.is_err());
+        assert_eq!(clips_on(&ctx, audio).len(), 1);
+        assert_eq!(ctx.history.undo_stack.len(), history_depth);
+    }
 
     #[test]
     fn get_audio_waveform_clips_data_empty_state() {

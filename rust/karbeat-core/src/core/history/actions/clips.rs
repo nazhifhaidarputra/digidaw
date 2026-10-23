@@ -86,6 +86,43 @@ impl ClipsMadeUnique {
 
 swap_action!(ClipsMadeUnique, "Make Clips Unique");
 
+/// An audio source deleted together with the clips that played it.
+///
+/// Holds the clip changes and the detached waveform. Undo reattaches the source and its clips
+/// under the same keys; redo detaches them again.
+#[derive(Debug)]
+pub struct AudioSourceRemoved {
+    clips: ClipsChanged,
+    source: PoolSwap<AudioSourceId, Arc<AudioWaveform>>,
+}
+
+impl AudioSourceRemoved {
+    /// Records the deletion from the clip changes and the waveform the project detached.
+    pub fn new(
+        clips: ClipsChanged,
+        source_id: AudioSourceId,
+        waveform: Arc<AudioWaveform>,
+    ) -> Self {
+        Self {
+            clips,
+            source: PoolSwap::from_entries(vec![(source_id, Some(waveform))]),
+        }
+    }
+
+    fn swap(&mut self, app: &mut ApplicationState) -> Result<EngineSync, HistoryError> {
+        // The source goes first on undo so its clips never point at a missing waveform; the
+        // order does not matter on redo because both end up detached.
+        self.source
+            .swap(&mut app.asset_library.source_map, "Audio source")?;
+        let mut sync = self.clips.swap(app)?;
+        // Added and removed audio sources only reach the engine with a full graph.
+        sync.merge(EngineSync::full_graph());
+        Ok(sync)
+    }
+}
+
+swap_action!(AudioSourceRemoved, "Delete Audio Source");
+
 /// Captures the tracks and clips a clip edit is about to touch, then builds the
 /// [`ClipsChanged`] record once the edit has run.
 ///

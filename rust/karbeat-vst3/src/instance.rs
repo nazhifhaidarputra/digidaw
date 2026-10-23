@@ -11,6 +11,7 @@ use karbeat_host_api::{
     HostError, PluginDescriptor, PluginState, ProcessingConfig, ProcessingGate,
 };
 use karbeat_plugin_api::prelude::ParameterSpec;
+use karbeat_utils::typestate::InvalidState;
 use std::{
     cell::UnsafeCell,
     ptr,
@@ -33,7 +34,8 @@ fn mapping_batch_end(next: usize, limit: usize) -> usize {
     next.saturating_add(limit).min(MIDI_MAPPING_QUERY_COUNT)
 }
 
-pub(crate) struct Vst3PrepareJob {
+/// Preparation carried between native-loop iterations while MIDI mappings are queried.
+pub struct Vst3PrepareJob {
     dsp: Option<Dsp>,
     mapping: Option<ComPtr<IMidiMapping>>,
     next_mapping: usize,
@@ -112,7 +114,10 @@ fn describe_buses(
             Ok(BusDescription {
                 role,
                 native: bus_arrangement(processor, direction, index, info)?,
-                default_active: info.flags & BusInfo_::BusFlags_::kDefaultActive != 0,
+                // The SDK's flag constants are `u32` or `i32` depending on the target ABI.
+                default_active: i64::from(info.flags)
+                    & i64::from(BusInfo_::BusFlags_::kDefaultActive)
+                    != 0,
             })
         })
         .collect()
@@ -160,6 +165,62 @@ fn current_arrangements(
         .collect()
 }
 
+karbeat_utils::typestate! {
+    /// Processing lifecycle of one instance, as its UI owner last left it.
+    ///
+    /// The audio thread can finish suspending on its own after a busy suspension, so
+    /// `Running` records the owner's last successful resume, not the gate's current state.
+    machine InstanceLifecycle {
+        shared: (),
+        erased: AnyInstanceLifecycle,
+        states {
+            /// Created, or being prepared again; no processing configuration applies.
+            Unprepared as UnpreparedInstance {}
+            /// Prepared for `config` with processing suspended.
+            Prepared as PreparedInstance { config: ProcessingConfig }
+            /// Prepared for `config` and resumed.
+            Running as RunningInstance { config: ProcessingConfig }
+        }
+        transitions {
+            // Preparation starts only once processing is suspended.
+            Unprepared | Prepared => Unprepared: fn begin_prepare(shared, state) {
+                Unprepared {}
+            }
+
+            Unprepared => Prepared: fn finish_prepare(shared, state, config: ProcessingConfig) {
+                Prepared { config }
+            }
+
+            // Resuming a running instance is valid; see the note on `Running` above.
+            Prepared | Running => Running: fn resumed(shared, state) {
+                Running { config: state.config }
+            }
+
+            Prepared | Running => Prepared: fn suspended(shared, state) {
+                Prepared { config: state.config }
+            }
+        }
+    }
+}
+
+impl AnyInstanceLifecycle {
+    fn unprepared() -> Self {
+        InstanceLifecycle {
+            shared: (),
+            state: Unprepared {},
+        }
+        .into()
+    }
+
+    fn config(&self) -> Option<&ProcessingConfig> {
+        match self {
+            Self::Unprepared(_) => None,
+            Self::Prepared(instance) => Some(&instance.state.config),
+            Self::Running(instance) => Some(&instance.state.config),
+        }
+    }
+}
+
 pub(crate) struct Vst3Instance {
     pub descriptor: PluginDescriptor,
     pub component: Option<ComPtr<IComponent>>,
@@ -171,9 +232,10 @@ pub(crate) struct Vst3Instance {
     component_connection: Option<ComPtr<IConnectionPoint>>,
     controller_connection: Option<ComPtr<IConnectionPoint>>,
     connected: bool,
-    pub active: bool,
-    pub running: bool,
-    pub config: Option<ProcessingConfig>,
+    /// Whether the component is activated, tracked for teardown. It differs from the
+    /// lifecycle only after a failed deactivation.
+    active: bool,
+    lifecycle: AnyInstanceLifecycle,
     pub slot: Option<Arc<ProcessorSlot>>,
     pub endpoint_taken: bool,
     pub exchange: Arc<ParameterExchange>,
@@ -184,6 +246,38 @@ pub(crate) struct Vst3Instance {
     _module: Rc<Vst3Module>,
 }
 impl Vst3Instance {
+    /// Processing configuration the instance is prepared for, if any.
+    pub fn config(&self) -> Option<&ProcessingConfig> {
+        self.lifecycle.config()
+    }
+
+    /// Whether the owner last resumed processing.
+    pub fn is_running(&self) -> bool {
+        matches!(self.lifecycle, AnyInstanceLifecycle::Running(_))
+    }
+
+    /// Applies a run-time lifecycle transition, keeping the current state when it is not
+    /// valid from it.
+    fn advance(
+        &mut self,
+        transition: impl FnOnce(
+            AnyInstanceLifecycle,
+        )
+            -> Result<AnyInstanceLifecycle, (AnyInstanceLifecycle, InvalidState)>,
+    ) -> Result<(), HostError> {
+        let current = std::mem::replace(&mut self.lifecycle, AnyInstanceLifecycle::unprepared());
+        match transition(current) {
+            Ok(next) => {
+                self.lifecycle = next;
+                Ok(())
+            }
+            Err((unchanged, _)) => {
+                self.lifecycle = unchanged;
+                Err(HostError::InvalidTransition)
+            }
+        }
+    }
+
     pub fn create(
         module: Rc<Vst3Module>,
         descriptor: PluginDescriptor,
@@ -205,8 +299,7 @@ impl Vst3Instance {
             controller_connection: None,
             connected: false,
             active: false,
-            running: false,
-            config: None,
+            lifecycle: AnyInstanceLifecycle::unprepared(),
             slot: None,
             endpoint_taken: false,
             exchange: ParameterExchange::new(&[]),
@@ -347,7 +440,7 @@ impl Vst3Instance {
     ) -> Result<Vst3PrepareJob, HostError> {
         config.validate()?;
         self.suspend()?;
-        self.config = None;
+        self.advance(AnyInstanceLifecycle::begin_prepare)?;
         let component = self
             .component
             .as_ref()
@@ -546,7 +639,7 @@ impl Vst3Instance {
                 endpoint_alive: AtomicBool::new(false),
             }));
         }
-        self.config = Some(config);
+        self.advance(|lifecycle| lifecycle.finish_prepare(config))?;
         Ok(true)
     }
 
@@ -557,17 +650,9 @@ impl Vst3Instance {
     }
 
     /// Applies the parts of a `restartComponent` request the host handles in place.
-    ///
-    /// A latency change is re-read on this UI owner and published to the audio endpoint, whose
-    /// `has_latency_changed` edge then triggers delay-compensation recalculation.
     pub fn apply_restart_flags(&self, flags: i32) {
-        if flags & RestartFlags_::kLatencyChanged != 0
-            && self.active
-            && let (Some(processor), Some(slot)) = (&self.processor, &self.slot)
-        {
-            // SAFETY: Latency is queried on the owning UI thread of an active processor.
-            let latency = unsafe { processor.getLatencySamples() };
-            slot.latency.store(latency, Ordering::Release);
+        if flags & RestartFlags_::kLatencyChanged != 0 {
+            self.publish_latency();
         }
         if flags & RestartFlags_::kIoChanged != 0 {
             log::warn!(
@@ -583,11 +668,12 @@ impl Vst3Instance {
             // SAFETY: Successful suspension acknowledges the end of all processing access.
             unsafe { &mut *slot.dsp.get() }.stop()?;
         }
-        self.running = false;
+        // An unprepared instance has nothing to suspend and stays as it is.
+        drop(self.advance(AnyInstanceLifecycle::suspended));
         Ok(())
     }
     pub fn resume(&mut self) -> Result<(), HostError> {
-        if self.config.is_none() {
+        if self.config().is_none() {
             return Err(HostError::InvalidTransition);
         }
         let slot = self.slot.as_ref().ok_or(HostError::InvalidTransition)?;
@@ -597,8 +683,7 @@ impl Vst3Instance {
         // SAFETY: Suspended gate grants exclusive control-thread access until resume below.
         unsafe { &mut *slot.dsp.get() }.start()?;
         slot.gate.resume()?;
-        self.running = true;
-        Ok(())
+        self.advance(AnyInstanceLifecycle::resumed)
     }
     pub fn flush_parameters(&mut self) -> Result<(), HostError> {
         self.suspend()?;
@@ -606,8 +691,26 @@ impl Vst3Instance {
             // SAFETY: Exclusive suspended DSP access; flush cached UI edits before querying state.
             let dsp = unsafe { &mut *slot.dsp.get() };
             dsp.flush(&self.exchange)?;
+            // Processors such as LSP's work out their latency while rendering, so the value
+            // read at activation can be stale until a block has run.
+            self.publish_latency();
         }
         Ok(())
+    }
+
+    /// Re-reads latency and tail on this UI owner and publishes them to the audio endpoint,
+    /// whose `has_latency_changed` edge then triggers delay-compensation recalculation.
+    fn publish_latency(&self) {
+        if self.active
+            && let (Some(processor), Some(slot)) = (&self.processor, &self.slot)
+        {
+            // SAFETY: Latency is queried on the owning UI thread of an active processor.
+            let latency = unsafe { processor.getLatencySamples() };
+            // SAFETY: Tail is queried on the owning UI thread of an active processor.
+            let tail = unsafe { processor.getTailSamples() };
+            slot.latency.store(latency, Ordering::Release);
+            slot.tail.store(tail, Ordering::Release);
+        }
     }
     pub fn save_state(&mut self) -> Result<PluginState, HostError> {
         self.flush_parameters()?;

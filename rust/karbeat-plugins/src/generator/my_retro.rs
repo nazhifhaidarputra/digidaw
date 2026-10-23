@@ -130,7 +130,7 @@ impl MyRetro {
 
             let env_level = voice.adsr.process(amp_envelope);
 
-            if voice.adsr.state == EnvelopeState::Idle {
+            if voice.adsr.state() == EnvelopeState::Idle {
                 voice.is_active = false;
                 break; // Massive CPU save: don't iterate remaining frames!
             }
@@ -198,7 +198,7 @@ impl MyRetro {
 
             let env_level = voice.adsr.process(amp_envelope);
 
-            if voice.adsr.state == EnvelopeState::Idle {
+            if voice.adsr.state() == EnvelopeState::Idle {
                 voice.is_active = false;
                 continue;
             }
@@ -559,7 +559,7 @@ mod rich_midi_tests {
         });
         assert!(synth.active_voices[0].key_released);
         assert_ne!(
-            synth.active_voices[0].adsr.state,
+            synth.active_voices[0].adsr.state(),
             karbeat_dsp::envelope::EnvelopeState::Release
         );
 
@@ -569,7 +569,7 @@ mod rich_midi_tests {
             value: 0,
         });
         assert_eq!(
-            synth.active_voices[0].adsr.state,
+            synth.active_voices[0].adsr.state(),
             karbeat_dsp::envelope::EnvelopeState::Release
         );
     }

@@ -100,11 +100,53 @@ pub struct DawContext {
     pub telemetry_reg_receiver: Option<Mutex<mpsc::Receiver<TelemetryRegistration>>>,
 }
 
-#[derive(Clone, Debug)]
-pub enum HostedTargetState {
-    Active(ExternalPluginInstanceHandle),
-    Transitioning,
-    Failed(String),
+karbeat_utils::typestate! {
+    /// Host-side state of one external plugin target.
+    #[derive(Clone, Debug)]
+    pub machine HostedTarget {
+        shared: (),
+        erased: #[derive(Clone, Debug)] HostedTargetState,
+        states {
+            /// A live instance backs the target.
+            #[derive(Clone, Debug)]
+            Active as ActiveHostedTarget { pub instance: ExternalPluginInstanceHandle }
+            /// A lifecycle operation is replacing the instance.
+            #[derive(Clone, Debug)]
+            Transitioning as TransitioningHostedTarget {}
+            /// The plugin could not be loaded.
+            #[derive(Clone, Debug)]
+            Failed as FailedHostedTarget { pub reason: String }
+        }
+        transitions {
+            // An active target takes the instance that replaces its previous one.
+            Active | Transitioning | Failed => Active: fn activate(
+                shared,
+                state,
+                instance: ExternalPluginInstanceHandle,
+            ) {
+                Active { instance }
+            }
+
+            Active | Failed => Transitioning: fn begin_transition(shared, state) {
+                Transitioning {}
+            }
+
+            Active | Transitioning => Failed: fn fail(shared, state, reason: String) {
+                Failed { reason }
+            }
+        }
+    }
+}
+
+impl HostedTargetState {
+    /// State of a target whose plugin could not be loaded.
+    pub fn failed(reason: String) -> Self {
+        HostedTarget {
+            shared: (),
+            state: Failed { reason },
+        }
+        .into()
+    }
 }
 
 #[derive(Clone)]
@@ -119,6 +161,26 @@ impl DawContext {
     /// Creates a context with a blank project, first-party registry, and disconnected audio queues.
     pub fn new() -> Self {
         Self::with_external_plugins(HostClient::unavailable())
+    }
+
+    /// Marks `target` as backed by `instance`, whatever state it was in or if it is new.
+    pub fn activate_hosted_target(
+        &mut self,
+        target: crate::audio::event::PluginTarget,
+        instance: ExternalPluginInstanceHandle,
+    ) {
+        let active = match self.hosted_targets.remove(&target) {
+            // Every state can activate, so the machine comes back either way.
+            Some(state) => match state.activate(instance) {
+                Ok(next) | Err((next, _)) => next,
+            },
+            None => HostedTarget {
+                shared: (),
+                state: Active { instance },
+            }
+            .into(),
+        };
+        self.hosted_targets.insert(target, active);
     }
 
     /// Creates a context with an injected format-independent external plugin host.
@@ -308,8 +370,6 @@ impl DawContext {
         let lane_audio_graph = AudioAutomationLane {
             points: lane.points.clone(),
             enabled: lane.enabled,
-            min: lane.min,
-            max: lane.max,
             default_value: lane.default_value,
         };
         let _ = self.send_audio_command(AudioCommand::UpdateAutomationLane {

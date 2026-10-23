@@ -1,13 +1,11 @@
 import 'package:fast_immutable_collections/fast_immutable_collections.dart';
-import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:karbeat/app/providers/blocking_task_provider.dart';
-import 'package:karbeat/app/providers/notification_provider.dart';
 import 'package:karbeat/app/providers/piano_roll_state.dart';
 import 'package:karbeat/app/providers/project_provider.dart';
-import 'package:karbeat/core/utils/logger.dart';
+import 'package:karbeat/app/providers/workspace_state.dart';
 import 'package:karbeat/features/plugins/services/plugin_ui_launcher.dart';
+import 'package:karbeat/features/source/services/audio_source_import.dart';
 import 'package:karbeat/features/source/services/audio_waveform_services.dart';
 import 'package:karbeat/features/source/view/audio_properties_screen.dart';
 import 'package:karbeat/src/rust/api/plugin.dart';
@@ -17,37 +15,6 @@ import 'package:karbeat/app/providers/clip_placement_state.dart';
 
 class SourceListScreen extends ConsumerWidget {
   const SourceListScreen({super.key});
-
-  Future<void> _pickFile(BuildContext context, WidgetRef ref) async {
-    final notifications = ref.read(notificationProvider.notifier);
-    FilePickerResult? result;
-    try {
-      result = await FilePicker.pickFiles(type: FileType.audio);
-    } catch (error, stackTrace) {
-      AppLogger.error('Could not select an audio file: $error');
-      notifications.error(
-        error,
-        title: 'Could not select audio',
-        stackTrace: stackTrace,
-      );
-      return;
-    }
-
-    final path = result?.files.single.path;
-    if (path == null || !context.mounted) return;
-
-    final projectNotifier = ref.read(projectProvider.notifier);
-    final importResult = await ref
-        .read(blockingTaskProvider.notifier)
-        .run(
-          label: 'Loading audio...',
-          task: () => projectNotifier.loadAudioSource(path),
-        );
-
-    if (context.mounted && importResult.isOk()) {
-      ref.invalidate(audioSourcesProvider);
-    }
-  }
 
   Future<void> _renamePattern(
     BuildContext context,
@@ -96,6 +63,65 @@ class SourceListScreen extends ConsumerWidget {
         .renamePattern(patternId: patternId, newName: trimmedName);
   }
 
+  /// Number of timeline clips that play the audio source [sourceId].
+  static int audioSourceClipCount(Iterable<UiTrack> tracks, int sourceId) =>
+      tracks
+          .expand((track) => track.clips)
+          .where(
+            (clip) => switch (clip.source) {
+              UiClipSource_Audio(sourceId: final id) => id == sourceId,
+              _ => false,
+            },
+          )
+          .length;
+
+  /// Asks before deleting an audio source, naming how many clips go with it.
+  Future<void> _deleteAudioSource(
+    BuildContext context,
+    WidgetRef ref,
+    int sourceId,
+    String name,
+  ) async {
+    final tracks =
+        ref.read(projectProvider).value?.tracks.values ?? const <UiTrack>[];
+    final clipCount = audioSourceClipCount(tracks, sourceId);
+    final clipText = switch (clipCount) {
+      0 => 'No clip on the timeline uses it.',
+      1 => '1 clip that plays it will be removed from the timeline.',
+      _ => '$clipCount clips that play it will be removed from the timeline.',
+    };
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Delete audio source?'),
+        content: Text(
+          '“$name” will be removed from the project. $clipText\n\n'
+          'The audio file on disk is not deleted, and you can undo this.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+
+    // A placement of this source would create a clip with nothing to play.
+    final placement = ref.read(clipPlacementProvider);
+    if (placement.sourceType == UiSourceType.audio &&
+        placement.sourceId == sourceId) {
+      ref.read(clipPlacementProvider.notifier).cancelPlacement();
+    }
+    await ref.read(projectProvider.notifier).removeAudioSource(sourceId);
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final colors = Theme.of(context).colorScheme;
@@ -112,7 +138,7 @@ class SourceListScreen extends ConsumerWidget {
 
     return Scaffold(
       floatingActionButton: FloatingActionButton(
-        onPressed: () => _pickFile(context, ref),
+        onPressed: () => importAudioSource(context, ref),
         child: const Icon(Icons.add),
       ),
       body: CustomScrollView(
@@ -181,7 +207,6 @@ class SourceListScreen extends ConsumerWidget {
                   );
                 },
                 onPlace: null,
-                // onDelete: () => ref.read(karbeatStateProvider).removeGenerator(id), // TODO implement
               );
             }, childCount: generators.length),
           ),
@@ -257,6 +282,8 @@ class SourceListScreen extends ConsumerWidget {
                             initialTrackId: firstTrackId,
                           );
                     },
+                    onDelete: () =>
+                        _deleteAudioSource(context, ref, id, source.name),
                   );
                 }, childCount: audioSources.length),
               );
@@ -322,6 +349,7 @@ class SourceListScreen extends ConsumerWidget {
                 color: colors.secondary,
                 onTap: () {
                   ref.read(pianoRollProvider.notifier).openPattern(id);
+                  ref.read(workspaceStateProvider.notifier).openPattern(id);
                 },
                 onPlace: () {
                   final firstTrackId = ref
@@ -360,6 +388,9 @@ class _SourceTile extends StatelessWidget {
   final VoidCallback? onPlace;
   final VoidCallback? onRename;
 
+  /// Deletes the item; the menu entry is hidden when it cannot be deleted.
+  final VoidCallback? onDelete;
+
   const _SourceTile({
     required this.title,
     required this.subtitle,
@@ -368,6 +399,7 @@ class _SourceTile extends StatelessWidget {
     required this.onTap,
     this.onPlace,
     this.onRename,
+    this.onDelete,
   });
 
   @override
@@ -380,47 +412,52 @@ class _SourceTile extends StatelessWidget {
         subtitle,
         style: TextStyle(color: colors.onSurfaceVariant),
       ),
-      trailing: PopupMenuButton<String>(
-        icon: Icon(Icons.more_vert, color: colors.onSurfaceVariant),
-        onSelected: (value) {
-          if (value == 'place') onPlace?.call();
-          if (value == 'rename') onRename?.call();
-        },
-        itemBuilder: (context) => [
-          if (onPlace != null)
-            const PopupMenuItem(
-              value: 'place',
-              child: Row(
-                children: [
-                  Icon(Icons.input),
-                  SizedBox(width: 8),
-                  Text("Put in timeline"),
-                ],
-              ),
-            ),
-          if (onRename != null)
-            const PopupMenuItem(
-              value: 'rename',
-              child: Row(
-                children: [
-                  Icon(Icons.edit),
-                  SizedBox(width: 8),
-                  Text("Rename"),
-                ],
-              ),
-            ),
-          const PopupMenuItem(
-            value: 'delete',
-            child: Row(
-              children: [
-                Icon(Icons.delete),
-                SizedBox(width: 8),
-                Text("Delete"),
+      // Items without any action get no menu button.
+      trailing: onPlace == null && onRename == null && onDelete == null
+          ? null
+          : PopupMenuButton<String>(
+              icon: Icon(Icons.more_vert, color: colors.onSurfaceVariant),
+              onSelected: (value) {
+                if (value == 'place') onPlace?.call();
+                if (value == 'rename') onRename?.call();
+                if (value == 'delete') onDelete?.call();
+              },
+              itemBuilder: (context) => [
+                if (onPlace != null)
+                  const PopupMenuItem(
+                    value: 'place',
+                    child: Row(
+                      children: [
+                        Icon(Icons.input),
+                        SizedBox(width: 8),
+                        Text("Put in timeline"),
+                      ],
+                    ),
+                  ),
+                if (onRename != null)
+                  const PopupMenuItem(
+                    value: 'rename',
+                    child: Row(
+                      children: [
+                        Icon(Icons.edit),
+                        SizedBox(width: 8),
+                        Text("Rename"),
+                      ],
+                    ),
+                  ),
+                if (onDelete != null)
+                  const PopupMenuItem(
+                    value: 'delete',
+                    child: Row(
+                      children: [
+                        Icon(Icons.delete),
+                        SizedBox(width: 8),
+                        Text("Delete"),
+                      ],
+                    ),
+                  ),
               ],
             ),
-          ),
-        ],
-      ),
       onTap: onTap,
     );
   }

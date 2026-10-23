@@ -6,7 +6,10 @@ use crate::{
     context::ParameterExchange,
     instance::check_optional,
 };
-use karbeat_host_api::{HostError, PluginDescriptor, PluginKind, ProcessingConfig, ProcessingGate};
+use karbeat_host_api::{
+    HostError, PluginDescriptor, PluginKind, ProcessingConfig, ProcessingGate,
+    channels::{adapt_channels, silence},
+};
 use karbeat_plugin_api::prelude::{
     AudioBuffers, AudioPlugin, BusConfig, MidiMessage, NoteExpressionType, ParameterSpec,
     ProcessContext,
@@ -26,6 +29,28 @@ use vst3::{
         kResultOk,
     },
 };
+
+karbeat_utils::typestate! {
+    /// Whether `setProcessing(true)` is in effect on the plugin's processor.
+    #[derive(Clone, Copy)]
+    machine Processing {
+        shared: (),
+        erased: #[derive(Clone, Copy)] AnyProcessing,
+        states {
+            #[derive(Clone, Copy)]
+            Stopped as StoppedProcessing {}
+            #[derive(Clone, Copy)]
+            Started as StartedProcessing {}
+        }
+        transitions {
+            Stopped => Started: fn start(shared, state) { Started {} }
+            Started => Stopped: fn stop(shared, state) { Stopped {} }
+        }
+    }
+}
+
+/// Frames rendered to deliver parameter edits while no audio block is running.
+const FLUSH_FRAMES: usize = 32;
 
 pub(crate) struct Dsp {
     pub processor: ComPtr<IAudioProcessor>,
@@ -49,7 +74,7 @@ pub(crate) struct Dsp {
     changes: ComWrapper<ParameterChanges>,
     output_changes: ComWrapper<ParameterChanges>,
     pub use_f64: bool,
-    pub processing: bool,
+    processing: AnyProcessing,
     pub midi_mapping: [[Option<u32>; 130]; 16],
     note_ids: [Option<u64>; 2048],
     active_keys: [bool; 2048],
@@ -96,7 +121,11 @@ impl Dsp {
             changes: ComWrapper::new(ParameterChanges::new(ids)),
             output_changes: ComWrapper::new(ParameterChanges::new(ids)),
             use_f64,
-            processing: false,
+            processing: Processing {
+                shared: (),
+                state: Stopped {},
+            }
+            .into(),
             midi_mapping: [[None; 130]; 16],
             note_ids: [None; 2048],
             active_keys: [false; 2048],
@@ -104,29 +133,40 @@ impl Dsp {
         }
     }
 
+    /// Whether the processor has been told to process.
+    pub const fn is_processing(&self) -> bool {
+        matches!(self.processing, AnyProcessing::Started(_))
+    }
+
     pub fn stop(&mut self) -> Result<(), HostError> {
-        if self.processing {
+        if let AnyProcessing::Started(started) = self.processing {
             // SAFETY: Called only after the processing gate is suspended.
             check_optional("setProcessing(false)", unsafe {
                 self.processor.setProcessing(0)
             })?;
-            self.processing = false;
+            self.processing = started.stop().into();
         }
         Ok(())
     }
 
     pub fn start(&mut self) -> Result<(), HostError> {
-        if !self.processing {
+        if let AnyProcessing::Stopped(stopped) = self.processing {
             // SAFETY: Component was prepared/activated by the UI owner, with DSP suspended.
             check_optional("setProcessing(true)", unsafe {
                 self.processor.setProcessing(1)
             })?;
-            self.processing = true;
+            self.processing = stopped.start().into();
         }
         Ok(())
     }
 
+    /// Delivers pending parameter edits through a short silent block whose audio is discarded.
+    ///
+    /// VST3 also lets a host flush parameters with a zero-sample `process` call, but processors
+    /// such as LSP's read their parameter queues only while rendering frames and would drop the
+    /// edits. The block reports a stopped transport and leaves the processing state as it was.
     pub fn flush(&mut self, exchange: &ParameterExchange) -> Result<(), HostError> {
+        let frames = FLUSH_FRAMES.min(self.config.max_block_size);
         self.events.clear();
         self.output_events.clear();
         self.changes.clear();
@@ -136,11 +176,60 @@ impl Dsp {
                 self.changes.push(parameter.id, 0, parameter.get());
             }
         }
-        let mut data = self.process_data(0, ptr::null_mut());
-        // SAFETY: All parameter storage is preallocated and lives through this zero-sample call.
-        check_optional("processor.flush", unsafe {
-            self.processor.process(&raw mut data)
-        })
+        for plane in self.input32.iter_mut().chain(&mut self.output32) {
+            if let Some(block) = plane.get_mut(..frames) {
+                block.fill(0.0);
+            }
+        }
+        for plane in self.input64.iter_mut().chain(&mut self.output64) {
+            if let Some(block) = plane.get_mut(..frames) {
+                block.fill(0.0);
+            }
+        }
+        self.bind_buses();
+        let was_processing = self.is_processing();
+        self.start()?;
+        // SAFETY: This ABI record contains only integer/float/plain-record fields.
+        let mut transport: Vst::ProcessContext = unsafe { std::mem::zeroed() };
+        transport.sampleRate = self.config.sample_rate;
+        let mut data = self.process_data(i32::try_from(frames).unwrap_or(0), &raw mut transport);
+        // SAFETY: The caller holds exclusive suspended DSP access; all pointers refer to
+        // preallocated storage or this stack context for the synchronous call.
+        let code = unsafe { self.processor.process(&raw mut data) };
+        if !was_processing {
+            self.stop()?;
+        }
+        check_optional("processor.flush", code)
+    }
+
+    /// Points the VST3 bus records at the preallocated sample planes.
+    fn bind_buses(&mut self) {
+        for (plane, pointer) in self.input32.iter_mut().zip(&mut self.input_ptrs32) {
+            *pointer = plane.as_mut_ptr();
+        }
+        for (plane, pointer) in self.output32.iter_mut().zip(&mut self.output_ptrs32) {
+            *pointer = plane.as_mut_ptr();
+        }
+        for (plane, pointer) in self.input64.iter_mut().zip(&mut self.input_ptrs64) {
+            *pointer = plane.as_mut_ptr();
+        }
+        for (plane, pointer) in self.output64.iter_mut().zip(&mut self.output_ptrs64) {
+            *pointer = plane.as_mut_ptr();
+        }
+        fill_buses(
+            &mut self.input_buses,
+            &self.input_channels,
+            &mut self.input_ptrs32,
+            &mut self.input_ptrs64,
+            self.use_f64,
+        );
+        fill_buses(
+            &mut self.output_buses,
+            &self.output_channels,
+            &mut self.output_ptrs32,
+            &mut self.output_ptrs64,
+            self.use_f64,
+        );
     }
 
     fn process_data(&mut self, frames: i32, context: *mut Vst::ProcessContext) -> Vst::ProcessData {
@@ -148,26 +237,10 @@ impl Dsp {
             processMode: if self.config.offline { 2 } else { 0 },
             symbolicSampleSize: i32::from(self.use_f64),
             numSamples: frames,
-            numInputs: if frames == 0 {
-                0
-            } else {
-                i32::try_from(self.input_buses.len()).unwrap_or(0)
-            },
-            numOutputs: if frames == 0 {
-                0
-            } else {
-                i32::try_from(self.output_buses.len()).unwrap_or(0)
-            },
-            inputs: if frames == 0 {
-                ptr::null_mut()
-            } else {
-                self.input_buses.as_mut_ptr()
-            },
-            outputs: if frames == 0 {
-                ptr::null_mut()
-            } else {
-                self.output_buses.as_mut_ptr()
-            },
+            numInputs: i32::try_from(self.input_buses.len()).unwrap_or(0),
+            numOutputs: i32::try_from(self.output_buses.len()).unwrap_or(0),
+            inputs: self.input_buses.as_mut_ptr(),
+            outputs: self.output_buses.as_mut_ptr(),
             inputParameterChanges: self
                 .changes
                 .as_com_ref::<IParameterChanges>()
@@ -199,7 +272,7 @@ impl Dsp {
             .first()
             .and_then(|b| b.channel_data.first())
             .map_or(0, |c| c.len());
-        if frames == 0 || frames > self.config.max_block_size || !self.processing {
+        if frames == 0 || frames > self.config.max_block_size || !self.is_processing() {
             silence(buffers);
             return;
         }
@@ -233,32 +306,7 @@ impl Dsp {
                 plane[..frames].fill(0.0);
             }
         }
-        for (plane, pointer) in self.input32.iter_mut().zip(&mut self.input_ptrs32) {
-            *pointer = plane.as_mut_ptr();
-        }
-        for (plane, pointer) in self.output32.iter_mut().zip(&mut self.output_ptrs32) {
-            *pointer = plane.as_mut_ptr();
-        }
-        for (plane, pointer) in self.input64.iter_mut().zip(&mut self.input_ptrs64) {
-            *pointer = plane.as_mut_ptr();
-        }
-        for (plane, pointer) in self.output64.iter_mut().zip(&mut self.output_ptrs64) {
-            *pointer = plane.as_mut_ptr();
-        }
-        fill_buses(
-            &mut self.input_buses,
-            &self.input_channels,
-            &mut self.input_ptrs32,
-            &mut self.input_ptrs64,
-            self.use_f64,
-        );
-        fill_buses(
-            &mut self.output_buses,
-            &self.output_channels,
-            &mut self.output_ptrs32,
-            &mut self.output_ptrs64,
-            self.use_f64,
-        );
+        self.bind_buses();
         self.events.clear();
         self.output_events.clear();
         self.changes.clear();
@@ -472,46 +520,6 @@ fn narrow_sample(value: f64) -> f32 {
     if value.is_finite() { value as f32 } else { 0.0 }
 }
 
-/// Maps `sources` onto `destinations` for the first `frames` samples.
-///
-/// Equal layouts copy channel by channel. A stereo source feeding a mono destination is averaged,
-/// and a mono source feeding a wider destination is duplicated into its first two channels.
-/// Otherwise the first shared channels are copied. Destination channels without a source keep
-/// their existing contents, which callers clear beforehand.
-fn adapt_channels<S: AsRef<[f32]>, D: AsMut<[f32]>>(
-    sources: &[S],
-    destinations: &mut [D],
-    frames: usize,
-) {
-    match (sources, &mut *destinations) {
-        ([left, right, ..], [mono]) => {
-            let (left, right, mono) = (left.as_ref(), right.as_ref(), mono.as_mut());
-            let count = frames.min(left.len()).min(right.len()).min(mono.len());
-            for ((destination, left), right) in mono[..count]
-                .iter_mut()
-                .zip(&left[..count])
-                .zip(&right[..count])
-            {
-                *destination = (left + right) * 0.5;
-            }
-        }
-        ([mono], [first, second, ..]) => {
-            let mono = mono.as_ref();
-            for destination in [first.as_mut(), second.as_mut()] {
-                let count = frames.min(mono.len()).min(destination.len());
-                destination[..count].copy_from_slice(&mono[..count]);
-            }
-        }
-        _ => {
-            for (source, destination) in sources.iter().zip(destinations.iter_mut()) {
-                let (source, destination) = (source.as_ref(), destination.as_mut());
-                let count = frames.min(source.len()).min(destination.len());
-                destination[..count].copy_from_slice(&source[..count]);
-            }
-        }
-    }
-}
-
 fn empty_bus() -> Vst::AudioBusBuffers {
     Vst::AudioBusBuffers {
         numChannels: 0,
@@ -608,18 +616,6 @@ fn transport_context(context: &ProcessContext, sample_rate: f64) -> Vst::Process
     result.cycleEndMusic = context.loop_end_beat.unwrap_or(0.0);
     result
 }
-pub(crate) fn silence(buffers: &mut AudioBuffers) {
-    for bus in buffers
-        .main_outputs
-        .iter_mut()
-        .chain(buffers.aux_outputs.iter_mut())
-    {
-        for channel in bus.channel_data.iter_mut() {
-            channel.fill(0.0);
-        }
-    }
-}
-
 pub(crate) struct ProcessorSlot {
     pub gate: ProcessingGate,
     pub dsp: UnsafeCell<Dsp>,
@@ -718,6 +714,7 @@ impl AudioPlugin for Vst3Processor {
         if value.is_finite() {
             if let Some(parameter) = self.exchange.parameter(id) {
                 parameter.set(f64::from(value).clamp(0.0, 1.0), 0);
+                parameter.mark_user_edited();
             }
         }
     }
@@ -727,9 +724,19 @@ impl AudioPlugin for Vst3Processor {
             .map_or(0.0, |p| narrow_sample(p.get()))
     }
     fn apply_automation(&mut self, id: u32, value: f32) {
-        self.set_parameter(id, value);
+        if value.is_finite()
+            && let Some(parameter) = self.exchange.parameter(id)
+            && !parameter.is_user_edited()
+        {
+            parameter.set(f64::from(value).clamp(0.0, 1.0), 0);
+        }
     }
     fn clear_automation(&mut self, _id: u32) {}
+    fn clear_parameter_overrides(&mut self) {
+        for parameter in &self.exchange.parameters {
+            parameter.clear_user_edited();
+        }
+    }
     fn default_parameters(&self) -> karbeat_plugin_api::traits::HashMap<u32, f32> {
         self.specs
             .iter()
@@ -984,17 +991,7 @@ mod tests {
     }
 
     #[test]
-    fn channel_adaptation_covers_equal_widening_and_truncating_layouts() {
-        let mut stereo = [vec![0.0_f32; 2], vec![0.0; 2]];
-        adapt_channels(&[[2.0_f32, 4.0]], &mut stereo, 2);
-        assert_eq!(stereo, [vec![2.0, 4.0], vec![2.0, 4.0]]);
-        let mut three = [vec![9.0_f32; 2], vec![9.0; 2], vec![0.0; 2]];
-        adapt_channels(&[[1.0_f32, 1.0], [2.0, 2.0]], &mut three, 1);
-        assert_eq!(three, [vec![1.0, 9.0], vec![2.0, 9.0], vec![0.0, 0.0]]);
-    }
-
-    #[test]
-    fn zero_sample_state_flush_delivers_edits_without_consuming_audio_errors() {
+    fn state_flush_delivers_edits_in_a_short_silent_block_without_consuming_audio_errors() {
         let processor = ComWrapper::new(FlushProcessor(Cell::new(None)));
         let config = ProcessingConfig {
             sample_rate: 48_000.0,
@@ -1015,19 +1012,21 @@ mod tests {
         let exchange = ParameterExchange::new(&[(77, 0.0)]);
         exchange.parameter(77).unwrap().set(0.75, 0);
         dsp.flush(&exchange).unwrap();
+        // Rendered frames, because processors such as LSP's ignore edits in a zero-sample call.
         assert_eq!(
             processor.0.get(),
             Some(FlushRecord {
-                samples: 0,
-                input_count: 0,
-                output_count: 0,
-                null_buses: true,
+                samples: 32,
+                input_count: 1,
+                output_count: 1,
+                null_buses: false,
                 parameter: 77,
                 offset: 0,
                 value: 0.75,
                 notes: [(u16::MAX, -1, -1); 4],
             })
         );
+        assert!(!dsp.is_processing());
         assert!(
             !exchange
                 .parameter(77)
@@ -1041,6 +1040,70 @@ mod tests {
         exchange.parameter(77).unwrap().set(0.5, 0);
         dsp.flush(&exchange).unwrap();
         assert_eq!(exchange.process_error.load(Ordering::Acquire), kResultFalse);
+    }
+
+    fn endpoint_with_exchange(exchange: Arc<ParameterExchange>) -> Vst3Processor {
+        let processor = ComWrapper::new(FlushProcessor(Cell::new(None)));
+        let dsp = Dsp::new(
+            processor.to_com_ptr::<IAudioProcessor>().unwrap(),
+            ProcessingConfig {
+                sample_rate: 48_000.0,
+                max_block_size: 32,
+                main_input_channels: 0,
+                main_output_channels: 1,
+                sidechain_channels: 0,
+                offline: false,
+            },
+            vec![],
+            vec![plan(BusRole::Main, 1)],
+            &[77],
+            false,
+        );
+        Vst3Processor {
+            slot: Arc::new(ProcessorSlot {
+                gate: ProcessingGate::default(),
+                dsp: UnsafeCell::new(dsp),
+                latency: AtomicU32::new(0),
+                tail: AtomicU32::new(0),
+                endpoint_alive: AtomicBool::new(true),
+            }),
+            exchange,
+            descriptor: karbeat_host_api::PluginDescriptor {
+                identity: karbeat_host_api::PluginIdentity {
+                    format: karbeat_host_api::PluginFormat::Vst3,
+                    native_id: "fixture".into(),
+                },
+                path: "fixture.vst3".into(),
+                name: "Fixture".into(),
+                vendor: String::new(),
+                version: "1".into(),
+                kind: karbeat_host_api::PluginKind::Instrument,
+            },
+            specs: Vec::new(),
+            bypass: false,
+            reset_pending: false,
+            latency_seen: 0,
+            bypass_delay: karbeat_host_api::bypass::BypassDelay::new(1, 0).unwrap(),
+        }
+    }
+
+    #[test]
+    fn manual_parameter_edits_win_over_automation_until_released() {
+        let exchange = ParameterExchange::new(&[(77, 0.0)]);
+        let mut endpoint = endpoint_with_exchange(exchange);
+
+        endpoint.set_parameter(77, 0.25);
+        assert!((endpoint.get_parameter(77) - 0.25).abs() < 1e-6);
+
+        endpoint.apply_automation(77, 1.0);
+        assert!(
+            (endpoint.get_parameter(77) - 0.25).abs() < 1e-6,
+            "automation must not overwrite a hand edit"
+        );
+
+        endpoint.clear_parameter_overrides();
+        endpoint.apply_automation(77, 1.0);
+        assert!((endpoint.get_parameter(77) - 1.0).abs() < 1e-6);
     }
 
     fn render_notes(endpoint: &mut Vst3Processor, midi: &[karbeat_plugin_api::prelude::MidiEvent]) {
@@ -1102,7 +1165,11 @@ mod tests {
                 &[77],
                 false,
             );
-            dsp.processing = true;
+            dsp.processing = Processing {
+                shared: (),
+                state: Started {},
+            }
+            .into();
             let slot = Arc::new(ProcessorSlot {
                 gate: ProcessingGate::default(),
                 dsp: UnsafeCell::new(dsp),

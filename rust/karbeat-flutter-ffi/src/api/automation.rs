@@ -3,10 +3,10 @@ use std::collections::HashMap;
 use flutter_rust_bridge::frb;
 use karbeat_core::{
     core::project::{
-        AutomationCurveType, AutomationLane, AutomationPoint, AutomationTarget,
+        AutomationCurveType, AutomationLane, AutomationPoint, AutomationTarget, BezierHandles,
         EffectAutomationTarget, MasterAutomationTarget, MixerChannelParamTarget, ModulationLink,
         ModulationLinkForOrderedLaneView, ModulationSource, RemovedModulations,
-        TrackAutomationTarget,
+        TrackAutomationTarget, interpolate_points_at, interpolate_segment, tension_count,
     },
     shared::{BusId, EffectId, TrackId},
 };
@@ -20,10 +20,10 @@ use crate::api::{context::DawContext, plugin::UiPluginTarget};
 pub struct AutomationLaneDto {
     pub id: u64,
     pub label: String,
+    /// Points in engine order, with normalized values (0.0 to 1.0).
     pub points: Vec<AutomationPointDto>,
     pub enabled: bool,
-    pub min: f64,
-    pub max: f64,
+    /// Normalized value held while the lane has no points.
     pub default_value: f64,
 }
 
@@ -35,6 +35,55 @@ pub struct AutomationPointDto {
     pub value: f64,
     pub curve_type: AutomationCurveTypeDto,
     pub tension: f64,
+    /// Bezier handles of the segment to the next point; only Bezier segments use them.
+    pub handles: Option<BezierHandlesDto>,
+}
+
+/// Control handles of a Bezier segment. `x` is a fraction of the segment's duration and `y` a
+/// normalized lane value, both 0.0 to 1.0.
+#[derive(Clone, Copy, Debug)]
+#[frb(dart_metadata=("freezed"))]
+pub struct BezierHandlesDto {
+    pub x1: f64,
+    pub y1: f64,
+    pub x2: f64,
+    pub y2: f64,
+}
+
+impl From<BezierHandles> for BezierHandlesDto {
+    fn from(handles: BezierHandles) -> Self {
+        Self {
+            x1: handles.x1,
+            y1: handles.y1,
+            x2: handles.x2,
+            y2: handles.y2,
+        }
+    }
+}
+
+impl From<BezierHandlesDto> for BezierHandles {
+    fn from(handles: BezierHandlesDto) -> Self {
+        Self {
+            x1: handles.x1,
+            y1: handles.y1,
+            x2: handles.x2,
+            y2: handles.y2,
+        }
+    }
+}
+
+/// Which segment controls a curve type responds to, so editors stay generic over curve types.
+#[derive(Clone, Copy, Debug)]
+#[frb(dart_metadata=("freezed"))]
+pub struct AutomationCurveTraitsDto {
+    /// Whether tension changes the shape.
+    pub supports_tension: bool,
+    /// Whether raising tension lowers a rising segment.
+    pub tension_inverted: bool,
+    /// Whether tension selects a step or cycle count instead of a bend.
+    pub tension_is_count: bool,
+    /// Whether the shape comes from Bezier handles.
+    pub uses_handles: bool,
 }
 
 /// Automation removed as part of another project operation, such as deleting an effect.
@@ -112,11 +161,20 @@ pub enum EffectAutomationTargetDto {
     PluginParam { param_id: u32 },
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Copy, Debug)]
 pub enum AutomationCurveTypeDto {
     Linear,
     Exponential,
     Step,
+    Logarithmic,
+    SCurve,
+    Bezier,
+    Stairs,
+    SmoothStairs,
+    Pulse,
+    Wave,
+    Triangle,
+    HalfSine,
 }
 
 #[frb(dart_metadata=("freezed"))]
@@ -197,6 +255,15 @@ impl From<AutomationCurveType> for AutomationCurveTypeDto {
             AutomationCurveType::Linear => Self::Linear,
             AutomationCurveType::Exponential => Self::Exponential,
             AutomationCurveType::Step => Self::Step,
+            AutomationCurveType::Logarithmic => Self::Logarithmic,
+            AutomationCurveType::SCurve => Self::SCurve,
+            AutomationCurveType::Bezier => Self::Bezier,
+            AutomationCurveType::Stairs => Self::Stairs,
+            AutomationCurveType::SmoothStairs => Self::SmoothStairs,
+            AutomationCurveType::Pulse => Self::Pulse,
+            AutomationCurveType::Wave => Self::Wave,
+            AutomationCurveType::Triangle => Self::Triangle,
+            AutomationCurveType::HalfSine => Self::HalfSine,
         }
     }
 }
@@ -207,6 +274,15 @@ impl From<AutomationCurveTypeDto> for AutomationCurveType {
             AutomationCurveTypeDto::Linear => Self::Linear,
             AutomationCurveTypeDto::Exponential => Self::Exponential,
             AutomationCurveTypeDto::Step => Self::Step,
+            AutomationCurveTypeDto::Logarithmic => Self::Logarithmic,
+            AutomationCurveTypeDto::SCurve => Self::SCurve,
+            AutomationCurveTypeDto::Bezier => Self::Bezier,
+            AutomationCurveTypeDto::Stairs => Self::Stairs,
+            AutomationCurveTypeDto::SmoothStairs => Self::SmoothStairs,
+            AutomationCurveTypeDto::Pulse => Self::Pulse,
+            AutomationCurveTypeDto::Wave => Self::Wave,
+            AutomationCurveTypeDto::Triangle => Self::Triangle,
+            AutomationCurveTypeDto::HalfSine => Self::HalfSine,
         }
     }
 }
@@ -219,6 +295,7 @@ impl From<AutomationPointDto> for AutomationPoint {
             value: NormalizedF64::new(point.value),
             curve_type: point.curve_type.into(),
             tension: BipolarF64::new(point.tension),
+            handles: point.handles.map(Into::into),
         }
     }
 }
@@ -231,6 +308,7 @@ impl From<AutomationPoint> for AutomationPointDto {
             value: p.value.get(),
             curve_type: p.curve_type.into(),
             tension: p.tension.get(),
+            handles: p.handles.map(Into::into),
         }
     }
 }
@@ -259,8 +337,6 @@ impl TryFrom<AutomationLaneDto> for AutomationLane {
             points,
             next_point_id,
             enabled: l.enabled,
-            min: l.min,
-            max: l.max,
             default_value,
         })
     }
@@ -273,8 +349,6 @@ impl From<&AutomationLane> for AutomationLaneDto {
             label: l.label.clone(),
             points: l.points.iter().map(|p| p.to_owned().into()).collect(),
             enabled: l.enabled,
-            min: l.min,
-            max: l.max,
             default_value: l.default_value.get(),
         }
     }
@@ -454,16 +528,18 @@ pub fn get_automation_lanes_for_bus(
         .collect()
 }
 
+/// Creates an automation lane for `target`.
+///
+/// `initial_value` is the parameter's current value in its own unit; the parameter normalizes
+/// it. `None` starts the lane on the value stored in the project.
 pub fn add_automation_lane(
     ctx: &DawContext,
     target: AutomationTargetDto,
     label: &str,
-    min: f64,
-    max: f64,
-    initial_value: f64,
+    initial_value: Option<f64>,
 ) -> Result<(AutomationLaneDto, ModulationLinkDto), String> {
     crate::api::context::project_ctx!(ctx);
-    match automation_api::add_automation_lane(ctx, target.into(), label, min, max, initial_value) {
+    match automation_api::add_automation_lane(ctx, target.into(), label, initial_value) {
         Ok((lane, mod_link)) => {
             let lane_dto = AutomationLaneDto::from(&lane);
             let mod_link_dto = ModulationLinkDto::from(&mod_link);
@@ -492,9 +568,7 @@ pub fn add_automation_lane_for_track(
     track_id: u64,
     target: AutomationTargetDto,
     label: &str,
-    min: f64,
-    max: f64,
-    initial_value: f64,
+    initial_value: Option<f64>,
 ) -> Result<AutomationLaneDto, String> {
     crate::api::context::project_ctx!(ctx);
     match automation_api::add_automation_lane_for_track(
@@ -502,8 +576,6 @@ pub fn add_automation_lane_for_track(
         TrackId::from_u64(track_id),
         target.into(),
         label,
-        min,
-        max,
         initial_value,
     ) {
         Ok(lane) => {
@@ -519,9 +591,7 @@ pub fn add_automation_lane_for_bus(
     bus_id: u64,
     target: AutomationTargetDto,
     label: &str,
-    min: f64,
-    max: f64,
-    initial_value: f64,
+    initial_value: Option<f64>,
 ) -> Result<AutomationLaneDto, String> {
     crate::api::context::project_ctx!(ctx);
     match automation_api::add_automation_lane_for_bus(
@@ -529,8 +599,6 @@ pub fn add_automation_lane_for_bus(
         BusId::from_u64(bus_id),
         target.into(),
         label,
-        min,
-        max,
         initial_value,
     ) {
         Ok(lane) => {
@@ -604,6 +672,11 @@ pub fn remove_automation_point(
         .map_err(|e| e.to_string())
 }
 
+/// Changes the supplied fields of one automation point and returns the updated lane.
+#[allow(
+    clippy::too_many_arguments,
+    reason = "each optional field is one independently editable point property"
+)]
 pub fn update_automation_point(
     ctx: &DawContext,
     automation_id: u64,
@@ -612,7 +685,8 @@ pub fn update_automation_point(
     value: Option<f64>,
     tension: Option<f64>,
     curve_type: Option<AutomationCurveTypeDto>,
-) -> Result<usize, String> {
+    handles: Option<BezierHandlesDto>,
+) -> Result<AutomationLaneDto, String> {
     crate::api::context::project_ctx!(ctx);
     let some_value = value.map(|v| {
         if v > 1.0 || v < 0.0 {
@@ -638,8 +712,164 @@ pub fn update_automation_point(
         some_value,
         some_tension,
         curve_type.map(|ct| ct.into()),
+        handles.map(Into::into),
     )
+    .map(|(lane, _)| (&lane).into())
     .map_err(|e| e.to_string())
+}
+
+// ▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱
+// Range copy and paste
+// ▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱
+
+/// Copies the curve of a lane between two ticks. Returned points have times relative to the
+/// range start; a point is added on each edge the range cuts through a segment.
+pub fn copy_automation_range(
+    ctx: &DawContext,
+    automation_id: u64,
+    start_tick: u32,
+    end_tick: u32,
+) -> Result<Vec<AutomationPointDto>, String> {
+    crate::api::context::read_ctx!(ctx);
+    automation_api::copy_automation_range(ctx, automation_id.into(), start_tick, end_tick)
+        .map(|points| points.into_iter().map(Into::into).collect())
+        .map_err(|e| e.to_string())
+}
+
+/// Removes every point of a lane between two ticks as one undo step.
+pub fn delete_automation_range(
+    ctx: &DawContext,
+    automation_id: u64,
+    start_tick: u32,
+    end_tick: u32,
+) -> Result<AutomationLaneDto, String> {
+    crate::api::context::project_ctx!(ctx);
+    automation_api::delete_automation_range(ctx, automation_id.into(), start_tick, end_tick)
+        .map(|lane| (&lane).into())
+        .map_err(|e| e.to_string())
+}
+
+/// Pastes a copied curve at `at_tick` as one undo step, replacing the points under it.
+///
+/// `length_ticks` is the length of the copied range; `target_length` stretches the curve to
+/// another length.
+pub fn paste_automation_points(
+    ctx: &DawContext,
+    automation_id: u64,
+    at_tick: u32,
+    points: Vec<AutomationPointDto>,
+    length_ticks: u32,
+    target_length: Option<u32>,
+) -> Result<AutomationLaneDto, String> {
+    crate::api::context::project_ctx!(ctx);
+    let points: Vec<AutomationPoint> = points.into_iter().map(Into::into).collect();
+    automation_api::paste_automation_points(
+        ctx,
+        automation_id.into(),
+        at_tick,
+        &points,
+        length_ticks,
+        target_length,
+    )
+    .map(|lane| (&lane).into())
+    .map_err(|e| e.to_string())
+}
+
+// ▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱
+// Parameter values
+// ▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱
+
+/// Formats a lane's normalized value in the unit of the parameter it automates.
+#[frb(sync)]
+pub fn automation_value_text(
+    ctx: &DawContext,
+    automation_id: u64,
+    normalized: f64,
+) -> Result<String, String> {
+    crate::api::context::read_ctx!(ctx);
+    automation_api::automation_value_text(ctx, automation_id.into(), NormalizedF64::new(normalized))
+        .map_err(|e| e.to_string())
+}
+
+/// Parses text typed in the unit of a lane's parameter into a normalized lane value.
+#[frb(sync)]
+pub fn parse_automation_value(
+    ctx: &DawContext,
+    automation_id: u64,
+    text: &str,
+) -> Result<f64, String> {
+    crate::api::context::read_ctx!(ctx);
+    automation_api::parse_automation_value(ctx, automation_id.into(), text)
+        .map(NormalizedF64::get)
+        .map_err(|e| e.to_string())
+}
+
+// ▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱
+// Curve drawing
+//
+// Flutter draws curves with these functions, which call the same code the audio engine plays.
+// ▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱
+
+/// Samples a lane's curve at `sample_count` evenly spaced ticks from `start_tick` to `end_tick`
+/// inclusive. `points` must be in lane order. Returns no samples for a lane without points.
+#[frb(sync)]
+pub fn sample_automation_curve(
+    points: Vec<AutomationPointDto>,
+    start_tick: f64,
+    end_tick: f64,
+    sample_count: u32,
+) -> Vec<f32> {
+    let points: Vec<AutomationPoint> = points.into_iter().map(Into::into).collect();
+    let last = f64::from(sample_count.saturating_sub(1).max(1));
+    (0..sample_count)
+        .map_while(|index| {
+            let tick = start_tick + (end_tick - start_tick) * f64::from(index) / last;
+            interpolate_points_at(&points, tick).map(|value| narrow(value.get()))
+        })
+        .collect()
+}
+
+/// Value at the time midpoint of every segment of a lane, one entry per pair of consecutive
+/// points. Editors place each segment's tension handle on it.
+#[frb(sync)]
+pub fn automation_segment_midpoints(points: Vec<AutomationPointDto>) -> Vec<f32> {
+    let points: Vec<AutomationPoint> = points.into_iter().map(Into::into).collect();
+    points
+        .windows(2)
+        .filter_map(|pair| match pair {
+            [from, to] => Some(narrow(
+                interpolate_segment(from, to.value, 0.5).clamp(0.0, 1.0),
+            )),
+            _ => None,
+        })
+        .collect()
+}
+
+/// Describes which segment controls a curve type responds to.
+#[frb(sync)]
+pub fn automation_curve_traits(curve_type: AutomationCurveTypeDto) -> AutomationCurveTraitsDto {
+    let traits = AutomationCurveType::from(curve_type).traits();
+    AutomationCurveTraitsDto {
+        supports_tension: traits.supports_tension,
+        tension_inverted: traits.tension_inverted,
+        tension_is_count: traits.tension_is_count,
+        uses_handles: traits.uses_handles,
+    }
+}
+
+/// Step or cycle count that `tension` selects for count-driven curve types.
+#[frb(sync)]
+pub fn automation_tension_count(tension: f64) -> u32 {
+    tension_count(tension)
+}
+
+/// Narrows a drawing sample for transfer as a flat `f32` list.
+#[allow(
+    clippy::as_conversions,
+    reason = "curve samples are only drawn, so f32 precision is enough"
+)]
+fn narrow(value: f64) -> f32 {
+    value as f32
 }
 
 // ▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱

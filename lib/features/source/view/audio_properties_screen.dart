@@ -266,15 +266,14 @@ class _EnvelopeReadout extends StatelessWidget {
   }
 }
 
-/// Sample mode and offline edits. Edits render in the background; the
-/// original audio plays until the render is ready.
+/// Sample mode and edits. Edits render in the background and the original
+/// audio plays until the render is ready, except pitch and tempo in realtime
+/// mode, which play through a realtime stretcher at once.
 class _OfflineEditControls extends ConsumerWidget {
   const _OfflineEditControls({required this.sourceId, required this.props});
 
   final int sourceId;
   final AudioWaveformUiForAudioProperties props;
-
-  static const _comingSoon = 'Coming soon';
 
   String _modeLabel(UiAudioSampleMode mode) => switch (mode) {
     UiAudioSampleMode.default_ => 'Default',
@@ -318,9 +317,31 @@ class _OfflineEditControls extends ConsumerWidget {
     ),
   );
 
+  Future<void> _setRealtime(WidgetRef ref, bool realtime) => _apply(
+    ref,
+    (ctx) =>
+        setWaveformRealtime(ctx: ctx, sourceId: sourceId, realtime: realtime),
+  );
+
+  Future<void> _setPitch(
+    WidgetRef ref, {
+    double? cents,
+    bool? preserveFormants,
+  }) => _apply(
+    ref,
+    (ctx) => setWaveformPitch(
+      ctx: ctx,
+      sourceId: sourceId,
+      pitchCents: cents ?? props.pitchCents,
+      preserveFormants: preserveFormants ?? props.preserveFormants,
+    ),
+  );
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final colors = Theme.of(context).colorScheme;
+    // Coarse moves in whole semitones (100 cents); fine covers the cents between.
+    final coarse = (props.pitchCents / 100).roundToDouble() * 100;
+    final fine = (props.pitchCents - coarse).roundToDouble();
     Widget toggle(
       String label,
       IconData icon,
@@ -379,38 +400,110 @@ class _OfflineEditControls extends ConsumerWidget {
               ],
             ),
           ),
+          _CommitKnob(
+            label: 'Pitch',
+            unit: 'ct',
+            value: coarse,
+            min: -2400,
+            max: 2400,
+            step: 100,
+            onCommit: (value) => _setPitch(ref, cents: value + fine),
+          ),
+          _CommitKnob(
+            label: 'Fine',
+            unit: 'ct',
+            value: fine,
+            min: -50,
+            max: 50,
+            onCommit: (value) => _setPitch(ref, cents: coarse + value),
+          ),
           Tooltip(
-            message: _comingSoon,
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                IgnorePointer(
-                  child: Opacity(
-                    opacity: 0.4,
-                    child: DigidawParameterKnob(
-                      value: 0,
-                      min: -24,
-                      max: 24,
-                      defaultValue: 0,
-                      step: 1,
-                      diameter: 32,
-                      onChanged: (_) {},
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 6),
-                Text(
-                  'Pitch',
-                  style: TextStyle(
-                    color: colors.onSurfaceVariant,
-                    fontSize: 12,
-                  ),
-                ),
-              ],
+            message: props.realtime
+                ? 'Pitch and tempo play through a realtime stretcher; '
+                      'turn off to render them offline at full quality'
+                : 'Pitch and tempo are rendered offline; turn on to '
+                      'stretch them while playing instead',
+            child: toggle(
+              'Realtime',
+              Icons.bolt,
+              props.realtime,
+              (value) => _setRealtime(ref, value),
+            ),
+          ),
+          Tooltip(
+            message: 'Keep the voice character when shifting pitch',
+            child: toggle(
+              'Formants',
+              Icons.record_voice_over,
+              props.preserveFormants,
+              (value) => _setPitch(ref, preserveFormants: value),
             ),
           ),
         ],
       ),
+    );
+  }
+}
+
+/// A stepped knob that previews its value while dragging and commits once on
+/// release, so a drag starts one render instead of one per step.
+class _CommitKnob extends StatefulWidget {
+  const _CommitKnob({
+    required this.label,
+    required this.unit,
+    required this.value,
+    required this.min,
+    required this.max,
+    this.step = 1,
+    required this.onCommit,
+  });
+
+  final String label;
+  final String unit;
+  final double value;
+  final double min;
+  final double max;
+  final double step;
+  final Future<void> Function(double value) onCommit;
+
+  @override
+  State<_CommitKnob> createState() => _CommitKnobState();
+}
+
+class _CommitKnobState extends State<_CommitKnob> {
+  double? _draft;
+
+  Future<void> _commit(double value) async {
+    if (value != widget.value) await widget.onCommit(value);
+    if (mounted) setState(() => _draft = null);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final value = _draft ?? widget.value;
+    final sign = value > 0 ? '+' : '';
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        DigidawParameterKnob(
+          value: value,
+          min: widget.min,
+          max: widget.max,
+          defaultValue: 0,
+          step: widget.step,
+          diameter: 32,
+          onChanged: (next) => setState(() => _draft = next),
+          onChangeEnd: _commit,
+        ),
+        const SizedBox(width: 6),
+        Text(
+          '${widget.label} $sign${value.toStringAsFixed(0)} ${widget.unit}',
+          style: TextStyle(
+            color: Theme.of(context).colorScheme.onSurfaceVariant,
+            fontSize: 12,
+          ),
+        ),
+      ],
     );
   }
 }
@@ -462,11 +555,16 @@ class _TempoControlsState extends ConsumerState<_TempoControls> {
       (null, final bpm?) => '${bpm.toStringAsFixed(1)} BPM (as placed)',
       (null, null) => 'Tempo unknown',
     };
+    final followsLive =
+        props.realtime && props.sampleMode == UiAudioSampleMode.stretch;
     final status = rendering || (props.fitted && !props.renderReady)
         ? 'Rendering…'
         : props.fitted
         ? (props.warp ? 'Fitted beat by beat' : 'Fitted to project tempo')
+        : followsLive
+        ? 'Follows the project tempo in real time'
         : null;
+    final canWarp = grid != null && !props.realtime;
     Widget busy() => const SizedBox.square(
       dimension: 14,
       child: CircularProgressIndicator(strokeWidth: 2),
@@ -497,7 +595,7 @@ class _TempoControlsState extends ConsumerState<_TempoControls> {
                     (ctx) => startFitToTempo(
                       ctx: ctx,
                       sourceId: sourceId,
-                      warp: _warp && grid != null,
+                      warp: _warp && canWarp,
                     ),
                   ),
             icon: rendering ? busy() : const Icon(Icons.timer, size: 16),
@@ -506,13 +604,15 @@ class _TempoControlsState extends ConsumerState<_TempoControls> {
           Tooltip(
             message: grid == null
                 ? 'Detect the tempo first'
+                : props.realtime
+                ? 'Beat by beat needs offline stretching'
                 : 'Stretch beat by beat so every beat lands on the grid',
             child: FilterChip(
               label: const Text('Beat by beat'),
-              selected: _warp && grid != null,
-              onSelected: grid == null
-                  ? null
-                  : (selected) => setState(() => _warp = selected),
+              selected: _warp && canWarp,
+              onSelected: canWarp
+                  ? (selected) => setState(() => _warp = selected)
+                  : null,
             ),
           ),
           if (status != null)

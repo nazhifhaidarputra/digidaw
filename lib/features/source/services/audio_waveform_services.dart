@@ -9,6 +9,10 @@ final audioSourcesProvider = FutureProvider.autoDispose<Map<int, AudioWaveformUi
   // 1. Wait for DAW context to be ready
   final ctx = ref.watch(projectProvider.notifier).dawContext;
 
+  // Refetch whenever the whole project is republished (undo, redo, deleting a
+  // source), since any of those can add or remove sources.
+  ref.watch(projectProvider.select((s) => s.value?.fullStateRevision));
+
   // 2. Direct FFI call instead of routing through monolithic state
   final result = await getAudioSourceList(ctx: ctx); 
   

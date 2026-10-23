@@ -369,25 +369,51 @@ impl Default for AudioHardwareConfig {
 }
 
 impl ApplicationState {
-    /// Deletes an audio source and removes all clips referencing it.
+    /// Clips on any track that play `source_id`, each with the track that lists it.
+    pub fn audio_source_clips(&self, source_id: AudioSourceId) -> Vec<(TrackId, ClipId)> {
+        self.tracks
+            .iter()
+            .flat_map(|(track_id, track)| track.clips.iter().map(move |clip| (track_id, *clip)))
+            .filter(|(_, clip_id)| {
+                matches!(
+                    self.clips_pool.get(*clip_id).and_then(|clip| clip.source.as_ref()),
+                    Some(DawSource::Audio(id)) if *id == source_id
+                )
+            })
+            .collect()
+    }
+
+    /// Deletes an audio source together with every clip that plays it, and returns its waveform.
+    ///
+    /// The source and its clips are detached from their pools rather than removed, so a recorded
+    /// history action can put them back under the same keys. Clips of the source waiting in the
+    /// clipboard are dropped: pasting them would create clips with nothing to play.
     pub fn remove_audio_source(
         &mut self,
         source_id: AudioSourceId,
-    ) -> anyhow::Result<AudioSourceId> {
-        // we check whether the source exists
-        let library = &mut self.asset_library;
+    ) -> anyhow::Result<Arc<AudioWaveform>> {
+        let clips = self.audio_source_clips(source_id);
+        let waveform = self
+            .asset_library
+            .source_map
+            .detach(source_id)
+            .ok_or_else(|| anyhow!("Source does not exist"))?;
 
-        if library.source_map.remove(source_id).is_none() {
-            return Err(anyhow!("Source does not exist"));
+        for (track_id, clip_id) in clips {
+            if let Some(track) = self.tracks.get_mut(track_id) {
+                track.clips.retain(|id| *id != clip_id);
+            }
+            // The clip was just read from the pool, so there is always a value to detach.
+            drop(self.clips_pool.detach(clip_id));
         }
 
-        // cascade delete
-        let clips_pool = &mut self.clips_pool;
-        for track in self.tracks.values_mut() {
-            track.remove_clip_by_source_id(clips_pool, source_id.to_u64(), false);
+        if let ClipboardContent::Clips(copied) = &mut self.clipboard {
+            copied.retain(
+                |clip| !matches!(clip.source, Some(DawSource::Audio(id)) if id == source_id),
+            );
         }
 
-        Ok(source_id)
+        Ok(waveform)
     }
 
     /// Replaces an audio source's waveform envelope and returns the previous one.
@@ -465,7 +491,7 @@ mod slotmap_persistence_tests {
 
         let automation_id = state
             .automation_pool
-            .insert_with_key(|id| AutomationLane::new(id, "Volume", 0.0, 1.0, 0.5));
+            .insert_with_key(|id| AutomationLane::new(id, "Volume", NormalizedF64::new(0.5)));
         let point_id = state.automation_pool[automation_id]
             .add_point(AutomationPoint::new(480, NormalizedF64::new(0.75)));
 

@@ -11,7 +11,7 @@ use std::f32::consts::FRAC_PI_2;
 use karbeat_utils::types::BipolarF64;
 use serde::{Deserialize, Serialize};
 
-use super::automation::{AutomationCurveType, shape_segment};
+use super::automation::{AutomationCurveType, SegmentShape, shape_segment};
 
 /// Largest envelope point gain (+6 dB).
 pub const MAX_ENVELOPE_GAIN: f32 = 2.0;
@@ -31,8 +31,13 @@ pub struct Fade {
 impl Fade {
     /// Gain at normalized position `t` from silence (0.0) to unity (1.0).
     #[inline]
-    fn shape(&self, t: f64) -> f32 {
-        shape_segment(self.curve_type, self.tension.get(), 0.0, 1.0, t) as f32
+    pub fn gain_at(&self, t: f64) -> f32 {
+        shape_segment(
+            SegmentShape::new(self.curve_type, self.tension.get()),
+            0.0,
+            1.0,
+            t,
+        ) as f32
     }
 }
 
@@ -143,11 +148,11 @@ impl GainEnvelope {
         let (fade_in, fade_out) = self.fade_lengths(len);
         let mut gain = 1.0;
         if elapsed < fade_in {
-            gain *= self.fade_in.shape(elapsed as f64 / fade_in as f64);
+            gain *= self.fade_in.gain_at(elapsed as f64 / fade_in as f64);
         }
         let remaining = len.saturating_sub(elapsed);
         if remaining < fade_out {
-            gain *= self.fade_out.shape(remaining as f64 / fade_out as f64);
+            gain *= self.fade_out.gain_at(remaining as f64 / fade_out as f64);
         }
         gain
     }
@@ -180,8 +185,7 @@ impl GainEnvelope {
         };
         let t = (pos - from.position) as f64 / (to.position - from.position) as f64;
         shape_segment(
-            from.curve_type,
-            from.tension.get(),
+            SegmentShape::new(from.curve_type, from.tension.get()),
             f64::from(from.gain),
             f64::from(to.gain),
             t,

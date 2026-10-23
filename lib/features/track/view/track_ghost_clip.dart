@@ -3,18 +3,55 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:karbeat/app/providers/clip_placement_state.dart';
 import 'package:karbeat/app/providers/project_provider.dart';
 import 'package:karbeat/app/providers/transport_state.dart';
+import 'package:karbeat/app/providers/workspace_state.dart';
 import 'package:karbeat/core/utils/clip_time_utils.dart';
+import 'package:karbeat/src/rust/api/project.dart';
+import 'package:karbeat/src/rust/api/track.dart' show UiResizeEdge;
+
+/// [clip] as the batch drag [action] would leave it after [deltaTicks], so a
+/// ghost shows the result of the edit before it is committed.
+UiClip previewDraggedClip(
+  UiClip clip, {
+  required BatchDragAction action,
+  required int deltaTicks,
+  required bool stretch,
+  required double bpm,
+  required int sampleRate,
+}) {
+  final UiResizeEdge edge;
+  switch (action) {
+    case BatchDragAction.none:
+      return clip;
+    case BatchDragAction.move:
+      return clip.copyWith(startTime: clip.startTime + deltaTicks);
+    case BatchDragAction.resizeLeft:
+      edge = UiResizeEdge.left;
+    case BatchDragAction.resizeRight:
+      edge = UiResizeEdge.right;
+  }
+  // Only audio stretches; other clips are trimmed or extended.
+  return stretch && clip.source is UiClipSource_Audio
+      ? stretchResizedClip(clip, edge, deltaTicks, bpm, sampleRate)
+      : resizedClip(clip, edge, deltaTicks, bpm, sampleRate);
+}
 
 class TrackGhostClip extends ConsumerWidget {
   final int trackId;
   final double trackHeight;
   final double zoomLevel;
 
+  /// Builds the content of a dragged clip's ghost. [clip] is the clip as the
+  /// drag would leave it, [left] its x position on the track, and
+  /// [contentStretch] the length scale of its audio under a stretching resize.
+  final Widget Function(UiClip clip, double left, double contentStretch)
+  clipBuilder;
+
   const TrackGhostClip({
     super.key,
     required this.trackId,
     required this.trackHeight,
     required this.zoomLevel,
+    required this.clipBuilder,
   });
 
   @override
@@ -64,51 +101,42 @@ class TrackGhostClip extends ConsumerWidget {
                   transportProvider.select((s) => s.value?.sampleRate),
                 ) ??
                 48000;
-            final snappedDelta = placementState.snappedDeltaTicks;
+            final stretch = ref.watch(
+              workspaceStateProvider.select((s) => s.resizeStretches),
+            );
 
             for (final clipId in placementState.draggedClipIds) {
               final clip = originalTrack.clips
                   .where((c) => c.id == clipId)
                   .firstOrNull;
               if (clip != null) {
-                final screenLeft = clip.startTimeInTicks / zoomLevel;
-                final clipWidth = clip.loopLengthInTicks(bpm, sr) / zoomLevel;
-
-                double activeWidth = clipWidth;
-                double activeLeft = screenLeft;
-
-                if (placementState.dragAction == BatchDragAction.resizeRight) {
-                  activeWidth += (snappedDelta / zoomLevel);
-                } else if (placementState.dragAction ==
-                    BatchDragAction.resizeLeft) {
-                  activeLeft += (snappedDelta / zoomLevel);
-                  activeWidth -= (snappedDelta / zoomLevel);
-                } else if (placementState.dragAction == BatchDragAction.move) {
-                  activeLeft += (snappedDelta / zoomLevel);
-                }
-
-                final safeWidth = activeWidth < 1 ? 1.0 : activeWidth;
+                final preview = previewDraggedClip(
+                  clip,
+                  action: placementState.dragAction,
+                  deltaTicks: placementState.snappedDeltaTicks,
+                  stretch: stretch,
+                  bpm: bpm,
+                  sampleRate: sr,
+                );
+                final left = preview.startTimeInTicks / zoomLevel;
+                final width = preview.loopLengthInTicks(bpm, sr) / zoomLevel;
+                final contentStretch =
+                    stretch &&
+                        clip.source is UiClipSource_Audio &&
+                        clip.loopLength > 0
+                    ? preview.loopLength / clip.loopLength
+                    : 1.0;
 
                 ghostWidgets.add(
                   Positioned(
-                    left: activeLeft,
-                    top: 0,
-                    width: safeWidth,
+                    left: left,
+                    top: 2,
+                    width: width < 1 ? 1.0 : width,
                     height: trackHeight - 4,
-                    child: Draggable<List<int>>(
-                      data: placementState.draggedClipIds,
-                      feedback: _buildExistingGhostBox(
-                        colors,
-                        clip.name,
-                        safeWidth,
-                        0.7,
-                      ),
-                      childWhenDragging: const SizedBox.shrink(),
-                      child: _buildExistingGhostBox(
-                        colors,
-                        clip.name,
-                        safeWidth,
-                        0.7,
+                    child: IgnorePointer(
+                      child: Opacity(
+                        opacity: 0.7,
+                        child: clipBuilder(preview, left, contentStretch),
                       ),
                     ),
                   ),
@@ -144,37 +172,6 @@ class TrackGhostClip extends ConsumerWidget {
               fontWeight: FontWeight.bold,
               shadows: [Shadow(color: colors.shadow, blurRadius: 2)],
             ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildExistingGhostBox(
-    ColorScheme colors,
-    String name,
-    double width,
-    double opacity,
-  ) {
-    return Opacity(
-      opacity: opacity,
-      child: Container(
-        width: width,
-        height: trackHeight - 4,
-        decoration: BoxDecoration(
-          color: colors.primaryContainer,
-          border: Border.all(color: colors.primary, width: 2),
-          borderRadius: BorderRadius.circular(4),
-        ),
-        child: Center(
-          child: Text(
-            name,
-            style: TextStyle(
-              color: colors.onPrimaryContainer,
-              fontSize: 10,
-              fontWeight: FontWeight.bold,
-            ),
-            overflow: TextOverflow.ellipsis,
           ),
         ),
       ),

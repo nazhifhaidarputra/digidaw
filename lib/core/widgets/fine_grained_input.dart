@@ -199,6 +199,10 @@ class ParameterInteractionWrapper<T extends num> extends StatelessWidget {
   final VoidCallback? onAddAutomation;
   final VoidCallback? onRemoveAutomation;
 
+  /// Context actions owned by the caller, shown after the built-in parameter
+  /// actions. Parameter screens use this for actions such as copy and paste.
+  final List<DawContextAction> extraActions;
+
   const ParameterInteractionWrapper({
     super.key,
     required this.child,
@@ -211,6 +215,7 @@ class ParameterInteractionWrapper<T extends num> extends StatelessWidget {
     required this.onChanged,
     this.onAddAutomation,
     this.onRemoveAutomation,
+    this.extraActions = const [],
   });
 
   @override
@@ -253,6 +258,7 @@ class ParameterInteractionWrapper<T extends num> extends StatelessWidget {
             icon: Icons.cancel,
             onTap: onRemoveAutomation!,
           ),
+        ...extraActions,
       ],
       child: child,
     );

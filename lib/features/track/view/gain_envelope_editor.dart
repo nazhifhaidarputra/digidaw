@@ -1,7 +1,9 @@
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:karbeat/core/widgets/context_menu.dart';
+import 'package:karbeat/features/track/services/curve_sampler.dart';
 import 'package:karbeat/features/track/services/gain_envelope_evaluator.dart';
 import 'package:karbeat/features/track/view/automation_point_context_menu.dart';
 import 'package:karbeat/src/rust/api/automation.dart';
@@ -61,7 +63,7 @@ double _yToGain(double y, double height) {
 /// bend them, the bottom handle to change the crossfade, and the points to
 /// move them. Double-tap to add a point; right-click or long-press a point or
 /// fade handle for its curve options. Each gesture commits once, on release.
-class GainEnvelopeEditor extends StatefulWidget {
+class GainEnvelopeEditor extends ConsumerStatefulWidget {
   const GainEnvelopeEditor({
     super.key,
     required this.envelope,
@@ -88,12 +90,12 @@ class GainEnvelopeEditor extends StatefulWidget {
   final bool interactive;
 
   @override
-  State<GainEnvelopeEditor> createState() => _GainEnvelopeEditorState();
+  ConsumerState<GainEnvelopeEditor> createState() => _GainEnvelopeEditorState();
 }
 
 enum _Grip { fadeIn, fadeOut, fadeInTension, fadeOutTension, crossfade, point }
 
-class _GainEnvelopeEditorState extends State<GainEnvelopeEditor> {
+class _GainEnvelopeEditorState extends ConsumerState<GainEnvelopeEditor> {
   /// Envelope being dragged; shown instead of [GainEnvelopeEditor.envelope]
   /// until the commit lands.
   UiGainEnvelope? _draft;
@@ -147,7 +149,8 @@ class _GainEnvelopeEditorState extends State<GainEnvelopeEditor> {
 
     UiFade bend(UiFade fade) {
       _dragDy += details.delta.dy;
-      final direction = fade.curveType == AutomationCurveTypeDto.exponential
+      final direction =
+          ref.read(curveSamplerProvider).traits(fade.curveType).tensionInverted
           ? 1.0
           : -1.0;
       final tension = (_tensionAnchor + direction * _dragDy / 60).clamp(
@@ -230,24 +233,27 @@ class _GainEnvelopeEditorState extends State<GainEnvelopeEditor> {
     required VoidCallback onResetTension,
   }) {
     final colors = Theme.of(context).colorScheme;
+    final sampler = ref.read(curveSamplerProvider);
     return [
       DawContextAction.submenu(
         title: 'Curve type',
         subtitle: automationCurveTypeLabel(current),
         icon: automationCurveTypeIcon(current),
         children: [
-          for (final curveType in AutomationCurveTypeDto.values)
-            DawContextAction(
-              title: automationCurveTypeLabel(curveType),
-              icon: current == curveType
-                  ? Icons.check
-                  : automationCurveTypeIcon(curveType),
-              color: current == curveType ? colors.primary : null,
-              onTap: () => onCurve(curveType),
-            ),
+          // Envelope points and fades have no Bezier handles.
+          for (final curveType in automationCurveTypeMenuOrder)
+            if (!sampler.traits(curveType).usesHandles)
+              DawContextAction(
+                title: automationCurveTypeLabel(curveType),
+                icon: current == curveType
+                    ? Icons.check
+                    : automationCurveTypeIcon(curveType),
+                color: current == curveType ? colors.primary : null,
+                onTap: () => onCurve(curveType),
+              ),
         ],
       ),
-      if (tension != 0 && current != AutomationCurveTypeDto.step)
+      if (tension != 0 && sampler.traits(current).supportsTension)
         DawContextAction(
           title: 'Reset tension',
           icon: Icons.restart_alt,
@@ -369,6 +375,7 @@ class _GainEnvelopeEditorState extends State<GainEnvelopeEditor> {
   Widget build(BuildContext context) {
     final envelope = _envelope;
     final axis = widget.axis;
+    final sampler = ref.watch(curveSamplerProvider);
 
     return LayoutBuilder(
       builder: (context, constraints) {
@@ -383,6 +390,7 @@ class _GainEnvelopeEditorState extends State<GainEnvelopeEditor> {
             contentLength: widget.contentLength,
             color: widget.color,
             crossfadeColor: Theme.of(context).colorScheme.tertiary,
+            sampler: sampler,
           ),
         );
         if (!widget.interactive) return IgnorePointer(child: painter);
@@ -424,13 +432,13 @@ class _GainEnvelopeEditorState extends State<GainEnvelopeEditor> {
           fadeOutX,
         );
         if (fadeIn > 0 &&
-            envelope.fadeIn.curveType != AutomationCurveTypeDto.step) {
+            sampler.traits(envelope.fadeIn.curveType).supportsTension) {
           final x = axis.toX(widget.contentStart + fadeIn / 2);
           add(
             () => _handle(
               center: Offset(
                 x,
-                _gainToY(fadeShape(envelope.fadeIn, 0.5), height),
+                _gainToY(sampler.fadeGain(envelope.fadeIn, 0.5), height),
               ),
               grip: _Grip.fadeInTension,
               height: height,
@@ -441,13 +449,13 @@ class _GainEnvelopeEditorState extends State<GainEnvelopeEditor> {
           );
         }
         if (fadeOut > 0 &&
-            envelope.fadeOut.curveType != AutomationCurveTypeDto.step) {
+            sampler.traits(envelope.fadeOut.curveType).supportsTension) {
           final x = axis.toX(_contentEnd - fadeOut / 2);
           add(
             () => _handle(
               center: Offset(
                 x,
-                _gainToY(fadeShape(envelope.fadeOut, 0.5), height),
+                _gainToY(sampler.fadeGain(envelope.fadeOut, 0.5), height),
               ),
               grip: _Grip.fadeOutTension,
               height: height,
@@ -513,6 +521,7 @@ class _GainEnvelopePainter extends CustomPainter {
     required this.contentLength,
     required this.color,
     required this.crossfadeColor,
+    required this.sampler,
   });
 
   final UiGainEnvelope envelope;
@@ -521,6 +530,9 @@ class _GainEnvelopePainter extends CustomPainter {
   final int contentLength;
   final Color color;
   final Color crossfadeColor;
+
+  /// Source of the drawn gains: the audio engine's envelope code.
+  final CurveSampler sampler;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -550,15 +562,21 @@ class _GainEnvelopePainter extends CustomPainter {
       axis.toX(contentEnd - envelope.fadeOut.length),
     ].where((x) => x >= left && x <= right).toList()..sort();
 
+    // An untouched envelope is unity everywhere, so it needs no sampling.
+    final gains = isIdentityEnvelope(envelope)
+        ? null
+        : sampler.sampleEnvelope(
+            envelope,
+            contentStart: contentStart,
+            contentLength: contentLength,
+            positions: [for (final x in xs) axis.toPosition(x)],
+          );
+
     final line = Path();
     final fill = Path()..moveTo(xs.first, height);
     for (var i = 0; i < xs.length; i++) {
       final x = xs[i];
-      final position = axis.toPosition(x);
-      final gain =
-          envelopeFadeGain(envelope, position - contentStart, contentLength) *
-          envelopePointGain(envelope.points, position);
-      final y = _gainToY(gain, height);
+      final y = _gainToY(gains == null ? 1.0 : gains[i], height);
       if (i == 0) {
         line.moveTo(x, y);
       } else {

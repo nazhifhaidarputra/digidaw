@@ -8,11 +8,16 @@ import 'package:karbeat/app/providers/mixer_state.dart';
 import 'package:karbeat/app/providers/notification_provider.dart';
 import 'package:karbeat/app/providers/project_provider.dart';
 import 'package:karbeat/app/providers/transport_state.dart';
+import 'package:karbeat/app/providers/workspace_state.dart';
 import 'package:karbeat/core/utils/clip_time_utils.dart';
 import 'package:karbeat/core/utils/color.dart';
 import 'package:karbeat/core/utils/logger.dart';
 import 'package:karbeat/core/utils/result_type.dart';
+import 'package:karbeat/features/mixer/services/mixer_channel_targets.dart';
 import 'package:karbeat/features/source/services/audio_waveform_services.dart';
+import 'package:karbeat/features/track/models/mixer_channel_sidepanel.dart';
+import 'package:karbeat/shared/models/grid.dart';
+import 'package:karbeat/src/rust/api/mixer.dart' show UiMixerChannelTarget;
 import 'package:karbeat/src/rust/api/audio.dart' as audio_api;
 import 'package:karbeat/src/rust/api/pattern.dart';
 import 'package:karbeat/src/rust/api/project.dart';
@@ -48,14 +53,38 @@ abstract class TrackListState with _$TrackListState {
     /// The clip that should receive keyboard focus (last clicked).
     int? focusClipId,
 
+    /// Track and tick of the last timeline click. Ctrl+V pastes here.
+    int? lastClickedTrackId,
+    int? lastClickedTick,
+
     /// Per-track pixel heights for the arranger rows, keyed by track ID.
     @Default(IMapConst<int, int>({})) IMap<int, int> trackIdHeightMap,
 
     /// Tracks shrunk to a title-only row. Their stored height is kept so
     /// expanding restores it.
     @Default(ISetConst<int>({})) ISet<int> collapsedTrackIds,
+
+    /// Mixer channel panel beside the track headers.
+    @Default(MixerChannelPanelState()) MixerChannelPanelState mixerChannelPanel,
   }) = _TrackListState;
 }
+
+/// The channel shown in the track list's mixer panel; null while the panel is
+/// closed or once its track or bus no longer exists.
+final mixerChannelPanelTargetProvider = Provider<UiMixerChannelTarget?>((ref) {
+  final panel = ref.watch(
+    trackListStateProvider.select((s) => s.mixerChannelPanel),
+  );
+  final target = panel.target;
+  if (!panel.isOpen || target == null) return null;
+  final exists = ref.watch(
+    projectProvider.select((s) {
+      final mixer = s.value?.mixer;
+      return mixer != null && target.channelIn(mixer) != null;
+    }),
+  );
+  return exists ? target : null;
+});
 
 // ============================================================
 // Notifier
@@ -116,6 +145,24 @@ class TrackListNotifier extends Notifier<TrackListState> {
       collapsedTrackIds: collapsed.contains(trackId)
           ? collapsed.remove(trackId)
           : collapsed.add(trackId),
+    );
+  }
+
+  /// Shows [target] in the mixer channel panel; selecting the channel that
+  /// is already shown closes the panel.
+  void selectMixerChannel(UiMixerChannelTarget target) {
+    final panel = state.mixerChannelPanel;
+    state = state.copyWith(
+      mixerChannelPanel: panel.isOpen && panel.target == target
+          ? panel.copyWith(isOpen: false)
+          : MixerChannelPanelState(isOpen: true, target: target),
+    );
+  }
+
+  void closeMixerChannelPanel() {
+    if (!state.mixerChannelPanel.isOpen) return;
+    state = state.copyWith(
+      mixerChannelPanel: state.mixerChannelPanel.copyWith(isOpen: false),
     );
   }
 
@@ -225,6 +272,20 @@ class TrackListNotifier extends Notifier<TrackListState> {
       selectedTrackId: null,
       selectedClipIds: IList(),
       focusClipId: null,
+    );
+  }
+
+  /// Remember where the last timeline click landed. Paste and other
+  /// click-relative actions use it as their insertion point.
+  void recordTimelineClick({required int trackId, required int tick}) {
+    final safeTick = tick < 0 ? 0 : tick;
+    if (state.lastClickedTrackId == trackId &&
+        state.lastClickedTick == safeTick) {
+      return;
+    }
+    state = state.copyWith(
+      lastClickedTrackId: trackId,
+      lastClickedTick: safeTick,
     );
   }
 
@@ -515,6 +576,7 @@ class TrackListNotifier extends Notifier<TrackListState> {
   /// Delete a single clip, with an optimistic local removal.
   Future<Result<void>> deleteClip(int trackId, int clipId) async {
     _optimisticDeleteClips(trackId, {clipId});
+    _pruneSelection(trackId, {clipId});
     final result = await AsyncValue.guard(() async {
       await track_api.deleteClip(ctx: _ctx, trackId: trackId, clipId: clipId);
       syncTrack(trackId);
@@ -629,6 +691,37 @@ class TrackListNotifier extends Notifier<TrackListState> {
   // ------------------------------------------------------------------
   // Batch clip operations
   // ------------------------------------------------------------------
+
+  /// Moves the selected clips [steps] move steps along the timeline, where
+  /// one step is [step] (a single tick when it is none). Stops at the start
+  /// of the timeline.
+  Future<Result<void>> nudgeSelectedClips({
+    required int steps,
+    required MusicalBeatSize step,
+  }) async {
+    final trackId = state.selectedTrackId;
+    final clipIds = state.selectedClipIds;
+    final track = trackId == null
+        ? null
+        : ref.read(projectProvider).value?.tracks[trackId];
+    if (trackId == null || track == null || clipIds.isEmpty) {
+      return Result.ok(null);
+    }
+    final starts = track.clips
+        .where((clip) => clipIds.contains(clip.id))
+        .map((clip) => clip.startTimeInTicks);
+    if (starts.isEmpty) return Result.ok(null);
+    final earliestStart = starts.reduce((a, b) => a < b ? a : b);
+
+    final ticksPerStep = step == MusicalBeatSize.none
+        ? 1
+        : (step.value * 960).round();
+    var deltaTicks = steps * ticksPerStep;
+    if (deltaTicks < -earliestStart) deltaTicks = -earliestStart;
+    if (deltaTicks == 0) return Result.ok(null);
+
+    return moveClipBatch(trackId, clipIds.toList(), deltaTicks);
+  }
 
   /// Move multiple clips by [deltaTicks], with an optimistic update.
   Future<Result<void>> moveClipBatch(
@@ -806,6 +899,7 @@ class TrackListNotifier extends Notifier<TrackListState> {
   /// Delete multiple clips at once, with an optimistic local removal.
   Future<Result<void>> deleteClipBatch(int trackId, List<int> clipIds) async {
     _optimisticDeleteClips(trackId, clipIds.toSet());
+    _pruneSelection(trackId, clipIds.toSet());
 
     final result = await AsyncValue.guard(() async {
       await track_api.deleteClipBatch(
@@ -922,6 +1016,78 @@ class TrackListNotifier extends Notifier<TrackListState> {
     }
   }
 
+  /// Paste clips from the session clipboard at the last clicked timeline
+  /// position. Falls back to the selected track when no point was recorded.
+  Future<Result<void>> pasteClipsAtLastClick() async {
+    final tracks = ref.read(projectProvider).value?.tracks;
+    final lastTrackId = state.lastClickedTrackId;
+    final targetTrackId =
+        lastTrackId != null && tracks?.containsKey(lastTrackId) == true
+        ? lastTrackId
+        : state.selectedTrackId;
+    if (targetTrackId == null) return Result.ok(null);
+
+    final track = tracks?[targetTrackId];
+    if (track == null) return Result.ok(null);
+
+    final workspace = ref.read(workspaceStateProvider);
+    var pasteTick = state.lastClickedTick ?? 0;
+    if (workspace.snapToGrid && workspace.gridSize.value > 0) {
+      final ticksPerLine = (960.0 * 4.0) / workspace.gridSize.value;
+      if (ticksPerLine > 0) {
+        pasteTick = ((pasteTick / ticksPerLine).round() * ticksPerLine).toInt();
+      }
+    }
+
+    return pasteClips(
+      targetTrackId: targetTrackId,
+      pasteStartTime: pasteTick < 0 ? 0 : pasteTick,
+      trackType: track.trackType,
+    );
+  }
+
+  /// Duplicates the selected clips directly after the selection and selects
+  /// the copies.
+  Future<Result<void>> duplicateSelectedClips() async {
+    final trackId = state.selectedTrackId;
+    final clipIds = state.selectedClipIds.toList(growable: false);
+    if (trackId == null || clipIds.isEmpty) return Result.ok(null);
+
+    final track = ref.read(projectProvider).value?.tracks[trackId];
+    if (track == null) return Result.ok(null);
+
+    final bpm = ref.read(transportProvider).value?.state?.bpm ?? 120.0;
+    final sampleRate = ref.read(transportProvider).value?.sampleRate ?? 48000;
+    final selected = track.clips
+        .where((clip) => clipIds.contains(clip.id))
+        .toList(growable: false);
+    if (selected.isEmpty) return Result.ok(null);
+
+    final selectionEnd = selected
+        .map(
+          (clip) =>
+              clip.startTimeInTicks + clip.loopLengthInTicks(bpm, sampleRate),
+        )
+        .reduce((a, b) => a > b ? a : b);
+
+    final result = await duplicateClipGroups(
+      trackId: trackId,
+      clipIds: clipIds,
+      groupStartTimes: [selectionEnd],
+    );
+    if (result.isErr()) return Result.error(result.err());
+
+    final duplicated = result.ok();
+    if (duplicated.isNotEmpty) {
+      state = state.copyWith(
+        selectedTrackId: trackId,
+        selectedClipIds: duplicated.map((clip) => clip.id).toIList(),
+        focusClipId: duplicated.last.id,
+      );
+    }
+    return Result.ok(null);
+  }
+
   /// Reorder [trackId] to [newIdx] within the track list.
   ///
   /// Updates the project tracks before calling the backend so the header and
@@ -1018,6 +1184,23 @@ class TrackListNotifier extends Notifier<TrackListState> {
     ref
         .read(projectProvider.notifier)
         .upsertTrack(trackId, track.copyWith(clips: updatedClips));
+  }
+
+  /// Drops deleted clips from the selection so a batch delete cannot leave
+  /// stale IDs behind.
+  void _pruneSelection(int trackId, Set<int> deletedClipIds) {
+    if (state.selectedTrackId != trackId || state.selectedClipIds.isEmpty) {
+      return;
+    }
+    final remaining = state.selectedClipIds
+        .where((clipId) => !deletedClipIds.contains(clipId))
+        .toIList();
+    if (remaining.length == state.selectedClipIds.length) return;
+    state = state.copyWith(
+      selectedClipIds: remaining,
+      focusClipId: remaining.isEmpty ? null : remaining.last,
+      selectedTrackId: remaining.isEmpty ? null : state.selectedTrackId,
+    );
   }
 
   void _applyOptimisticResize(
@@ -1273,62 +1456,7 @@ class TrackListNotifier extends Notifier<TrackListState> {
 
     final updatedClips = track.clips.map((clip) {
       if (!clipIdSet.contains(clip.id)) return clip;
-      int newStart = clip.startTime.toInt();
-      int newLength = clip.loopLength.toInt();
-      int newOffset = clip.offsetStart.toInt();
-
-      if (clip.isSampleBased) {
-        final oldLengthTicks = samplesToTicks(clip.loopLength, bpm, sampleRate);
-        final oldEndTick = clip.startTime + oldLengthTicks;
-        if (edge == UiResizeEdge.right) {
-          final newEndTick = (oldEndTick + deltaTicks).clamp(
-            clip.startTime + 10,
-            1 << 62,
-          );
-          newLength = ticksToSamples(
-            newEndTick - clip.startTime,
-            bpm,
-            sampleRate,
-          );
-        } else {
-          final newStartTick = (clip.startTime + deltaTicks)
-              .clamp(0, oldEndTick - 10)
-              .toInt();
-          final deltaSamples = ticksToSamples(
-            newStartTick - clip.startTime,
-            bpm,
-            sampleRate,
-          );
-          newStart = newStartTick;
-          newLength = (clip.loopLength - deltaSamples)
-              .clamp(1, 1 << 62)
-              .toInt();
-          newOffset = (clip.offsetStart + deltaSamples)
-              .clamp(0, 1 << 62)
-              .toInt();
-        }
-      } else if (edge == UiResizeEdge.right) {
-        final newEnd = (clip.startTime + clip.loopLength + deltaTicks).clamp(
-          clip.startTime + 10,
-          1 << 62,
-        );
-        newLength = newEnd.toInt() - clip.startTime.toInt();
-      } else {
-        final oldEnd = clip.startTime + clip.loopLength;
-        int newStartProposed = (clip.startTime + deltaTicks)
-            .clamp(0, oldEnd - 10)
-            .toInt();
-        final delta = newStartProposed - clip.startTime;
-        final newOffsetProposed = (clip.offsetStart + delta).clamp(0, 1 << 62);
-        newStart = newStartProposed;
-        newLength = (oldEnd - newStartProposed).toInt();
-        newOffset = newOffsetProposed.toInt();
-      }
-      return clip.copyWith(
-        startTime: newStart,
-        loopLength: newLength,
-        offsetStart: newOffset,
-      );
+      return resizedClip(clip, edge, deltaTicks, bpm, sampleRate);
     }).toList();
 
     ref

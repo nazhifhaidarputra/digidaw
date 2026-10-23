@@ -11,7 +11,8 @@ use crate::audio::render_state::AudioGraphState;
 use crate::commands::{AudioCommand, AudioFeedback, EffectTarget, TelemetryRegistration};
 use crate::core::project::automation::{
     AutomationLane, AutomationPoint, AutomationTarget, EffectAutomationTarget,
-    MasterAutomationTarget, MixerChannelParamTarget, TrackAutomationTarget,
+    MasterAutomationTarget, MixerChannelParamTarget, TEMPO_AUTOMATION_MAX_BPM,
+    TEMPO_AUTOMATION_MIN_BPM, TrackAutomationTarget,
 };
 use crate::core::project::modulation::{ModulationLink, ModulationSource};
 use crate::core::project::track::AudioTrack;
@@ -393,7 +394,7 @@ fn test_automation_lane_applied_to_mixer_volume() {
     };
 
     let automation_id = app_state.automation_pool.insert_with_key(|id| {
-        let mut lane = AutomationLane::new(id, "Volume", 0.0, 1.0, 0.5);
+        let mut lane = AutomationLane::new(id, "Volume", NormalizedF64::new(0.5));
         lane.add_point(AutomationPoint::new(0, NormalizedF64::new(0.75)));
         lane
     });
@@ -466,6 +467,205 @@ fn test_automation_lane_applied_to_mixer_volume() {
         ch.volume.get(),
         -20.5,
         "Volume should be automated to -20.5 dB"
+    );
+}
+
+#[test]
+fn manual_mixer_edit_suspends_automation_until_a_transport_seek() {
+    let (_, cmd_consumer) = RingBuffer::<AudioCommand>::new(1024);
+    let (pos_producer, _) = RingBuffer::<TransportFeedback>::new(1024);
+    let (fb_producer, _) = RingBuffer::<AudioFeedback>::new(1024);
+    let (telemetry_tx, _) = mpsc::sync_channel::<TelemetryRegistration>(1024);
+
+    let mut engine = AudioEngine::new(
+        cmd_consumer,
+        pos_producer,
+        fb_producer,
+        44100,
+        2,
+        120.0,
+        512,
+        AudioEngineTelemetry::new_for_export(),
+        telemetry_tx,
+    );
+
+    let mut app_state = ApplicationState::default();
+    let track_id = app_state.tracks.insert_with_key(|id| {
+        AudioTrack::new(
+            id,
+            "Manual Override",
+            Color::new_from_rgb(0, 0, 0),
+            TrackType::Audio,
+        )
+    });
+    let target = AutomationTarget::Track {
+        track_id,
+        track_target: TrackAutomationTarget::MixerChannel(MixerChannelParamTarget::Volume),
+    };
+
+    let automation_id = app_state.automation_pool.insert_with_key(|id| {
+        let mut lane = AutomationLane::new(id, "Volume", NormalizedF64::new(0.5));
+        lane.add_point(AutomationPoint::new(0, NormalizedF64::new(0.75)));
+        lane
+    });
+    let automation_lane = app_state.automation_pool[automation_id].clone();
+
+    let mod_source_id = app_state
+        .modulation_sources
+        .insert(ModulationSource::Automation {
+            lane_id: automation_id,
+        });
+    let mod_link_id =
+        app_state
+            .modulation_links
+            .insert_with_key(|id| ModulationLinkForOrderedLaneView {
+                order_idx: 0,
+                prop: ModulationLink {
+                    id,
+                    source_id: mod_source_id,
+                    target: target.clone(),
+                    depth: 1.0,
+                    base_value: 0.5,
+                },
+            });
+
+    engine.process_command(AudioCommand::ReplaceFullGraph {
+        graph: AudioGraphState::from(&app_state),
+    });
+
+    let mut channel = crate::audio::engine::AudioMixerChannelValues::default();
+    channel.volume.set_base(0.5);
+    engine.mixer_state.track_channels.insert(track_id, channel);
+
+    engine.process_command(AudioCommand::AddModulationSource {
+        id: mod_source_id,
+        source: ModulationSource::Automation {
+            lane_id: automation_id,
+        },
+    });
+    engine.process_command(AudioCommand::AddModulationLink {
+        id: mod_link_id,
+        link: ModulationLink {
+            id: mod_link_id,
+            source_id: mod_source_id,
+            target: target.clone(),
+            depth: 1.0,
+            base_value: 0.5,
+        },
+    });
+    engine.process_command(AudioCommand::UpdateAutomationLane {
+        id: automation_id,
+        lane: automation_lane.into(),
+    });
+
+    engine.process_command(AudioCommand::SetPlayhead(0));
+    engine.process_command(AudioCommand::SetPlaying(true));
+
+    let mut block = vec![0.0; 512 * 2];
+    engine.process(&mut block);
+    let automated = engine
+        .mixer_state
+        .track_channels
+        .get(&track_id)
+        .expect("track channel")
+        .volume
+        .get();
+    assert!((automated - (-20.5)).abs() < 1e-3, "automated: {automated}");
+
+    // A hand edit takes over while the transport is running. The core API sends this marker
+    // before changing a mixer control; the engine owns the resulting suspension.
+    engine.process_command(AudioCommand::MarkParameterManual {
+        target: target.clone(),
+    });
+    engine.process_command(AudioCommand::SetMixerChannelParameter {
+        target: crate::commands::MixerChannelTarget::Track(track_id),
+        param: crate::core::project::MixerChannelParams::Volume(-6.0),
+    });
+    engine.process(&mut block);
+    let manual = engine
+        .mixer_state
+        .track_channels
+        .get(&track_id)
+        .expect("track channel")
+        .volume
+        .get();
+    assert!((manual - (-6.0)).abs() < 1e-3, "manual: {manual}");
+
+    // Still playing, so another block must not reapply automation on top of the hand edit.
+    engine.process(&mut block);
+    let still_manual = engine
+        .mixer_state
+        .track_channels
+        .get(&track_id)
+        .expect("track channel")
+        .volume
+        .get();
+    assert!(
+        (still_manual - (-6.0)).abs() < 1e-3,
+        "still manual: {still_manual}"
+    );
+
+    // Seeking releases the override and the lane wins again on the next block.
+    engine.process_command(AudioCommand::SetPlayhead(0));
+    engine.process(&mut block);
+    let resumed = engine
+        .mixer_state
+        .track_channels
+        .get(&track_id)
+        .expect("track channel")
+        .volume
+        .get();
+    assert!((resumed - (-20.5)).abs() < 1e-3, "resumed: {resumed}");
+    assert!(!engine.modulation.suspended_targets.contains(&target));
+
+    // Stopping playback releases the manual override as well.
+    engine.process_command(AudioCommand::MarkParameterManual {
+        target: target.clone(),
+    });
+    assert!(engine.modulation.suspended_targets.contains(&target));
+    engine.process_command(AudioCommand::SetPlaying(false));
+    assert!(!engine.modulation.suspended_targets.contains(&target));
+}
+
+#[test]
+fn tempo_automation_maps_the_normalized_lane_to_bpm() {
+    let (_, cmd_consumer) = RingBuffer::<AudioCommand>::new(1024);
+    let (pos_producer, _) = RingBuffer::<TransportFeedback>::new(1024);
+    let (fb_producer, _) = RingBuffer::<AudioFeedback>::new(1024);
+    let (telemetry_tx, _) = mpsc::sync_channel::<TelemetryRegistration>(1024);
+    let mut engine = AudioEngine::new(
+        cmd_consumer,
+        pos_producer,
+        fb_producer,
+        44100,
+        2,
+        120.0,
+        512,
+        AudioEngineTelemetry::new_for_export(),
+        telemetry_tx,
+    );
+
+    let mut app_state = ApplicationState::default();
+    app_state
+        .add_automation_lane(
+            AutomationTarget::Master(MasterAutomationTarget::TempoBpm),
+            "Tempo",
+            NormalizedF64::new(0.5),
+        )
+        .expect("tempo lane should be created");
+    engine.process_command(AudioCommand::ReplaceFullGraph {
+        graph: AudioGraphState::from(&app_state),
+    });
+    engine.process_command(AudioCommand::SetPlayhead(0));
+
+    let mut output_buffer = vec![0.0; 512 * 2];
+    engine.process(&mut output_buffer);
+
+    let midpoint = (TEMPO_AUTOMATION_MIN_BPM + TEMPO_AUTOMATION_MAX_BPM) / 2.0;
+    assert!(
+        (engine.transport.bpm - midpoint).abs() < 1e-3,
+        "tempo was {}",
+        engine.transport.bpm
     );
 }
 
@@ -568,10 +768,10 @@ fn removing_an_effect_drops_its_automation_in_the_same_command() {
     ));
     let mut app_state = ApplicationState::default();
     let (effect_lane, effect_link) = app_state
-        .add_automation_lane(effect_target, "Gain", 0.0, 1.0, 0.5)
+        .add_automation_lane(effect_target, "Gain", NormalizedF64::new(0.5))
         .expect("effect lane should be created");
     let (volume_lane, volume_link) = app_state
-        .add_automation_lane(volume_target, "Volume", 0.0, 1.0, 0.5)
+        .add_automation_lane(volume_target, "Volume", NormalizedF64::new(0.5))
         .expect("volume lane should be created");
     let effect_source = app_state.modulation_links[effect_link].prop.source_id;
     let volume_source = app_state.modulation_links[volume_link].prop.source_id;
@@ -879,6 +1079,127 @@ fn render_tone_track(linked_to_master: bool) -> f32 {
 fn unlinked_track_does_not_reach_master() {
     assert!(render_tone_track(true) > 1.0);
     assert_eq!(render_tone_track(false), 0.0);
+}
+
+/// Effect that counts its process calls and emits a constant level for its first `ringing`
+/// calls without reporting a tail, optionally asking for continuous processing the way hosted
+/// plugins do.
+pub(crate) struct IdleProbe {
+    pub calls: std::sync::Arc<std::sync::atomic::AtomicUsize>,
+    pub ringing: usize,
+    pub continuous: bool,
+}
+
+impl karbeat_plugin_api::traits::AudioPlugin for IdleProbe {
+    test_effect_boilerplate!();
+    fn needs_continuous_processing(&self) -> bool {
+        self.continuous
+    }
+    fn process(
+        &mut self,
+        buffers: &mut karbeat_plugin_api::types::AudioBuffers,
+        _: &karbeat_plugin_api::types::ProcessContext,
+    ) {
+        let call = self
+            .calls
+            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        let level = if call < self.ringing { 0.25 } else { 0.0 };
+        for output in buffers.main_outputs.iter_mut() {
+            for channel in output.channel_data.iter_mut() {
+                channel.fill(level);
+            }
+        }
+    }
+}
+
+/// Renders four blocks of a stopped, clipless project with an [`IdleProbe`] on `target`, and
+/// returns the probe's process calls and the energy that reached the master output.
+fn render_idle_probe(
+    target: fn(crate::shared::TrackId, crate::shared::BusId) -> EffectTarget,
+    continuous: bool,
+    bypass: bool,
+) -> (usize, f32) {
+    use crate::core::project::{RoutingConnection, RoutingNode};
+
+    let (_, command_consumer) = RingBuffer::<AudioCommand>::new(32);
+    let (position_producer, _) = RingBuffer::<TransportFeedback>::new(32);
+    let (feedback_producer, _) = RingBuffer::<AudioFeedback>::new(32);
+    let (telemetry_sender, _) = mpsc::sync_channel::<TelemetryRegistration>(32);
+    let mut engine = AudioEngine::new(
+        command_consumer,
+        position_producer,
+        feedback_producer,
+        48_000,
+        2,
+        120.0,
+        64,
+        AudioEngineTelemetry::new_for_export(),
+        telemetry_sender,
+    );
+    let mut app_state = ApplicationState::default();
+    let track = app_state.tracks.insert_with_key(|id| {
+        AudioTrack::new(id, "Idle", Color::new_from_rgb(0, 0, 0), TrackType::Audio)
+    });
+    engine.process_command(AudioCommand::ReplaceFullGraph {
+        graph: AudioGraphState::from(&app_state),
+    });
+    let bus = crate::shared::BusId::from(1);
+    engine.process_command(AudioCommand::AddBus {
+        bus_id: bus,
+        name: "Idle".into(),
+    });
+    engine.process_command(AudioCommand::UpdateRouting {
+        routing: vec![
+            RoutingConnection::new(RoutingNode::Track(track), RoutingNode::Master),
+            RoutingConnection::new(RoutingNode::Bus(bus), RoutingNode::Master),
+        ]
+        .into_boxed_slice(),
+    });
+    let target = target(track, bus);
+    let effect_id = crate::shared::EffectId::from(1);
+    let calls = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
+    engine.process_command(AudioCommand::InstallEffect {
+        target,
+        effect_id,
+        registry_id: 0,
+        plugin: Box::new(IdleProbe {
+            calls: calls.clone(),
+            ringing: usize::MAX,
+            continuous,
+        }),
+        telemetry: None,
+    });
+    engine.process_command(AudioCommand::SetEffectBypass {
+        target,
+        effect_id,
+        bypass,
+    });
+
+    let mut block = vec![0.0_f32; 128];
+    let mut energy = 0.0;
+    for _ in 0..4 {
+        engine.process(&mut block);
+        energy += block.iter().map(|sample| sample.abs()).sum::<f32>();
+    }
+    (calls.load(std::sync::atomic::Ordering::Relaxed), energy)
+}
+
+#[test]
+fn silent_channels_keep_processing_effects_that_need_it() {
+    let targets: [fn(crate::shared::TrackId, crate::shared::BusId) -> EffectTarget; 3] = [
+        |track, _| EffectTarget::Track(track),
+        |_, bus| EffectTarget::Bus(bus),
+        |_, _| EffectTarget::Master,
+    ];
+    for target in targets {
+        // Nothing plays and the transport is stopped, yet the effect runs and is heard.
+        let (calls, energy) = render_idle_probe(target, true, false);
+        assert_eq!(calls, 4);
+        assert!(energy > 1.0);
+        // Ordinary effects stay parked on a silent channel, and so does a bypassed slot.
+        assert_eq!(render_idle_probe(target, false, false), (0, 0.0));
+        assert_eq!(render_idle_probe(target, true, true), (0, 0.0));
+    }
 }
 
 #[test]

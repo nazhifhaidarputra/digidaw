@@ -69,11 +69,38 @@ void main() {
   test('browser panel uses immutable empty defaults', () {
     const state = BrowserPanelState();
 
-    expect(state.isExpanded, isFalse);
     expect(state.isLoadingDirectory, isFalse);
     expect(state.directories, isEmpty);
     expect(state.expandedDirectoryPaths, isEmpty);
     expect(state.selectedSamplePath, isNull);
+  });
+
+  test('right panel toggles and follows its selected tab', () {
+    final container = ProviderContainer();
+    addTearDown(container.dispose);
+    final notifier = container.read(workspaceStateProvider.notifier);
+
+    var state = container.read(workspaceStateProvider);
+    expect(state.isRightPanelExpanded, isFalse);
+    expect(state.rightPanelTab, RightPanelTab.browser);
+
+    notifier.toggleRightPanel();
+    state = container.read(workspaceStateProvider);
+    expect(state.isRightPanelExpanded, isTrue);
+
+    notifier.selectRightPanelTab(RightPanelTab.sources);
+    state = container.read(workspaceStateProvider);
+    expect(state.isRightPanelExpanded, isTrue);
+    expect(state.rightPanelTab, RightPanelTab.sources);
+
+    notifier.closeRightPanel();
+    expect(
+      container.read(workspaceStateProvider).isRightPanelExpanded,
+      isFalse,
+    );
+
+    notifier.selectRightPanelTab(RightPanelTab.sources);
+    expect(container.read(workspaceStateProvider).isRightPanelExpanded, isTrue);
   });
 
   test('scanner builds a sorted recursive audio-only tree', () async {

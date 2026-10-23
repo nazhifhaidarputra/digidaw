@@ -45,6 +45,13 @@ impl AudioEffectInstance {
             self.plugin.latency_samples()
         }
     }
+
+    /// Whether this slot is processed even while its channel carries no signal; bypassed
+    /// slots are skipped by the chain and never are.
+    #[inline]
+    pub fn keeps_processing(&self) -> bool {
+        !self.bypass && self.plugin.needs_continuous_processing()
+    }
 }
 
 #[derive(Default, Clone)]
@@ -399,8 +406,6 @@ impl From<&AudioPluginState> for AudioPluginSnapshotState {
 pub struct AudioAutomationLane {
     pub points: Vec<AutomationPoint>,
     pub enabled: bool,
-    pub min: f64,
-    pub max: f64,
     pub default_value: NormalizedF64,
 }
 
@@ -409,8 +414,6 @@ impl From<AutomationLane> for AudioAutomationLane {
         Self {
             points: l.points,
             enabled: l.enabled,
-            min: l.min,
-            max: l.max,
             default_value: l.default_value,
         }
     }

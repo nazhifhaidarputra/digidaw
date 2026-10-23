@@ -1,13 +1,13 @@
-use karbeat_dsp::pitch_shift::{PitchShiftAlgorithm, PitchShiftEngine};
+use karbeat_dsp::pitch_shift::PitchShiftEngine;
 use karbeat_macros::{auto_param, karbeat_plugin};
 use karbeat_plugin_api::prelude::*;
 use karbeat_utils::hash::hash_str;
 
-/// The audio FX Plugin for real-time, low-latency Pitch Shifting.
+/// The audio FX Plugin for real-time, low-latency Pitch Shifting, from two octaves down to
+/// two octaves up.
 ///
-/// Uses Rubberband via FFI bindings under the hood. To be able to run
-/// this, you must install rubberband system-wide.
-/// For further information, see https://breakfastquay.com/rubberband/
+/// The shifter is `karbeat_dsp`'s default live pitch shifter, currently Signalsmith Stretch
+/// (https://signalsmith-audio.co.uk/code/stretch/) compiled through `karbeat-signalsmith`.
 #[karbeat_plugin]
 #[derive(Clone, Debug)]
 pub struct PitchShifter {
@@ -20,7 +20,7 @@ pub struct PitchShifter {
     channels: usize,
     sample_rate: f32,
     reported_latency_samples: u32,
-    latency_pitch_ratio: f32,
+    latency_pitch_cents: f32,
 }
 
 impl Default for PitchShifter {
@@ -50,7 +50,7 @@ impl AudioPlugin for PitchShifter {
         self.sample_rate = sample_rate;
         self.pitch_shift_engine.prepare(sample_rate, self.channels);
         self.reported_latency_samples = self.latency_samples();
-        self.latency_pitch_ratio = self.pitch_shift_engine.pitch_ratio.get();
+        self.latency_pitch_cents = self.pitch_shift_engine.pitch_cents.get();
     }
 
     fn set_io_layout(&mut self, inputs: &[BusConfig], _outputs: &[BusConfig]) {
@@ -58,14 +58,14 @@ impl AudioPlugin for PitchShifter {
 
         if self.channels != new_channels {
             self.channels = new_channels;
-            // Rebuild the rubberband instance with the new channel count.
+            // Rebuild the shifter with the new channel count.
             self.pitch_shift_engine
                 .prepare(self.sample_rate, self.channels);
         }
     }
 
     /// Report the latency of the plugin to the audio engine in samples.
-    /// Delegates to the rubberband engine which queries the library directly.
+    /// Delegates to the shifter engine, which queries the library directly.
     fn latency_samples(&self) -> u32 {
         self.pitch_shift_engine.latency_samples()
     }
@@ -78,11 +78,11 @@ impl AudioPlugin for PitchShifter {
     }
 
     fn has_latency_changed(&mut self) -> bool {
-        let pitch_ratio = self.pitch_shift_engine.pitch_ratio.get();
-        if pitch_ratio == self.latency_pitch_ratio {
+        let pitch_cents = self.pitch_shift_engine.pitch_cents.get();
+        if pitch_cents == self.latency_pitch_cents {
             return false;
         }
-        self.latency_pitch_ratio = pitch_ratio;
+        self.latency_pitch_cents = pitch_cents;
         let current = self.latency_samples();
         let changed = current != self.reported_latency_samples;
         self.reported_latency_samples = current;
@@ -159,17 +159,19 @@ mod tests {
     use super::*;
 
     #[test]
-    fn reports_pitch_dependent_latency_changes() {
+    fn reports_latency_changes_after_pitch_changes() {
         let mut plugin = PitchShifter::default();
         plugin.prepare(48000.0, 512);
         let initial_latency = plugin.latency_samples();
         assert!(!plugin.has_latency_changed());
-        plugin.pitch_shift_engine.pitch_ratio.set_base(0.5);
+        plugin.pitch_shift_engine.pitch_cents.set_base(-1200.0);
         plugin
             .pitch_shift_engine
             .process_block(&mut [&mut [0.0; 512], &mut [0.0; 512]]);
-        assert_ne!(plugin.latency_samples(), initial_latency);
-        assert!(plugin.has_latency_changed());
+        // Whether the latency follows the pitch depends on the shifter; a change is reported
+        // exactly once.
+        let changed = plugin.latency_samples() != initial_latency;
+        assert_eq!(plugin.has_latency_changed(), changed);
         assert!(!plugin.has_latency_changed());
         assert_eq!(plugin.tail_samples(), plugin.latency_samples());
     }

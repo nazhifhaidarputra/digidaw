@@ -154,6 +154,93 @@ impl CancelToken {
     }
 }
 
+/// Identity a job keeps through its lifecycle, and the service its events go to.
+struct JobTicket {
+    id: JobId,
+    spec: JobSpec,
+    service: Arc<Shared>,
+}
+
+karbeat_utils::typestate! {
+    /// Lifecycle of one admitted job. Each transition publishes its [`JobState`] event, so a
+    /// job reports `Running` at most once and ends exactly once.
+    machine Job {
+        shared: JobTicket,
+        erased: AnyJob,
+        states {
+            Queued as QueuedJob {}
+            Running as RunningJob {}
+            Finished as FinishedJob {}
+        }
+        transitions {
+            Queued => Running: fn start(ticket, state) {
+                ticket.service.event(ticket.id, ticket.spec, JobState::Running);
+                Running {}
+            }
+
+            // Removes the job from the registry and publishes its terminal event.
+            Queued | Running => Finished: fn finish(ticket, state, terminal: JobState) {
+                ticket.service.registry.lock().remove(&ticket.id);
+                ticket.service.event(ticket.id, ticket.spec, terminal);
+                Finished {}
+            }
+        }
+    }
+}
+
+impl QueuedJob {
+    /// Publishes the `Queued` event of a job that was just registered.
+    fn admitted(id: JobId, spec: JobSpec, service: Arc<Shared>) -> Self {
+        service.event(id, spec, JobState::Queued);
+        Job {
+            shared: JobTicket { id, spec, service },
+            state: Queued {},
+        }
+    }
+}
+
+/// Job states that can still end.
+trait Unfinished: Sized {
+    fn ticket(&self) -> &JobTicket;
+
+    fn end(self, terminal: JobState) -> FinishedJob;
+
+    /// Ends the job with the terminal event for `result`, then delivers the result.
+    fn conclude<T>(self, result: Result<T, JobError>, reply: oneshot::Sender<Result<T, JobError>>) {
+        let terminal = match &result {
+            Ok(_) => JobState::Completed,
+            Err(JobError::Cancelled | JobError::ShuttingDown) => JobState::Cancelled,
+            Err(error) => {
+                let JobTicket { id, spec, .. } = self.ticket();
+                log::warn!("Background job {id} ({:?}) failed: {error}", spec.kind);
+                JobState::Failed(error.to_string())
+            }
+        };
+        let _finished: FinishedJob = self.end(terminal);
+        drop(reply.send(result));
+    }
+}
+
+impl Unfinished for QueuedJob {
+    fn ticket(&self) -> &JobTicket {
+        self.shared()
+    }
+
+    fn end(self, terminal: JobState) -> FinishedJob {
+        self.finish(terminal)
+    }
+}
+
+impl Unfinished for RunningJob {
+    fn ticket(&self) -> &JobTicket {
+        self.shared()
+    }
+
+    fn end(self, terminal: JobState) -> FinishedJob {
+        self.finish(terminal)
+    }
+}
+
 /// Handle given to a running job for cancellation checks and progress reports.
 pub struct JobContext {
     id: JobId,
@@ -303,29 +390,6 @@ impl Shared {
         });
     }
 
-    /// Removes the job from the registry and publishes its terminal event.
-    fn finish<T>(
-        &self,
-        id: JobId,
-        spec: JobSpec,
-        result: Result<T, JobError>,
-        reply: oneshot::Sender<Result<T, JobError>>,
-    ) {
-        self.registry.lock().remove(&id);
-        let state = match &result {
-            Ok(_) => JobState::Completed,
-            Err(JobError::Cancelled | JobError::ShuttingDown) => JobState::Cancelled,
-            Err(error) => JobState::Failed(error.to_string()),
-        };
-        if let Err(error) = &result
-            && !matches!(error, JobError::Cancelled | JobError::ShuttingDown)
-        {
-            log::warn!("Background job {id} ({:?}) failed: {error}", spec.kind);
-        }
-        self.event(id, spec, state);
-        drop(reply.send(result));
-    }
-
     /// Waits for a slot of the job's class. `Ok(None)` means the class has no limit.
     async fn acquire(
         &self,
@@ -400,8 +464,9 @@ impl JobService {
         self.shared.generation.load(Ordering::Acquire)
     }
 
-    /// Registers a job and cancels the one it supersedes. Returns its id, token and generation.
-    fn admit(&self, spec: JobSpec) -> Result<(JobId, CancelToken, u64), JobError> {
+    /// Registers a job and cancels the one it supersedes. Returns it queued, with its token
+    /// and generation.
+    fn admit(&self, spec: JobSpec) -> Result<(QueuedJob, CancelToken, u64), JobError> {
         if !self.shared.accepting.load(Ordering::Acquire) {
             return Err(JobError::ShuttingDown);
         }
@@ -423,8 +488,8 @@ impl JobService {
             },
         );
         drop(registry);
-        self.shared.event(id, spec, JobState::Queued);
-        Ok((id, cancel, self.generation()))
+        let job = QueuedJob::admitted(id, spec, Arc::clone(&self.shared));
+        Ok((job, cancel, self.generation()))
     }
 
     fn rejected<T>(error: JobError) -> JobHandle<T> {
@@ -447,21 +512,22 @@ impl JobService {
             Ok(runtime) => runtime,
             Err(error) => return Self::rejected(error),
         };
-        let (id, cancel, generation) = match self.admit(spec) {
+        let (job, cancel, generation) = match self.admit(spec) {
             Ok(admitted) => admitted,
             Err(error) => return Self::rejected(error),
         };
+        let id = job.shared().id;
         let (reply, receiver) = oneshot::channel();
         let shared = Arc::clone(&self.shared);
         runtime.spawn(async move {
             let permit = match shared.acquire(spec.class, &cancel).await {
                 Ok(permit) => permit,
-                Err(error) => return shared.finish(id, spec, Err(error), reply),
+                Err(error) => return job.conclude(Err(error), reply),
             };
             if cancel.is_cancelled() {
-                return shared.finish(id, spec, Err(JobError::Cancelled), reply);
+                return job.conclude(Err(JobError::Cancelled), reply);
             }
-            shared.event(id, spec, JobState::Running);
+            let job = job.start();
             let context = JobContext {
                 id,
                 spec,
@@ -477,7 +543,7 @@ impl JobService {
                 Ok(Err(error)) => Err(work_error(error, &cancel)),
                 Err(_) => Err(JobError::Panicked),
             };
-            shared.finish(id, spec, result, reply);
+            job.conclude(result, reply);
         });
         JobHandle { id, receiver }
     }
@@ -497,21 +563,22 @@ impl JobService {
             Ok(runtime) => runtime,
             Err(error) => return Self::rejected(error),
         };
-        let (id, cancel, generation) = match self.admit(spec) {
+        let (job, cancel, generation) = match self.admit(spec) {
             Ok(admitted) => admitted,
             Err(error) => return Self::rejected(error),
         };
+        let id = job.shared().id;
         let (reply, receiver) = oneshot::channel();
         let shared = Arc::clone(&self.shared);
         let orchestration = async move {
             let permit = match shared.acquire(spec.class, &cancel).await {
                 Ok(permit) => permit,
-                Err(error) => return shared.finish(id, spec, Err(error), reply),
+                Err(error) => return job.conclude(Err(error), reply),
             };
             if cancel.is_cancelled() {
-                return shared.finish(id, spec, Err(JobError::Cancelled), reply);
+                return job.conclude(Err(JobError::Cancelled), reply);
             }
-            shared.event(id, spec, JobState::Running);
+            let job = job.start();
             let context = JobContext {
                 id,
                 spec,
@@ -527,7 +594,7 @@ impl JobService {
                 Ok(Err(error)) => Err(work_error(error, &cancel)),
                 Err(_) => Err(JobError::Panicked),
             };
-            shared.finish(id, spec, result, reply);
+            job.conclude(result, reply);
         };
         runtime.spawn(orchestration);
         JobHandle { id, receiver }

@@ -6,10 +6,7 @@ use std::{
     collections::HashMap,
     ffi::{CStr, CString, c_void},
     ptr,
-    sync::{
-        Arc,
-        atomic::{AtomicBool, AtomicI32, AtomicU8, AtomicU64, Ordering},
-    },
+    sync::{Arc, atomic::Ordering},
     thread::ThreadId,
 };
 use vst3::{
@@ -17,53 +14,7 @@ use vst3::{
     Steinberg::{Vst::*, *},
 };
 
-pub struct ParameterValue {
-    pub id: u32,
-    pub value: AtomicU64,
-    pub pending: AtomicBool,
-    pub edits: AtomicU8,
-}
-impl ParameterValue {
-    pub fn get(&self) -> f64 {
-        f64::from_bits(self.value.load(Ordering::Acquire))
-    }
-    pub fn set(&self, value: f64, edit: u8) {
-        self.value.store(value.to_bits(), Ordering::Release);
-        self.pending.store(true, Ordering::Release);
-        self.edits.fetch_or(edit, Ordering::Relaxed);
-    }
-}
-
-pub struct ParameterExchange {
-    pub parameters: Vec<ParameterValue>,
-    pub restart: AtomicI32,
-    pub overflow: AtomicBool,
-    pub process_error: Arc<AtomicI32>,
-}
-impl ParameterExchange {
-    pub fn new(values: &[(u32, f64)]) -> Arc<Self> {
-        Arc::new(Self {
-            parameters: values
-                .iter()
-                .map(|&(id, value)| ParameterValue {
-                    id,
-                    value: AtomicU64::new(value.to_bits()),
-                    pending: AtomicBool::new(false),
-                    edits: AtomicU8::new(0),
-                })
-                .collect(),
-            restart: AtomicI32::new(0),
-            overflow: AtomicBool::new(false),
-            process_error: Arc::new(AtomicI32::new(0)),
-        })
-    }
-    pub fn parameter(&self, id: u32) -> Option<&ParameterValue> {
-        self.parameters
-            .binary_search_by_key(&id, |p| p.id)
-            .ok()
-            .map(|i| &self.parameters[i])
-    }
-}
+pub use karbeat_host_api::ParameterExchange;
 
 pub struct ComponentHandler {
     pub exchange: Arc<ParameterExchange>,
@@ -77,16 +28,20 @@ impl IComponentHandlerTrait for ComponentHandler {
             return kInvalidArgument;
         };
         param.edits.fetch_or(1, Ordering::Relaxed);
+        param.mark_user_edited();
         kResultOk
     }
     unsafe fn performEdit(&self, id: u32, value: f64) -> tresult {
         let Some(param) = self.exchange.parameter(id) else {
             return kInvalidArgument;
         };
-        if !value.is_finite() || !(0.0..=1.0).contains(&value) {
+        if !value.is_finite() {
             return kInvalidArgument;
         }
-        param.set(value, 2);
+        // Controllers that normalize in single precision can overshoot the range by a rounding
+        // error at either end; dropping the edit would leave the processor on the old value.
+        param.set(value.clamp(0.0, 1.0), 2);
+        param.mark_user_edited();
         kResultOk
     }
     unsafe fn endEdit(&self, id: u32) -> tresult {
@@ -379,3 +334,36 @@ impl IMessageTrait for HostMessage {
 
 #[cfg(target_os = "linux")]
 crate::run_loop::delegate_run_loop!(Vst3HostContext);
+
+#[cfg(test)]
+#[allow(
+    clippy::unwrap_used,
+    reason = "test fixtures hold the edited parameter"
+)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn edits_overshooting_the_normalized_range_are_clamped_instead_of_dropped() {
+        let exchange = ParameterExchange::new(&[(7, 0.5)]);
+        let handler = ComponentHandler {
+            exchange: exchange.clone(),
+        };
+        let parameter = exchange.parameter(7).unwrap();
+        // SAFETY: The handler only touches its own atomics.
+        assert_eq!(unsafe { handler.performEdit(7, 1.000_000_1) }, kResultOk);
+        assert!((parameter.get() - 1.0).abs() < f64::EPSILON);
+        assert!(parameter.pending.load(Ordering::Acquire));
+        assert!(parameter.is_user_edited());
+        // SAFETY: As above.
+        assert_eq!(unsafe { handler.performEdit(7, -0.000_000_1) }, kResultOk);
+        assert!(parameter.get().abs() < f64::EPSILON);
+        // SAFETY: As above.
+        assert_eq!(
+            unsafe { handler.performEdit(7, f64::NAN) },
+            kInvalidArgument
+        );
+        // SAFETY: As above.
+        assert_eq!(unsafe { handler.performEdit(8, 0.5) }, kInvalidArgument);
+    }
+}

@@ -19,7 +19,12 @@ mixin _$AutomationLaneEditorState {
  int? get hoveredPointId;/// The currently opened context automation lane ID
  int? get contextLaneId;/// The currently opened context automation point ID
  int? get contextPointId;/// The clipboard for automation lane point value
- AutomationLanePointClipboard get clipboard;
+ AutomationLanePointClipboard get clipboard;/// Lane holding the range painted with the Select tool
+ int? get selectionLaneId;/// Tick where the selected range was started
+ int? get selectionAnchorTick;/// Tick the selected range was dragged to
+ int? get selectionFocusTick;/// Lane that was last right-clicked on its timeline
+ int? get pasteLaneId;/// Tick that was right-clicked on [pasteLaneId]; where a paste lands
+ int? get pasteTick;
 /// Create a copy of AutomationLaneEditorState
 /// with the given fields replaced by the non-null parameter values.
 @JsonKey(includeFromJson: false, includeToJson: false)
@@ -30,16 +35,16 @@ $AutomationLaneEditorStateCopyWith<AutomationLaneEditorState> get copyWith => _$
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is AutomationLaneEditorState&&(identical(other.hoveredLaneId, hoveredLaneId) || other.hoveredLaneId == hoveredLaneId)&&(identical(other.hoveredPointId, hoveredPointId) || other.hoveredPointId == hoveredPointId)&&(identical(other.contextLaneId, contextLaneId) || other.contextLaneId == contextLaneId)&&(identical(other.contextPointId, contextPointId) || other.contextPointId == contextPointId)&&(identical(other.clipboard, clipboard) || other.clipboard == clipboard));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is AutomationLaneEditorState&&(identical(other.hoveredLaneId, hoveredLaneId) || other.hoveredLaneId == hoveredLaneId)&&(identical(other.hoveredPointId, hoveredPointId) || other.hoveredPointId == hoveredPointId)&&(identical(other.contextLaneId, contextLaneId) || other.contextLaneId == contextLaneId)&&(identical(other.contextPointId, contextPointId) || other.contextPointId == contextPointId)&&(identical(other.clipboard, clipboard) || other.clipboard == clipboard)&&(identical(other.selectionLaneId, selectionLaneId) || other.selectionLaneId == selectionLaneId)&&(identical(other.selectionAnchorTick, selectionAnchorTick) || other.selectionAnchorTick == selectionAnchorTick)&&(identical(other.selectionFocusTick, selectionFocusTick) || other.selectionFocusTick == selectionFocusTick)&&(identical(other.pasteLaneId, pasteLaneId) || other.pasteLaneId == pasteLaneId)&&(identical(other.pasteTick, pasteTick) || other.pasteTick == pasteTick));
 }
 
 
 @override
-int get hashCode => Object.hash(runtimeType,hoveredLaneId,hoveredPointId,contextLaneId,contextPointId,clipboard);
+int get hashCode => Object.hash(runtimeType,hoveredLaneId,hoveredPointId,contextLaneId,contextPointId,clipboard,selectionLaneId,selectionAnchorTick,selectionFocusTick,pasteLaneId,pasteTick);
 
 @override
 String toString() {
-  return 'AutomationLaneEditorState(hoveredLaneId: $hoveredLaneId, hoveredPointId: $hoveredPointId, contextLaneId: $contextLaneId, contextPointId: $contextPointId, clipboard: $clipboard)';
+  return 'AutomationLaneEditorState(hoveredLaneId: $hoveredLaneId, hoveredPointId: $hoveredPointId, contextLaneId: $contextLaneId, contextPointId: $contextPointId, clipboard: $clipboard, selectionLaneId: $selectionLaneId, selectionAnchorTick: $selectionAnchorTick, selectionFocusTick: $selectionFocusTick, pasteLaneId: $pasteLaneId, pasteTick: $pasteTick)';
 }
 
 
@@ -50,7 +55,7 @@ abstract mixin class $AutomationLaneEditorStateCopyWith<$Res>  {
   factory $AutomationLaneEditorStateCopyWith(AutomationLaneEditorState value, $Res Function(AutomationLaneEditorState) _then) = _$AutomationLaneEditorStateCopyWithImpl;
 @useResult
 $Res call({
- int? hoveredLaneId, int? hoveredPointId, int? contextLaneId, int? contextPointId, AutomationLanePointClipboard clipboard
+ int? hoveredLaneId, int? hoveredPointId, int? contextLaneId, int? contextPointId, AutomationLanePointClipboard clipboard, int? selectionLaneId, int? selectionAnchorTick, int? selectionFocusTick, int? pasteLaneId, int? pasteTick
 });
 
 
@@ -67,14 +72,19 @@ class _$AutomationLaneEditorStateCopyWithImpl<$Res>
 
 /// Create a copy of AutomationLaneEditorState
 /// with the given fields replaced by the non-null parameter values.
-@pragma('vm:prefer-inline') @override $Res call({Object? hoveredLaneId = freezed,Object? hoveredPointId = freezed,Object? contextLaneId = freezed,Object? contextPointId = freezed,Object? clipboard = null,}) {
+@pragma('vm:prefer-inline') @override $Res call({Object? hoveredLaneId = freezed,Object? hoveredPointId = freezed,Object? contextLaneId = freezed,Object? contextPointId = freezed,Object? clipboard = null,Object? selectionLaneId = freezed,Object? selectionAnchorTick = freezed,Object? selectionFocusTick = freezed,Object? pasteLaneId = freezed,Object? pasteTick = freezed,}) {
   return _then(_self.copyWith(
 hoveredLaneId: freezed == hoveredLaneId ? _self.hoveredLaneId : hoveredLaneId // ignore: cast_nullable_to_non_nullable
 as int?,hoveredPointId: freezed == hoveredPointId ? _self.hoveredPointId : hoveredPointId // ignore: cast_nullable_to_non_nullable
 as int?,contextLaneId: freezed == contextLaneId ? _self.contextLaneId : contextLaneId // ignore: cast_nullable_to_non_nullable
 as int?,contextPointId: freezed == contextPointId ? _self.contextPointId : contextPointId // ignore: cast_nullable_to_non_nullable
 as int?,clipboard: null == clipboard ? _self.clipboard : clipboard // ignore: cast_nullable_to_non_nullable
-as AutomationLanePointClipboard,
+as AutomationLanePointClipboard,selectionLaneId: freezed == selectionLaneId ? _self.selectionLaneId : selectionLaneId // ignore: cast_nullable_to_non_nullable
+as int?,selectionAnchorTick: freezed == selectionAnchorTick ? _self.selectionAnchorTick : selectionAnchorTick // ignore: cast_nullable_to_non_nullable
+as int?,selectionFocusTick: freezed == selectionFocusTick ? _self.selectionFocusTick : selectionFocusTick // ignore: cast_nullable_to_non_nullable
+as int?,pasteLaneId: freezed == pasteLaneId ? _self.pasteLaneId : pasteLaneId // ignore: cast_nullable_to_non_nullable
+as int?,pasteTick: freezed == pasteTick ? _self.pasteTick : pasteTick // ignore: cast_nullable_to_non_nullable
+as int?,
   ));
 }
 /// Create a copy of AutomationLaneEditorState
@@ -168,10 +178,10 @@ return $default(_that);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( int? hoveredLaneId,  int? hoveredPointId,  int? contextLaneId,  int? contextPointId,  AutomationLanePointClipboard clipboard)?  $default,{required TResult orElse(),}) {final _that = this;
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( int? hoveredLaneId,  int? hoveredPointId,  int? contextLaneId,  int? contextPointId,  AutomationLanePointClipboard clipboard,  int? selectionLaneId,  int? selectionAnchorTick,  int? selectionFocusTick,  int? pasteLaneId,  int? pasteTick)?  $default,{required TResult orElse(),}) {final _that = this;
 switch (_that) {
 case _AutomationLaneEditorState() when $default != null:
-return $default(_that.hoveredLaneId,_that.hoveredPointId,_that.contextLaneId,_that.contextPointId,_that.clipboard);case _:
+return $default(_that.hoveredLaneId,_that.hoveredPointId,_that.contextLaneId,_that.contextPointId,_that.clipboard,_that.selectionLaneId,_that.selectionAnchorTick,_that.selectionFocusTick,_that.pasteLaneId,_that.pasteTick);case _:
   return orElse();
 
 }
@@ -189,10 +199,10 @@ return $default(_that.hoveredLaneId,_that.hoveredPointId,_that.contextLaneId,_th
 /// }
 /// ```
 
-@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( int? hoveredLaneId,  int? hoveredPointId,  int? contextLaneId,  int? contextPointId,  AutomationLanePointClipboard clipboard)  $default,) {final _that = this;
+@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( int? hoveredLaneId,  int? hoveredPointId,  int? contextLaneId,  int? contextPointId,  AutomationLanePointClipboard clipboard,  int? selectionLaneId,  int? selectionAnchorTick,  int? selectionFocusTick,  int? pasteLaneId,  int? pasteTick)  $default,) {final _that = this;
 switch (_that) {
 case _AutomationLaneEditorState():
-return $default(_that.hoveredLaneId,_that.hoveredPointId,_that.contextLaneId,_that.contextPointId,_that.clipboard);case _:
+return $default(_that.hoveredLaneId,_that.hoveredPointId,_that.contextLaneId,_that.contextPointId,_that.clipboard,_that.selectionLaneId,_that.selectionAnchorTick,_that.selectionFocusTick,_that.pasteLaneId,_that.pasteTick);case _:
   throw StateError('Unexpected subclass');
 
 }
@@ -209,10 +219,10 @@ return $default(_that.hoveredLaneId,_that.hoveredPointId,_that.contextLaneId,_th
 /// }
 /// ```
 
-@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( int? hoveredLaneId,  int? hoveredPointId,  int? contextLaneId,  int? contextPointId,  AutomationLanePointClipboard clipboard)?  $default,) {final _that = this;
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( int? hoveredLaneId,  int? hoveredPointId,  int? contextLaneId,  int? contextPointId,  AutomationLanePointClipboard clipboard,  int? selectionLaneId,  int? selectionAnchorTick,  int? selectionFocusTick,  int? pasteLaneId,  int? pasteTick)?  $default,) {final _that = this;
 switch (_that) {
 case _AutomationLaneEditorState() when $default != null:
-return $default(_that.hoveredLaneId,_that.hoveredPointId,_that.contextLaneId,_that.contextPointId,_that.clipboard);case _:
+return $default(_that.hoveredLaneId,_that.hoveredPointId,_that.contextLaneId,_that.contextPointId,_that.clipboard,_that.selectionLaneId,_that.selectionAnchorTick,_that.selectionFocusTick,_that.pasteLaneId,_that.pasteTick);case _:
   return null;
 
 }
@@ -223,8 +233,8 @@ return $default(_that.hoveredLaneId,_that.hoveredPointId,_that.contextLaneId,_th
 /// @nodoc
 
 
-class _AutomationLaneEditorState implements AutomationLaneEditorState {
-  const _AutomationLaneEditorState({this.hoveredLaneId, this.hoveredPointId, this.contextLaneId, this.contextPointId, this.clipboard = const AutomationLanePointClipboard.empty()});
+class _AutomationLaneEditorState extends AutomationLaneEditorState {
+  const _AutomationLaneEditorState({this.hoveredLaneId, this.hoveredPointId, this.contextLaneId, this.contextPointId, this.clipboard = const AutomationLanePointClipboard.empty(), this.selectionLaneId, this.selectionAnchorTick, this.selectionFocusTick, this.pasteLaneId, this.pasteTick}): super._();
   
 
 /// The ID of the hovered automation lane
@@ -237,6 +247,16 @@ class _AutomationLaneEditorState implements AutomationLaneEditorState {
 @override final  int? contextPointId;
 /// The clipboard for automation lane point value
 @override@JsonKey() final  AutomationLanePointClipboard clipboard;
+/// Lane holding the range painted with the Select tool
+@override final  int? selectionLaneId;
+/// Tick where the selected range was started
+@override final  int? selectionAnchorTick;
+/// Tick the selected range was dragged to
+@override final  int? selectionFocusTick;
+/// Lane that was last right-clicked on its timeline
+@override final  int? pasteLaneId;
+/// Tick that was right-clicked on [pasteLaneId]; where a paste lands
+@override final  int? pasteTick;
 
 /// Create a copy of AutomationLaneEditorState
 /// with the given fields replaced by the non-null parameter values.
@@ -248,16 +268,16 @@ _$AutomationLaneEditorStateCopyWith<_AutomationLaneEditorState> get copyWith => 
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is _AutomationLaneEditorState&&(identical(other.hoveredLaneId, hoveredLaneId) || other.hoveredLaneId == hoveredLaneId)&&(identical(other.hoveredPointId, hoveredPointId) || other.hoveredPointId == hoveredPointId)&&(identical(other.contextLaneId, contextLaneId) || other.contextLaneId == contextLaneId)&&(identical(other.contextPointId, contextPointId) || other.contextPointId == contextPointId)&&(identical(other.clipboard, clipboard) || other.clipboard == clipboard));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is _AutomationLaneEditorState&&(identical(other.hoveredLaneId, hoveredLaneId) || other.hoveredLaneId == hoveredLaneId)&&(identical(other.hoveredPointId, hoveredPointId) || other.hoveredPointId == hoveredPointId)&&(identical(other.contextLaneId, contextLaneId) || other.contextLaneId == contextLaneId)&&(identical(other.contextPointId, contextPointId) || other.contextPointId == contextPointId)&&(identical(other.clipboard, clipboard) || other.clipboard == clipboard)&&(identical(other.selectionLaneId, selectionLaneId) || other.selectionLaneId == selectionLaneId)&&(identical(other.selectionAnchorTick, selectionAnchorTick) || other.selectionAnchorTick == selectionAnchorTick)&&(identical(other.selectionFocusTick, selectionFocusTick) || other.selectionFocusTick == selectionFocusTick)&&(identical(other.pasteLaneId, pasteLaneId) || other.pasteLaneId == pasteLaneId)&&(identical(other.pasteTick, pasteTick) || other.pasteTick == pasteTick));
 }
 
 
 @override
-int get hashCode => Object.hash(runtimeType,hoveredLaneId,hoveredPointId,contextLaneId,contextPointId,clipboard);
+int get hashCode => Object.hash(runtimeType,hoveredLaneId,hoveredPointId,contextLaneId,contextPointId,clipboard,selectionLaneId,selectionAnchorTick,selectionFocusTick,pasteLaneId,pasteTick);
 
 @override
 String toString() {
-  return 'AutomationLaneEditorState(hoveredLaneId: $hoveredLaneId, hoveredPointId: $hoveredPointId, contextLaneId: $contextLaneId, contextPointId: $contextPointId, clipboard: $clipboard)';
+  return 'AutomationLaneEditorState(hoveredLaneId: $hoveredLaneId, hoveredPointId: $hoveredPointId, contextLaneId: $contextLaneId, contextPointId: $contextPointId, clipboard: $clipboard, selectionLaneId: $selectionLaneId, selectionAnchorTick: $selectionAnchorTick, selectionFocusTick: $selectionFocusTick, pasteLaneId: $pasteLaneId, pasteTick: $pasteTick)';
 }
 
 
@@ -268,7 +288,7 @@ abstract mixin class _$AutomationLaneEditorStateCopyWith<$Res> implements $Autom
   factory _$AutomationLaneEditorStateCopyWith(_AutomationLaneEditorState value, $Res Function(_AutomationLaneEditorState) _then) = __$AutomationLaneEditorStateCopyWithImpl;
 @override @useResult
 $Res call({
- int? hoveredLaneId, int? hoveredPointId, int? contextLaneId, int? contextPointId, AutomationLanePointClipboard clipboard
+ int? hoveredLaneId, int? hoveredPointId, int? contextLaneId, int? contextPointId, AutomationLanePointClipboard clipboard, int? selectionLaneId, int? selectionAnchorTick, int? selectionFocusTick, int? pasteLaneId, int? pasteTick
 });
 
 
@@ -285,14 +305,19 @@ class __$AutomationLaneEditorStateCopyWithImpl<$Res>
 
 /// Create a copy of AutomationLaneEditorState
 /// with the given fields replaced by the non-null parameter values.
-@override @pragma('vm:prefer-inline') $Res call({Object? hoveredLaneId = freezed,Object? hoveredPointId = freezed,Object? contextLaneId = freezed,Object? contextPointId = freezed,Object? clipboard = null,}) {
+@override @pragma('vm:prefer-inline') $Res call({Object? hoveredLaneId = freezed,Object? hoveredPointId = freezed,Object? contextLaneId = freezed,Object? contextPointId = freezed,Object? clipboard = null,Object? selectionLaneId = freezed,Object? selectionAnchorTick = freezed,Object? selectionFocusTick = freezed,Object? pasteLaneId = freezed,Object? pasteTick = freezed,}) {
   return _then(_AutomationLaneEditorState(
 hoveredLaneId: freezed == hoveredLaneId ? _self.hoveredLaneId : hoveredLaneId // ignore: cast_nullable_to_non_nullable
 as int?,hoveredPointId: freezed == hoveredPointId ? _self.hoveredPointId : hoveredPointId // ignore: cast_nullable_to_non_nullable
 as int?,contextLaneId: freezed == contextLaneId ? _self.contextLaneId : contextLaneId // ignore: cast_nullable_to_non_nullable
 as int?,contextPointId: freezed == contextPointId ? _self.contextPointId : contextPointId // ignore: cast_nullable_to_non_nullable
 as int?,clipboard: null == clipboard ? _self.clipboard : clipboard // ignore: cast_nullable_to_non_nullable
-as AutomationLanePointClipboard,
+as AutomationLanePointClipboard,selectionLaneId: freezed == selectionLaneId ? _self.selectionLaneId : selectionLaneId // ignore: cast_nullable_to_non_nullable
+as int?,selectionAnchorTick: freezed == selectionAnchorTick ? _self.selectionAnchorTick : selectionAnchorTick // ignore: cast_nullable_to_non_nullable
+as int?,selectionFocusTick: freezed == selectionFocusTick ? _self.selectionFocusTick : selectionFocusTick // ignore: cast_nullable_to_non_nullable
+as int?,pasteLaneId: freezed == pasteLaneId ? _self.pasteLaneId : pasteLaneId // ignore: cast_nullable_to_non_nullable
+as int?,pasteTick: freezed == pasteTick ? _self.pasteTick : pasteTick // ignore: cast_nullable_to_non_nullable
+as int?,
   ));
 }
 

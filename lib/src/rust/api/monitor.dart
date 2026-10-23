@@ -20,5 +20,6 @@ sealed class PerformanceMetricsDTO with _$PerformanceMetricsDTO {
     required double ramUsageMb,
     required double totalRamMb,
     required double dspHeadroom,
+    required int pdcLatencySamples,
   }) = _PerformanceMetricsDTO;
 }

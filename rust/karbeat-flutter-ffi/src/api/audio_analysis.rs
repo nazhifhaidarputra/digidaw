@@ -207,6 +207,48 @@ pub fn set_audio_source_sample_mode(
     Ok(())
 }
 
+/// Sets an audio source's pitch shift in cents (clamped to ±2400, two octaves either way) and
+/// whether to preserve formants (undoable). In realtime mode it plays at once; offline it
+/// renders in the background and the original audio plays until the render is ready.
+pub fn set_waveform_pitch(
+    ctx: &DawContext,
+    source_id: u64,
+    pitch_cents: f32,
+    preserve_formants: bool,
+) -> Result<(), String> {
+    let source = AudioSourceId::from_u64(source_id);
+    let needs_render = audio_analysis_api::set_waveform_pitch(
+        &mut ctx.project_write(),
+        source,
+        pitch_cents,
+        preserve_formants,
+    )
+    .map_err(|error| error.to_string())?;
+    audio_analysis_api::cancel_stale_renders(&ctx.read());
+    if needs_render {
+        schedule_render(ctx, source, Duration::ZERO);
+    }
+    Ok(())
+}
+
+/// Sets whether an audio source shifts its pitch and follows the tempo through a realtime
+/// stretcher, or renders them offline (undoable), then renders what is left in the background.
+pub fn set_waveform_realtime(
+    ctx: &DawContext,
+    source_id: u64,
+    realtime: bool,
+) -> Result<(), String> {
+    let source = AudioSourceId::from_u64(source_id);
+    let needs_render =
+        audio_analysis_api::set_waveform_realtime(&mut ctx.project_write(), source, realtime)
+            .map_err(|error| error.to_string())?;
+    audio_analysis_api::cancel_stale_renders(&ctx.read());
+    if needs_render {
+        schedule_render(ctx, source, Duration::ZERO);
+    }
+    Ok(())
+}
+
 /// Sets an audio source's normalize, invert and reverse edits (undoable), then renders them
 /// in the background. The original audio plays until the render is ready.
 pub fn set_waveform_edits(

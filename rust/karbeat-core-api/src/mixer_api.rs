@@ -9,7 +9,8 @@ use karbeat_core::{
             EffectToggled, RoutingRecorder, StructureRecorder,
         },
         project::{
-            RemovedModulations, SidechainRoute, TrackId,
+            AutomationTarget, MasterAutomationTarget, MixerChannelParamTarget, RemovedModulations,
+            SidechainRoute, TrackAutomationTarget, TrackId,
             mixer::{
                 BusMixerChannel, EffectInstance, MixerChannel, MixerChannelParams, MixerState,
                 RoutingConnection, RoutingNode, RoutingTap,
@@ -223,8 +224,38 @@ pub fn set_mixer_channel_param(
     target: MixerChannelTarget,
     param: MixerChannelParams,
 ) {
+    if let Some(target) = mixer_automation_target(&target, &param) {
+        let _ = ctx.send_audio_command(AudioCommand::MarkParameterManual { target });
+    }
     let _ = ctx.send_audio_command(AudioCommand::SetMixerChannelParameter { target, param });
     ctx.mark_project_modified();
+}
+
+/// Maps a user-editable mixer control to the automation target it drives.
+fn mixer_automation_target(
+    target: &MixerChannelTarget,
+    param: &MixerChannelParams,
+) -> Option<AutomationTarget> {
+    let mix_target = match param {
+        MixerChannelParams::Volume(_) => MixerChannelParamTarget::Volume,
+        MixerChannelParams::Pan(_) => MixerChannelParamTarget::Pan,
+        MixerChannelParams::Mute(_)
+        | MixerChannelParams::Solo(_)
+        | MixerChannelParams::InvertedPhase(_) => return None,
+    };
+    Some(match target {
+        MixerChannelTarget::Track(track_id) => AutomationTarget::Track {
+            track_id: *track_id,
+            track_target: TrackAutomationTarget::MixerChannel(mix_target),
+        },
+        MixerChannelTarget::Bus(bus_id) => AutomationTarget::Bus {
+            bus_id: *bus_id,
+            mix_target,
+        },
+        MixerChannelTarget::Master => {
+            AutomationTarget::Master(MasterAutomationTarget::MixerChannel(mix_target))
+        }
+    })
 }
 
 /// Ask the audio thread to emit a full MixerChannelSnapshot for the given
@@ -813,5 +844,62 @@ fn record_effect_added(ctx: &mut DawContext, target: EffectTarget, effect_id: Ef
         .and_then(|channel| channel.effects.position(effect_id));
     if let Some(index) = index {
         ctx.push_history(EffectToggled::added(target, effect_id, index));
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn mixer_user_controls_map_to_the_targets_automation_drives() {
+        let track_id = TrackId::from(3);
+        let track = MixerChannelTarget::Track(track_id);
+        assert_eq!(
+            mixer_automation_target(&track, &MixerChannelParams::Volume(-6.0)),
+            Some(AutomationTarget::Track {
+                track_id,
+                track_target: TrackAutomationTarget::MixerChannel(MixerChannelParamTarget::Volume),
+            })
+        );
+        assert_eq!(
+            mixer_automation_target(&track, &MixerChannelParams::Pan(0.25)),
+            Some(AutomationTarget::Track {
+                track_id,
+                track_target: TrackAutomationTarget::MixerChannel(MixerChannelParamTarget::Pan),
+            })
+        );
+
+        let bus_id = BusId::from(7);
+        assert_eq!(
+            mixer_automation_target(
+                &MixerChannelTarget::Bus(bus_id),
+                &MixerChannelParams::Volume(0.0)
+            ),
+            Some(AutomationTarget::Bus {
+                bus_id,
+                mix_target: MixerChannelParamTarget::Volume,
+            })
+        );
+        assert_eq!(
+            mixer_automation_target(&MixerChannelTarget::Master, &MixerChannelParams::Pan(0.0)),
+            Some(AutomationTarget::Master(
+                MasterAutomationTarget::MixerChannel(MixerChannelParamTarget::Pan)
+            ))
+        );
+    }
+
+    #[test]
+    fn non_automatable_mixer_controls_do_not_suspend_modulation() {
+        for param in [
+            MixerChannelParams::Mute(true),
+            MixerChannelParams::Solo(true),
+            MixerChannelParams::InvertedPhase(true),
+        ] {
+            assert_eq!(
+                mixer_automation_target(&MixerChannelTarget::Master, &param),
+                None
+            );
+        }
     }
 }

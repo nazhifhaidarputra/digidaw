@@ -57,17 +57,20 @@ fn write_output_data<T>(
 {
     debug_assert!(device_channels >= OUTPUT_CHANNELS);
     let mut output_frames = data.chunks_exact_mut(device_channels);
-    for output_frame in &mut output_frames {
-        let engine_frame = consumer.pop().unwrap_or_else(|_| {
-            OUTPUT_UNDERRUN_SAMPLES.fetch_add(OUTPUT_CHANNELS_U64, Ordering::Relaxed);
-            [0.0; OUTPUT_CHANNELS]
-        });
-
-        for output in output_frame.iter_mut() {
-            *output = T::from_sample(0.0);
+    let wanted = output_frames.len();
+    // One bulk read instead of a queue operation per frame.
+    let available = consumer.slots().min(wanted);
+    if let Ok(chunk) = consumer.read_chunk(available) {
+        let (first, second) = chunk.as_slices();
+        for (output_frame, engine_frame) in (&mut output_frames).zip(first.iter().chain(second)) {
+            write_output_frame(output_frame, *engine_frame);
         }
-        output_frame[0] = T::from_sample(sanitize_output_sample(engine_frame[0]));
-        output_frame[1] = T::from_sample(sanitize_output_sample(engine_frame[1]));
+        chunk.commit_all();
+    }
+    // Whatever the engine has not rendered yet plays as silence.
+    for output_frame in &mut output_frames {
+        OUTPUT_UNDERRUN_SAMPLES.fetch_add(OUTPUT_CHANNELS_U64, Ordering::Relaxed);
+        write_output_frame(output_frame, [0.0; OUTPUT_CHANNELS]);
     }
 
     // A valid stereo CPAL callback is frame-aligned. Keep any malformed tail
@@ -77,19 +80,34 @@ fn write_output_data<T>(
     }
 }
 
+/// Writes one engine frame to the first two channels of a device frame and silences the rest.
+#[inline(always)]
+fn write_output_frame<T>(output_frame: &mut [T], engine_frame: OutputFrame)
+where
+    T: SizedSample + FromSample<f32>,
+{
+    for output in output_frame.iter_mut() {
+        *output = T::from_sample(0.0);
+    }
+    if let [left, right, ..] = output_frame {
+        *left = T::from_sample(sanitize_output_sample(engine_frame[0]));
+        *right = T::from_sample(sanitize_output_sample(engine_frame[1]));
+    }
+}
+
+/// Queues interleaved stereo `samples` as whole frames with one bulk write. Returns `false`
+/// when `samples` is not frame-aligned or the queue could not take every frame; the frames
+/// that fit are still queued.
 #[inline]
 fn push_output_frames(producer: &mut Producer<OutputFrame>, samples: &[f32]) -> bool {
-    if !samples.len().is_multiple_of(OUTPUT_CHANNELS) {
+    let (frames, incomplete) = samples.as_chunks::<OUTPUT_CHANNELS>();
+    if !incomplete.is_empty() {
         return false;
     }
-
-    for frame in samples.chunks_exact(OUTPUT_CHANNELS) {
-        if producer.push([frame[0], frame[1]]).is_err() {
-            return false;
-        }
-    }
-
-    true
+    let Ok(chunk) = producer.write_chunk_uninit(producer.slots().min(frames.len())) else {
+        return false;
+    };
+    chunk.fill_from_iter(frames.iter().copied()) == frames.len()
 }
 
 enum RestartReason {
@@ -319,6 +337,132 @@ pub struct AudioRuntimeSettings {
     pub stream_status: DeviceStreamStatus,
 }
 
+karbeat_utils::typestate! {
+    /// Output stream lifecycle; [`DeviceStreamStatus`] is its stored snapshot.
+    machine OutputStream {
+        shared: (),
+        erased: AnyOutputStream,
+        states {
+            Starting as StartingStream {}
+            Running as RunningStream {}
+            Retrying as RetryingStream { reason: String }
+            Unavailable as UnavailableStream { reason: String }
+        }
+        transitions {
+            // The monitor rebuilds the stream after every outcome and settings changes can
+            // arrive at any time, so each state is reachable from all of them.
+            Starting | Running | Retrying | Unavailable => Starting: fn restart(shared, state) {
+                Starting {}
+            }
+
+            Starting | Running | Retrying | Unavailable => Running: fn started(shared, state) {
+                Running {}
+            }
+
+            Starting | Running | Retrying | Unavailable => Retrying: fn retry(
+                shared,
+                state,
+                reason: String,
+            ) {
+                Retrying { reason }
+            }
+
+            Starting | Running | Retrying | Unavailable => Unavailable: fn unavailable(
+                shared,
+                state,
+                reason: String,
+            ) {
+                Unavailable { reason }
+            }
+        }
+    }
+}
+
+impl From<DeviceStreamStatus> for AnyOutputStream {
+    fn from(status: DeviceStreamStatus) -> Self {
+        let shared = ();
+        match status {
+            DeviceStreamStatus::Starting => OutputStream {
+                shared,
+                state: Starting {},
+            }
+            .into(),
+            DeviceStreamStatus::Running => OutputStream {
+                shared,
+                state: Running {},
+            }
+            .into(),
+            DeviceStreamStatus::Retrying { reason } => OutputStream {
+                shared,
+                state: Retrying { reason },
+            }
+            .into(),
+            DeviceStreamStatus::Unavailable { reason } => OutputStream {
+                shared,
+                state: Unavailable { reason },
+            }
+            .into(),
+        }
+    }
+}
+
+impl From<AnyOutputStream> for DeviceStreamStatus {
+    fn from(stream: AnyOutputStream) -> Self {
+        match stream {
+            AnyOutputStream::Starting(_) => Self::Starting,
+            AnyOutputStream::Running(_) => Self::Running,
+            AnyOutputStream::Retrying(stream) => Self::Retrying {
+                reason: stream.state.reason,
+            },
+            AnyOutputStream::Unavailable(stream) => Self::Unavailable {
+                reason: stream.state.reason,
+            },
+        }
+    }
+}
+
+impl AudioRuntimeSettings {
+    /// Runs a stream lifecycle transition on the stored status.
+    fn advance_stream(
+        &mut self,
+        transition: impl FnOnce(
+            AnyOutputStream,
+        ) -> Result<
+            AnyOutputStream,
+            (AnyOutputStream, karbeat_utils::typestate::InvalidState),
+        >,
+    ) {
+        let current = std::mem::replace(&mut self.stream_status, DeviceStreamStatus::Starting);
+        self.stream_status = match transition(current.into()) {
+            Ok(next) => next.into(),
+            Err((unchanged, invalid)) => {
+                log::warn!("Output stream status: {invalid}");
+                unchanged.into()
+            }
+        };
+    }
+
+    /// Records that the stream is being built or rebuilt.
+    pub fn stream_restarting(&mut self) {
+        self.advance_stream(AnyOutputStream::restart);
+    }
+
+    /// Records that the stream is consuming rendered frames.
+    pub fn stream_started(&mut self) {
+        self.advance_stream(AnyOutputStream::started);
+    }
+
+    /// Records a recoverable failure that triggers delayed stream recreation.
+    pub fn stream_retrying(&mut self, reason: String) {
+        self.advance_stream(|stream| stream.retry(reason));
+    }
+
+    /// Records that no usable stream could be established.
+    pub fn stream_unavailable(&mut self, reason: String) {
+        self.advance_stream(|stream| stream.unavailable(reason));
+    }
+}
+
 impl Default for AudioRuntimeSettings {
     fn default() -> Self {
         Self {
@@ -348,13 +492,20 @@ impl Default for AudioDeviceConfig {
     }
 }
 
+/// Finds an available CPAL host by name.
+///
+/// CPAL names its hosts after their identifiers (`Asio`, `Jack`, `Wasapi`), so matching ignores
+/// case to keep the conventional spellings and previously saved selections resolving.
+fn find_host_id(host_name: &str) -> Option<cpal::HostId> {
+    cpal::available_hosts()
+        .into_iter()
+        .find(|host_id| host_id.name().eq_ignore_ascii_case(host_name))
+}
+
 /// Resolve the host based on user preference or OS defaults
 fn resolve_host(preferred_host: Option<&str>) -> cpal::Host {
     if let Some(host_name) = preferred_host {
-        if let Some(host_id) = cpal::available_hosts()
-            .into_iter()
-            .find(|h| h.name() == host_name)
-        {
+        if let Some(host_id) = find_host_id(host_name) {
             if let Ok(host) = cpal::host_from_id(host_id) {
                 log::info!("Connected to user-selected Host: {}", host_name);
                 return host;
@@ -373,10 +524,7 @@ fn resolve_host(preferred_host: Option<&str>) -> cpal::Host {
 pub fn get_available_hosts() -> Vec<String> {
     cpal::available_hosts()
         .into_iter()
-        .filter(|h| match h.name() {
-            "ASIO" => cfg!(feature = "asio"),
-            _ => true,
-        })
+        .filter(|h| !h.name().eq_ignore_ascii_case("ASIO") || cfg!(feature = "asio"))
         .map(|h| h.name().to_string())
         .collect()
 }
@@ -386,10 +534,8 @@ pub fn get_output_devices(host_name: Option<&str>) -> Result<Vec<AudioDeviceInfo
     let host = match host_name {
         None => cpal::default_host(),
         Some(name) => {
-            let host_id = cpal::available_hosts()
-                .into_iter()
-                .find(|host_id| host_id.name() == name)
-                .ok_or_else(|| anyhow!("Audio host '{name}' is unavailable"))?;
+            let host_id =
+                find_host_id(name).ok_or_else(|| anyhow!("Audio host '{name}' is unavailable"))?;
             cpal::host_from_id(host_id)?
         }
     };
@@ -418,10 +564,7 @@ pub fn get_device_sample_rates(
     host_name: String,
     device_id: String,
 ) -> Result<Vec<u32>, anyhow::Error> {
-    let host_id = cpal::available_hosts()
-        .into_iter()
-        .find(|h| h.name() == host_name)
-        .unwrap_or_else(|| cpal::default_host().id());
+    let host_id = find_host_id(&host_name).unwrap_or_else(|| cpal::default_host().id());
 
     let host = cpal::host_from_id(host_id)?;
     let device = host
@@ -465,7 +608,7 @@ fn get_device_and_config(
                 false
             })
             .ok_or_else(|| anyhow!("Requested device '{}' not found", dev_id))?
-    } else if host.id().name() == "ASIO" {
+    } else if host.id().name().eq_ignore_ascii_case("ASIO") {
         if let Some(default) = host.default_output_device() {
             default
         } else {
@@ -516,7 +659,7 @@ fn get_device_and_config(
     }
 
     // Yield to the Server's globally locked buffer size if using JACK to prevent crash loop
-    let buffer_size = if host.id().name() == "JACK" {
+    let buffer_size = if host.id().name().eq_ignore_ascii_case("JACK") {
         cpal::BufferSize::Default
     } else {
         match supported_config.buffer_size() {
@@ -589,7 +732,7 @@ pub fn start_audio_stream(
             config_pref.host_name.as_deref(),
             device_buffer_size as u32,
         ));
-        runtime.stream_status = DeviceStreamStatus::Starting;
+        runtime.stream_restarting();
     }
 
     {
@@ -761,9 +904,7 @@ pub fn start_audio_stream(
             {
                 Ok(res) => res,
                 Err(e) => {
-                    runtime_settings_arc.write().stream_status = DeviceStreamStatus::Retrying {
-                        reason: e.to_string(),
-                    };
+                    runtime_settings_arc.write().stream_retrying(e.to_string());
                     log::error!(
                         "Monitor: Failed to resolve audio device: {}. Retrying in {:?}...",
                         e,
@@ -819,9 +960,9 @@ pub fn start_audio_stream(
             let consumer = match ready_rx.recv() {
                 Ok(Ok(consumer)) => consumer,
                 Ok(Err(error)) => {
-                    runtime_settings_arc.write().stream_status = DeviceStreamStatus::Unavailable {
-                        reason: error.clone(),
-                    };
+                    runtime_settings_arc
+                        .write()
+                        .stream_unavailable(error.clone());
                     log::error!("Could not configure DSP output path: {error}");
                     std::thread::sleep(retry_delay);
                     retry_delay = next_retry_delay(retry_delay);
@@ -932,9 +1073,7 @@ pub fn start_audio_stream(
                 drop(stream);
                 let _ = dsp_control_tx.send(DspControl::Detach);
 
-                runtime_settings_arc.write().stream_status = DeviceStreamStatus::Retrying {
-                    reason: e.to_string(),
-                };
+                runtime_settings_arc.write().stream_retrying(e.to_string());
                 log::error!(
                     "Monitor: Failed to play stream: {}. Retrying in {:?}...",
                     e,
@@ -948,7 +1087,7 @@ pub fn start_audio_stream(
             {
                 let mut runtime = runtime_settings_arc.write();
                 runtime.actual_stream = Some(actual_config);
-                runtime.stream_status = DeviceStreamStatus::Running;
+                runtime.stream_started();
             }
 
             log::info!("Monitor: Audio stream is successfully running.");
@@ -1055,8 +1194,8 @@ fn actual_stream_config(
 )]
 mod tests {
     use super::{
-        INITIAL_RETRY_DELAY, MAX_RETRY_DELAY, automatic_host, next_retry_delay, push_output_frames,
-        select_output_config, write_output_data,
+        INITIAL_RETRY_DELAY, MAX_RETRY_DELAY, automatic_host, find_host_id, get_available_hosts,
+        next_retry_delay, push_output_frames, select_output_config, write_output_data,
     };
     use cpal::{SampleFormat, SupportedBufferSize, SupportedStreamConfigRange};
     use rtrb::RingBuffer;
@@ -1064,6 +1203,16 @@ mod tests {
     #[test]
     fn automatic_host_is_the_cpal_platform_default() {
         assert_eq!(automatic_host().id(), cpal::default_host().id());
+    }
+
+    #[test]
+    fn listed_hosts_resolve_by_name_in_any_case() {
+        for name in get_available_hosts() {
+            let host_id = find_host_id(&name).unwrap();
+            assert_eq!(find_host_id(&name.to_uppercase()), Some(host_id));
+            assert_eq!(find_host_id(&name.to_lowercase()), Some(host_id));
+        }
+        assert_eq!(find_host_id("not-a-real-host"), None);
     }
 
     #[test]

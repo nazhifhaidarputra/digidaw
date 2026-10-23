@@ -58,7 +58,7 @@ mod transport;
 
 pub use automation::{AutomationChanged, AutomationRecorder};
 pub use batch::Batch;
-pub use clips::{ClipEditRecorder, ClipsChanged, ClipsMadeUnique};
+pub use clips::{AudioSourceRemoved, ClipEditRecorder, ClipsChanged, ClipsMadeUnique};
 pub use names::{
     BusRecolored, BusRenamed, PatternRenamed, TrackRecolored, TrackRenamed, TracksReordered,
 };

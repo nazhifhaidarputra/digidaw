@@ -6,7 +6,7 @@ use karbeat_plugins::registry::PluginFactory;
 
 use crate::{
     audio::{
-        engine::{PlaybackMode, PluginTelemetrySnapshot},
+        engine::{MetronomeClick, PlaybackMode, PluginTelemetrySnapshot},
         event::PluginTarget,
         render_state::{AudioAutomationLane, AudioGraphState},
     },
@@ -321,6 +321,8 @@ pub enum AudioCommand {
     },
     /// Enables or disables metronome rendering.
     SetMetronomeActive(bool),
+    /// Replaces the metronome's sound with a custom click, or restores the built-in one.
+    SetMetronomeClick(Option<MetronomeClick>),
 
     /// Send command to execute command from real-time plugin state. to use this
     /// effectively, use a message passing channel for real-time data streaming
@@ -451,6 +453,14 @@ pub enum AudioCommand {
     /// Ends a manual automation edit gesture.
     EndEdit {
         /// Parameter target whose manual-edit gesture ends.
+        target: AutomationTarget,
+    },
+    /// Marks a parameter as changed by user input outside the plugin parameter command.
+    ///
+    /// Automation and modulation ignore the target until the transport seeks or toggles
+    /// playback, matching the behavior of `SetParameter` and `BeginEdit`.
+    MarkParameterManual {
+        /// Parameter target that takes over from automation.
         target: AutomationTarget,
     },
 

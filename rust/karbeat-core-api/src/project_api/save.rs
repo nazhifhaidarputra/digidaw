@@ -371,10 +371,11 @@ mod tests {
                     let directory = tempfile::tempdir().unwrap();
                     let path = directory.path().join("previous.karbeat");
                     std::fs::write(&path, b"previous project").unwrap();
-                    let result =
-                        save_project(&mut ctx, &path, Duration::from_millis(100), |_, _| {
-                            Err(HostError::Busy)
-                        });
+                    // Shuttle's sleep does not advance the wall clock this deadline reads, so
+                    // keep it short enough to expire within the scheduler's step bound.
+                    let result = save_project(&mut ctx, &path, Duration::from_millis(5), |_, _| {
+                        Err(HostError::Busy)
+                    });
                     assert!(result.is_err());
                     responder.join().unwrap();
                     assert_eq!(std::fs::read(&path).unwrap(), b"previous project");

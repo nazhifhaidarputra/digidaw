@@ -10,6 +10,8 @@ typedef AppearancePreferences = ({
   double backgroundOverlayOpacity,
   String? customFontPath,
   String? customFontFamily,
+  String? colorThemeSource,
+  List<String> customColorThemePaths,
 });
 
 class AppearancePreferencesService {
@@ -21,6 +23,14 @@ class AppearancePreferencesService {
       'settings.appearance.background_overlay.v1';
   static const fontPathKey = 'settings.appearance.font_path.v1';
   static const fontFamilyKey = 'settings.appearance.font_family.v1';
+  static const colorThemeSourceKey =
+      'settings.appearance.color_theme_source.v1';
+  static const customColorThemePathsKey =
+      'settings.appearance.custom_color_theme_paths.v1';
+
+  /// Held the single loaded theme file before several could be kept.
+  static const legacyCustomColorThemePathKey =
+      'settings.appearance.custom_color_theme_path.v1';
 
   Future<Result<AppearancePreferences>> load() {
     return attemptAsync(() async {
@@ -32,6 +42,10 @@ class AppearancePreferencesService {
       final storedOverlay = await preferences.getDouble(backgroundOverlayKey);
       final fontPath = await preferences.getString(fontPathKey);
       final fontFamily = await preferences.getString(fontFamilyKey);
+      final colorThemeSource = await preferences.getString(colorThemeSourceKey);
+      final customColorThemePaths =
+          await preferences.getStringList(customColorThemePathsKey) ??
+          [?await preferences.getString(legacyCustomColorThemePathKey)];
       final theme = AppThemeMode.values
           .where((value) => value.name == themeName)
           .firstOrNull;
@@ -67,6 +81,8 @@ class AppearancePreferencesService {
         backgroundOverlayOpacity: overlay,
         customFontPath: fontPath,
         customFontFamily: fontFamily,
+        colorThemeSource: colorThemeSource,
+        customColorThemePaths: customColorThemePaths,
       );
     });
   }
@@ -96,6 +112,20 @@ class AppearancePreferencesService {
         fontFamilyKey,
         value.customFontFamily,
       );
+      await _writeOptionalString(
+        preferences,
+        colorThemeSourceKey,
+        value.colorThemeSource,
+      );
+      if (value.customColorThemePaths.isEmpty) {
+        await preferences.remove(customColorThemePathsKey);
+      } else {
+        await preferences.setStringList(
+          customColorThemePathsKey,
+          value.customColorThemePaths,
+        );
+      }
+      await preferences.remove(legacyCustomColorThemePathKey);
     });
   }
 

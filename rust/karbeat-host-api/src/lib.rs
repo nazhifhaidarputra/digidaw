@@ -56,9 +56,15 @@
 //! requires_clone::<karbeat_host_api::PreparedProcessor>();
 //! ```
 
+/// Channel-layout adaptation between engine buses and hosted processor buffers.
+pub mod channels;
 mod control;
+mod exchange;
 mod executor;
 mod lifecycle;
+/// Native UI-thread runtime shared by format backends.
+#[cfg(any(target_os = "linux", target_os = "windows"))]
+pub mod native_host;
 pub mod native_ui;
 mod processor;
 pub mod scanner;
@@ -66,6 +72,7 @@ mod traits;
 mod types;
 
 pub use control::*;
+pub use exchange::*;
 pub use executor::*;
 pub use lifecycle::*;
 pub use native_ui::*;

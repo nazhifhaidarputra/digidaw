@@ -10,10 +10,10 @@ import 'package:karbeat/app/providers/timeline_state.dart';
 import 'package:karbeat/core/constants/audio_format.dart';
 import 'package:karbeat/core/widgets/shortcut_focus_anchor.dart';
 import 'package:karbeat/features/workspace/services/export_service.dart';
+import 'package:karbeat/features/workspace/services/project_file_dialogs.dart';
 import 'package:karbeat/shared/models/export_audio.dart';
 import 'package:karbeat/src/rust/api/project.dart';
 import 'package:karbeat/src/rust/api/timeline.dart';
-import 'package:file_picker/file_picker.dart';
 
 class ProjectExportPanel extends ConsumerStatefulWidget {
   final VoidCallback onClose;
@@ -63,12 +63,11 @@ class _ProjectExportPanelState extends ConsumerState<ProjectExportPanel> {
   Future<void> _pickSavePath() async {
     final exportState = ref.read(exportProjectProvider);
     final format = exportState.selectedFormat;
+    final extension = format.name.toLowerCase();
 
-    String? outputFile = await FilePicker.saveFile(
-      dialogTitle: 'Select export location and name',
-      fileName: '${_nameController.text}.${format.name.toLowerCase()}',
-      type: FileType.custom,
-      allowedExtensions: [format.name.toLowerCase()],
+    final outputFile = await pickAudioExportFileToSave(
+      fileName: _nameController.text,
+      extension: extension,
     );
 
     if (outputFile != null) {
@@ -81,8 +80,8 @@ class _ProjectExportPanelState extends ConsumerState<ProjectExportPanel> {
 
       // Extract filename without extension to cleanly update the local name controller
       final nameWithExt = file.uri.pathSegments.last;
-      final nameWithoutExt = nameWithExt.contains('.')
-          ? nameWithExt.substring(0, nameWithExt.lastIndexOf('.'))
+      final nameWithoutExt = nameWithExt.toLowerCase().endsWith('.$extension')
+          ? nameWithExt.substring(0, nameWithExt.length - extension.length - 1)
           : nameWithExt;
       _nameController.text = nameWithoutExt;
     }

@@ -863,6 +863,7 @@ impl AudioPlugin for DigiParametricEQ {
                 for (id, value) in saved_params {
                     self.set_parameter(id, value);
                 }
+                self.clear_parameter_overrides();
             }
             Err(err) => {
                 log::error!("Failed to deserialize Plugin state: {}", err);

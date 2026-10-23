@@ -2,9 +2,43 @@
 name = "karbeat-clap"
 version.workspace = true
 edition.workspace = true
+license = "GPL-3.0-only"
+description = "CLAP host implementation for DigiDAW external plugin hosting"
 
 [dependencies]
 karbeat-host-api.workspace = true
 
+# The host runs on the platforms the shared native UI runtime supports.
+[target.'cfg(any(target_os = "linux", target_os = "windows"))'.dependencies]
+clack-common = "0.2.0"
+clack-extensions = { version = "0.2.0", features = [
+    "clack-host",
+    "audio-ports",
+    "gui",
+    "latency",
+    "log",
+    "note-ports",
+    "params",
+    "posix-fd",
+    "render",
+    "state",
+    "thread-check",
+    "timer",
+] }
+clack-host = "0.2.0"
+karbeat-plugin-api.workspace = true
+karbeat-utils.workspace = true
+libloading.workspace = true
+log.workspace = true
+raw-window-handle.workspace = true
+tokio.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true
+
 [lints]
 workspace = true
+
+[[test]]
+name = "vital"
+harness = false

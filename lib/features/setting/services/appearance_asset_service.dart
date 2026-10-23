@@ -6,6 +6,14 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:karbeat/core/utils/result_type.dart';
 
 class AppearanceAssetService {
+  /// Asset keys of the colour themes shipped with the app, in menu order.
+  static const bundledColorThemes = [
+    'assets/themes/catppuccin_mocha.json',
+    'assets/themes/catppuccin_latte.json',
+  ];
+
+  static const maxColorThemeFileBytes = 1024 * 1024;
+
   Future<Result<String?>> pickBackgroundImage() {
     return attemptAsync(() async {
       final result = await FilePicker.pickFiles(
@@ -25,6 +33,35 @@ class AppearanceAssetService {
         allowedExtensions: const ['ttf', 'otf'],
       );
       return result?.files.single.path;
+    });
+  }
+
+  Future<Result<String?>> pickColorThemeFile() {
+    return attemptAsync(() async {
+      final result = await FilePicker.pickFiles(
+        dialogTitle: 'Choose color theme',
+        type: FileType.custom,
+        allowedExtensions: const ['json'],
+      );
+      return result?.files.single.path;
+    });
+  }
+
+  /// Reads the JSON text of a colour theme from a bundled asset key or a
+  /// file path.
+  Future<Result<String>> readColorTheme(String source) {
+    return attemptAsync(() async {
+      if (bundledColorThemes.contains(source)) {
+        return rootBundle.loadString(source);
+      }
+      final file = File(source);
+      if (await file.length() > maxColorThemeFileBytes) {
+        throw FileSystemException(
+          'The color theme file is larger than 1 MB',
+          source,
+        );
+      }
+      return file.readAsString();
     });
   }
 

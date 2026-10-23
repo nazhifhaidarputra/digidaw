@@ -86,6 +86,13 @@ In DigiDAW, a parameter wraps two distinct values:
 - When automation is active, `current_value` is continuously modulated by the timeline automation curve.
 - The user's `base_value` remains untouched.
 - When automation ends or is cleared (`clear_automation()`), `current_value` snaps back to `base_value`.
+- A user edit (`set_base_manual` / `set_base_manual_from_f64`, used by the generated
+  `set_parameter`) sets `manually_overridden`. Automation and modulation then leave the parameter
+  alone until the engine calls the generated `clear_parameter_overrides()` on transport seek or
+  play/stop. State restore clears the flag, because loading a project is not a user edit.
+- Hosted external plugins have the equivalent per-parameter flag in
+  `karbeat-host-api/src/exchange.rs`; the VST3, CLAP, and LV2 wrappers read it so edits made in a
+  plugin's native editor also take precedence until the transport resets.
 - **Latest Feature — `get_current_parameter` vs `get_parameter`**:
   - `get_parameter(id)`: Returns `base_value` (used when saving project presets or updating static UI controls).
   - `get_current_parameter(id)`: Returns the live `current_value` (used by UI meters, visual knobs during automation playback, and engine telemetry).

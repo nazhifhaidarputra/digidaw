@@ -1,14 +1,18 @@
 use anyhow::Context;
+use karbeat_plugin_types::{ParameterSpec, ParameterValueType};
 use karbeat_utils::types::{BipolarF64, NormalizedF64};
 
 use karbeat_core::{
+    audio::engine::AudioMixerChannelValues,
     commands::AudioCommand,
     context::DawContext,
     core::{
         history::actions::AutomationRecorder,
         project::{
-            AutomationCurveType, ModulationLink, ModulationLinkForOrderedLaneView,
-            ModulationSource,
+            AutomationCurveType, AutomationPoint, BezierHandles, EffectAutomationTarget,
+            MasterAutomationTarget, MixerChannel, MixerChannelParamTarget, ModulationLink,
+            ModulationLinkForOrderedLaneView, ModulationSource, TEMPO_AUTOMATION_MAX_BPM,
+            TEMPO_AUTOMATION_MIN_BPM, TrackAutomationTarget,
             automation::{AutomationLane, AutomationTarget},
         },
     },
@@ -32,14 +36,13 @@ pub fn add_automation_lane_for_track(
     track_id: TrackId,
     target: AutomationTarget,
     label: impl Into<String>,
-    min: f64,
-    max: f64,
-    initial_value: f64,
+    initial_value: Option<f64>,
 ) -> anyhow::Result<AutomationLane> {
+    let initial_value = initial_normalized_value(ctx, &target, initial_value)?;
     let automation_before = AutomationRecorder::begin(&ctx.app_state);
     let app = &mut ctx.app_state;
     let (lane, link_id) =
-        app.add_automation_lane_for_track(track_id, target, label, min, max, initial_value)?;
+        app.add_automation_lane_for_track(track_id, target, label, initial_value)?;
     record(ctx, automation_before, "Add Automation Lane");
 
     broadcast_modulation(ctx, link_id)?;
@@ -52,18 +55,20 @@ pub fn add_automation_lane_for_track(
     Ok(lane)
 }
 
-/// Inserts a fully specified automation lane and broadcasts it to the audio thread.
+/// Inserts an automation lane for `target` and broadcasts it to the audio thread.
+///
+/// `initial_value` is the parameter's current value in its own unit (dB, Hz, ...); the target
+/// parameter normalizes it. `None` starts the lane on the value stored in the project.
 pub fn add_automation_lane(
     ctx: &mut DawContext,
     target: AutomationTarget,
     label: impl Into<String>,
-    min: f64,
-    max: f64,
-    initial_value: f64,
+    initial_value: Option<f64>,
 ) -> anyhow::Result<(AutomationLane, ModulationLinkForOrderedLaneView)> {
+    let initial_value = initial_normalized_value(ctx, &target, initial_value)?;
     let automation_before = AutomationRecorder::begin(&ctx.app_state);
     let app = &mut ctx.app_state;
-    let (lane, link_id) = app.add_automation_lane(target, label, min, max, initial_value)?;
+    let (lane, link_id) = app.add_automation_lane(target, label, initial_value)?;
     record(ctx, automation_before, "Add Automation Lane");
 
     broadcast_modulation(ctx, link_id)?;
@@ -87,14 +92,13 @@ pub fn add_automation_lane_for_bus(
     bus_id: BusId,
     target: AutomationTarget,
     label: impl Into<String>,
-    min: f64,
-    max: f64,
-    initial_value: f64,
+    initial_value: Option<f64>,
 ) -> anyhow::Result<AutomationLane> {
+    let initial_value = initial_normalized_value(ctx, &target, initial_value)?;
     let automation_before = AutomationRecorder::begin(&ctx.app_state);
     let (lane, link_id) = {
         let app = &mut ctx.app_state;
-        app.add_automation_lane_for_bus(bus_id, target, label, min, max, initial_value)?
+        app.add_automation_lane_for_bus(bus_id, target, label, initial_value)?
     };
     record(ctx, automation_before, "Add Automation Lane");
 
@@ -191,7 +195,13 @@ pub fn remove_automation_point(
     Ok(lane)
 }
 
-/// Changes an automation point's position or value and republishes the lane snapshot.
+/// Changes the supplied fields of an automation point and republishes the lane snapshot.
+///
+/// Returns the updated lane together with the point's index in it.
+#[allow(
+    clippy::too_many_arguments,
+    reason = "each optional field is one independently editable point property"
+)]
 pub fn update_automation_point(
     ctx: &mut DawContext,
     automation_id: AutomationId,
@@ -200,16 +210,255 @@ pub fn update_automation_point(
     value: Option<NormalizedF64>,
     tension: Option<BipolarF64>,
     curve_type: Option<AutomationCurveType>,
-) -> anyhow::Result<usize> {
+    handles: Option<BezierHandles>,
+) -> anyhow::Result<(AutomationLane, usize)> {
     let automation_before = AutomationRecorder::begin(&ctx.app_state);
     let app = &mut ctx.app_state;
 
-    let (lane, new_index) =
-        app.update_automation_point(automation_id, id, time_ticks, value, tension, curve_type)?;
+    let (lane, new_index) = app.update_automation_point(
+        automation_id,
+        id,
+        time_ticks,
+        value,
+        tension,
+        curve_type,
+        handles,
+    )?;
     record(ctx, automation_before, "Edit Automation Point");
 
     ctx.broadcast_automation_lane(automation_id, &lane);
-    Ok(new_index)
+    Ok((lane, new_index))
+}
+
+/// Copies the curve of a lane between two ticks, with times relative to the range start.
+pub fn copy_automation_range(
+    ctx: &DawContext,
+    automation_id: AutomationId,
+    start_tick: u32,
+    end_tick: u32,
+) -> anyhow::Result<Vec<AutomationPoint>> {
+    ctx.app_state
+        .copy_automation_range(automation_id, start_tick, end_tick)
+}
+
+/// Removes every point of a lane between two ticks as one undo step.
+pub fn delete_automation_range(
+    ctx: &mut DawContext,
+    automation_id: AutomationId,
+    start_tick: u32,
+    end_tick: u32,
+) -> anyhow::Result<AutomationLane> {
+    let automation_before = AutomationRecorder::begin(&ctx.app_state);
+    let lane = ctx
+        .app_state
+        .delete_automation_range(automation_id, start_tick, end_tick)?;
+    record(ctx, automation_before, "Delete Automation Range");
+
+    ctx.broadcast_automation_lane(automation_id, &lane);
+    Ok(lane)
+}
+
+/// Pastes a copied curve into a lane as one undo step, replacing the points under it.
+///
+/// `length_ticks` is the length of the copied range and `target_length` optionally stretches the
+/// curve to another length.
+pub fn paste_automation_points(
+    ctx: &mut DawContext,
+    automation_id: AutomationId,
+    at_tick: u32,
+    points: &[AutomationPoint],
+    length_ticks: u32,
+    target_length: Option<u32>,
+) -> anyhow::Result<AutomationLane> {
+    let automation_before = AutomationRecorder::begin(&ctx.app_state);
+    let lane = ctx.app_state.paste_automation_points(
+        automation_id,
+        at_tick,
+        points,
+        length_ticks,
+        target_length,
+    )?;
+    record(ctx, automation_before, "Paste Automation Curve");
+
+    ctx.broadcast_automation_lane(automation_id, &lane);
+    Ok(lane)
+}
+
+// ▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱
+// Target parameter mapping
+// ▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱
+
+/// Describes the parameter a target automates: its range, value type, and choice labels.
+///
+/// Automation lanes only hold normalized values, so this specification is the one place that
+/// maps them to the parameter's own unit.
+pub fn target_parameter_spec(
+    ctx: &DawContext,
+    target: &AutomationTarget,
+) -> anyhow::Result<ParameterSpec> {
+    let mixer = &ctx.app_state.mixer;
+    let (channel, mix_target): (Option<&MixerChannel>, &MixerChannelParamTarget) = match target {
+        AutomationTarget::Generator { param_id, .. } => {
+            return plugin_parameter_spec(ctx, target, *param_id);
+        }
+        AutomationTarget::Master(MasterAutomationTarget::TempoBpm) => {
+            let bpm = f64::from(ctx.app_state.transport.bpm);
+            return Ok(ParameterSpec::new_float(
+                0,
+                "Tempo",
+                "Transport",
+                bpm,
+                f64::from(TEMPO_AUTOMATION_MIN_BPM),
+                f64::from(TEMPO_AUTOMATION_MAX_BPM),
+                120.0,
+                0.0,
+            ));
+        }
+        AutomationTarget::Track {
+            track_id,
+            track_target: TrackAutomationTarget::MixerChannel(mix_target),
+        } => (
+            mixer.channels.get(*track_id).map(|c| &c.channel),
+            mix_target,
+        ),
+        AutomationTarget::Bus { bus_id, mix_target } => {
+            (mixer.buses.get(*bus_id).map(|b| &b.channel), mix_target)
+        }
+        AutomationTarget::Master(MasterAutomationTarget::MixerChannel(mix_target)) => {
+            (Some(&mixer.master_bus), mix_target)
+        }
+    };
+
+    // The engine's channel parameters own the range automation is played in; the project
+    // channel supplies the value currently set by the user.
+    let engine_channel = AudioMixerChannelValues::default();
+    match mix_target {
+        MixerChannelParamTarget::Volume => channel.map(|c| ParameterSpec {
+            value: f64::from(c.volume.get_base()),
+            ..engine_channel.volume.to_spec()
+        }),
+        MixerChannelParamTarget::Pan => channel.map(|c| ParameterSpec {
+            value: f64::from(c.pan.get_base()),
+            ..engine_channel.pan.to_spec()
+        }),
+        MixerChannelParamTarget::Plugin {
+            target: EffectAutomationTarget::Mix,
+            ..
+        } => Some(ParameterSpec::new_float(
+            0, "Mix", "Effect", 1.0, 0.0, 1.0, 1.0, 0.0,
+        )),
+        MixerChannelParamTarget::Plugin {
+            target: EffectAutomationTarget::PluginParam { param_id },
+            ..
+        } => return plugin_parameter_spec(ctx, target, *param_id),
+    }
+    .ok_or_else(|| anyhow::anyhow!("Mixer channel for {target:?} not found"))
+}
+
+fn plugin_parameter_spec(
+    ctx: &DawContext,
+    target: &AutomationTarget,
+    param_id: u32,
+) -> anyhow::Result<ParameterSpec> {
+    let plugin = target
+        .as_plugin_target()
+        .ok_or_else(|| anyhow::anyhow!("{target:?} is not a plugin parameter"))?;
+    crate::plugin_api::get_plugin_parameter_specs(ctx, &plugin, |spec, _| spec)?
+        .into_iter()
+        .find(|spec| spec.id == param_id)
+        .ok_or_else(|| anyhow::anyhow!("Parameter {param_id} not found for {target:?}"))
+}
+
+/// Normalizes the value a new lane starts on through the target parameter.
+fn initial_normalized_value(
+    ctx: &DawContext,
+    target: &AutomationTarget,
+    initial_value: Option<f64>,
+) -> anyhow::Result<NormalizedF64> {
+    let spec = target_parameter_spec(ctx, target)?;
+    Ok(NormalizedF64::from_range(
+        initial_value.unwrap_or(spec.value),
+        spec.min,
+        spec.max,
+    ))
+}
+
+fn lane_parameter_spec(ctx: &DawContext, lane_id: AutomationId) -> anyhow::Result<ParameterSpec> {
+    let target = ctx
+        .app_state
+        .automation_lane_target(lane_id)
+        .ok_or_else(|| anyhow::anyhow!("Automation lane {lane_id:?} has no target"))?;
+    target_parameter_spec(ctx, target)
+}
+
+/// Formats a lane's normalized value in the unit of the parameter it automates.
+pub fn automation_value_text(
+    ctx: &DawContext,
+    lane_id: AutomationId,
+    normalized: NormalizedF64,
+) -> anyhow::Result<String> {
+    Ok(parameter_value_text(
+        &lane_parameter_spec(ctx, lane_id)?,
+        normalized,
+    ))
+}
+
+/// Parses text typed in the unit of a lane's parameter into a normalized lane value.
+///
+/// Accepts numbers for every parameter, choice labels for choice parameters, and `on` / `off`
+/// for toggles. Values outside the parameter's range are clamped.
+pub fn parse_automation_value(
+    ctx: &DawContext,
+    lane_id: AutomationId,
+    text: &str,
+) -> anyhow::Result<NormalizedF64> {
+    let spec = lane_parameter_spec(ctx, lane_id)?;
+    parse_parameter_value(&spec, text)
+        .ok_or_else(|| anyhow::anyhow!("'{text}' is not a value of {}", spec.name))
+}
+
+fn parameter_value_text(spec: &ParameterSpec, normalized: NormalizedF64) -> String {
+    let plain = normalized.to_range(spec.min, spec.max);
+    match spec.value_type {
+        ParameterValueType::Bool => if plain >= 0.5 { "On" } else { "Off" }.to_owned(),
+        ParameterValueType::Choice => spec
+            .choices
+            .iter()
+            .zip(0_u32..)
+            .min_by(|(_, a), (_, b)| {
+                (f64::from(*a) - plain)
+                    .abs()
+                    .total_cmp(&(f64::from(*b) - plain).abs())
+            })
+            .map_or_else(|| format!("{plain:.0}"), |(label, _)| label.clone()),
+        ParameterValueType::Int => unsigned_zero(format!("{plain:.0}")),
+        ParameterValueType::Float => unsigned_zero(format!("{plain:.2}")),
+    }
+}
+
+/// Drops the minus sign from a value that rounds to zero, so it reads "0.00" and not "-0.00".
+fn unsigned_zero(text: String) -> String {
+    match text.strip_prefix('-') {
+        Some(digits) if digits.chars().all(|c| c == '0' || c == '.') => digits.to_owned(),
+        _ => text,
+    }
+}
+
+fn parse_parameter_value(spec: &ParameterSpec, text: &str) -> Option<NormalizedF64> {
+    let text = text.trim();
+    let plain = match spec.value_type {
+        ParameterValueType::Bool if text.eq_ignore_ascii_case("on") => Some(1.0),
+        ParameterValueType::Bool if text.eq_ignore_ascii_case("off") => Some(0.0),
+        ParameterValueType::Choice => spec
+            .choices
+            .iter()
+            .zip(0_u32..)
+            .find(|(label, _)| label.eq_ignore_ascii_case(text))
+            .map(|(_, index)| f64::from(index)),
+        _ => None,
+    }
+    .or_else(|| text.parse::<f64>().ok().filter(|value| value.is_finite()))?;
+    Some(NormalizedF64::from_range(plain, spec.min, spec.max))
 }
 
 /// Returns cloned automation lanes whose targets belong to `track_id`.

@@ -369,6 +369,16 @@ class DefaultControlPanel extends ConsumerWidget {
           ),
           const SizedBox(width: 8),
           ControlPanelToolbarItem(
+            name: "Follow Playhead",
+            icon: Icons.keyboard_double_arrow_right,
+            color: colors.secondary,
+            isActive: workspaceState.followPlayhead,
+            onTap: () => ref
+                .read(workspaceStateProvider.notifier)
+                .toggleFollowPlayhead(),
+          ),
+          const SizedBox(width: 8),
+          ControlPanelToolbarItem(
             name: "Metronome",
             icon: MdiIcons.metronome,
             color: colors.secondary,
@@ -396,7 +406,7 @@ class DefaultControlPanel extends ConsumerWidget {
 
     builder.addDivider();
 
-    // AspectRatio bounds constraint injection!
+    // The fixed height decides how many label rows fit per column.
     builder.addWidget(
       SizedBox(height: itemHeight, child: const DawPerformanceMonitor()),
     );
@@ -418,10 +428,10 @@ class DefaultControlPanel extends ConsumerWidget {
             ref.read(workspaceStateProvider.notifier).selectTool(tool),
         items: [
           PopupMenuItem(
-            value: ToolSelection.pointer,
+            value: ToolSelection.panSelect,
             child: ListTile(
-              leading: Icon(Icons.near_me, color: colors.secondary),
-              title: const Text("Pointer"),
+              leading: Icon(Icons.pan_tool_alt, color: colors.secondary),
+              title: const Text("Pan/Select"),
               contentPadding: EdgeInsets.zero,
             ),
           ),
@@ -511,8 +521,8 @@ class DefaultControlPanel extends ConsumerWidget {
   // Helpers to dynamically display the currently selected Tool
   String _getToolName(ToolSelection tool) {
     switch (tool) {
-      case ToolSelection.pointer:
-        return "Pointer";
+      case ToolSelection.panSelect:
+        return "Pan/Select";
       case ToolSelection.slice:
         return "Cut";
       case ToolSelection.draw:
@@ -526,14 +536,14 @@ class DefaultControlPanel extends ConsumerWidget {
       case ToolSelection.resize:
         return "Resize";
       default:
-        return "Pointer";
+        return "Pan/Select";
     }
   }
 
   IconData _getToolIcon(ToolSelection tool) {
     switch (tool) {
-      case ToolSelection.pointer:
-        return Icons.near_me;
+      case ToolSelection.panSelect:
+        return Icons.pan_tool_alt;
       case ToolSelection.slice:
         return Icons.content_cut;
       case ToolSelection.draw:
@@ -547,7 +557,7 @@ class DefaultControlPanel extends ConsumerWidget {
       case ToolSelection.resize:
         return MdiIcons.arrowLeftRight;
       default:
-        return Icons.near_me;
+        return Icons.pan_tool_alt;
     }
   }
 

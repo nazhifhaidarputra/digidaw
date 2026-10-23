@@ -2,10 +2,12 @@
 
 #[cfg(test)]
 mod tests {
+    use crate::clip_api;
     use crate::clipboard_api;
 
-    use crate::test::helpers::{make_ctx, make_seeded_ctx};
+    use crate::test::helpers::{add_dc_audio_source, make_ctx, make_seeded_ctx};
     use karbeat_core::core::project::ClipboardContent;
+    use karbeat_core::core::project::clip::ClipSourceType;
     use karbeat_core::shared::id::PatternId;
 
     #[test]
@@ -206,5 +208,59 @@ mod tests {
         let result = clipboard_api::paste_clips(&mut ctx, midi_id, paste_pos);
         assert!(result.is_ok(), "{:?}", result.err());
         assert!(!result.unwrap().is_empty());
+    }
+
+    #[test]
+    fn paste_audio_clips_on_midi_track_is_rejected() {
+        let (mut ctx, audio_id, midi_id, _pat_id) = make_seeded_ctx();
+        let source_id = add_dc_audio_source(&mut ctx);
+        clip_api::add_clip(
+            &mut ctx,
+            Some(source_id.to_u64()),
+            ClipSourceType::Audio,
+            audio_id,
+            0,
+        )
+        .expect("audio clip should be created");
+        let audio_clip_ids: Vec<_> = ctx.app_state.tracks[audio_id]
+            .clips
+            .iter()
+            .copied()
+            .collect();
+        clipboard_api::copy_clips(&mut ctx, audio_id, &audio_clip_ids);
+
+        let paste_pos = karbeat_core::core::project::clip::ClipTimeUnit::Ticks {
+            start_time: 9600,
+            loop_length: 0,
+            offset_start: 0,
+        };
+        let result = clipboard_api::paste_clips(&mut ctx, midi_id, paste_pos);
+        assert!(
+            result.is_err(),
+            "audio clips must not be pasted onto a MIDI track"
+        );
+        assert!(
+            ctx.app_state.tracks[midi_id]
+                .clips
+                .iter()
+                .all(|clip_id| !matches!(
+                    ctx.app_state.clips_pool[*clip_id].source,
+                    Some(karbeat_core::core::project::DawSource::Audio(id))
+                        if id == source_id
+                )),
+            "rejected paste must not leave audio clips on the MIDI track"
+        );
+
+        let audio_paste_pos = karbeat_core::core::project::clip::ClipTimeUnit::Audio {
+            start_tick: 9600,
+            loop_length: 0,
+            offset_start: 0,
+        };
+        let result = clipboard_api::paste_clips(&mut ctx, audio_id, audio_paste_pos);
+        assert!(
+            result.is_ok(),
+            "audio clips should paste onto an audio track: {:?}",
+            result.err()
+        );
     }
 }

@@ -1,11 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:file_picker/file_picker.dart';
 import 'package:karbeat/app/providers/blocking_task_provider.dart';
 import 'package:karbeat/app/providers/project_provider.dart';
 import 'package:karbeat/app/providers/workspace_state.dart';
 import 'package:karbeat/features/setting/view/setting_screen.dart';
+import 'package:karbeat/features/source/services/audio_source_import.dart';
 import 'package:karbeat/features/workspace/services/project_file_actions.dart';
+import 'package:karbeat/features/workspace/services/project_file_dialogs.dart';
 import 'package:karbeat/features/workspace/view/unsaved_changes_guard.dart';
 import 'package:karbeat/shared/enums/global.dart';
 
@@ -18,7 +19,12 @@ class DawToolbarMenuGroup {
   /// Define list of actions with type [DawToolbarMenuAction]
   final List<DawToolbarMenuAction> actions;
 
-  DawToolbarMenuGroup({required this.id, required this.title, required this.icon, required this.actions});
+  DawToolbarMenuGroup({
+    required this.id,
+    required this.title,
+    required this.icon,
+    required this.actions,
+  });
 }
 
 /// Model for toolbar menu action
@@ -34,7 +40,12 @@ class DawToolbarMenuAction {
   /// Define the callback when this action is executed
   final DawToolbarMenuActionCallback? callback;
 
-  DawToolbarMenuAction(this.title, {this.shortcut, this.isDestructive = false, this.callback});
+  DawToolbarMenuAction(
+    this.title, {
+    this.shortcut,
+    this.isDestructive = false,
+    this.callback,
+  });
 }
 
 typedef DawToolbarMenuActionCallback = void Function(BuildContext, WidgetRef);
@@ -54,7 +65,6 @@ class DawToolbarMenuGroupFactory {
         callback: (context, ref) async {
           if (!await confirmDiscardUnsavedChanges(context, ref)) return;
           await ref.read(projectProvider.notifier).newBlankProject();
-          await updateProjectWindowTitle(null);
         },
       ),
       DawToolbarMenuAction(
@@ -62,17 +72,17 @@ class DawToolbarMenuGroupFactory {
         shortcut: 'Ctrl+O',
         callback: (context, ref) async {
           if (!await confirmDiscardUnsavedChanges(context, ref)) return;
-          final result = await FilePicker.pickFiles(type: FileType.custom, allowedExtensions: projectFileExtensions);
-          if (result != null && result.files.single.path != null) {
-            final path = result.files.single.path!;
-            final project = ref.read(projectProvider.notifier);
+          final path = await pickProjectFileToOpen();
+          if (path == null) return;
+          final project = ref.read(projectProvider.notifier);
 
-            // Await the Rust Shadow Load & Swap behind the global blocking overlay.
-            final loaded = await ref
-                .read(blockingTaskProvider.notifier)
-                .run(label: 'Loading project...', task: () => project.loadProject(path));
-            if (loaded.isOk()) await updateProjectWindowTitle(path);
-          }
+          // Await the Rust Shadow Load & Swap behind the global blocking overlay.
+          await ref
+              .read(blockingTaskProvider.notifier)
+              .run(
+                label: 'Loading project...',
+                task: () => project.loadProject(path),
+              );
         },
       ),
       DawToolbarMenuAction(
@@ -90,7 +100,11 @@ class DawToolbarMenuGroupFactory {
           await saveCurrentProject(ref, saveAs: true);
         },
       ),
-      DawToolbarMenuAction('Import Audio'),
+      DawToolbarMenuAction(
+        'Import Audio',
+        shortcut: 'Ctrl+I',
+        callback: (context, ref) => importAudioSource(context, ref),
+      ),
       DawToolbarMenuAction(
         'Export Project',
         callback: (context, ref) async {
@@ -99,11 +113,20 @@ class DawToolbarMenuGroupFactory {
       ),
       DawToolbarMenuAction(
         'Settings',
+        shortcut: 'F2',
         callback: (context, ref) {
           Navigator.of(context, rootNavigator: true).push(
-            MaterialPageRoute<void>(builder: (context) => const SettingScreen()),
+            MaterialPageRoute<void>(
+              builder: (context) => const SettingScreen(),
+            ),
           );
         },
+      ),
+      DawToolbarMenuAction(
+        'Quit DigiDAW',
+        shortcut: 'Alt+F4',
+        isDestructive: true,
+        callback: (context, ref) => quitApplication(context, ref),
       ),
     ],
   );

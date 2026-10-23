@@ -8,6 +8,16 @@ import 'package:karbeat/core/input/intents/workspace/save_intent.dart';
 import 'package:karbeat/core/input/intents/workspace/action_history_intent.dart';
 import 'package:karbeat/core/input/shortcut_models.dart';
 
+/// Opens the application settings screen.
+class OpenSettingsIntent extends Intent {
+  const OpenSettingsIntent();
+}
+
+/// Imports an audio file into the project's source list.
+class ImportAudioIntent extends Intent {
+  const ImportAudioIntent();
+}
+
 const workspaceShortcuts = IListConst<DawShortcut>([
   DawShortcut(
     id: "transport.togglePlayback",
@@ -35,7 +45,7 @@ const workspaceShortcuts = IListConst<DawShortcut>([
     title: 'Toggle Metronome',
     category: 'Transport',
     intent: ToggleMetronomeIntent(),
-    defaultKey: SingleActivator(LogicalKeyboardKey.keyM),
+    defaultKey: SingleActivator(LogicalKeyboardKey.keyM, control: true),
   ),
   DawShortcut(
     id: "workspace.save",
@@ -90,5 +100,19 @@ const workspaceShortcuts = IListConst<DawShortcut>([
     category: 'Workspace',
     intent: ToggleVirtualMidiKeyboardIntent(),
     defaultKey: SingleActivator(LogicalKeyboardKey.keyK, alt: true),
+  ),
+  DawShortcut(
+    id: 'workspace.openSettings',
+    title: 'Open Settings',
+    category: 'Workspace',
+    intent: OpenSettingsIntent(),
+    defaultKey: SingleActivator(LogicalKeyboardKey.f2),
+  ),
+  DawShortcut(
+    id: 'workspace.importAudio',
+    title: 'Import Audio',
+    category: 'Workspace',
+    intent: ImportAudioIntent(),
+    defaultKey: SingleActivator(LogicalKeyboardKey.keyI, control: true),
   ),
 ]);

@@ -233,6 +233,15 @@ class ProjectNotifier extends AsyncNotifier<ApplicationDataStore> {
     });
   }
 
+  /// Deletes an audio source and every clip that plays it as one undo step,
+  /// then publishes the project the backend returns.
+  Future<Result<void>> removeAudioSource(int sourceId) {
+    return _applyHistoryOperation(
+      () => audio_api.removeAudioSource(ctx: dawContext, sourceId: sourceId),
+      errorTitle: 'Could not delete the audio source',
+    );
+  }
+
   /// Save the current project to disk relying on the injected `SerializerService`.
   Future<Result<void>> saveProject(String path) {
     return _runBackendOperation(() async {
@@ -463,6 +472,9 @@ class ProjectNotifier extends AsyncNotifier<ApplicationDataStore> {
     );
   }
 
+  /// Runs a backend operation that answers with the whole project, such as
+  /// undo, redo, or an edit touching several parts of it, and publishes the
+  /// refreshed state.
   Future<Result<void>> _applyHistoryOperation(
     Future<UiApplicationState> Function() operation, {
     required String errorTitle,

@@ -21,6 +21,10 @@ class _ClipRenderer extends ConsumerWidget {
   /// Whether the shown gain envelope reacts to pointer input.
   final bool envelopeInteractive;
 
+  /// Length scale of the audio content, for previewing a stretching resize
+  /// before the source is stretched.
+  final double contentStretch;
+
   const _ClipRenderer({
     required this.clip,
     required this.trackType,
@@ -35,6 +39,7 @@ class _ClipRenderer extends ConsumerWidget {
     this.compact = false,
     this.trackId,
     this.envelopeInteractive = false,
+    this.contentStretch = 1.0,
   });
 
   static const double _headerHeight = 16;
@@ -60,36 +65,29 @@ class _ClipRenderer extends ConsumerWidget {
       ),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(3),
-        child: Stack(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             // A. Label Header
-            Positioned(
-              top: 0,
-              left: 0,
-              right: 0,
+            Container(
               height: _headerHeight,
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 4),
-                alignment: Alignment.centerLeft,
-                color: headerColor,
-                child: Text(
-                  clip.name,
-                  style: TextStyle(
-                    color: headerForeground,
-                    fontSize: 10,
-                    fontWeight: FontWeight.w500,
-                  ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
+              padding: const EdgeInsets.symmetric(horizontal: 4),
+              alignment: Alignment.centerLeft,
+              color: headerColor,
+              child: Text(
+                clip.name,
+                style: TextStyle(
+                  color: headerForeground,
+                  fontSize: 10,
+                  fontWeight: FontWeight.w500,
                 ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
               ),
             ),
 
-            // B. Content (Waveform or MIDI Notes), laid out below the header
-            Positioned.fill(
-              top: _headerHeight,
-              child: _buildContent(context, ref),
-            ),
+            // B. Content (Waveform or MIDI Notes)
+            Expanded(child: _buildContent(context, ref)),
           ],
         ),
       ),
@@ -209,7 +207,8 @@ class _ClipRenderer extends ConsumerWidget {
         final sourceSamplesPerTick =
             (60.0 / tempo) *
             (handle.getSampleRate() / 960.0) *
-            handle.tempoRate(projectBpm: tempo);
+            handle.tempoRate(projectBpm: tempo) /
+            contentStretch;
 
         final waveformColor = color.computeLuminance() > 0.5
             ? Colors.black.withAlpha(180) // Dark waveform for light tracks

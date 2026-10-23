@@ -368,6 +368,7 @@ mod tests {
                     constraints: NativeWindowConstraints::resizable(),
                     initially_visible: false,
                     preferred_surface: NativeSurfacePreference::Require(NativeSurfaceKind::Win32),
+                    stay_on_top: false,
                 },
             )
             .unwrap();

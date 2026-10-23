@@ -5,7 +5,7 @@ use std::time::Duration;
 use crate::api::context::DawContext;
 use crate::api::plugins::opaque::ZeroCopyHandle;
 use crate::api::project::{
-    AudioWaveformUiForAudioProperties, UiAudioHardwareConfig, UiGainEnvelope,
+    AudioWaveformUiForAudioProperties, UiApplicationState, UiAudioHardwareConfig, UiGainEnvelope,
 };
 use crate::frb_generated::StreamSink;
 use flutter_rust_bridge::frb;
@@ -392,6 +392,15 @@ pub fn get_audio_properties(
     })?
 }
 
+/// Deletes an audio source and every clip that plays it as one undoable step, and returns the
+/// project as it is afterwards.
+pub fn remove_audio_source(ctx: &DawContext, source_id: u64) -> Result<UiApplicationState, String> {
+    let mut core = ctx.project_write();
+    audio_waveform_api::remove_audio_source(&mut core, AudioSourceId::from_u64(source_id))
+        .map_err(|e| e.to_string())?;
+    Ok(UiApplicationState::from(core.app_state.clone()))
+}
+
 /// Waveform envelopes of every audio source, keyed by source ID.
 pub fn get_audio_source_envelopes(ctx: &DawContext) -> HashMap<u64, UiGainEnvelope> {
     crate::api::context::read_ctx!(ctx);
@@ -502,4 +511,11 @@ pub fn play_preview_note_generator(
 #[frb(sync)]
 pub fn set_metronome_active(ctx: &DawContext, active: bool) {
     audio_api::set_metronome_active(&mut ctx.runtime_write(), active);
+}
+
+/// Uses the audio file at `file_path` as the metronome sound, or the built-in click when it
+/// is `None`. Offbeats play the file as recorded and downbeats an octave higher.
+pub fn set_metronome_sound(ctx: &DawContext, file_path: Option<String>) -> Result<(), String> {
+    audio_api::set_metronome_sound(&mut ctx.runtime_write(), file_path.as_deref())
+        .map_err(|error| error.to_string())
 }

@@ -4,10 +4,12 @@ use crate::{
         engine::{
             buffer::AudioBuffer,
             helper::*,
+            kernels::apply_fader,
             metronome::MetronomeState,
             modulation::{LiveModulationSource, ModulationState},
             routing::{RouteTargets, RoutingState},
             runtime::*,
+            schedule::{ClipSchedule, clip_span_samples},
             telemetry::{AudioEngineTelemetry, PluginTelemetrySnapshot},
             transport::{PlaybackMode, TransportState},
             types::*,
@@ -68,6 +70,9 @@ pub struct AudioEngine {
 
     /// Offline bounces render what feeds the master bus, skipping its effects and fader.
     pub(super) bypass_master: bool,
+
+    /// Clip spans per track for the current graph and tempo.
+    pub(super) clip_schedule: ClipSchedule,
 }
 
 pub(super) enum RetiredGraphState {
@@ -290,6 +295,7 @@ impl AudioEngine {
             telemetry,
             graph_retirement: graph_retirement_queue(),
             bypass_master: false,
+            clip_schedule: ClipSchedule::default(),
         }
     }
 
@@ -430,6 +436,7 @@ impl AudioEngine {
             telemetry: AudioEngineTelemetry::new_for_export(),
             graph_retirement: graph_retirement_queue(),
             bypass_master,
+            clip_schedule: ClipSchedule::default(),
         };
         engine.recalculate_latencies();
         Ok(engine)
@@ -870,6 +877,7 @@ impl AudioEngine {
         self.transport.song.is_playing = false;
         self.transport.pattern.is_playing = false;
         self.stop_all_active_generators();
+        self.release_manual_parameter_overrides();
 
         self.reset_playhead();
         self.reset_pattern_state();
@@ -1329,18 +1337,20 @@ impl AudioEngine {
                     }
 
                     // A silent channel still runs its effects while a sidechain feeds them,
-                    // so gates and duckers keep reacting to their key signal.
+                    // so gates and duckers keep reacting to their key signal, and while a
+                    // hosted plugin needs its process callback.
                     if !has_signal
                         && self
                             .plugin_state
                             .get_track_effects(track_id.to_u32() as usize)
                             .is_some_and(|effects| {
                                 effects.iter().any(|effect| {
-                                    self.routing.node_has_signal.contains_key(
-                                        &RoutingNode::PluginSidechain(SidechainRoute::TrackEffect(
-                                            *track_id, effect.id,
-                                        )),
-                                    )
+                                    effect.keeps_processing()
+                                        || self.routing.node_has_signal.contains_key(
+                                            &RoutingNode::PluginSidechain(
+                                                SidechainRoute::TrackEffect(*track_id, effect.id),
+                                            ),
+                                        )
                                 })
                             })
                     {
@@ -1428,13 +1438,13 @@ impl AudioEngine {
                         .track_channels
                         .entry(*track_id)
                         .or_default();
-                    apply_volume_and_pan_simd(
+                    let peak = apply_fader(
                         &mut self.workspace.mix_buffer,
                         channels,
                         &mut channel.volume,
                         &mut channel.pan,
                     );
-                    channel.observe_magnitude(&self.workspace.mix_buffer);
+                    channel.observe_peak(peak);
 
                     // Route the track signal to destinations based on routing matrix
                     let workspace = &mut self.workspace;
@@ -1453,18 +1463,9 @@ impl AudioEngine {
                     );
                 }
                 RoutingNode::Bus(bus_id) => {
-                    let bus_buf = match self.workspace.bus_buffers.get(bus_id) {
-                        Some(buf) => buf,
-                        None => {
-                            continue;
-                        }
-                    };
-
-                    // Resize temp buffer if needed and copy
-                    if self.workspace.bus_temp_buffer.len() != buf_len {
-                        self.workspace.bus_temp_buffer.resize(buf_len, 0.0);
+                    if !self.workspace.bus_buffers.contains_key(bus_id) {
+                        continue;
                     }
-                    self.workspace.bus_temp_buffer.copy_from_slice(bus_buf);
 
                     // Get bus channel settings from audio-thread-owned mixer state
                     let bus_settings_channel =
@@ -1477,7 +1478,8 @@ impl AudioEngine {
                     }
 
                     // ================= Bus Tail Handling ===================
-                    // Sidechain input counts as signal so keyed effects keep processing.
+                    // Sidechain input counts as signal so keyed effects keep processing, and
+                    // so does a hosted plugin that needs its process callback.
                     let mut bus_has_signal = self
                         .routing
                         .node_has_signal
@@ -1489,11 +1491,12 @@ impl AudioEngine {
                             .get_bus_effects(bus_id.to_u32() as usize)
                             .is_some_and(|effects| {
                                 effects.iter().any(|effect| {
-                                    self.routing.node_has_signal.contains_key(
-                                        &RoutingNode::PluginSidechain(SidechainRoute::BusEffect(
-                                            *bus_id, effect.id,
-                                        )),
-                                    )
+                                    effect.keeps_processing()
+                                        || self.routing.node_has_signal.contains_key(
+                                            &RoutingNode::PluginSidechain(
+                                                SidechainRoute::BusEffect(*bus_id, effect.id),
+                                            ),
+                                        )
                                 })
                             });
                     let bus_effects_tail = self
@@ -1531,13 +1534,14 @@ impl AudioEngine {
                         }
                     }
 
-                    // Copy to mix_buffer for processing
+                    // The bus sum becomes the working buffer. What the bus keeps instead is
+                    // scratch that the next block clears before anything is routed into it.
                     if self.workspace.mix_buffer.len() != buf_len {
                         self.workspace.mix_buffer.resize(buf_len, 0.0);
                     }
-                    self.workspace
-                        .mix_buffer
-                        .copy_from_slice(&self.workspace.bus_temp_buffer);
+                    if let Some(bus_buffer) = self.workspace.bus_buffers.get_mut(bus_id) {
+                        std::mem::swap(&mut self.workspace.mix_buffer, bus_buffer);
+                    }
 
                     // Apply bus effects
                     if let Some(effects) = self
@@ -1619,13 +1623,13 @@ impl AudioEngine {
 
                     let bus_settings_channel =
                         self.mixer_state.bus_channels.entry(*bus_id).or_default();
-                    apply_volume_and_pan_simd(
+                    let peak = apply_fader(
                         &mut self.workspace.mix_buffer,
                         channels,
                         &mut bus_settings_channel.volume,
                         &mut bus_settings_channel.pan,
                     );
-                    bus_settings_channel.observe_magnitude(&self.workspace.mix_buffer);
+                    bus_settings_channel.observe_peak(peak);
 
                     // Route bus output to destinations
                     let workspace = &mut self.workspace;
@@ -1660,11 +1664,12 @@ impl AudioEngine {
                         .copied()
                         .unwrap_or(false)
                         || self.plugin_state.master_effects.iter().any(|effect| {
-                            self.routing.node_has_signal.contains_key(
-                                &RoutingNode::PluginSidechain(SidechainRoute::MasterEffect(
-                                    effect.id,
-                                )),
-                            )
+                            effect.keeps_processing()
+                                || self.routing.node_has_signal.contains_key(
+                                    &RoutingNode::PluginSidechain(SidechainRoute::MasterEffect(
+                                        effect.id,
+                                    )),
+                                )
                         });
                     let master_effects_tail = self
                         .plugin_state
@@ -1706,7 +1711,6 @@ impl AudioEngine {
                             &mut self.workspace.aux_channel_buffers,
                             &self.modulation.block_param_changes,
                         );
-                        master_bus_mut.observe_magnitude(output);
                     } else {
                         // output silent buffer
                         output.fill(0.0);
@@ -1865,12 +1869,13 @@ impl AudioEngine {
         }
 
         // ==== SIMD Apply Gain and Pan ====
-        apply_volume_and_pan_simd(
+        let peak = apply_fader(
             buffer,
             channels,
             &mut master_bus.volume,
             &mut master_bus.pan,
         );
+        master_bus.observe_peak(peak);
     }
 
     fn resolve_sequencer_events(&mut self, buffer_size: usize) {
@@ -1878,15 +1883,28 @@ impl AudioEngine {
         let end_time = start_time + (buffer_size as u32);
 
         let tracks = std::mem::take(&mut self.current_state.graph.tracks);
+        let samples_per_beat =
+            ((60.0 / self.transport.bpm) * (self.config.sample_rate as f32)) as f64;
+        self.clip_schedule.ensure(
+            &tracks,
+            &self.current_state.graph.clips,
+            samples_per_beat / PPQ,
+        );
 
-        for track in &tracks {
-            self.process_track(track, start_time, end_time);
+        for (track_index, track) in tracks.iter().enumerate() {
+            self.process_track(track_index, track, start_time, end_time);
         }
 
         self.current_state.graph.tracks = tracks;
     }
 
-    fn process_track(&mut self, track: &AudioTrack, start_time: u32, end_time: u32) {
+    fn process_track(
+        &mut self,
+        track_index: usize,
+        track: &AudioTrack,
+        start_time: u32,
+        end_time: u32,
+    ) {
         let track_id = track.id;
 
         let mut gen_voice_idx = None;
@@ -1904,7 +1922,14 @@ impl AudioEngine {
         let samples_per_tick = samples_per_beat / PPQ;
 
         let clip_ids = track.clips();
-        for (index, clip_id) in clip_ids.iter().enumerate() {
+        // Only the clips that can overlap this block; the checks below still decide.
+        for index in self
+            .clip_schedule
+            .candidates(track_index, start_time, end_time)
+        {
+            let Some(clip_id) = clip_ids.get(index) else {
+                break;
+            };
             let Some(clip_data) = self.current_state.graph.clips.get(clip_id) else {
                 continue;
             };
@@ -2076,6 +2101,12 @@ impl AudioEngine {
             self.config.num_channels as usize,
         );
 
+        // Offline renders compensate their own graph and leave the monitor reading alone.
+        if matches!(self.processing_mode, ProcessingMode::Realtime) {
+            super::telemetry::PDC_LATENCY_SAMPLES
+                .store(max_system_latency, std::sync::atomic::Ordering::Relaxed);
+        }
+
         log::info!(
             "[PDC] Recalculated Latencies. Max System Latency: {} samples",
             max_system_latency
@@ -2110,6 +2141,32 @@ impl AudioEngine {
                     self.retire_graph_state(RetiredGraphState::Automation(lane));
                 }
             }
+        }
+    }
+
+    /// Releases every manual parameter override so automation and modulation resume.
+    ///
+    /// Called on transport seek and play/stop, which is the point where a user edit stops
+    /// taking precedence over automation. Runs on the audio thread, but only on transport
+    /// commands, and performs no heap allocation.
+    pub(super) fn release_manual_parameter_overrides(&mut self) {
+        self.modulation.suspended_targets.clear();
+
+        for (_, generator) in self.plugin_state.generators.iter_mut() {
+            generator.plugin.clear_parameter_overrides();
+        }
+        for chain in self
+            .plugin_state
+            .track_effects
+            .iter_mut()
+            .chain(self.plugin_state.bus_effects.iter_mut())
+        {
+            for effect in chain {
+                effect.plugin.clear_parameter_overrides();
+            }
+        }
+        for effect in &mut self.plugin_state.master_effects {
+            effect.plugin.clear_parameter_overrides();
         }
     }
 
@@ -2194,7 +2251,12 @@ impl AudioEngine {
                     );
                 }
                 MasterAutomationTarget::TempoBpm => {
-                    self.transport.bpm = final_value;
+                    // Lanes are normalized; tempo owns the mapping to beats per minute.
+                    self.transport.bpm = karbeat_dsp::interpolation::lerp(
+                        final_value,
+                        TEMPO_AUTOMATION_MIN_BPM,
+                        TEMPO_AUTOMATION_MAX_BPM,
+                    );
                 }
             },
         }
@@ -2283,6 +2345,16 @@ impl AudioEngine {
                 MasterAutomationTarget::TempoBpm => {}
             },
         }
+    }
+
+    /// Whether any effect keeps processing on a silent channel, as hosted plugins do.
+    pub fn has_continuous_effects(&self) -> bool {
+        itertools::chain!(
+            self.plugin_state.track_effects.iter().flatten(),
+            self.plugin_state.bus_effects.iter().flatten(),
+            self.plugin_state.master_effects.iter(),
+        )
+        .any(AudioEffectInstance::keeps_processing)
     }
 
     /// Returns the exact number of samples needed to fully clear all plugin delays and reverb tails.
@@ -2462,40 +2534,6 @@ impl AudioEngine {
             producer.publish();
         }
         self.telemetry.param_telemetry_producers = producers;
-    }
-}
-
-/// Timeline start, length, and source offset of a clip in project samples.
-fn clip_span_samples(time: &ClipTimeUnit, samples_per_tick: f64) -> (u32, u32, u32) {
-    match time {
-        ClipTimeUnit::Samples {
-            start_time,
-            loop_length,
-            offset_start,
-        } => (
-            *start_time as u32,
-            *loop_length as u32,
-            *offset_start as u32,
-        ),
-        ClipTimeUnit::Ticks {
-            start_time,
-            loop_length,
-            offset_start,
-        } => {
-            let st = ((*start_time as f64) * samples_per_tick) as u32;
-            let ll = ((*loop_length as f64) * samples_per_tick) as u32;
-            let os = ((*offset_start as f64) * samples_per_tick) as u32;
-            (st, ll, os)
-        }
-        ClipTimeUnit::Audio {
-            start_tick,
-            loop_length,
-            offset_start,
-        } => (
-            ((*start_tick as f64) * samples_per_tick).round() as u32,
-            *loop_length as u32,
-            *offset_start as u32,
-        ),
     }
 }
 

@@ -1,7 +1,7 @@
 use karbeat_core::{
     audio::backend::{
-        self, AudioDeviceInfo, AudioRuntimeSettings, DeviceStreamStatus, OutputDeviceSelection,
-        OutputHostSelection, RequestedOutputConfig,
+        self, AudioDeviceInfo, AudioRuntimeSettings, OutputDeviceSelection, OutputHostSelection,
+        RequestedOutputConfig,
     },
     context::DawContext,
 };
@@ -75,7 +75,7 @@ pub fn commit_dsp_config(
         let mut runtime = ctx.audio_runtime_settings.write();
         runtime.requested_dsp.sample_rate = sample_rate;
         runtime.requested_dsp.block_size = block_size;
-        runtime.stream_status = DeviceStreamStatus::Starting;
+        runtime.stream_restarting();
     }
     ctx.app_state.audio_config.sample_rate = sample_rate;
     ctx.app_state.audio_config.buffer_size = block_size;
@@ -94,13 +94,23 @@ pub fn select_output(
     if let Some(host_name) = host_name.as_deref()
         && !available_output_hosts()
             .iter()
-            .any(|name| name == host_name)
+            .any(|name| name.eq_ignore_ascii_case(host_name))
     {
         anyhow::bail!("Audio host '{host_name}' is unavailable");
     }
 
     let selected_device = match device_id {
-        None => OutputDeviceSelection::SystemDefault,
+        None => {
+            // A named host without drivers or a running server would otherwise be accepted and
+            // then retried forever by the stream supervisor.
+            if let Some(host_name) = host_name.as_deref() {
+                anyhow::ensure!(
+                    !available_output_devices(Some(host_name))?.is_empty(),
+                    "Audio host '{host_name}' has no output devices. Install or start its driver first."
+                );
+            }
+            OutputDeviceSelection::SystemDefault
+        }
         Some(id) => {
             let devices = available_output_devices(host_name.as_deref())?;
             let device = devices
@@ -138,7 +148,7 @@ pub fn select_output(
         host: selected_host,
         device: selected_device,
     };
-    runtime.stream_status = DeviceStreamStatus::Starting;
+    runtime.stream_restarting();
     Ok(runtime.clone())
 }
 

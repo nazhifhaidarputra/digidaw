@@ -120,16 +120,17 @@ impl ModulationState {
         }
 
         for link in &self.active_links {
+            // A target the user changed by hand ignores every source until the transport
+            // resets, not just timeline automation lanes.
+            if self.suspended_targets.contains(&link.target) {
+                continue;
+            }
             if let Some((source, output)) = self.active_sources.get(&link.source_id) {
                 let entry = accumulators
                     .entry(link.target.clone())
                     .or_insert((None, 0.0));
                 match source {
-                    LiveModulationSource::Automation { .. } => {
-                        if !self.suspended_targets.contains(&link.target) {
-                            entry.0 = Some(*output);
-                        }
-                    }
+                    LiveModulationSource::Automation { .. } => entry.0 = Some(*output),
                     _ => entry.1 += output * link.depth,
                 }
             }
