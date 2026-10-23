@@ -3,7 +3,7 @@
 #
 # Removes the app, the `digidaw` launcher, and the desktop menu entry and icon. Settings and crash
 # recovery data are kept unless --purge is given. The system libraries install.sh installed
-# (GTK 3, ALSA, FFTW, libsamplerate) are left in place because other software may use them.
+# (GTK 3, ALSA, FFTW, libsamplerate, lilv) are left in place because other software may use them.
 # build_linux.sh ships this script in the archive as uninstall.sh, and install.sh keeps a
 # copy in the install folder.
 set -euo pipefail
@@ -35,6 +35,9 @@ if [ -L "$LAUNCHER" ] && [ "$(readlink "$LAUNCHER")" = "$INSTALL_DIR/karbeat" ];
     rm -f "$LAUNCHER"
 fi
 rm -f "${DESKTOP_ENTRIES[@]}" "$ICON"
+if command -v update-desktop-database >/dev/null 2>&1; then
+    update-desktop-database "$DATA_HOME/applications" >/dev/null 2>&1 || true
+fi
 rm -rf "$INSTALL_DIR"
 
 if [ "$PURGE" = true ]; then
@@ -56,4 +59,4 @@ echo -e "\033[1;32m==> SUCCESS: DigiDAW has been uninstalled.\033[0m"
 if [ "$PURGE" = false ]; then
     echo "Settings and crash recovery data were kept; run with --purge to delete them."
 fi
-echo "Your projects and the system libraries (GTK 3, ALSA, FFTW, libsamplerate) were not touched."
+echo "Your projects and the system libraries (GTK 3, ALSA, FFTW, libsamplerate, lilv) were not touched."

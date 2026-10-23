@@ -41,7 +41,7 @@ DigiDAW is currently released for **Linux x64 only**, as it is the only platform
 
 The installer:
 
-- Installs GTK 3, ALSA, FFTW, libsamplerate, and lilv (the LV2 plugin library) with your package manager (apt, dnf, pacman, or zypper). On other distributions, install them yourself before running DigiDAW.
+- Installs GTK 3, ALSA, FFTW, libsamplerate, and lilv (the LV2 plugin library) with your package manager (apt, dnf, pacman, or zypper). On RHEL and its rebuilds, enable EPEL first so `lilv-libs` is available; on immutable Fedora systems, layer the packages with `rpm-ostree`. On other distributions, install them yourself before running DigiDAW.
 - Copies DigiDAW to `~/.local/share/digidaw`.
 - Adds a `digidaw` command in `~/.local/bin` and a DigiDAW entry to your app menu.
 - Checks that every library DigiDAW needs can be found, and lists any that are missing.
