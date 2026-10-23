@@ -19,9 +19,17 @@ class _BrowserSampleRow extends _BrowserTreeRow {
 }
 
 class SampleBrowserPanel extends ConsumerWidget {
-  const SampleBrowserPanel({super.key, required this.scrollController});
+  const SampleBrowserPanel({
+    super.key,
+    required this.scrollController,
+    this.showHeader = true,
+  });
 
   final ScrollController scrollController;
+
+  /// Whether to show the standalone panel header. The unified right panel
+  /// provides its own header and tabs.
+  final bool showHeader;
 
   Future<void> _previewSample(
     BuildContext context,
@@ -51,7 +59,7 @@ class SampleBrowserPanel extends ConsumerWidget {
     final dawContext = ref.read(projectProvider).hasValue
         ? ref.read(projectProvider.notifier).dawContext
         : null;
-    ref.read(workspaceStateProvider.notifier).closeBrowserPanel();
+    ref.read(workspaceStateProvider.notifier).closeRightPanel();
     if (dawContext == null) return;
     try {
       await audio_api.stopAllPreviews(ctx: dawContext);
@@ -96,40 +104,44 @@ class SampleBrowserPanel extends ConsumerWidget {
       color: colors.surfaceContainerLow,
       child: Column(
         children: [
-          Container(
-            height: 30,
-            padding: const EdgeInsets.only(left: 10, right: 2),
-            color: colors.surfaceContainer,
-            child: Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    'Sample Browser',
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(color: colors.onSurface, fontSize: 12),
+          if (showHeader)
+            Container(
+              height: 30,
+              padding: const EdgeInsets.only(left: 10, right: 2),
+              color: colors.surfaceContainer,
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      'Sample Browser',
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(color: colors.onSurface, fontSize: 12),
+                    ),
                   ),
-                ),
-                IconButton(
-                  tooltip: 'Add sample directory',
-                  padding: EdgeInsets.zero,
-                  visualDensity: VisualDensity.compact,
-                  onPressed: state.isLoadingDirectory
-                      ? null
-                      : () => ref
-                            .read(workspaceStateProvider.notifier)
-                            .addSampleDirectory(),
-                  icon: const Icon(Icons.create_new_folder_outlined, size: 17),
-                ),
-                IconButton(
-                  tooltip: 'Close sample browser',
-                  padding: EdgeInsets.zero,
-                  visualDensity: VisualDensity.compact,
-                  onPressed: () => unawaited(_close(ref)),
-                  icon: const Icon(Icons.close, size: 17),
-                ),
-              ],
+                  IconButton(
+                    tooltip: 'Add sample directory',
+                    padding: EdgeInsets.zero,
+                    visualDensity: VisualDensity.compact,
+                    onPressed: state.isLoadingDirectory
+                        ? null
+                        : () => ref
+                              .read(workspaceStateProvider.notifier)
+                              .addSampleDirectory(),
+                    icon: const Icon(
+                      Icons.create_new_folder_outlined,
+                      size: 17,
+                    ),
+                  ),
+                  IconButton(
+                    tooltip: 'Close sample browser',
+                    padding: EdgeInsets.zero,
+                    visualDensity: VisualDensity.compact,
+                    onPressed: () => unawaited(_close(ref)),
+                    icon: const Icon(Icons.close, size: 17),
+                  ),
+                ],
+              ),
             ),
-          ),
           if (state.isLoadingDirectory)
             const LinearProgressIndicator(minHeight: 2),
           Expanded(

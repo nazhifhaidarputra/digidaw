@@ -1114,6 +1114,7 @@ impl ApplicationState {
     ///
     /// The earliest copied clip is aligned to `start_pos`; negative shifted positions clamp to zero.
     /// Raw units are used, so callers must supply a position compatible with the copied clip units.
+    /// Clips whose content does not belong to the target track type are rejected.
     pub fn paste_clip_batch(
         &mut self,
         target_track_id: TrackId,
@@ -1126,6 +1127,19 @@ impl ApplicationState {
 
         if copied_clips.is_empty() {
             return Err(anyhow::anyhow!("Clipboard is empty"));
+        }
+
+        let target_track = self
+            .tracks
+            .get(target_track_id)
+            .ok_or_else(|| anyhow!("Target track not found"))?;
+        if copied_clips
+            .iter()
+            .any(|clip| !target_track.accepts_clip(clip))
+        {
+            return Err(anyhow!(
+                "Cannot paste clips of a different type onto this track"
+            ));
         }
 
         let min_time_raw = copied_clips

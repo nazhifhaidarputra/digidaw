@@ -27,7 +27,11 @@ class _AudioTrackSlotState extends ConsumerState<AudioTrackSlot> {
   List<UiClip> _drawSourceClips = const [];
   List<int> _drawCopyStartTicks = const [];
   bool _isCommittingDrawCopies = false;
+  bool _drawFromEmptySpace = false;
+  int _drawAnchorTick = 0;
   int? _rangePointer;
+  int? _deletePointer;
+  final Set<int> _deleteSwipeClipIds = <int>{};
 
   int _browserDropTick(Offset globalOffset, double zoomLevel) {
     final renderBox = context.findRenderObject() as RenderBox;
@@ -41,28 +45,24 @@ class _AudioTrackSlotState extends ConsumerState<AudioTrackSlot> {
     return ticks;
   }
 
-  void _handleEmptySpaceClick({
-    required BuildContext context,
-    required double localDx,
-    required double zoomLevel,
-  }) {
-    int startTime = (localDx * zoomLevel).round();
-
-    if (ref.read(workspaceStateProvider).snapToGrid) {
-      startTime = _snapTick(startTime, ref.read(workspaceStateProvider));
-    }
-
-    ref
-        .read(trackListStateProvider.notifier)
-        .createEmptyPatternClip(trackId: widget.trackId, startTime: startTime);
-  }
-
   int? _gridStep(WorkspaceState workspaceState) {
     if (!workspaceState.snapToGrid || workspaceState.gridSize.value <= 0) {
       return null;
     }
     final step = (960.0 * 4.0) / workspaceState.gridSize.value;
     return step > 0 ? step.round() : null;
+  }
+
+  int _pointerTick(PointerEvent event, double zoomLevel) =>
+      math.max(0.0, event.localPosition.dx * zoomLevel).round();
+
+  void _recordTimelineClick(PointerEvent event, double zoomLevel) {
+    ref
+        .read(trackListStateProvider.notifier)
+        .recordTimelineClick(
+          trackId: widget.trackId,
+          tick: _pointerTick(event, zoomLevel),
+        );
   }
 
   UiClip? _clipAtTick({
@@ -103,39 +103,93 @@ class _AudioTrackSlotState extends ConsumerState<AudioTrackSlot> {
 
     final tempo = ref.read(transportProvider).value?.state?.bpm ?? 120.0;
     final sampleRate = ref.read(transportProvider).value?.sampleRate ?? 48000;
-    final tick = (event.localPosition.dx * zoomLevel).round();
+    final tick = _pointerTick(event, zoomLevel);
     final hitClip = _clipAtTick(
       clips: track.clips,
       tick: tick,
       tempo: tempo,
       sampleRate: sampleRate,
     );
-    if (hitClip == null) return;
 
     final selection = ref.read(trackListStateProvider);
-    final hitIsSelected =
-        selection.selectedTrackId == widget.trackId &&
-        selection.selectedClipIds.contains(hitClip.id);
+    List<UiClip> sourceClips;
+    var fromEmptySpace = false;
 
-    final sourceIds = hitIsSelected
-        ? selection.selectedClipIds.toSet()
-        : <int>{hitClip.id};
+    if (hitClip == null) {
+      // Drawing in empty space repeats the last selected clip group on this
+      // track.
+      final selectionOnTrack = selection.selectedTrackId == widget.trackId;
+      final trackedIds = <int>{};
+      if (selectionOnTrack) {
+        if (selection.selectedClipIds.isNotEmpty) {
+          trackedIds.addAll(selection.selectedClipIds);
+        } else if (selection.focusClipId != null) {
+          trackedIds.add(selection.focusClipId!);
+        }
+      }
+      final trackedClips = track.clips
+          .where((clip) => trackedIds.contains(clip.id))
+          .toList(growable: false);
+      if (trackedClips.isEmpty) {
+        // Nothing to repeat: keep the gesture alive so a plain click can
+        // still create an empty pattern clip on a MIDI track.
+        setState(() {
+          _drawPointer = event.pointer;
+          _drawSourceClips = const [];
+          _drawCopyStartTicks = const [];
+          _drawFromEmptySpace = true;
+          _drawAnchorTick = _snapTick(tick, ref.read(workspaceStateProvider));
+        });
+        return;
+      }
+      sourceClips = trackedClips;
+      fromEmptySpace = true;
+    } else {
+      final hitIsSelected =
+          selection.selectedTrackId == widget.trackId &&
+          selection.selectedClipIds.contains(hitClip.id);
 
-    if (!hitIsSelected) {
-      ref
-          .read(trackListStateProvider.notifier)
-          .selectClip(trackId: widget.trackId, clipId: hitClip.id);
+      final sourceIds = hitIsSelected
+          ? selection.selectedClipIds.toSet()
+          : <int>{hitClip.id};
+
+      if (!hitIsSelected) {
+        ref
+            .read(trackListStateProvider.notifier)
+            .selectClip(trackId: widget.trackId, clipId: hitClip.id);
+      }
+
+      sourceClips = track.clips
+          .where((clip) => sourceIds.contains(clip.id))
+          .toList(growable: false);
+      if (sourceClips.isEmpty) return;
     }
 
-    final sourceClips = track.clips
-        .where((clip) => sourceIds.contains(clip.id))
+    final workspaceState = ref.read(workspaceStateProvider);
+    final anchorTick = fromEmptySpace ? _snapTick(tick, workspaceState) : 0;
+    final sourceRanges = sourceClips
+        .map((clip) => _clipRangeInTicks(clip, tempo, sampleRate))
         .toList(growable: false);
-    if (sourceClips.isEmpty) return;
+    final sourceIds = sourceClips.map((clip) => clip.id).toSet();
+    final occupiedRanges = track.clips
+        .where((clip) => !sourceIds.contains(clip.id))
+        .map((clip) => _clipRangeInTicks(clip, tempo, sampleRate))
+        .toList(growable: false);
 
     setState(() {
       _drawPointer = event.pointer;
       _drawSourceClips = sourceClips;
-      _drawCopyStartTicks = const [];
+      _drawFromEmptySpace = fromEmptySpace;
+      _drawAnchorTick = anchorTick;
+      _drawCopyStartTicks = fromEmptySpace
+          ? _drawAnchoredCopyStarts(
+              sourceRanges: sourceRanges,
+              occupiedRanges: [...occupiedRanges, ...sourceRanges],
+              anchorTick: anchorTick,
+              dragTick: anchorTick,
+              gridStep: _gridStep(workspaceState),
+            )
+          : const [];
     });
   }
 
@@ -162,12 +216,21 @@ class _AudioTrackSlotState extends ConsumerState<AudioTrackSlot> {
         .map((clip) => _clipRangeInTicks(clip, tempo, sampleRate))
         .toList(growable: false);
     final workspaceState = ref.read(workspaceStateProvider);
-    final starts = _drawSwipeCopyStarts(
-      sourceRanges: sourceRanges,
-      occupiedRanges: occupiedRanges,
-      dragTick: (event.localPosition.dx * zoomLevel).round(),
-      gridStep: _gridStep(workspaceState),
-    );
+    final dragTick = _pointerTick(event, zoomLevel);
+    final starts = _drawFromEmptySpace
+        ? _drawAnchoredCopyStarts(
+            sourceRanges: sourceRanges,
+            occupiedRanges: [...occupiedRanges, ...sourceRanges],
+            anchorTick: _drawAnchorTick,
+            dragTick: dragTick,
+            gridStep: _gridStep(workspaceState),
+          )
+        : _drawSwipeCopyStarts(
+            sourceRanges: sourceRanges,
+            occupiedRanges: occupiedRanges,
+            dragTick: dragTick,
+            gridStep: _gridStep(workspaceState),
+          );
 
     if (!listEquals(starts, _drawCopyStartTicks)) {
       setState(() => _drawCopyStartTicks = starts);
@@ -187,15 +250,33 @@ class _AudioTrackSlotState extends ConsumerState<AudioTrackSlot> {
 
     final sourceClips = _drawSourceClips;
     final startsInTicks = _drawCopyStartTicks;
+    final anchorTick = _drawAnchorTick;
     setState(() {
       _drawPointer = null;
       _drawSourceClips = const [];
       _drawCopyStartTicks = const [];
+      _drawFromEmptySpace = false;
       _isCommittingDrawCopies =
           sourceClips.isNotEmpty && startsInTicks.isNotEmpty;
     });
 
-    if (sourceClips.isEmpty || startsInTicks.isEmpty) return;
+    if (sourceClips.isEmpty) {
+      // No clip to repeat: keep the draw tool's fallback of creating an empty
+      // pattern clip, but only where that content belongs.
+      if (track.trackType == UiTrackType.midi) {
+        await ref
+            .read(trackListStateProvider.notifier)
+            .createEmptyPatternClip(
+              trackId: widget.trackId,
+              startTime: anchorTick,
+            );
+      }
+      return;
+    }
+    if (startsInTicks.isEmpty) {
+      _isCommittingDrawCopies = false;
+      return;
+    }
 
     final notifier = ref.read(trackListStateProvider.notifier);
     final sourceIds = sourceClips
@@ -263,6 +344,7 @@ class _AudioTrackSlotState extends ConsumerState<AudioTrackSlot> {
       _drawPointer = null;
       _drawSourceClips = const [];
       _drawCopyStartTicks = const [];
+      _drawFromEmptySpace = false;
     });
   }
 
@@ -316,6 +398,60 @@ class _AudioTrackSlotState extends ConsumerState<AudioTrackSlot> {
     if (_rangePointer != event.pointer) return;
     _rangePointer = null;
     ref.read(rangeSelectProvider.notifier).cancel();
+  }
+
+  void _startDeleteSwipe(PointerEvent event, UiTrack track, double zoomLevel) {
+    if (_deletePointer != null || (event.buttons & kPrimaryButton) == 0) return;
+    _deletePointer = event.pointer;
+    _deleteSwipeClipIds.clear();
+    _collectDeleteClip(event, track, zoomLevel);
+  }
+
+  void _updateDeleteSwipe(PointerEvent event, UiTrack track, double zoomLevel) {
+    if (_deletePointer != event.pointer) return;
+    _collectDeleteClip(event, track, zoomLevel);
+  }
+
+  /// Adds the clip under the pointer to the swipe-delete set.
+  void _collectDeleteClip(PointerEvent event, UiTrack track, double zoomLevel) {
+    final tempo = ref.read(transportProvider).value?.state?.bpm ?? 120.0;
+    final sampleRate = ref.read(transportProvider).value?.sampleRate ?? 48000;
+    final hitClip = _clipAtTick(
+      clips: track.clips,
+      tick: _pointerTick(event, zoomLevel),
+      tempo: tempo,
+      sampleRate: sampleRate,
+    );
+    if (hitClip == null || _deleteSwipeClipIds.contains(hitClip.id)) return;
+    setState(() => _deleteSwipeClipIds.add(hitClip.id));
+  }
+
+  Future<void> _finishDeleteSwipe(
+    PointerEvent event,
+    UiTrack track,
+    double zoomLevel,
+  ) async {
+    if (_deletePointer != event.pointer) return;
+    _collectDeleteClip(event, track, zoomLevel);
+
+    final clipIds = _deleteSwipeClipIds.toList(growable: false);
+    setState(() {
+      _deletePointer = null;
+      _deleteSwipeClipIds.clear();
+    });
+    if (clipIds.isEmpty) return;
+
+    await ref
+        .read(trackListStateProvider.notifier)
+        .deleteClipBatch(widget.trackId, clipIds);
+  }
+
+  void _cancelDeleteSwipe(PointerEvent event) {
+    if (_deletePointer != event.pointer) return;
+    setState(() {
+      _deletePointer = null;
+      _deleteSwipeClipIds.clear();
+    });
   }
 
   @override
@@ -475,13 +611,7 @@ class _AudioTrackSlotState extends ConsumerState<AudioTrackSlot> {
                         return;
                       }
 
-                      if (selectedTool == ToolSelection.draw) {
-                        _handleEmptySpaceClick(
-                          context: context,
-                          localDx: details.localPosition.dx,
-                          zoomLevel: zoomLevel,
-                        );
-                      } else {
+                      if (selectedTool != ToolSelection.draw) {
                         ref
                             .read(trackListStateProvider.notifier)
                             .deselectAllClips();
@@ -530,6 +660,7 @@ class _AudioTrackSlotState extends ConsumerState<AudioTrackSlot> {
                   compact: widget.collapsed,
                   selectedTool: selectedTool,
                   isSelected: isSelected,
+                  isPendingDelete: _deleteSwipeClipIds.contains(clip.id),
                   selectedClipIds: selectedClipIds,
                   horizontalScrollController: widget.horizontalScrollController,
                   waveformMap: waveformMap,
@@ -612,30 +743,57 @@ class _AudioTrackSlotState extends ConsumerState<AudioTrackSlot> {
       },
     );
 
-    if (selectedTool != ToolSelection.draw || placementState.isPlacing) {
-      if (selectedTool != ToolSelection.select || placementState.isPlacing) {
-        return trackSlot;
+    Widget toolSlot = trackSlot;
+    if (!placementState.isPlacing) {
+      switch (selectedTool) {
+        case ToolSelection.draw:
+          toolSlot = Listener(
+            behavior: HitTestBehavior.deferToChild,
+            onPointerDown: (event) => _startDrawSwipe(
+              event: event,
+              track: track,
+              zoomLevel: zoomLevel,
+            ),
+            onPointerMove: (event) => _updateDrawSwipe(
+              event: event,
+              track: track,
+              zoomLevel: zoomLevel,
+            ),
+            onPointerUp: (event) => unawaited(_finishDrawSwipe(event, track)),
+            onPointerCancel: _cancelDrawSwipe,
+            child: trackSlot,
+          );
+        case ToolSelection.delete:
+          toolSlot = Listener(
+            behavior: HitTestBehavior.deferToChild,
+            onPointerDown: (event) =>
+                _startDeleteSwipe(event, track, zoomLevel),
+            onPointerMove: (event) =>
+                _updateDeleteSwipe(event, track, zoomLevel),
+            onPointerUp: (event) =>
+                unawaited(_finishDeleteSwipe(event, track, zoomLevel)),
+            onPointerCancel: _cancelDeleteSwipe,
+            child: trackSlot,
+          );
+        case ToolSelection.select:
+          toolSlot = Listener(
+            behavior: HitTestBehavior.deferToChild,
+            onPointerDown: (event) => _startRangeSelect(event, zoomLevel),
+            onPointerMove: (event) => _updateRangeSelect(event, zoomLevel),
+            onPointerUp: (event) => _finishRangeSelect(event, track, zoomLevel),
+            onPointerCancel: _cancelRangeSelect,
+            child: trackSlot,
+          );
+        default:
+          break;
       }
-
-      return Listener(
-        behavior: HitTestBehavior.deferToChild,
-        onPointerDown: (event) => _startRangeSelect(event, zoomLevel),
-        onPointerMove: (event) => _updateRangeSelect(event, zoomLevel),
-        onPointerUp: (event) => _finishRangeSelect(event, track, zoomLevel),
-        onPointerCancel: _cancelRangeSelect,
-        child: trackSlot,
-      );
     }
 
+    // Every click on a track records where Ctrl+V should paste.
     return Listener(
       behavior: HitTestBehavior.deferToChild,
-      onPointerDown: (event) =>
-          _startDrawSwipe(event: event, track: track, zoomLevel: zoomLevel),
-      onPointerMove: (event) =>
-          _updateDrawSwipe(event: event, track: track, zoomLevel: zoomLevel),
-      onPointerUp: (event) => unawaited(_finishDrawSwipe(event, track)),
-      onPointerCancel: _cancelDrawSwipe,
-      child: trackSlot,
+      onPointerDown: (event) => _recordTimelineClick(event, zoomLevel),
+      child: toolSlot,
     );
   }
 }

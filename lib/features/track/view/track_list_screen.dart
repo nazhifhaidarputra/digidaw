@@ -12,8 +12,10 @@ import 'package:karbeat/core/widgets/scroll_physics/unclamped_never_scrollable_p
 import 'package:karbeat/core/widgets/rainbow_sparkle.dart';
 import 'package:karbeat/features/mixer/view/mixer_channel_context_menu.dart';
 import 'package:karbeat/features/plugins/widgets/plugin_browser_dialog.dart';
+import 'package:karbeat/features/source/services/audio_source_import.dart';
 import 'package:karbeat/features/source/services/audio_waveform_services.dart';
 import 'package:karbeat/features/source/view/audio_properties_screen.dart';
+import 'package:karbeat/features/source/view/source_list_panel.dart';
 import 'package:karbeat/features/track/view/automation_lane_context_menu.dart';
 import 'package:karbeat/features/track/view/automation_lane_header.dart';
 import 'package:karbeat/features/track/view/automation_lane_slot.dart';
@@ -68,6 +70,7 @@ part 'track_list_timeline_annotations.dart';
 part 'track_list_audio_slot.dart';
 part 'track_list_interactive_clip.dart';
 part 'track_list_clip_renderer.dart';
+part 'right_side_panel.dart';
 // part 'track_list_grouped_batch_overlay.dart';
 
 class _ClipTickRange {
@@ -116,6 +119,57 @@ List<int> _drawSwipeCopyStarts({
 
   final starts = <int>[];
   int nextStart = alignForward(sourceEnd);
+
+  // A practical guard against building an unbounded preview if a malformed
+  // pointer event reports an extremely large timeline coordinate.
+  const maxCopiesPerSwipe = 1000;
+  while (nextStart <= dragTick && starts.length < maxCopiesPerSwipe) {
+    final copyRanges = relativeRanges
+        .map((range) => range.shifted(nextStart))
+        .toList(growable: false);
+    final collides = copyRanges.any(
+      (copy) => occupiedRanges.any(copy.overlaps),
+    );
+    if (collides) break;
+
+    starts.add(nextStart);
+    nextStart = alignForward(nextStart + groupLength);
+  }
+
+  return starts;
+}
+
+/// Calculates the leading tick of every copy in a draw swipe that starts on
+/// empty space. The first copy lands at [anchorTick] and each following copy
+/// begins where the previous one ends, so repeated draws never overlap.
+List<int> _drawAnchoredCopyStarts({
+  required List<_ClipTickRange> sourceRanges,
+  required List<_ClipTickRange> occupiedRanges,
+  required int anchorTick,
+  required int dragTick,
+  int? gridStep,
+}) {
+  if (sourceRanges.isEmpty) return const [];
+
+  final sourceStart = sourceRanges.map((range) => range.start).reduce(math.min);
+  final sourceEnd = sourceRanges.map((range) => range.end).reduce(math.max);
+  final groupLength = sourceEnd - sourceStart;
+  if (groupLength <= 0) return const [];
+
+  int alignForward(int tick) {
+    if (gridStep == null || gridStep <= 0) return tick;
+    return ((tick + gridStep - 1) ~/ gridStep) * gridStep;
+  }
+
+  final relativeRanges = sourceRanges
+      .map(
+        (range) =>
+            _ClipTickRange(range.start - sourceStart, range.end - sourceStart),
+      )
+      .toList(growable: false);
+
+  final starts = <int>[];
+  int nextStart = alignForward(anchorTick < 0 ? 0 : anchorTick);
 
   // A practical guard against building an unbounded preview if a malformed
   // pointer event reports an extremely large timeline coordinate.

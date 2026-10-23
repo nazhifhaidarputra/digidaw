@@ -28,9 +28,10 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
   late ScrollController _rulerController; // Controller 1: Top Ruler
   late ScrollController _trackContentController; // Controller 2: Bottom Content
 
-  // Sample Browser scroll controller (not linked with other scroll controller like the header and audio slot)
+  // Right panel scroll controllers (browser and source list tabs).
   late ScrollController _browserPanelController;
-  ProviderSubscription<bool>? _browserPanelSubscription;
+  late ScrollController _sourcePanelController;
+  ProviderSubscription<bool>? _rightPanelSubscription;
   ProviderSubscription<bool>? _mixerPanelSubscription;
   late final DawContext _dawContext;
 
@@ -61,10 +62,8 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
     super.initState();
     _dawContext = ref.read(projectProvider.notifier).dawContext;
     _trackOrderController = ValueNotifier(List.unmodifiable(widget.trackIds));
-    final browserExpanded = ref.read(
-      workspaceStateProvider.select(
-        (state) => state.browserPanelState.isExpanded,
-      ),
+    final rightPanelExpanded = ref.read(
+      workspaceStateProvider.select((state) => state.isRightPanelExpanded),
     );
     _trackSplitViewController = MultiSplitViewController(
       areas: [
@@ -72,8 +71,8 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
           _mixerPanelArea(),
         Area(size: widget.headerWidth, min: 160, max: 300, data: 'header'),
         Area(min: 200, data: 'timeline'),
-        if (browserExpanded)
-          Area(size: 300, min: 220, max: 480, data: 'browser'),
+        if (rightPanelExpanded)
+          Area(size: 300, min: 220, max: 480, data: 'rightPanel'),
       ],
     );
 
@@ -85,13 +84,12 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
     _rulerController = _horizontalControllers.addAndGet();
     _trackContentController = _horizontalControllers.addAndGet();
     _browserPanelController = ScrollController();
+    _sourcePanelController = ScrollController();
     _trackContentController.addListener(_handleScrollExpansion);
     HardwareKeyboard.instance.addHandler(_handleKeyEvents);
-    _browserPanelSubscription = ref.listenManual<bool>(
-      workspaceStateProvider.select(
-        (state) => state.browserPanelState.isExpanded,
-      ),
-      (_, isExpanded) => _setBrowserPanelExpanded(isExpanded),
+    _rightPanelSubscription = ref.listenManual<bool>(
+      workspaceStateProvider.select((state) => state.isRightPanelExpanded),
+      (_, isExpanded) => _setRightPanelExpanded(isExpanded),
     );
     _mixerPanelSubscription = ref.listenManual<bool>(
       mixerChannelPanelTargetProvider.select((target) => target != null),
@@ -122,16 +120,16 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
     }
   }
 
-  void _setBrowserPanelExpanded(bool isExpanded) {
-    final browserIndex = _trackSplitViewController.areas.indexWhere(
-      (area) => area.data == 'browser',
+  void _setRightPanelExpanded(bool isExpanded) {
+    final panelIndex = _trackSplitViewController.areas.indexWhere(
+      (area) => area.data == 'rightPanel',
     );
-    if (isExpanded && browserIndex == -1) {
+    if (isExpanded && panelIndex == -1) {
       _trackSplitViewController.addArea(
-        Area(size: 300, min: 220, max: 480, data: 'browser'),
+        Area(size: 300, min: 220, max: 480, data: 'rightPanel'),
       );
-    } else if (!isExpanded && browserIndex != -1) {
-      _trackSplitViewController.removeAreaAt(browserIndex);
+    } else if (!isExpanded && panelIndex != -1) {
+      _trackSplitViewController.removeAreaAt(panelIndex);
     }
   }
 
@@ -149,7 +147,7 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
 
   @override
   void dispose() {
-    _browserPanelSubscription?.close();
+    _rightPanelSubscription?.close();
     _mixerPanelSubscription?.close();
     _trackOrderController.dispose();
     _trackSplitViewController.dispose();
@@ -159,6 +157,7 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
     _rulerController.dispose();
     _trackContentController.dispose();
     _browserPanelController.dispose();
+    _sourcePanelController.dispose();
     unawaited(_stopBrowserPreviews());
     HardwareKeyboard.instance.removeHandler(_handleKeyEvents);
     super.dispose();
@@ -367,20 +366,19 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
             ),
             const SizedBox(width: 16),
             TextButton.icon(
-              onPressed: () => ref
-                  .read(workspaceStateProvider.notifier)
-                  .toggleBrowserPanel(),
+              onPressed: () =>
+                  ref.read(workspaceStateProvider.notifier).toggleRightPanel(),
               icon: Icon(
-                Icons.library_music,
+                Icons.vertical_split,
                 size: 16,
-                color: workspaceState.browserPanelState.isExpanded
+                color: workspaceState.isRightPanelExpanded
                     ? colors.primary
                     : colors.onSurfaceVariant,
               ),
               label: Text(
-                'Samples',
+                'Right Panel',
                 style: TextStyle(
-                  color: workspaceState.browserPanelState.isExpanded
+                  color: workspaceState.isRightPanelExpanded
                       ? colors.primary
                       : colors.onSurfaceVariant,
                   fontSize: 12,
@@ -1452,9 +1450,10 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
                     // Areas paint in reverse order, so without a clip the
                     // playhead and cut line overflow onto the browser panel.
                     return ClipRect(child: _buildTimelineArea(context));
-                  case 'browser':
-                    return SampleBrowserPanel(
-                      scrollController: _browserPanelController,
+                  case 'rightPanel':
+                    return RightSidePanel(
+                      browserScrollController: _browserPanelController,
+                      sourceScrollController: _sourcePanelController,
                     );
                   default:
                     return const SizedBox();

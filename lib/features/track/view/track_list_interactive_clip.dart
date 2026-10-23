@@ -9,6 +9,7 @@ class _InteractiveClip extends ConsumerStatefulWidget {
   final double height;
   final ToolSelection selectedTool;
   final bool isSelected;
+  final bool isPendingDelete;
   final List<int> selectedClipIds;
   final ScrollController horizontalScrollController;
   final Map<int, WaveformHandle> waveformMap;
@@ -27,6 +28,7 @@ class _InteractiveClip extends ConsumerStatefulWidget {
     required this.selectedClipIds,
     required this.horizontalScrollController,
     required this.waveformMap,
+    this.isPendingDelete = false,
     this.compact = false,
   });
 
@@ -255,7 +257,11 @@ class _InteractiveClipState extends ConsumerState<_InteractiveClip> {
       width: safeWidth,
       child: Opacity(
         // Leader becomes invisible (has overlay), followers become semi-transparent
-        opacity: isPartOfBatchDrag ? 0.3 : 1.0,
+        opacity: widget.isPendingDelete
+            ? 0.2
+            : isPartOfBatchDrag
+            ? 0.3
+            : 1.0,
         child: IgnorePointer(
           ignoring: placementState.isDraggingExisting,
           child: MouseRegion(
@@ -340,14 +346,7 @@ class _InteractiveClipState extends ConsumerState<_InteractiveClip> {
           _openClipEditor();
           return;
         }
-        if (widget.selectedTool == ToolSelection.delete) {
-          final state = ref.read(trackListStateProvider.notifier);
-          if (widget.isSelected && widget.selectedClipIds.length > 1) {
-            state.deleteSelectedClips();
-          } else {
-            state.deleteClip(widget.trackId, widget.clip.id);
-          }
-        } else if (widget.selectedTool == ToolSelection.select) {
+        if (widget.selectedTool == ToolSelection.select) {
           final state = ref.read(trackListStateProvider.notifier);
           final renderBox = context.findRenderObject() as RenderBox?;
           final tapPosition =

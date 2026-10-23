@@ -540,7 +540,7 @@ as IList<BrowserSample>,
 /// @nodoc
 mixin _$BrowserPanelState {
 
- bool get isExpanded; bool get isLoadingDirectory; IMap<String, FileTree> get directories; ISet<String> get expandedDirectoryPaths; String? get selectedSamplePath;
+ bool get isLoadingDirectory; IMap<String, FileTree> get directories; ISet<String> get expandedDirectoryPaths; String? get selectedSamplePath;
 /// Create a copy of BrowserPanelState
 /// with the given fields replaced by the non-null parameter values.
 @JsonKey(includeFromJson: false, includeToJson: false)
@@ -551,16 +551,16 @@ $BrowserPanelStateCopyWith<BrowserPanelState> get copyWith => _$BrowserPanelStat
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is BrowserPanelState&&(identical(other.isExpanded, isExpanded) || other.isExpanded == isExpanded)&&(identical(other.isLoadingDirectory, isLoadingDirectory) || other.isLoadingDirectory == isLoadingDirectory)&&(identical(other.directories, directories) || other.directories == directories)&&const DeepCollectionEquality().equals(other.expandedDirectoryPaths, expandedDirectoryPaths)&&(identical(other.selectedSamplePath, selectedSamplePath) || other.selectedSamplePath == selectedSamplePath));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is BrowserPanelState&&(identical(other.isLoadingDirectory, isLoadingDirectory) || other.isLoadingDirectory == isLoadingDirectory)&&(identical(other.directories, directories) || other.directories == directories)&&const DeepCollectionEquality().equals(other.expandedDirectoryPaths, expandedDirectoryPaths)&&(identical(other.selectedSamplePath, selectedSamplePath) || other.selectedSamplePath == selectedSamplePath));
 }
 
 
 @override
-int get hashCode => Object.hash(runtimeType,isExpanded,isLoadingDirectory,directories,const DeepCollectionEquality().hash(expandedDirectoryPaths),selectedSamplePath);
+int get hashCode => Object.hash(runtimeType,isLoadingDirectory,directories,const DeepCollectionEquality().hash(expandedDirectoryPaths),selectedSamplePath);
 
 @override
 String toString() {
-  return 'BrowserPanelState(isExpanded: $isExpanded, isLoadingDirectory: $isLoadingDirectory, directories: $directories, expandedDirectoryPaths: $expandedDirectoryPaths, selectedSamplePath: $selectedSamplePath)';
+  return 'BrowserPanelState(isLoadingDirectory: $isLoadingDirectory, directories: $directories, expandedDirectoryPaths: $expandedDirectoryPaths, selectedSamplePath: $selectedSamplePath)';
 }
 
 
@@ -571,7 +571,7 @@ abstract mixin class $BrowserPanelStateCopyWith<$Res>  {
   factory $BrowserPanelStateCopyWith(BrowserPanelState value, $Res Function(BrowserPanelState) _then) = _$BrowserPanelStateCopyWithImpl;
 @useResult
 $Res call({
- bool isExpanded, bool isLoadingDirectory, IMap<String, FileTree> directories, ISet<String> expandedDirectoryPaths, String? selectedSamplePath
+ bool isLoadingDirectory, IMap<String, FileTree> directories, ISet<String> expandedDirectoryPaths, String? selectedSamplePath
 });
 
 
@@ -588,10 +588,9 @@ class _$BrowserPanelStateCopyWithImpl<$Res>
 
 /// Create a copy of BrowserPanelState
 /// with the given fields replaced by the non-null parameter values.
-@pragma('vm:prefer-inline') @override $Res call({Object? isExpanded = null,Object? isLoadingDirectory = null,Object? directories = null,Object? expandedDirectoryPaths = null,Object? selectedSamplePath = freezed,}) {
+@pragma('vm:prefer-inline') @override $Res call({Object? isLoadingDirectory = null,Object? directories = null,Object? expandedDirectoryPaths = null,Object? selectedSamplePath = freezed,}) {
   return _then(_self.copyWith(
-isExpanded: null == isExpanded ? _self.isExpanded : isExpanded // ignore: cast_nullable_to_non_nullable
-as bool,isLoadingDirectory: null == isLoadingDirectory ? _self.isLoadingDirectory : isLoadingDirectory // ignore: cast_nullable_to_non_nullable
+isLoadingDirectory: null == isLoadingDirectory ? _self.isLoadingDirectory : isLoadingDirectory // ignore: cast_nullable_to_non_nullable
 as bool,directories: null == directories ? _self.directories : directories // ignore: cast_nullable_to_non_nullable
 as IMap<String, FileTree>,expandedDirectoryPaths: null == expandedDirectoryPaths ? _self.expandedDirectoryPaths : expandedDirectoryPaths // ignore: cast_nullable_to_non_nullable
 as ISet<String>,selectedSamplePath: freezed == selectedSamplePath ? _self.selectedSamplePath : selectedSamplePath // ignore: cast_nullable_to_non_nullable
@@ -680,10 +679,10 @@ return $default(_that);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( bool isExpanded,  bool isLoadingDirectory,  IMap<String, FileTree> directories,  ISet<String> expandedDirectoryPaths,  String? selectedSamplePath)?  $default,{required TResult orElse(),}) {final _that = this;
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( bool isLoadingDirectory,  IMap<String, FileTree> directories,  ISet<String> expandedDirectoryPaths,  String? selectedSamplePath)?  $default,{required TResult orElse(),}) {final _that = this;
 switch (_that) {
 case _BrowserPanelState() when $default != null:
-return $default(_that.isExpanded,_that.isLoadingDirectory,_that.directories,_that.expandedDirectoryPaths,_that.selectedSamplePath);case _:
+return $default(_that.isLoadingDirectory,_that.directories,_that.expandedDirectoryPaths,_that.selectedSamplePath);case _:
   return orElse();
 
 }
@@ -701,10 +700,10 @@ return $default(_that.isExpanded,_that.isLoadingDirectory,_that.directories,_tha
 /// }
 /// ```
 
-@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( bool isExpanded,  bool isLoadingDirectory,  IMap<String, FileTree> directories,  ISet<String> expandedDirectoryPaths,  String? selectedSamplePath)  $default,) {final _that = this;
+@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( bool isLoadingDirectory,  IMap<String, FileTree> directories,  ISet<String> expandedDirectoryPaths,  String? selectedSamplePath)  $default,) {final _that = this;
 switch (_that) {
 case _BrowserPanelState():
-return $default(_that.isExpanded,_that.isLoadingDirectory,_that.directories,_that.expandedDirectoryPaths,_that.selectedSamplePath);case _:
+return $default(_that.isLoadingDirectory,_that.directories,_that.expandedDirectoryPaths,_that.selectedSamplePath);case _:
   throw StateError('Unexpected subclass');
 
 }
@@ -721,10 +720,10 @@ return $default(_that.isExpanded,_that.isLoadingDirectory,_that.directories,_tha
 /// }
 /// ```
 
-@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( bool isExpanded,  bool isLoadingDirectory,  IMap<String, FileTree> directories,  ISet<String> expandedDirectoryPaths,  String? selectedSamplePath)?  $default,) {final _that = this;
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( bool isLoadingDirectory,  IMap<String, FileTree> directories,  ISet<String> expandedDirectoryPaths,  String? selectedSamplePath)?  $default,) {final _that = this;
 switch (_that) {
 case _BrowserPanelState() when $default != null:
-return $default(_that.isExpanded,_that.isLoadingDirectory,_that.directories,_that.expandedDirectoryPaths,_that.selectedSamplePath);case _:
+return $default(_that.isLoadingDirectory,_that.directories,_that.expandedDirectoryPaths,_that.selectedSamplePath);case _:
   return null;
 
 }
@@ -736,10 +735,9 @@ return $default(_that.isExpanded,_that.isLoadingDirectory,_that.directories,_tha
 
 
 class _BrowserPanelState implements BrowserPanelState {
-  const _BrowserPanelState({this.isExpanded = false, this.isLoadingDirectory = false, this.directories = const IMapConst<String, FileTree>({}), this.expandedDirectoryPaths = const ISetConst<String>({}), this.selectedSamplePath});
+  const _BrowserPanelState({this.isLoadingDirectory = false, this.directories = const IMapConst<String, FileTree>({}), this.expandedDirectoryPaths = const ISetConst<String>({}), this.selectedSamplePath});
   
 
-@override@JsonKey() final  bool isExpanded;
 @override@JsonKey() final  bool isLoadingDirectory;
 @override@JsonKey() final  IMap<String, FileTree> directories;
 @override@JsonKey() final  ISet<String> expandedDirectoryPaths;
@@ -755,16 +753,16 @@ _$BrowserPanelStateCopyWith<_BrowserPanelState> get copyWith => __$BrowserPanelS
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is _BrowserPanelState&&(identical(other.isExpanded, isExpanded) || other.isExpanded == isExpanded)&&(identical(other.isLoadingDirectory, isLoadingDirectory) || other.isLoadingDirectory == isLoadingDirectory)&&(identical(other.directories, directories) || other.directories == directories)&&const DeepCollectionEquality().equals(other.expandedDirectoryPaths, expandedDirectoryPaths)&&(identical(other.selectedSamplePath, selectedSamplePath) || other.selectedSamplePath == selectedSamplePath));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is _BrowserPanelState&&(identical(other.isLoadingDirectory, isLoadingDirectory) || other.isLoadingDirectory == isLoadingDirectory)&&(identical(other.directories, directories) || other.directories == directories)&&const DeepCollectionEquality().equals(other.expandedDirectoryPaths, expandedDirectoryPaths)&&(identical(other.selectedSamplePath, selectedSamplePath) || other.selectedSamplePath == selectedSamplePath));
 }
 
 
 @override
-int get hashCode => Object.hash(runtimeType,isExpanded,isLoadingDirectory,directories,const DeepCollectionEquality().hash(expandedDirectoryPaths),selectedSamplePath);
+int get hashCode => Object.hash(runtimeType,isLoadingDirectory,directories,const DeepCollectionEquality().hash(expandedDirectoryPaths),selectedSamplePath);
 
 @override
 String toString() {
-  return 'BrowserPanelState(isExpanded: $isExpanded, isLoadingDirectory: $isLoadingDirectory, directories: $directories, expandedDirectoryPaths: $expandedDirectoryPaths, selectedSamplePath: $selectedSamplePath)';
+  return 'BrowserPanelState(isLoadingDirectory: $isLoadingDirectory, directories: $directories, expandedDirectoryPaths: $expandedDirectoryPaths, selectedSamplePath: $selectedSamplePath)';
 }
 
 
@@ -775,7 +773,7 @@ abstract mixin class _$BrowserPanelStateCopyWith<$Res> implements $BrowserPanelS
   factory _$BrowserPanelStateCopyWith(_BrowserPanelState value, $Res Function(_BrowserPanelState) _then) = __$BrowserPanelStateCopyWithImpl;
 @override @useResult
 $Res call({
- bool isExpanded, bool isLoadingDirectory, IMap<String, FileTree> directories, ISet<String> expandedDirectoryPaths, String? selectedSamplePath
+ bool isLoadingDirectory, IMap<String, FileTree> directories, ISet<String> expandedDirectoryPaths, String? selectedSamplePath
 });
 
 
@@ -792,10 +790,9 @@ class __$BrowserPanelStateCopyWithImpl<$Res>
 
 /// Create a copy of BrowserPanelState
 /// with the given fields replaced by the non-null parameter values.
-@override @pragma('vm:prefer-inline') $Res call({Object? isExpanded = null,Object? isLoadingDirectory = null,Object? directories = null,Object? expandedDirectoryPaths = null,Object? selectedSamplePath = freezed,}) {
+@override @pragma('vm:prefer-inline') $Res call({Object? isLoadingDirectory = null,Object? directories = null,Object? expandedDirectoryPaths = null,Object? selectedSamplePath = freezed,}) {
   return _then(_BrowserPanelState(
-isExpanded: null == isExpanded ? _self.isExpanded : isExpanded // ignore: cast_nullable_to_non_nullable
-as bool,isLoadingDirectory: null == isLoadingDirectory ? _self.isLoadingDirectory : isLoadingDirectory // ignore: cast_nullable_to_non_nullable
+isLoadingDirectory: null == isLoadingDirectory ? _self.isLoadingDirectory : isLoadingDirectory // ignore: cast_nullable_to_non_nullable
 as bool,directories: null == directories ? _self.directories : directories // ignore: cast_nullable_to_non_nullable
 as IMap<String, FileTree>,expandedDirectoryPaths: null == expandedDirectoryPaths ? _self.expandedDirectoryPaths : expandedDirectoryPaths // ignore: cast_nullable_to_non_nullable
 as ISet<String>,selectedSamplePath: freezed == selectedSamplePath ? _self.selectedSamplePath : selectedSamplePath // ignore: cast_nullable_to_non_nullable

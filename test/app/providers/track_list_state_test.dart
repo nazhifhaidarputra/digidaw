@@ -159,6 +159,54 @@ void main() {
     });
   });
 
+  group('timeline click tracker', () {
+    test('records the last click for click-relative paste', () async {
+      final container = await _container();
+      final notifier = container.read(trackListStateProvider.notifier);
+
+      notifier.recordTimelineClick(trackId: 1, tick: 1920);
+      final state = container.read(trackListStateProvider);
+      expect(state.lastClickedTrackId, 1);
+      expect(state.lastClickedTick, 1920);
+
+      notifier.recordTimelineClick(trackId: 1, tick: -5);
+      expect(container.read(trackListStateProvider).lastClickedTick, 0);
+    });
+  });
+
+  group('duplicating selected clips', () {
+    test('places the copy directly after the selection end', () async {
+      final container = await _container();
+      when(
+        () => api.crateApiTrackDuplicateClipGroups(
+          ctx: any(named: 'ctx'),
+          trackId: 1,
+          clipIds: any(named: 'clipIds'),
+          groupStartTimes: any(named: 'groupStartTimes'),
+        ),
+      ).thenAnswer((_) async => [_clip(20, 2880), _clip(21, 3840)]);
+
+      final notifier = container.read(trackListStateProvider.notifier)
+        ..selectClips(trackId: 1, clipIds: [10, 11]);
+
+      final result = await notifier.duplicateSelectedClips();
+
+      expect(result.isOk(), isTrue);
+      final starts =
+          verify(
+                () => api.crateApiTrackDuplicateClipGroups(
+                  ctx: any(named: 'ctx'),
+                  trackId: 1,
+                  clipIds: any(named: 'clipIds'),
+                  groupStartTimes: captureAny(named: 'groupStartTimes'),
+                ),
+              ).captured.single
+              as List<int>;
+      expect(starts, [2880]);
+      expect(container.read(trackListStateProvider).selectedClipIds, [20, 21]);
+    });
+  });
+
   group('nudging the selected clips', () {
     int movedBy() =>
         verify(

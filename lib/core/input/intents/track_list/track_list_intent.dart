@@ -18,6 +18,21 @@ class NudgeClipsIntent extends Intent {
   final int steps;
 }
 
+/// Copies the selected clips to the clip clipboard.
+class CopyClipsIntent extends Intent {
+  const CopyClipsIntent();
+}
+
+/// Pastes the clip clipboard at the last clicked timeline position.
+class PasteClipsIntent extends Intent {
+  const PasteClipsIntent();
+}
+
+/// Duplicates the selected clips directly after the selection.
+class DuplicateClipsIntent extends Intent {
+  const DuplicateClipsIntent();
+}
+
 /// Track-list shortcuts. They are active only in the track list view.
 const trackListShortcuts = IListConst<DawShortcut>([
   DawShortcut(
@@ -83,5 +98,29 @@ const trackListShortcuts = IListConst<DawShortcut>([
     scope: ShortcutScope.trackList,
     intent: NudgeClipsIntent(1),
     defaultKey: SingleActivator(LogicalKeyboardKey.arrowRight, shift: true),
+  ),
+  DawShortcut(
+    id: 'trackList.copyClips',
+    title: 'Copy Clips',
+    category: 'Track List',
+    scope: ShortcutScope.trackList,
+    intent: CopyClipsIntent(),
+    defaultKey: SingleActivator(LogicalKeyboardKey.keyC, control: true),
+  ),
+  DawShortcut(
+    id: 'trackList.pasteClips',
+    title: 'Paste Clips',
+    category: 'Track List',
+    scope: ShortcutScope.trackList,
+    intent: PasteClipsIntent(),
+    defaultKey: SingleActivator(LogicalKeyboardKey.keyV, control: true),
+  ),
+  DawShortcut(
+    id: 'trackList.duplicateClips',
+    title: 'Duplicate Clips',
+    category: 'Track List',
+    scope: ShortcutScope.trackList,
+    intent: DuplicateClipsIntent(),
+    defaultKey: SingleActivator(LogicalKeyboardKey.keyB, control: true),
   ),
 ]);

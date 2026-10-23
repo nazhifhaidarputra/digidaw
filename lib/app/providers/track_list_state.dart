@@ -8,6 +8,7 @@ import 'package:karbeat/app/providers/mixer_state.dart';
 import 'package:karbeat/app/providers/notification_provider.dart';
 import 'package:karbeat/app/providers/project_provider.dart';
 import 'package:karbeat/app/providers/transport_state.dart';
+import 'package:karbeat/app/providers/workspace_state.dart';
 import 'package:karbeat/core/utils/clip_time_utils.dart';
 import 'package:karbeat/core/utils/color.dart';
 import 'package:karbeat/core/utils/logger.dart';
@@ -51,6 +52,10 @@ abstract class TrackListState with _$TrackListState {
 
     /// The clip that should receive keyboard focus (last clicked).
     int? focusClipId,
+
+    /// Track and tick of the last timeline click. Ctrl+V pastes here.
+    int? lastClickedTrackId,
+    int? lastClickedTick,
 
     /// Per-track pixel heights for the arranger rows, keyed by track ID.
     @Default(IMapConst<int, int>({})) IMap<int, int> trackIdHeightMap,
@@ -267,6 +272,20 @@ class TrackListNotifier extends Notifier<TrackListState> {
       selectedTrackId: null,
       selectedClipIds: IList(),
       focusClipId: null,
+    );
+  }
+
+  /// Remember where the last timeline click landed. Paste and other
+  /// click-relative actions use it as their insertion point.
+  void recordTimelineClick({required int trackId, required int tick}) {
+    final safeTick = tick < 0 ? 0 : tick;
+    if (state.lastClickedTrackId == trackId &&
+        state.lastClickedTick == safeTick) {
+      return;
+    }
+    state = state.copyWith(
+      lastClickedTrackId: trackId,
+      lastClickedTick: safeTick,
     );
   }
 
@@ -557,6 +576,7 @@ class TrackListNotifier extends Notifier<TrackListState> {
   /// Delete a single clip, with an optimistic local removal.
   Future<Result<void>> deleteClip(int trackId, int clipId) async {
     _optimisticDeleteClips(trackId, {clipId});
+    _pruneSelection(trackId, {clipId});
     final result = await AsyncValue.guard(() async {
       await track_api.deleteClip(ctx: _ctx, trackId: trackId, clipId: clipId);
       syncTrack(trackId);
@@ -879,6 +899,7 @@ class TrackListNotifier extends Notifier<TrackListState> {
   /// Delete multiple clips at once, with an optimistic local removal.
   Future<Result<void>> deleteClipBatch(int trackId, List<int> clipIds) async {
     _optimisticDeleteClips(trackId, clipIds.toSet());
+    _pruneSelection(trackId, clipIds.toSet());
 
     final result = await AsyncValue.guard(() async {
       await track_api.deleteClipBatch(
@@ -995,6 +1016,78 @@ class TrackListNotifier extends Notifier<TrackListState> {
     }
   }
 
+  /// Paste clips from the session clipboard at the last clicked timeline
+  /// position. Falls back to the selected track when no point was recorded.
+  Future<Result<void>> pasteClipsAtLastClick() async {
+    final tracks = ref.read(projectProvider).value?.tracks;
+    final lastTrackId = state.lastClickedTrackId;
+    final targetTrackId =
+        lastTrackId != null && tracks?.containsKey(lastTrackId) == true
+        ? lastTrackId
+        : state.selectedTrackId;
+    if (targetTrackId == null) return Result.ok(null);
+
+    final track = tracks?[targetTrackId];
+    if (track == null) return Result.ok(null);
+
+    final workspace = ref.read(workspaceStateProvider);
+    var pasteTick = state.lastClickedTick ?? 0;
+    if (workspace.snapToGrid && workspace.gridSize.value > 0) {
+      final ticksPerLine = (960.0 * 4.0) / workspace.gridSize.value;
+      if (ticksPerLine > 0) {
+        pasteTick = ((pasteTick / ticksPerLine).round() * ticksPerLine).toInt();
+      }
+    }
+
+    return pasteClips(
+      targetTrackId: targetTrackId,
+      pasteStartTime: pasteTick < 0 ? 0 : pasteTick,
+      trackType: track.trackType,
+    );
+  }
+
+  /// Duplicates the selected clips directly after the selection and selects
+  /// the copies.
+  Future<Result<void>> duplicateSelectedClips() async {
+    final trackId = state.selectedTrackId;
+    final clipIds = state.selectedClipIds.toList(growable: false);
+    if (trackId == null || clipIds.isEmpty) return Result.ok(null);
+
+    final track = ref.read(projectProvider).value?.tracks[trackId];
+    if (track == null) return Result.ok(null);
+
+    final bpm = ref.read(transportProvider).value?.state?.bpm ?? 120.0;
+    final sampleRate = ref.read(transportProvider).value?.sampleRate ?? 48000;
+    final selected = track.clips
+        .where((clip) => clipIds.contains(clip.id))
+        .toList(growable: false);
+    if (selected.isEmpty) return Result.ok(null);
+
+    final selectionEnd = selected
+        .map(
+          (clip) =>
+              clip.startTimeInTicks + clip.loopLengthInTicks(bpm, sampleRate),
+        )
+        .reduce((a, b) => a > b ? a : b);
+
+    final result = await duplicateClipGroups(
+      trackId: trackId,
+      clipIds: clipIds,
+      groupStartTimes: [selectionEnd],
+    );
+    if (result.isErr()) return Result.error(result.err());
+
+    final duplicated = result.ok();
+    if (duplicated.isNotEmpty) {
+      state = state.copyWith(
+        selectedTrackId: trackId,
+        selectedClipIds: duplicated.map((clip) => clip.id).toIList(),
+        focusClipId: duplicated.last.id,
+      );
+    }
+    return Result.ok(null);
+  }
+
   /// Reorder [trackId] to [newIdx] within the track list.
   ///
   /// Updates the project tracks before calling the backend so the header and
@@ -1091,6 +1184,23 @@ class TrackListNotifier extends Notifier<TrackListState> {
     ref
         .read(projectProvider.notifier)
         .upsertTrack(trackId, track.copyWith(clips: updatedClips));
+  }
+
+  /// Drops deleted clips from the selection so a batch delete cannot leave
+  /// stale IDs behind.
+  void _pruneSelection(int trackId, Set<int> deletedClipIds) {
+    if (state.selectedTrackId != trackId || state.selectedClipIds.isEmpty) {
+      return;
+    }
+    final remaining = state.selectedClipIds
+        .where((clipId) => !deletedClipIds.contains(clipId))
+        .toIList();
+    if (remaining.length == state.selectedClipIds.length) return;
+    state = state.copyWith(
+      selectedClipIds: remaining,
+      focusClipId: remaining.isEmpty ? null : remaining.last,
+      selectedTrackId: remaining.isEmpty ? null : state.selectedTrackId,
+    );
   }
 
   void _applyOptimisticResize(

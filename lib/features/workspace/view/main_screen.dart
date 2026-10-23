@@ -15,10 +15,13 @@ import 'package:karbeat/core/input/intents/song_timeline/playback_intent.dart';
 import 'package:karbeat/core/input/intents/track_list/track_list_intent.dart';
 import 'package:karbeat/core/input/intents/workspace/action_history_intent.dart';
 import 'package:karbeat/core/input/intents/workspace/export_intent.dart';
+import 'package:karbeat/core/input/intents/workspace/intent.dart';
 import 'package:karbeat/core/input/intents/workspace/open_midi_keyboard_intent.dart';
 import 'package:karbeat/core/input/intents/workspace/save_intent.dart';
 import 'package:karbeat/core/utils/logger.dart';
 import 'package:karbeat/core/widgets/shortcut_focus_anchor.dart';
+import 'package:karbeat/features/setting/view/setting_screen.dart';
+import 'package:karbeat/features/source/services/audio_source_import.dart';
 import 'package:karbeat/features/workspace/services/project_file_actions.dart';
 import 'package:karbeat/features/workspace/view/project_export.dart';
 import 'package:karbeat/features/workspace/view/startup_recovery_prompt.dart';
@@ -159,6 +162,48 @@ class MainScreen extends ConsumerWidget {
                       return null;
                     },
                   ),
+              OpenSettingsIntent: CallbackAction<OpenSettingsIntent>(
+                onInvoke: (_) {
+                  Navigator.of(context, rootNavigator: true).push(
+                    MaterialPageRoute<void>(
+                      builder: (context) => const SettingScreen(),
+                    ),
+                  );
+                  return null;
+                },
+              ),
+              ImportAudioIntent: CallbackAction<ImportAudioIntent>(
+                onInvoke: (_) {
+                  unawaited(importAudioSource(context, ref));
+                  return null;
+                },
+              ),
+              CopyClipsIntent: CallbackAction<CopyClipsIntent>(
+                onInvoke: (_) {
+                  unawaited(_copySelectedClips(ref));
+                  return null;
+                },
+              ),
+              PasteClipsIntent: CallbackAction<PasteClipsIntent>(
+                onInvoke: (_) {
+                  unawaited(
+                    ref
+                        .read(trackListStateProvider.notifier)
+                        .pasteClipsAtLastClick(),
+                  );
+                  return null;
+                },
+              ),
+              DuplicateClipsIntent: CallbackAction<DuplicateClipsIntent>(
+                onInvoke: (_) {
+                  unawaited(
+                    ref
+                        .read(trackListStateProvider.notifier)
+                        .duplicateSelectedClips(),
+                  );
+                  return null;
+                },
+              ),
             },
       child: UnsavedChangesGuard(
         child: StartupRecoveryPrompt(
@@ -225,6 +270,18 @@ class MainScreen extends ConsumerWidget {
   Future<void> _runHistoryAction(WidgetRef ref, {required bool undo}) async {
     final project = ref.read(projectProvider.notifier);
     await (undo ? project.undoLastAction() : project.redoLastAction());
+  }
+
+  Future<void> _copySelectedClips(WidgetRef ref) async {
+    final selection = ref.read(trackListStateProvider);
+    final trackId = selection.selectedTrackId;
+    if (trackId == null || selection.selectedClipIds.isEmpty) return;
+    await ref
+        .read(trackListStateProvider.notifier)
+        .copySelectedClips(
+          trackId: trackId,
+          clipIds: selection.selectedClipIds.toList(),
+        );
   }
 
   Future<void> _togglePlayback(WidgetRef ref) async {

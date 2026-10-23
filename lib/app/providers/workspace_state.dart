@@ -91,6 +91,10 @@ abstract class WorkspaceState with _$WorkspaceState {
 
     @Default(false) bool showExportPanel,
 
+    /// The unified browser/source panel beside the track list.
+    @Default(false) bool isRightPanelExpanded,
+    @Default(RightPanelTab.browser) RightPanelTab rightPanelTab,
+
     @Default(BrowserPanelState()) BrowserPanelState browserPanelState,
 
     @Default(FloatingMidiKeyboardFieldState())
@@ -264,23 +268,29 @@ class WorkspaceNotifier extends Notifier<WorkspaceState> {
   }
 
   // ------------------------------------------------------------------
-  // Sample browser
+  // Right side panel
   // ------------------------------------------------------------------
 
-  void toggleBrowserPanel() {
-    state = state.copyWith(
-      browserPanelState: state.browserPanelState.copyWith(
-        isExpanded: !state.browserPanelState.isExpanded,
-      ),
-    );
+  /// Toggle the unified right-side panel.
+  void toggleRightPanel() {
+    state = state.copyWith(isRightPanelExpanded: !state.isRightPanelExpanded);
   }
 
-  void closeBrowserPanel() {
-    if (!state.browserPanelState.isExpanded) return;
-    state = state.copyWith(
-      browserPanelState: state.browserPanelState.copyWith(isExpanded: false),
-    );
+  /// Switch the right-side panel to [tab], opening the panel if needed.
+  void selectRightPanelTab(RightPanelTab tab) {
+    if (state.isRightPanelExpanded && state.rightPanelTab == tab) return;
+    state = state.copyWith(isRightPanelExpanded: true, rightPanelTab: tab);
   }
+
+  /// Hide the right-side panel.
+  void closeRightPanel() {
+    if (!state.isRightPanelExpanded) return;
+    state = state.copyWith(isRightPanelExpanded: false);
+  }
+
+  // ------------------------------------------------------------------
+  // Sample browser
+  // ------------------------------------------------------------------
 
   void selectBrowserSample(String path) {
     if (state.browserPanelState.selectedSamplePath == path) return;

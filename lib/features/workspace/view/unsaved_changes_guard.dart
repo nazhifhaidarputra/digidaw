@@ -14,6 +14,46 @@ import 'package:window_manager/window_manager.dart';
 
 enum _UnsavedChangesChoice { save, discard, cancel }
 
+/// Guards against a second quit request arriving while the first one is still
+/// asking about unsaved changes or shutting the session down.
+bool _quitInProgress = false;
+
+/// Confirms unsaved changes, records a clean shutdown, and closes the app.
+///
+/// Shared by the desktop window close button and the Project menu's quit
+/// action so both go through the same unsaved-changes flow.
+Future<void> quitApplication(BuildContext context, WidgetRef ref) async {
+  if (_quitInProgress) return;
+  _quitInProgress = true;
+
+  final proceed = await confirmDiscardUnsavedChanges(context, ref);
+  if (!proceed || !context.mounted) {
+    _quitInProgress = false;
+    return;
+  }
+
+  final dawContext = ref.read(projectProvider.notifier).dawContext;
+  final shutdown = await attemptAsync(
+    () => mitigation_api.markCleanShutdown(ctx: dawContext),
+  );
+  if (shutdown case Error<void>(error: final error)) {
+    AppLogger.warn('Could not record a clean shutdown: $error');
+  }
+  if (Platform.isLinux) {
+    // Destroying the GTK window under a running engine segfaults once the
+    // engine's pending task timers fire; the engine's own exit path quits
+    // the application in order instead.
+    await WidgetsBinding.instance.exitApplication(AppExitType.required);
+  } else if (_isDesktop) {
+    await windowManager.destroy();
+  } else {
+    await WidgetsBinding.instance.exitApplication(AppExitType.required);
+  }
+}
+
+final bool _isDesktop =
+    Platform.isWindows || Platform.isMacOS || Platform.isLinux;
+
 /// Asks what to do with unsaved changes before the current project is closed
 /// or replaced.
 ///
@@ -106,8 +146,6 @@ class _UnsavedChangesGuardState extends ConsumerState<UnsavedChangesGuard>
   static final bool _isDesktop =
       Platform.isWindows || Platform.isMacOS || Platform.isLinux;
 
-  bool _isClosing = false;
-
   @override
   void initState() {
     super.initState();
@@ -181,34 +219,7 @@ class _UnsavedChangesGuardState extends ConsumerState<UnsavedChangesGuard>
 
   @override
   void onWindowClose() {
-    unawaited(_closeWindow());
-  }
-
-  Future<void> _closeWindow() async {
-    if (_isClosing) return;
-    _isClosing = true;
-
-    final proceed = await confirmDiscardUnsavedChanges(context, ref);
-    if (!proceed || !mounted) {
-      _isClosing = false;
-      return;
-    }
-
-    final dawContext = ref.read(projectProvider.notifier).dawContext;
-    final shutdown = await attemptAsync(
-      () => mitigation_api.markCleanShutdown(ctx: dawContext),
-    );
-    if (shutdown case Error<void>(error: final error)) {
-      AppLogger.warn('Could not record a clean shutdown: $error');
-    }
-    if (Platform.isLinux) {
-      // Destroying the GTK window under a running engine segfaults once the
-      // engine's pending task timers fire; the engine's own exit path quits
-      // the application in order instead.
-      await WidgetsBinding.instance.exitApplication(AppExitType.required);
-    } else {
-      await windowManager.destroy();
-    }
+    unawaited(quitApplication(context, ref));
   }
 
   @override

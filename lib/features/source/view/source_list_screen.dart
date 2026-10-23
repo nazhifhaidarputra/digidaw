@@ -1,14 +1,11 @@
 import 'package:fast_immutable_collections/fast_immutable_collections.dart';
-import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:karbeat/app/providers/blocking_task_provider.dart';
-import 'package:karbeat/app/providers/notification_provider.dart';
 import 'package:karbeat/app/providers/piano_roll_state.dart';
 import 'package:karbeat/app/providers/project_provider.dart';
 import 'package:karbeat/app/providers/workspace_state.dart';
-import 'package:karbeat/core/utils/logger.dart';
 import 'package:karbeat/features/plugins/services/plugin_ui_launcher.dart';
+import 'package:karbeat/features/source/services/audio_source_import.dart';
 import 'package:karbeat/features/source/services/audio_waveform_services.dart';
 import 'package:karbeat/features/source/view/audio_properties_screen.dart';
 import 'package:karbeat/src/rust/api/plugin.dart';
@@ -18,37 +15,6 @@ import 'package:karbeat/app/providers/clip_placement_state.dart';
 
 class SourceListScreen extends ConsumerWidget {
   const SourceListScreen({super.key});
-
-  Future<void> _pickFile(BuildContext context, WidgetRef ref) async {
-    final notifications = ref.read(notificationProvider.notifier);
-    FilePickerResult? result;
-    try {
-      result = await FilePicker.pickFiles(type: FileType.audio);
-    } catch (error, stackTrace) {
-      AppLogger.error('Could not select an audio file: $error');
-      notifications.error(
-        error,
-        title: 'Could not select audio',
-        stackTrace: stackTrace,
-      );
-      return;
-    }
-
-    final path = result?.files.single.path;
-    if (path == null || !context.mounted) return;
-
-    final projectNotifier = ref.read(projectProvider.notifier);
-    final importResult = await ref
-        .read(blockingTaskProvider.notifier)
-        .run(
-          label: 'Loading audio...',
-          task: () => projectNotifier.loadAudioSource(path),
-        );
-
-    if (context.mounted && importResult.isOk()) {
-      ref.invalidate(audioSourcesProvider);
-    }
-  }
 
   Future<void> _renamePattern(
     BuildContext context,
@@ -172,7 +138,7 @@ class SourceListScreen extends ConsumerWidget {
 
     return Scaffold(
       floatingActionButton: FloatingActionButton(
-        onPressed: () => _pickFile(context, ref),
+        onPressed: () => importAudioSource(context, ref),
         child: const Icon(Icons.add),
       ),
       body: CustomScrollView(
