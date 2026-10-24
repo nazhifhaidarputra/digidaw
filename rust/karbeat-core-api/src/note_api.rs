@@ -367,6 +367,23 @@ pub fn transpose_notes(
     })
 }
 
+/// Scales the selection in time around its earliest note start. Starts and
+/// durations both scale, so later notes travel and grow further.
+pub fn stretch_notes(
+    ctx: &mut DawContext,
+    pattern_id: PatternId,
+    note_ids: &[NoteId],
+    factor: f64,
+) -> anyhow::Result<Pattern> {
+    anyhow::ensure!(
+        factor.is_finite() && factor > 0.0,
+        "Stretch factor must be positive"
+    );
+    transform_notes(ctx, pattern_id, "Stretch Notes", note_ids, |notes| {
+        Ok(note_transform::stretch(notes, factor))
+    })
+}
+
 /// Moves notes by `delta_ticks` in time, stopping the group at tick 0.
 pub fn shift_notes(
     ctx: &mut DawContext,

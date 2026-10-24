@@ -66,7 +66,9 @@ abstract class PianoRollStateData with _$PianoRollStateData {
     /// Loop region for pattern playback; the whole pattern loops when null.
     @Default(null) PatternLoopRegion? loopRegion,
 
-    /// Notes the draw tool stamps: the latest selection, like FL Studio.
+    /// The last single note the draw tool stamps when nothing is selected.
+    /// A multi-note selection is drawn from the live selection instead, so
+    /// clearing a range selection does not leave its whole batch armed.
     @Default(IListConst<UiNote>([])) IList<UiNote> drawTemplate,
   }) = _PianoRollStateData;
 
@@ -260,7 +262,7 @@ class PianoRollNotifier extends Notifier<PianoRollStateData> {
     final selection = noteIds.toISet();
     state = state.copyWith(
       selectedNoteIds: selection,
-      drawTemplate: _templateFor(selection) ?? state.drawTemplate,
+      drawTemplate: _singleNoteTemplate(selection) ?? state.drawTemplate,
     );
   }
 
@@ -269,24 +271,66 @@ class PianoRollNotifier extends Notifier<PianoRollStateData> {
     final selection = state.selectedNoteIds.addAll(noteIds);
     state = state.copyWith(
       selectedNoteIds: selection,
-      drawTemplate: _templateFor(selection) ?? state.drawTemplate,
+      drawTemplate: _singleNoteTemplate(selection) ?? state.drawTemplate,
     );
   }
 
-  /// Notes the draw tool stamps after [selection], or null to keep the
-  /// current template when nothing is selected.
-  IList<UiNote>? _templateFor(ISet<int> selection) {
+  /// The last interacted single note in [selection], or null when [selection]
+  /// holds a batch. Batches are stamped from the live selection instead, so
+  /// they never become the single-note draw template.
+  IList<UiNote>? _singleNoteTemplate(ISet<int> selection) {
+    if (selection.length != 1) return null;
     final patternId = state.editingPatternId;
-    if (selection.isEmpty || patternId == null) return null;
+    if (patternId == null) return null;
     final notes = _projectState.value?.patterns[patternId]?.notes ?? const [];
     final template = notes.where((note) => selection.contains(note.id));
     return template.isEmpty ? null : template.toIList();
   }
 
+  /// Notes the draw tool stamps: the highlighted selection as a batch, or the
+  /// last interacted single note when nothing is selected.
+  IList<UiNote> drawTemplateFor(UiPattern pattern) {
+    final selection = state.selectedNoteIds;
+    if (selection.isNotEmpty) {
+      final selected = pattern.notes
+          .where((note) => selection.contains(note.id))
+          .toList();
+      if (selected.isNotEmpty) return selected.toIList();
+    }
+
+    // Read the stored template back from the live pattern so edits to the last
+    // single note are reflected, and a deleted note stops being stamped.
+    final storedIds = state.drawTemplate.map((note) => note.id).toSet();
+    if (storedIds.isEmpty) return const IListConst([]);
+    return pattern.notes.where((note) => storedIds.contains(note.id)).toIList();
+  }
+
+  /// Arms [noteId] as the single note the draw tool stamps when nothing is
+  /// selected, without changing the selection. Called when a note is grabbed,
+  /// so the last touched note stays the single-note brush after a batch is
+  /// deselected.
+  void rememberSingleNote(int noteId) {
+    final patternId = state.editingPatternId;
+    if (patternId == null) return;
+    if (state.drawTemplate.length == 1 &&
+        state.drawTemplate.first.id == noteId) {
+      return;
+    }
+    final notes = _projectState.value?.patterns[patternId]?.notes ?? const [];
+    for (final note in notes) {
+      if (note.id == noteId) {
+        state = state.copyWith(drawTemplate: [note].toIList());
+        return;
+      }
+    }
+  }
+
   void removeNotesFromSelection(Iterable<int> noteIds) {
     // O(1) immutable removal
+    final selection = state.selectedNoteIds.removeAll(noteIds);
     state = state.copyWith(
-      selectedNoteIds: state.selectedNoteIds.removeAll(noteIds),
+      selectedNoteIds: selection,
+      drawTemplate: _singleNoteTemplate(selection) ?? state.drawTemplate,
     );
   }
 
@@ -854,6 +898,22 @@ class PianoRollNotifier extends Notifier<PianoRollStateData> {
       semitones: semitones,
     ),
   );
+
+  /// Scales notes in time around their earliest start. [factor] above one
+  /// stretches later notes further away and makes every note longer; below one
+  /// squeezes them. Targets the selection, or [noteIds] when given (the stretch
+  /// tool's single-note drag), and falls back to the whole pattern when both are
+  /// empty.
+  Future<Result<void>> stretchNotes(double factor, {Iterable<int>? noteIds}) =>
+      _transformPattern(
+        'stretch',
+        (ctx, patternId) => pattern_api.stretchNotes(
+          ctx: ctx,
+          patternId: patternId,
+          noteIds: (noteIds ?? _targetNoteIds).toList(),
+          factor: factor,
+        ),
+      );
 
   /// Moves notes by [steps] draw steps; negative moves earlier.
   Future<Result<void>> shiftNotes(int steps) => _transformPattern(

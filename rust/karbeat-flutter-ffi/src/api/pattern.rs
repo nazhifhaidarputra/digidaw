@@ -485,6 +485,25 @@ pub fn transpose_notes(
     .map_err(|e| e.to_string())
 }
 
+/// Scales notes in time around their earliest start, growing both their
+/// positions and their durations by `factor`.
+pub fn stretch_notes(
+    ctx: &DawContext,
+    pattern_id: u64,
+    note_ids: Vec<u32>,
+    factor: f64,
+) -> Result<UiPattern, String> {
+    crate::api::context::project_ctx!(ctx);
+    note_api::stretch_notes(
+        ctx,
+        PatternId::from_u64(pattern_id),
+        &self::note_ids(&note_ids),
+        factor,
+    )
+    .map(|pattern| UiPattern::from(&pattern))
+    .map_err(|e| e.to_string())
+}
+
 /// Moves notes in time by `delta_ticks`.
 pub fn shift_notes(
     ctx: &DawContext,

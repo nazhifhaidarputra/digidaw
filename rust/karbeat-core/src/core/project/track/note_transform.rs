@@ -205,6 +205,30 @@ pub fn transpose(notes: &[Note], semitones: i32) -> anyhow::Result<NoteEdit> {
     Ok(NoteEdit::updates(updates))
 }
 
+/// Scales the selection in time around its earliest note start.
+///
+/// Every start moves away from (or toward) that anchor and every duration grows
+/// (or shrinks) with `factor`, so notes further into the selection travel further
+/// and end up longer than notes near the anchor. Durations never drop below one tick.
+pub fn stretch(notes: &[Note], factor: f64) -> NoteEdit {
+    let Some(anchor) = notes.iter().map(|note| note.start_tick).min() else {
+        return NoteEdit::default();
+    };
+    NoteEdit::updates(
+        notes
+            .iter()
+            .map(|note| {
+                let offset = note.start_tick.saturating_sub(anchor) as f64;
+                Note {
+                    start_tick: anchor.saturating_add((offset * factor).round() as u64),
+                    duration: ((note.duration as f64) * factor).round().max(1.0) as u64,
+                    ..note.clone()
+                }
+            })
+            .collect(),
+    )
+}
+
 /// Moves every note by `delta_ticks`. The group stops at tick 0 rather than compressing.
 pub fn shift(notes: &[Note], delta_ticks: i64) -> NoteEdit {
     let earliest = notes.iter().map(|note| note.start_tick).min().unwrap_or(0);
@@ -335,6 +359,26 @@ mod tests {
             edit.updates.iter().map(|n| n.key).collect::<Vec<_>>(),
             [108, 48]
         );
+    }
+
+    #[test]
+    fn stretch_scales_starts_and_lengths_away_from_the_first_note() {
+        let notes = [
+            note(1, 960, 240, 60),
+            note(2, 1920, 480, 62),
+            note(3, 2880, 120, 64),
+        ];
+        let edit = stretch(&notes, 1.5);
+        assert_eq!(spans(&edit), [(960, 360), (2400, 720), (3840, 180)]);
+
+        let squashed = stretch(&notes, 0.5);
+        assert_eq!(spans(&squashed), [(960, 120), (1440, 240), (1920, 60)]);
+    }
+
+    #[test]
+    fn stretch_keeps_a_note_at_the_anchor_and_never_collapses_length() {
+        let edit = stretch(&[note(1, 100, 1, 60), note(2, 0, 40, 60)], 0.001);
+        assert_eq!(spans(&edit), [(0, 1), (0, 1)]);
     }
 
     #[test]

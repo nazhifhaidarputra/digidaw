@@ -44,6 +44,37 @@ List<DawContextAction> pianoRollNoteActions({
       onTap: notifier.chopNotes,
     ),
     DawContextAction.submenu(
+      title: 'Stretch',
+      icon: Icons.swap_horiz,
+      children: [
+        DawContextAction(
+          title: 'Longer 1.25×',
+          icon: Icons.open_in_full,
+          onTap: () => notifier.stretchNotes(1.25),
+        ),
+        DawContextAction(
+          title: 'Longer 1.5×',
+          icon: Icons.open_in_full,
+          onTap: () => notifier.stretchNotes(1.5),
+        ),
+        DawContextAction(
+          title: 'Longer 2×',
+          icon: Icons.open_in_full,
+          onTap: () => notifier.stretchNotes(2),
+        ),
+        DawContextAction(
+          title: 'Shorter 0.75×',
+          icon: Icons.close_fullscreen,
+          onTap: () => notifier.stretchNotes(0.75),
+        ),
+        DawContextAction(
+          title: 'Shorter 0.5×',
+          icon: Icons.close_fullscreen,
+          onTap: () => notifier.stretchNotes(0.5),
+        ),
+      ],
+    ),
+    DawContextAction.submenu(
       title: 'Transpose',
       icon: Icons.swap_vert,
       children: [

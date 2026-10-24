@@ -189,7 +189,7 @@ void main() {
     );
   });
 
-  test('selecting notes makes them the draw template', () async {
+  test('selecting one note makes it the single-note draw template', () async {
     final container = await createContainer();
     final notifier = container.read(pianoRollProvider.notifier);
 
@@ -199,6 +199,95 @@ void main() {
     expect(container.read(pianoRollProvider).drawTemplate.map((n) => n.id), [
       2,
     ]);
+  });
+
+  test('clearing a batch selection keeps the last single note armed', () async {
+    final container = await createContainer();
+    final notifier = container.read(pianoRollProvider.notifier);
+    final pattern = container
+        .read(projectProvider)
+        .requireValue
+        .patterns[_patternId]!;
+
+    notifier.selectNotes({2});
+    notifier.selectNotes({1, 2});
+    expect(notifier.drawTemplateFor(pattern).map((note) => note.id), [1, 2]);
+
+    notifier.clearNoteSelection();
+
+    expect(container.read(pianoRollProvider).drawTemplate.map((n) => n.id), [
+      2,
+    ]);
+    expect(notifier.drawTemplateFor(pattern).map((note) => note.id), [2]);
+  });
+
+  test('touching a note in a batch arms only that note for later', () async {
+    final container = await createContainer();
+    final notifier = container.read(pianoRollProvider.notifier);
+    final pattern = container
+        .read(projectProvider)
+        .requireValue
+        .patterns[_patternId]!;
+
+    notifier.selectNotes({1, 2});
+    notifier.rememberSingleNote(1);
+
+    expect(container.read(pianoRollProvider).selectedNoteIds.toSet(), {1, 2});
+    expect(notifier.drawTemplateFor(pattern).map((note) => note.id), [1, 2]);
+
+    notifier.clearNoteSelection();
+
+    expect(notifier.drawTemplateFor(pattern).map((note) => note.id), [1]);
+  });
+
+  test('the draw template ignores a deleted single note', () async {
+    final container = await createContainer();
+    final notifier = container.read(pianoRollProvider.notifier);
+    final pattern = container
+        .read(projectProvider)
+        .requireValue
+        .patterns[_patternId]!;
+
+    notifier.selectNotes({2});
+    notifier.clearNoteSelection();
+
+    expect(
+      notifier
+          .drawTemplateFor(pattern.copyWith(notes: [_note(1, 0, 60)]))
+          .isEmpty,
+      isTrue,
+    );
+  });
+
+  test('stretch targets the selection and passes the factor', () async {
+    final stretched = _pattern.copyWith(notes: [_note(1, 0, 60)]);
+    when(
+      () => api.crateApiPatternStretchNotes(
+        ctx: any(named: 'ctx'),
+        patternId: _patternId,
+        noteIds: any(named: 'noteIds'),
+        factor: any(named: 'factor'),
+      ),
+    ).thenAnswer((_) async => stretched);
+    final container = await createContainer();
+    final notifier = container.read(pianoRollProvider.notifier);
+    notifier.selectNotes({1, 2});
+
+    final result = await notifier.stretchNotes(1.5);
+
+    expect(result.isOk(), isTrue);
+    verify(
+      () => api.crateApiPatternStretchNotes(
+        ctx: any(named: 'ctx'),
+        patternId: _patternId,
+        noteIds: [1, 2],
+        factor: 1.5,
+      ),
+    ).called(1);
+    expect(
+      container.read(projectProvider).requireValue.patterns[_patternId],
+      stretched,
+    );
   });
 
   test('playing sends the loop region before starting', () async {

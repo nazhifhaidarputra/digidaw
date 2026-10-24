@@ -249,6 +249,34 @@ mod tests {
     }
 
     #[test]
+    fn stretch_notes_scales_starts_and_durations_together() {
+        let (mut ctx, _audio_id, _midi_id, pattern_id) = make_seeded_ctx();
+        let note_ids: Vec<_> = ctx.app_state.pattern_pool[pattern_id]
+            .notes
+            .iter()
+            .map(|n| n.id)
+            .collect();
+
+        let result = note_api::stretch_notes(&mut ctx, pattern_id, &note_ids, 2.0);
+
+        assert!(result.is_ok(), "{:?}", result.err());
+        let pattern = result.unwrap();
+        let spans: Vec<_> = pattern
+            .notes
+            .iter()
+            .map(|n| (n.start_tick, n.duration))
+            .collect();
+        assert_eq!(spans, [(0, 960), (960, 960), (1920, 960)]);
+    }
+
+    #[test]
+    fn stretch_notes_rejects_a_non_positive_factor() {
+        let (mut ctx, _audio_id, _midi_id, pattern_id) = make_seeded_ctx();
+        let result = note_api::stretch_notes(&mut ctx, pattern_id, &[], 0.0);
+        assert!(result.is_err());
+    }
+
+    #[test]
     fn resize_notes_batch_happy_path() {
         let (mut ctx, _audio_id, _midi_id, pattern_id) = make_seeded_ctx();
         let updates: Vec<_> = ctx.app_state.pattern_pool[pattern_id]

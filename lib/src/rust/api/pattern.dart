@@ -276,6 +276,20 @@ Future<UiPattern> transposeNotes({
   semitones: semitones,
 );
 
+/// Scales notes in time around their earliest start, growing both their
+/// positions and their durations by `factor`.
+Future<UiPattern> stretchNotes({
+  required DawContext ctx,
+  required int patternId,
+  required List<int> noteIds,
+  required double factor,
+}) => RustLib.instance.api.crateApiPatternStretchNotes(
+  ctx: ctx,
+  patternId: patternId,
+  noteIds: noteIds,
+  factor: factor,
+);
+
 /// Moves notes in time by `delta_ticks`.
 Future<UiPattern> shiftNotes({
   required DawContext ctx,

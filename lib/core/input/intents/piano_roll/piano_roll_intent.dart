@@ -204,4 +204,12 @@ const pianoRollShortcuts = IListConst<DawShortcut>([
     intent: SelectPianoRollToolIntent(PianoRollToolSelection.zoom),
     defaultKey: SingleActivator(LogicalKeyboardKey.digit8, alt: true),
   ),
+  DawShortcut(
+    id: 'pianoRoll.tool.stretch',
+    title: 'Stretch Tool',
+    category: 'Piano Roll Tools',
+    scope: ShortcutScope.pianoRoll,
+    intent: SelectPianoRollToolIntent(PianoRollToolSelection.stretch),
+    defaultKey: SingleActivator(LogicalKeyboardKey.digit9, alt: true),
+  ),
 ]);
