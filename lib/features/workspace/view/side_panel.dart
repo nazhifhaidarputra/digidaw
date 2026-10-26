@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:karbeat/core/input/input.dart';
+import 'package:karbeat/core/input/shortcut_models.dart';
 import 'package:karbeat/shared/models/menu_group.dart';
 
-class ContextPanel extends StatelessWidget {
+class ContextPanel extends ConsumerWidget {
   final DawToolbarMenuGroup group;
   final Function(DawToolbarMenuAction) onAction;
   final VoidCallback onClose;
@@ -14,7 +17,7 @@ class ContextPanel extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final colors = Theme.of(context).colorScheme;
     return Container(
       width: 240,
@@ -53,6 +56,10 @@ class ContextPanel extends StatelessWidget {
             child: ListView(
               padding: const EdgeInsets.all(8),
               children: group.actions.map((action) {
+                final shortcutId = action.shortcutId;
+                final chord = shortcutId == null
+                    ? null
+                    : ref.watch(activeShortcutChordProvider(shortcutId));
                 return Material(
                   color: Colors.transparent,
                   child: InkWell(
@@ -76,7 +83,7 @@ class ContextPanel extends StatelessWidget {
                               ),
                             ),
                           ),
-                          if (action.shortcut != null)
+                          if (chord != null)
                             Container(
                               margin: const EdgeInsets.only(left: 8),
                               padding: const EdgeInsets.symmetric(
@@ -88,7 +95,7 @@ class ContextPanel extends StatelessWidget {
                                 borderRadius: BorderRadius.circular(3),
                               ),
                               child: Text(
-                                action.shortcut!,
+                                shortcutLabel(chord),
                                 style: TextStyle(
                                   fontSize: 10,
                                   color: colors.onSurfaceVariant,

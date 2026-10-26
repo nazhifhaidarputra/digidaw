@@ -43,6 +43,22 @@ class ShiftNotesIntent extends Intent {
   final int steps;
 }
 
+/// Copies the selected notes to the note clipboard.
+class CopyNotesIntent extends Intent {
+  const CopyNotesIntent();
+}
+
+/// Pastes the note clipboard after the selection, snapped up to the draw step.
+class PasteNotesIntent extends Intent {
+  const PasteNotesIntent();
+}
+
+/// Duplicates the selected notes after themselves, without touching the
+/// clipboard.
+class DuplicateNotesIntent extends Intent {
+  const DuplicateNotesIntent();
+}
+
 /// Switches the piano-roll tool.
 class SelectPianoRollToolIntent extends Intent {
   const SelectPianoRollToolIntent(this.tool);
@@ -139,6 +155,30 @@ const pianoRollShortcuts = IListConst<DawShortcut>([
     scope: ShortcutScope.pianoRoll,
     intent: ShiftNotesIntent(1),
     defaultKey: SingleActivator(LogicalKeyboardKey.arrowRight, shift: true),
+  ),
+  DawShortcut(
+    id: 'pianoRoll.copyNotes',
+    title: 'Copy Notes',
+    category: 'Piano Roll',
+    scope: ShortcutScope.pianoRoll,
+    intent: CopyNotesIntent(),
+    defaultKey: SingleActivator(LogicalKeyboardKey.keyC, control: true),
+  ),
+  DawShortcut(
+    id: 'pianoRoll.pasteNotes',
+    title: 'Paste Notes',
+    category: 'Piano Roll',
+    scope: ShortcutScope.pianoRoll,
+    intent: PasteNotesIntent(),
+    defaultKey: SingleActivator(LogicalKeyboardKey.keyV, control: true),
+  ),
+  DawShortcut(
+    id: 'pianoRoll.duplicateNotes',
+    title: 'Duplicate Notes',
+    category: 'Piano Roll',
+    scope: ShortcutScope.pianoRoll,
+    intent: DuplicateNotesIntent(),
+    defaultKey: SingleActivator(LogicalKeyboardKey.keyB, control: true),
   ),
   DawShortcut(
     id: 'pianoRoll.tool.grab',

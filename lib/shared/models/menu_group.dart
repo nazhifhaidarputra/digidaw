@@ -31,8 +31,9 @@ class DawToolbarMenuGroup {
 class DawToolbarMenuAction {
   final String title;
 
-  /// Shortcut for this action to give a context to the user. **Note that this shortcut only works on desktop app**
-  final String? shortcut;
+  /// ID of the shortcut in the shortcut catalog whose active chord is shown as
+  /// a hint. The displayed key follows the user's remapping in settings.
+  final String? shortcutId;
 
   /// Flag the menu if the menu is a dangerous operation
   final bool isDestructive;
@@ -42,7 +43,7 @@ class DawToolbarMenuAction {
 
   DawToolbarMenuAction(
     this.title, {
-    this.shortcut,
+    this.shortcutId,
     this.isDestructive = false,
     this.callback,
   });
@@ -61,33 +62,21 @@ class DawToolbarMenuGroupFactory {
     actions: [
       DawToolbarMenuAction(
         'New project',
-        shortcut: 'Ctrl + N',
+        shortcutId: 'workspace.newProject',
         callback: (context, ref) async {
-          if (!await confirmDiscardUnsavedChanges(context, ref)) return;
-          await ref.read(projectProvider.notifier).newBlankProject();
+          await newProject(context, ref);
         },
       ),
       DawToolbarMenuAction(
         'Open project',
-        shortcut: 'Ctrl+O',
+        shortcutId: 'workspace.openProject',
         callback: (context, ref) async {
-          if (!await confirmDiscardUnsavedChanges(context, ref)) return;
-          final path = await pickProjectFileToOpen();
-          if (path == null) return;
-          final project = ref.read(projectProvider.notifier);
-
-          // Await the Rust Shadow Load & Swap behind the global blocking overlay.
-          await ref
-              .read(blockingTaskProvider.notifier)
-              .run(
-                label: 'Loading project...',
-                task: () => project.loadProject(path),
-              );
+          await openProject(context, ref);
         },
       ),
       DawToolbarMenuAction(
         'Save Project',
-        shortcut: 'Ctrl+S',
+        shortcutId: 'workspace.save',
         callback: (context, ref) async {
           // Untitled projects fall back to Save As.
           await saveCurrentProject(ref);
@@ -95,25 +84,26 @@ class DawToolbarMenuGroupFactory {
       ),
       DawToolbarMenuAction(
         'Save As...',
-        shortcut: 'Ctrl+Shift+S',
+        shortcutId: 'workspace.saveAs',
         callback: (context, ref) async {
           await saveCurrentProject(ref, saveAs: true);
         },
       ),
       DawToolbarMenuAction(
         'Import Audio',
-        shortcut: 'Ctrl+I',
+        shortcutId: 'workspace.importAudio',
         callback: (context, ref) => importAudioSource(context, ref),
       ),
       DawToolbarMenuAction(
         'Export Project',
+        shortcutId: 'workspace.export',
         callback: (context, ref) async {
           ref.read(workspaceStateProvider.notifier).openExportPanel();
         },
       ),
       DawToolbarMenuAction(
         'Settings',
-        shortcut: 'F2',
+        shortcutId: 'workspace.openSettings',
         callback: (context, ref) {
           Navigator.of(context, rootNavigator: true).push(
             MaterialPageRoute<void>(
@@ -124,7 +114,6 @@ class DawToolbarMenuGroupFactory {
       ),
       DawToolbarMenuAction(
         'Quit DigiDAW',
-        shortcut: 'Alt+F4',
         isDestructive: true,
         callback: (context, ref) => quitApplication(context, ref),
       ),
@@ -136,8 +125,8 @@ class DawToolbarMenuGroupFactory {
     icon: Icons.edit,
     title: 'Edit',
     actions: [
-      DawToolbarMenuAction('Undo', shortcut: 'Ctrl+Z'),
-      DawToolbarMenuAction('Redo', shortcut: 'CTRL+Y'),
+      DawToolbarMenuAction('Undo', shortcutId: 'workspace.undo'),
+      DawToolbarMenuAction('Redo', shortcutId: 'workspace.redo'),
     ],
   );
 
@@ -146,8 +135,8 @@ class DawToolbarMenuGroupFactory {
     title: 'View',
     icon: Icons.visibility,
     actions: [
-      DawToolbarMenuAction('Zoom in', shortcut: 'Ctrl+Plus'),
-      DawToolbarMenuAction('Zoom out', shortcut: 'CTRL+Minus'),
+      DawToolbarMenuAction('Zoom in'),
+      DawToolbarMenuAction('Zoom out'),
     ],
   );
 }

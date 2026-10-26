@@ -1077,7 +1077,7 @@ class PianoRollScreenState extends ConsumerState<PianoRollScreen> {
                                                       .pasteNotesFromClipboardToPattern(
                                                         pattern.id,
                                                         snappedTick,
-                                                        midiKey,
+                                                        newKey: midiKey,
                                                       );
                                                 },
                                               ),

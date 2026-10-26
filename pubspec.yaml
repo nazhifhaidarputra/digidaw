@@ -87,6 +87,8 @@ flutter:
   assets:
     - assets/
     - assets/images/
+    - assets/themes/digidaw_dark.json
+    - assets/themes/digidaw_light.json
     - assets/themes/catppuccin_mocha.json
     - assets/themes/catppuccin_latte.json
     # Only the models the app uses: a leftover full model in the folder is not bundled.

@@ -396,6 +396,19 @@ pub fn shift_notes(
     })
 }
 
+/// Copies notes after themselves so the earliest copy starts at `start_tick`,
+/// keeping their relative timing and parameters. Does not touch the clipboard.
+pub fn duplicate_notes(
+    ctx: &mut DawContext,
+    pattern_id: PatternId,
+    note_ids: &[NoteId],
+    start_tick: u64,
+) -> anyhow::Result<Pattern> {
+    transform_notes(ctx, pattern_id, "Duplicate Notes", note_ids, |notes| {
+        Ok(note_transform::duplicate(notes, start_tick))
+    })
+}
+
 /// Sets velocity, pan, and fine pitch per note, as one undo step.
 pub fn set_note_params_batch(
     ctx: &mut DawContext,

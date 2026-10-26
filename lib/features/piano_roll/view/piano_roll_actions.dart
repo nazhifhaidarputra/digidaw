@@ -179,6 +179,15 @@ Map<Type, Action<Intent>> pianoRollShortcutActions(WidgetRef ref) {
     ShiftNotesIntent: CallbackAction<ShiftNotesIntent>(
       onInvoke: (intent) => notifier().shiftNotes(intent.steps),
     ),
+    CopyNotesIntent: CallbackAction<CopyNotesIntent>(
+      onInvoke: (_) => notifier().copySelectedNotes(),
+    ),
+    PasteNotesIntent: CallbackAction<PasteNotesIntent>(
+      onInvoke: (_) => notifier().pasteNotesAfterSelection(),
+    ),
+    DuplicateNotesIntent: CallbackAction<DuplicateNotesIntent>(
+      onInvoke: (_) => notifier().duplicateSelectedNotes(),
+    ),
     SelectPianoRollToolIntent: CallbackAction<SelectPianoRollToolIntent>(
       onInvoke: (intent) {
         notifier().selectPianoRollTool(intent.tool);

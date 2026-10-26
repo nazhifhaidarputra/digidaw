@@ -562,3 +562,18 @@ pub fn add_note_copies(
     .map(|pattern| UiPattern::from(&pattern))
     .map_err(|e| e.to_string())
 }
+
+/// Duplicates notes after themselves so the earliest copy starts at `start_tick`,
+/// keeping their relative timing and parameters.
+pub fn duplicate_pattern_notes(
+    ctx: &DawContext,
+    pattern_id: u64,
+    note_ids: Vec<u32>,
+    start_tick: u64,
+) -> Result<UiPattern, String> {
+    crate::api::context::project_ctx!(ctx);
+    let note_ids: Vec<NoteId> = note_ids.into_iter().map(NoteId::from).collect();
+    note_api::duplicate_notes(ctx, PatternId::from_u64(pattern_id), &note_ids, start_tick)
+        .map(|pattern| UiPattern::from(&pattern))
+        .map_err(|e| e.to_string())
+}

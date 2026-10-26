@@ -1,7 +1,9 @@
+import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:karbeat/app/providers/blocking_task_provider.dart';
 import 'package:karbeat/app/providers/project_provider.dart';
 import 'package:karbeat/features/workspace/services/project_file_dialogs.dart';
+import 'package:karbeat/features/workspace/view/unsaved_changes_guard.dart';
 import 'package:karbeat/src/rust/api/serialization.dart' as serialization_api;
 
 /// Saves the current project behind the blocking overlay.
@@ -52,3 +54,20 @@ final projectWindowTitleProvider = Provider<String>((ref) {
   final saved = ref.watch(projectSavedProvider).value ?? true;
   return projectWindowTitle(filePath, saved: saved);
 });
+
+Future<Null> openProject(BuildContext context, WidgetRef ref) async {
+  if (!await confirmDiscardUnsavedChanges(context, ref)) return;
+  final path = await pickProjectFileToOpen();
+  if (path == null) return;
+  final project = ref.read(projectProvider.notifier);
+
+  // Await the Rust Shadow Load & Swap behind the global blocking overlay.
+  await ref
+      .read(blockingTaskProvider.notifier)
+      .run(label: 'Loading project...', task: () => project.loadProject(path));
+}
+
+Future<Null> newProject(BuildContext context, WidgetRef ref) async {
+  if (!await confirmDiscardUnsavedChanges(context, ref)) return;
+  await ref.read(projectProvider.notifier).newBlankProject();
+}

@@ -244,6 +244,28 @@ pub fn shift(notes: &[Note], delta_ticks: i64) -> NoteEdit {
     )
 }
 
+/// Copies every note so the earliest copy starts at `start_tick`, keeping the group's
+/// timing and every other parameter. New IDs are assigned on insertion.
+pub fn duplicate(notes: &[Note], start_tick: u64) -> NoteEdit {
+    let Some(earliest) = notes.iter().map(|note| note.start_tick).min() else {
+        return NoteEdit::default();
+    };
+    let delta = i64::try_from(start_tick)
+        .unwrap_or(i64::MAX)
+        .saturating_sub(i64::try_from(earliest).unwrap_or(i64::MAX));
+    NoteEdit {
+        updates: Vec::new(),
+        additions: notes
+            .iter()
+            .map(|note| Note {
+                id: NoteId::default(),
+                start_tick: note.start_tick.saturating_add_signed(delta),
+                ..note.clone()
+            })
+            .collect(),
+    }
+}
+
 /// Per-note parameter change; `None` leaves a parameter unchanged.
 #[derive(Debug, Clone, Copy, Default, PartialEq)]
 pub struct NoteParams {
@@ -385,6 +407,25 @@ mod tests {
     fn shift_stops_the_group_at_zero() {
         let edit = shift(&[note(1, 100, 10, 60), note(2, 400, 10, 60)], -240);
         assert_eq!(spans(&edit), [(0, 10), (300, 10)]);
+    }
+
+    #[test]
+    fn duplicate_keeps_relative_timing_and_adds_copies() {
+        let notes = [note(1, 120, 240, 60), note(2, 480, 120, 64)];
+        let edit = duplicate(&notes, 960);
+
+        assert!(edit.updates.is_empty());
+        assert_eq!(spans(&edit), [(960, 240), (1320, 120)]);
+        assert!(
+            edit.additions
+                .iter()
+                .all(|note| note.id == NoteId::default())
+        );
+    }
+
+    #[test]
+    fn duplicate_of_no_notes_is_empty() {
+        assert_eq!(duplicate(&[], 960), NoteEdit::default());
     }
 
     #[test]

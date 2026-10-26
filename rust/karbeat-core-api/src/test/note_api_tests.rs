@@ -277,6 +277,26 @@ mod tests {
     }
 
     #[test]
+    fn duplicate_notes_adds_copies_at_the_requested_start() {
+        let (mut ctx, _audio_id, _midi_id, pattern_id) = make_seeded_ctx();
+        let before = ctx.app_state.pattern_pool[pattern_id].notes.len();
+        let note_id = ctx.app_state.pattern_pool[pattern_id].notes[0].id;
+        let key = ctx.app_state.pattern_pool[pattern_id].notes[0].key;
+
+        let result = note_api::duplicate_notes(&mut ctx, pattern_id, &[note_id], 5000);
+
+        assert!(result.is_ok(), "{:?}", result.err());
+        let pattern = result.unwrap();
+        assert_eq!(pattern.notes.len(), before + 1);
+        assert!(
+            pattern
+                .notes
+                .iter()
+                .any(|note| note.start_tick == 5000 && note.key == key)
+        );
+    }
+
+    #[test]
     fn resize_notes_batch_happy_path() {
         let (mut ctx, _audio_id, _midi_id, pattern_id) = make_seeded_ctx();
         let updates: Vec<_> = ctx.app_state.pattern_pool[pattern_id]

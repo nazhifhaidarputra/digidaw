@@ -588,6 +588,13 @@ class PianoRollNotifier extends Notifier<PianoRollStateData> {
     }
   }
 
+  /// Copies the selected notes to the note clipboard.
+  Future<void> copySelectedNotes() async {
+    final patternId = state.editingPatternId;
+    if (patternId == null || state.selectedNoteIds.isEmpty) return;
+    await copyNotesFromPattern(patternId, _targetNoteIds);
+  }
+
   Future<void> cutNotesFromPattern(int patternId, List<int> noteIds) async {
     final patternOriCopy = _projectState.value?.patterns[patternId];
     if (patternOriCopy == null) return;
@@ -672,11 +679,11 @@ class PianoRollNotifier extends Notifier<PianoRollStateData> {
     return Result.ok(null);
   }
 
-  Future<void> pasteNotesFromClipboardToPattern(
+  Future<Result<void>> pasteNotesFromClipboardToPattern(
     int targetPatternId,
-    int newTickStart,
-    int newKey,
-  ) async {
+    int newTickStart, {
+    int? newKey,
+  }) async {
     final result = await ref.guardApi(() async {
       final pastedNotes = await session_api.pastePatternNotes(
         ctx: _ctx,
@@ -694,7 +701,86 @@ class PianoRollNotifier extends Notifier<PianoRollStateData> {
 
     if (result.hasError) {
       AppLogger.error(result.error.toString());
+      return Result.error(Exception(result.error.toString()));
     }
+    return Result.ok(null);
+  }
+
+  /// Pastes the note clipboard after the selected notes, or after the last note
+  /// in the pattern when nothing is selected. The start is rounded up to the
+  /// next draw step.
+  Future<Result<void>> pasteNotesAfterSelection() async {
+    final patternId = state.editingPatternId;
+    final pattern = patternId == null
+        ? null
+        : _projectState.value?.patterns[patternId];
+    if (patternId == null || pattern == null) {
+      return ref.notifyErrorResult(Exception('Pattern not found'));
+    }
+
+    return pasteNotesFromClipboardToPattern(
+      patternId,
+      _nextStepTick(_notesEndTick(pattern, state.selectedNoteIds)),
+    );
+  }
+
+  /// Duplicates the selected notes after themselves without touching the note
+  /// clipboard, then selects the copies. The start is rounded up to the next
+  /// draw step.
+  Future<Result<void>> duplicateSelectedNotes() async {
+    final patternId = state.editingPatternId;
+    final noteIds = _targetNoteIds;
+    final pattern = patternId == null
+        ? null
+        : _projectState.value?.patterns[patternId];
+    if (patternId == null || pattern == null) {
+      return ref.notifyErrorResult(Exception('Pattern not found'));
+    }
+    if (noteIds.isEmpty) return Result.ok(null);
+
+    final result = await AsyncValue.guard(
+      () => pattern_api.duplicatePatternNotes(
+        ctx: _ctx,
+        patternId: patternId,
+        noteIds: noteIds,
+        startTick: _nextStepTick(_notesEndTick(pattern, noteIds)),
+      ),
+    );
+
+    if (result case AsyncData(:final value)) {
+      final existingIds = pattern.notes.map((note) => note.id).toSet();
+      _projectNotifier.upsertPattern(patternId, value);
+      selectNotes(
+        value.notes
+            .where((note) => !existingIds.contains(note.id))
+            .map((note) => note.id),
+      );
+      return Result.ok(null);
+    }
+
+    AppLogger.error('Could not duplicate notes: ${result.error}');
+    return ref.notifyErrorResult(
+      result.error ?? Exception('Unknown error'),
+      title: 'Could not duplicate notes',
+    );
+  }
+
+  /// Latest end tick among [noteIds], or among every note when it is empty.
+  int _notesEndTick(UiPattern pattern, Iterable<int> noteIds) {
+    final ids = noteIds.toSet();
+    var endTick = 0;
+    for (final note in pattern.notes) {
+      if (ids.isNotEmpty && !ids.contains(note.id)) continue;
+      endTick = max(endTick, note.startTick + note.duration);
+    }
+    return endTick;
+  }
+
+  /// Rounds [tick] up to the next draw step.
+  int _nextStepTick(int tick) {
+    final step = state.stepTicks;
+    if (step <= 1) return tick;
+    return (tick + step - 1) ~/ step * step;
   }
 
   void _applyOptimisticNoteDeletionBatch(int patternId, List<int> noteIds) {

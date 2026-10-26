@@ -290,6 +290,70 @@ void main() {
     );
   });
 
+  test(
+    'duplicate places copies after the selection on the next step',
+    () async {
+      final duplicated = _pattern.copyWith(
+        notes: [..._pattern.notes, _note(3, 960, 64)],
+      );
+      when(
+        () => api.crateApiPatternDuplicatePatternNotes(
+          ctx: any(named: 'ctx'),
+          patternId: _patternId,
+          noteIds: any(named: 'noteIds'),
+          startTick: any(named: 'startTick'),
+        ),
+      ).thenAnswer((_) async => duplicated);
+      final container = await createContainer();
+      final notifier = container.read(pianoRollProvider.notifier);
+      notifier.selectNotes({2});
+
+      final result = await notifier.duplicateSelectedNotes();
+
+      expect(result.isOk(), isTrue);
+      verify(
+        () => api.crateApiPatternDuplicatePatternNotes(
+          ctx: any(named: 'ctx'),
+          patternId: _patternId,
+          noteIds: [2],
+          startTick: 960,
+        ),
+      ).called(1);
+      expect(
+        container.read(projectProvider).requireValue.patterns[_patternId],
+        duplicated,
+      );
+      expect(container.read(pianoRollProvider).selectedNoteIds.toSet(), {3});
+    },
+  );
+
+  test('paste starts after the selection on the next step', () async {
+    when(
+      () => api.crateApiSessionPastePatternNotes(
+        ctx: any(named: 'ctx'),
+        targetPatternId: _patternId,
+        playheadTick: any(named: 'playheadTick'),
+        targetKey: any(named: 'targetKey'),
+      ),
+    ).thenAnswer((_) async => [_note(3, 960, 64)]);
+    final container = await createContainer();
+    final notifier = container.read(pianoRollProvider.notifier);
+    notifier.selectNotes({2});
+
+    final result = await notifier.pasteNotesAfterSelection();
+
+    expect(result.isOk(), isTrue);
+    verify(
+      () => api.crateApiSessionPastePatternNotes(
+        ctx: any(named: 'ctx'),
+        targetPatternId: _patternId,
+        playheadTick: 960,
+        targetKey: null,
+      ),
+    ).called(1);
+    expect(container.read(pianoRollProvider).selectedNoteIds.toSet(), {3});
+  });
+
   test('playing sends the loop region before starting', () async {
     when(
       () => api.crateApiTransportSetPatternLoop(

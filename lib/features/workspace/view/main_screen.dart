@@ -83,6 +83,18 @@ class MainScreen extends ConsumerWidget {
                   return null;
                 },
               ),
+              NewProjectIntent: CallbackAction<NewProjectIntent>(
+                onInvoke: (_) {
+                  unawaited(newProject(context, ref));
+                  return null;
+                },
+              ),
+              OpenProjectIntent: CallbackAction<OpenProjectIntent>(
+                onInvoke: (_) {
+                  unawaited(openProject(context, ref));
+                  return null;
+                },
+              ),
               UndoIntent: CallbackAction<UndoIntent>(
                 onInvoke: (_) {
                   unawaited(_runHistoryAction(ref, undo: true));

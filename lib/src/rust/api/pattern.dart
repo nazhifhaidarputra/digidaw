@@ -325,6 +325,20 @@ Future<UiPattern> addNoteCopies({
   notes: notes,
 );
 
+/// Duplicates notes after themselves so the earliest copy starts at `start_tick`,
+/// keeping their relative timing and parameters.
+Future<UiPattern> duplicatePatternNotes({
+  required DawContext ctx,
+  required int patternId,
+  required List<int> noteIds,
+  required int startTick,
+}) => RustLib.instance.api.crateApiPatternDuplicatePatternNotes(
+  ctx: ctx,
+  patternId: patternId,
+  noteIds: noteIds,
+  startTick: startTick,
+);
+
 @freezed
 sealed class UiNote with _$UiNote {
   const factory UiNote({

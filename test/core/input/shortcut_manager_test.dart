@@ -205,6 +205,65 @@ void main() {
     expect(metronome.defaultKey.control, isTrue);
   });
 
+  test('piano roll binds copy, paste, and duplicate notes', () {
+    final container = ProviderContainer(
+      overrides: [
+        shortcutPreferencesServiceProvider.overrideWithValue(
+          _FakeShortcutPreferencesService(),
+        ),
+      ],
+    );
+    addTearDown(container.dispose);
+    container
+        .read(workspaceStateProvider.notifier)
+        .navigateTo(WorkspaceView.pianoRoll);
+
+    final shortcuts = container.read(activeShortcutMapProvider);
+    Intent? intentFor(LogicalKeyboardKey key) => shortcuts.entries
+        .where((entry) {
+          final activator = entry.key as SingleActivator;
+          return activator.trigger == key &&
+              activator.control &&
+              !activator.alt &&
+              !activator.shift;
+        })
+        .firstOrNull
+        ?.value;
+
+    expect(intentFor(LogicalKeyboardKey.keyC), isA<CopyNotesIntent>());
+    expect(intentFor(LogicalKeyboardKey.keyV), isA<PasteNotesIntent>());
+    expect(intentFor(LogicalKeyboardKey.keyB), isA<DuplicateNotesIntent>());
+  });
+
+  test('active shortcut chords follow remapped settings', () async {
+    final container = ProviderContainer(
+      overrides: [
+        shortcutPreferencesServiceProvider.overrideWithValue(
+          _FakeShortcutPreferencesService(),
+        ),
+      ],
+    );
+    addTearDown(container.dispose);
+    final notifier = container.read(shortcutManagerProvider.notifier);
+    await notifier.initialize();
+
+    expect(
+      container.read(activeShortcutChordProvider('workspace.save')),
+      ShortcutChord(logicalKeyId: LogicalKeyboardKey.keyS.keyId, control: true),
+    );
+    expect(
+      container.read(activeShortcutChordProvider('missing.command')),
+      isNull,
+    );
+
+    await notifier.remap('workspace.save', customChord);
+
+    expect(
+      container.read(activeShortcutChordProvider('workspace.save')),
+      customChord,
+    );
+  });
+
   test('a key may be shared across views but not with a global one', () async {
     final service = _FakeShortcutPreferencesService();
     final container = ProviderContainer(
