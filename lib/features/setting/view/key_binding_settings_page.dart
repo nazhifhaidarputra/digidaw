@@ -97,7 +97,7 @@ class _KeyBindingSettingsPageState
                 ..._buildGroups(visible, active, shortcutState.overrides),
               const SizedBox(height: 16),
               Text(
-                'Shortcuts require Ctrl, Alt, or Command plus a non-modifier key. Escape cancels capture.',
+                '$shortcutSupportHint Escape cancels capture.',
                 style: Theme.of(context).textTheme.bodySmall,
               ),
             ],
@@ -257,7 +257,7 @@ class _ShortcutCaptureDialogState extends State<_ShortcutCaptureDialog> {
     );
     if (!chord.isSupported) {
       setState(() {
-        _error = 'Use Ctrl, Alt, or Command with a non-modifier key.';
+        _error = shortcutSupportHint;
       });
       return KeyEventResult.handled;
     }

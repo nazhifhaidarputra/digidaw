@@ -59,6 +59,11 @@ class DuplicateNotesIntent extends Intent {
   const DuplicateNotesIntent();
 }
 
+/// Deletes the selected notes and clears the selection.
+class DeleteNotesIntent extends Intent {
+  const DeleteNotesIntent();
+}
+
 /// Switches the piano-roll tool.
 class SelectPianoRollToolIntent extends Intent {
   const SelectPianoRollToolIntent(this.tool);
@@ -179,6 +184,14 @@ const pianoRollShortcuts = IListConst<DawShortcut>([
     scope: ShortcutScope.pianoRoll,
     intent: DuplicateNotesIntent(),
     defaultKey: SingleActivator(LogicalKeyboardKey.keyB, control: true),
+  ),
+  DawShortcut(
+    id: 'pianoRoll.deleteNotes',
+    title: 'Delete Notes',
+    category: 'Piano Roll',
+    scope: ShortcutScope.pianoRoll,
+    intent: DeleteNotesIntent(),
+    defaultKey: SingleActivator(LogicalKeyboardKey.delete),
   ),
   DawShortcut(
     id: 'pianoRoll.tool.grab',

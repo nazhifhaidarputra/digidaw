@@ -216,6 +216,16 @@ class MainScreen extends ConsumerWidget {
                   return null;
                 },
               ),
+              DeleteClipsIntent: CallbackAction<DeleteClipsIntent>(
+                onInvoke: (_) {
+                  unawaited(
+                    ref
+                        .read(trackListStateProvider.notifier)
+                        .deleteSelectedClips(),
+                  );
+                  return null;
+                },
+              ),
             },
       child: UnsavedChangesGuard(
         child: StartupRecoveryPrompt(

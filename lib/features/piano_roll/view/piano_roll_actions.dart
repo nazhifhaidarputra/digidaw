@@ -188,6 +188,9 @@ Map<Type, Action<Intent>> pianoRollShortcutActions(WidgetRef ref) {
     DuplicateNotesIntent: CallbackAction<DuplicateNotesIntent>(
       onInvoke: (_) => notifier().duplicateSelectedNotes(),
     ),
+    DeleteNotesIntent: CallbackAction<DeleteNotesIntent>(
+      onInvoke: (_) => notifier().deleteSelectedNotes(),
+    ),
     SelectPianoRollToolIntent: CallbackAction<SelectPianoRollToolIntent>(
       onInvoke: (intent) {
         notifier().selectPianoRollTool(intent.tool);

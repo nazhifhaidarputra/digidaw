@@ -95,9 +95,7 @@ class ShortcutManagerNotifier extends Notifier<ShortcutManagerState> {
   Future<Result<void>> remap(String id, ShortcutChord chord) async {
     if (!chord.isSupported) {
       return Result.error(
-        const ShortcutValidationException(
-          'Use a non-modifier key with Ctrl, Alt, or Command.',
-        ),
+        const ShortcutValidationException(shortcutSupportHint),
       );
     }
     final shortcut = shortcutById(id);

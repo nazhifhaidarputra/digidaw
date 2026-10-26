@@ -765,6 +765,19 @@ class PianoRollNotifier extends Notifier<PianoRollStateData> {
     );
   }
 
+  /// Deletes the selected notes and clears the note selection.
+  Future<Result<void>> deleteSelectedNotes() async {
+    final patternId = state.editingPatternId;
+    final noteIds = _targetNoteIds;
+    if (patternId == null) {
+      return ref.notifyErrorResult(Exception('Pattern not found'));
+    }
+    if (noteIds.isEmpty) return Result.ok(null);
+
+    clearNoteSelection();
+    return deletePatternNoteBatch(patternId: patternId, noteIds: noteIds);
+  }
+
   /// Latest end tick among [noteIds], or among every note when it is empty.
   int _notesEndTick(UiPattern pattern, Iterable<int> noteIds) {
     final ids = noteIds.toSet();

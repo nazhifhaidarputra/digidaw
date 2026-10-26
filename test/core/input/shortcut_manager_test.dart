@@ -235,6 +235,55 @@ void main() {
     expect(intentFor(LogicalKeyboardKey.keyB), isA<DuplicateNotesIntent>());
   });
 
+  test('Delete removes the selection in both editing views', () {
+    final container = ProviderContainer(
+      overrides: [
+        shortcutPreferencesServiceProvider.overrideWithValue(
+          _FakeShortcutPreferencesService(),
+        ),
+      ],
+    );
+    addTearDown(container.dispose);
+
+    Intent? deleteIntent() => container
+        .read(activeShortcutMapProvider)
+        .entries
+        .where((entry) {
+          final activator = entry.key as SingleActivator;
+          return activator.trigger == LogicalKeyboardKey.delete &&
+              !activator.control &&
+              !activator.alt &&
+              !activator.shift &&
+              !activator.meta;
+        })
+        .firstOrNull
+        ?.value;
+
+    expect(deleteIntent(), isA<DeleteClipsIntent>());
+
+    container
+        .read(workspaceStateProvider.notifier)
+        .navigateTo(WorkspaceView.pianoRoll);
+    expect(deleteIntent(), isA<DeleteNotesIntent>());
+  });
+
+  test('Delete and Backspace are valid bare shortcut keys', () {
+    expect(
+      ShortcutChord(logicalKeyId: LogicalKeyboardKey.delete.keyId).isSupported,
+      isTrue,
+    );
+    expect(
+      ShortcutChord(
+        logicalKeyId: LogicalKeyboardKey.backspace.keyId,
+      ).isSupported,
+      isTrue,
+    );
+    expect(
+      ShortcutChord(logicalKeyId: LogicalKeyboardKey.keyA.keyId).isSupported,
+      isFalse,
+    );
+  });
+
   test('active shortcut chords follow remapped settings', () async {
     final container = ProviderContainer(
       overrides: [

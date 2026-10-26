@@ -59,8 +59,11 @@ abstract class ShortcutChord with _$ShortcutChord {
     );
   }
 
+  /// Editing keys that are useful on their own, such as the Delete key that
+  /// removes the current selection in a DAW.
   bool get isSupported =>
-      !_modifierKeyIds.contains(logicalKeyId) && (control || alt || meta);
+      !_modifierKeyIds.contains(logicalKeyId) &&
+      (control || alt || meta || _bareEditingKeyIds.contains(logicalKeyId));
 
   SingleActivator toActivator() => SingleActivator(
     LogicalKeyboardKey(logicalKeyId),
@@ -126,6 +129,11 @@ class ShortcutConflictException implements Exception {
   String toString() => 'Already assigned to $conflictingTitle.';
 }
 
+/// Explains which chords [ShortcutChord.isSupported] accepts.
+const shortcutSupportHint =
+    'Use Ctrl, Alt, or Command with a non-modifier key, or press Delete or '
+    'Backspace.';
+
 class ShortcutValidationException implements Exception {
   const ShortcutValidationException(this.message);
 
@@ -151,6 +159,11 @@ String shortcutLabel(ShortcutChord chord) {
   parts.add(key.isEmpty ? 'Key ${chord.logicalKeyId}' : key.toUpperCase());
   return parts.join('+');
 }
+
+final _bareEditingKeyIds = <int>{
+  LogicalKeyboardKey.delete.keyId,
+  LogicalKeyboardKey.backspace.keyId,
+};
 
 final _modifierKeyIds = <int>{
   LogicalKeyboardKey.controlLeft.keyId,

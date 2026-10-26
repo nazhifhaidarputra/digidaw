@@ -327,6 +327,40 @@ void main() {
     },
   );
 
+  test('Delete removes the selected notes and clears the selection', () async {
+    when(
+      () => api.crateApiPatternDeleteNotesBatch(
+        ctx: any(named: 'ctx'),
+        patternId: _patternId,
+        noteIds: any(named: 'noteIds'),
+      ),
+    ).thenAnswer((_) async {});
+    final container = await createContainer();
+    final notifier = container.read(pianoRollProvider.notifier);
+    notifier.selectNotes({2});
+
+    final result = await notifier.deleteSelectedNotes();
+
+    expect(result.isOk(), isTrue);
+    verify(
+      () => api.crateApiPatternDeleteNotesBatch(
+        ctx: any(named: 'ctx'),
+        patternId: _patternId,
+        noteIds: [2],
+      ),
+    ).called(1);
+    expect(container.read(pianoRollProvider).selectedNoteIds, isEmpty);
+    expect(
+      container
+          .read(projectProvider)
+          .requireValue
+          .patterns[_patternId]!
+          .notes
+          .map((note) => note.id),
+      [1],
+    );
+  });
+
   test('paste starts after the selection on the next step', () async {
     when(
       () => api.crateApiSessionPastePatternNotes(
