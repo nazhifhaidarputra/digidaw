@@ -7,6 +7,7 @@ description = "UI-independent API layer between Karbeat's core modules and its U
 
 [dependencies]
 karbeat-analysis.workspace = true
+karbeat-audio.workspace = true
 karbeat-core.workspace = true
 karbeat-dsp.workspace = true
 karbeat-host.workspace = true

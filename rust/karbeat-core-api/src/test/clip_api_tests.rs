@@ -12,7 +12,7 @@ mod tests {
     use karbeat_core::shared::id::{ClipId, TrackId};
 
     fn add_midi_clip(
-        ctx: &mut karbeat_core::context::DawContext,
+        ctx: &mut karbeat_audio::context::DawContext,
         track_id: TrackId,
         start: u32,
     ) -> karbeat_core::core::project::clip::Clip {
@@ -21,7 +21,7 @@ mod tests {
     }
 
     fn add_audio_clip(
-        ctx: &mut karbeat_core::context::DawContext,
+        ctx: &mut karbeat_audio::context::DawContext,
         track_id: TrackId,
         start: u64,
     ) -> Clip {

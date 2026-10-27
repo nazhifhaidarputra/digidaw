@@ -149,10 +149,13 @@ class _GainEnvelopeEditorState extends ConsumerState<GainEnvelopeEditor> {
 
     UiFade bend(UiFade fade) {
       _dragDy += details.delta.dy;
-      final direction =
-          ref.read(curveSamplerProvider).traits(fade.curveType).tensionInverted
-          ? 1.0
-          : -1.0;
+      final traits = ref.read(curveSamplerProvider).traits(fade.curveType);
+      // A Step fade switches to the far side when dragged toward it, while
+      // bendable curves follow the usual up-raises-the-curve direction.
+      final direction = switch (fade.curveType) {
+        AutomationCurveTypeDto.step => 1.0,
+        _ => traits.tensionInverted ? 1.0 : -1.0,
+      };
       final tension = (_tensionAnchor + direction * _dragDy / 60).clamp(
         -1.0,
         1.0,

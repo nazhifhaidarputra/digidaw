@@ -1,4 +1,4 @@
-use karbeat_core::{context::DawContext as CoreDawContext, init::init_engine};
+use karbeat_audio::{context::DawContext as CoreDawContext, init::init_engine};
 use karbeat_core_api as api;
 #[cfg(target_os = "android")]
 use once_cell::sync::OnceCell;

@@ -4,8 +4,8 @@
 mod tests {
     use std::sync::Arc;
 
+    use karbeat_audio::context::DawContext;
     use karbeat_core::{
-        context::DawContext,
         core::project::{
             AudioSourceId, DawSource,
             clip::{ClipSourceType, ClipTimeUnit, ResizeEdge},

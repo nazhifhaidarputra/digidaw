@@ -354,11 +354,13 @@ class _AutomationLaneSlotState extends ConsumerState<AutomationLaneSlot> {
 
   /// Direction in which raising tension moves the handle, so dragging up
   /// always raises the curve: `1` or `-1`. Count-driven curves simply get
-  /// more steps or cycles when dragged up.
+  /// more steps or cycles when dragged up. A Step handle moves toward the
+  /// other endpoint, since its tension picks which side of the segment holds.
   double _tensionDirection(AutomationPointDto from, double toValue) {
     final traits = _sampler.traits(from.curveType);
     final rising = toValue - from.value;
     if (traits.tensionIsCount || rising == 0) return 1;
+    if (from.curveType == AutomationCurveTypeDto.step) return -rising.sign;
     return traits.tensionInverted ? -rising.sign : rising.sign;
   }
 

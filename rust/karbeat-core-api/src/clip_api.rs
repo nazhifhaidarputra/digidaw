@@ -1,4 +1,4 @@
-use karbeat_core::context::DawContext;
+use karbeat_audio::context::DawContext;
 use karbeat_core::core::history::actions::{ClipEditRecorder, ClipsMadeUnique};
 use karbeat_core::core::project::clip::{
     Clip, ClipSourceType, ClipTimeUnit, MadeUnique, ResizeEdge,

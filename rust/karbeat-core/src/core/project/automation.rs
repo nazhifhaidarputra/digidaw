@@ -8,12 +8,9 @@ use karbeat_dsp::interpolation::lerp;
 use karbeat_utils::types::{BipolarF64, NormalizedF64};
 use serde::{Deserialize, Serialize};
 
-use crate::{
-    audio::event::PluginTarget,
-    shared::{
-        GeneratorId,
-        id::{AutomationId, AutomationPointId, BusId, EffectId, TrackId},
-    },
+use crate::shared::{
+    GeneratorId,
+    id::{AutomationId, AutomationPointId, BusId, EffectId, TrackId},
 };
 
 // ============================================================================
@@ -174,6 +171,63 @@ impl AutomationTarget {
         }
     }
 }
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Hash, Eq)]
+/// Identifies one plugin instance independent of whether it is a generator or mixer effect.
+pub enum PluginTarget {
+    /// Generator plugin in the project generator pool.
+    Generator(GeneratorId),
+    /// Effect on a track mixer channel.
+    TrackEffect(TrackId, EffectId),
+    /// Effect on a bus mixer channel.
+    BusEffect(BusId, EffectId),
+    /// Effect on the master mixer channel.
+    MasterEffect(EffectId),
+}
+
+impl TryFrom<&AutomationTarget> for PluginTarget {
+    type Error = &'static str;
+
+    fn try_from(target: &AutomationTarget) -> Result<Self, Self::Error> {
+        target
+            .as_plugin_target()
+            .ok_or("AutomationTarget does not map to a PluginTarget")
+    }
+}
+
+impl PluginTarget {
+    /// Builds the automation target for parameter `param_id` on this plugin instance.
+    pub fn to_automation_target(&self, param_id: u32) -> AutomationTarget {
+        match self {
+            PluginTarget::Generator(generator_id) => AutomationTarget::Generator {
+                generator_id: *generator_id,
+                param_id,
+            },
+            PluginTarget::TrackEffect(track_id, effect_id) => AutomationTarget::Track {
+                track_id: *track_id,
+                track_target: TrackAutomationTarget::MixerChannel(
+                    MixerChannelParamTarget::Plugin {
+                        effect_id: *effect_id,
+                        target: EffectAutomationTarget::PluginParam { param_id },
+                    },
+                ),
+            },
+            PluginTarget::BusEffect(bus_id, effect_id) => AutomationTarget::Bus {
+                bus_id: *bus_id,
+                mix_target: MixerChannelParamTarget::Plugin {
+                    effect_id: *effect_id,
+                    target: EffectAutomationTarget::PluginParam { param_id },
+                },
+            },
+            PluginTarget::MasterEffect(effect_id) => AutomationTarget::Master(
+                MasterAutomationTarget::MixerChannel(MixerChannelParamTarget::Plugin {
+                    effect_id: *effect_id,
+                    target: EffectAutomationTarget::PluginParam { param_id },
+                }),
+            ),
+        }
+    }
+}
+
 /// Lowest tempo reachable by tempo automation, in beats per minute.
 pub const TEMPO_AUTOMATION_MIN_BPM: f32 = 10.0;
 
@@ -194,7 +248,9 @@ pub enum AutomationCurveType {
     Linear,
     /// Exponential curve (good for frequency, volume)
     Exponential,
-    /// Instant step (no interpolation)
+    /// Instant step: non-negative tension holds the first value until the next
+    /// point, negative tension holds the second value from just after the
+    /// first point.
     Step,
     /// Mirror of the exponential curve: fast at the start, slow at the end
     Logarithmic,
@@ -238,7 +294,7 @@ impl AutomationCurveType {
         );
         let uses_handles = self == Self::Bezier;
         CurveTraits {
-            supports_tension: !uses_handles && self != Self::Step,
+            supports_tension: !uses_handles,
             tension_inverted: self == Self::Exponential,
             tension_is_count,
             uses_handles,
@@ -649,7 +705,8 @@ pub fn interpolate_segment(from: &AutomationPoint, to_value: NormalizedF64, t: f
 /// - Exponential: geometric ramp; tension is inverted so dragging feels natural.
 /// - Logarithmic: the exponential ramp mirrored, fast first and slow last.
 /// - SCurve: ease-in-out; tension moves the steep part earlier or later.
-/// - Step: holds the first value until the next point, tension is ignored.
+/// - Step: holds the first value until the next point; negative tension holds the second value
+///   from just after the first point instead.
 /// - Bezier: cubic through the shape's handles, tension is ignored.
 /// - Stairs, SmoothStairs, Pulse, Wave, Triangle: tension picks the step or cycle count, see
 ///   [`tension_count`].
@@ -684,7 +741,11 @@ pub fn shape_segment(shape: SegmentShape, v1: f64, v2: f64, t: f64) -> f64 {
             v1 + v2 - from * (to / from).powf(apply_tension_to_t(t, tension))
         }
         AutomationCurveType::SCurve => lerp(smoothstep(apply_tension_to_t(t, tension)), v1, v2),
-        AutomationCurveType::Step => v1,
+        AutomationCurveType::Step => {
+            // The point itself always keeps its value; tension picks which
+            // value the segment holds immediately after it.
+            if tension < 0.0 && t > 0.0 { v2 } else { v1 }
+        }
         AutomationCurveType::Bezier => {
             let handles = shape
                 .handles
@@ -908,13 +969,26 @@ mod tests {
     }
 
     #[test]
-    fn step_holds_until_the_next_point_regardless_of_tension() {
-        let points = [
-            point(0, 0.1, AutomationCurveType::Step, 0.9),
+    fn step_tension_picks_which_side_of_the_segment_holds() {
+        assert!(AutomationCurveType::Step.traits().supports_tension);
+        let hold_first = [
+            point(0, 0.1, AutomationCurveType::Step, 0.0),
             point(100, 0.9, AutomationCurveType::Linear, 0.0),
         ];
-        assert_eq!(value_at(&points, 99), 0.1);
-        assert_eq!(value_at(&points, 100), 0.9);
+        assert_eq!(value_at(&hold_first, 0), 0.1);
+        assert_eq!(value_at(&hold_first, 1), 0.1);
+        assert_eq!(value_at(&hold_first, 99), 0.1);
+        assert_eq!(value_at(&hold_first, 100), 0.9);
+
+        let hold_next = [
+            point(0, 0.1, AutomationCurveType::Step, -0.5),
+            point(100, 0.9, AutomationCurveType::Linear, 0.0),
+        ];
+        // The point keeps its own value; the step applies just after it.
+        assert_eq!(value_at(&hold_next, 0), 0.1);
+        assert_eq!(value_at(&hold_next, 1), 0.9);
+        assert_eq!(value_at(&hold_next, 99), 0.9);
+        assert_eq!(value_at(&hold_next, 100), 0.9);
     }
 
     /// C at tick 0 (100%), A at tick 100 (50%), D at tick 200 (100%), then B added at A's tick.
@@ -976,25 +1050,6 @@ mod tests {
         assert_eq!(ids(&lane), [a, b, d, c]);
     }
 
-    #[test]
-    fn audio_lane_matches_project_lane_evaluation() {
-        let mut lane =
-            AutomationLane::new(AutomationId::default(), "Cutoff", NormalizedF64::new(0.5));
-        lane.add_point(AutomationPoint::with_curve(
-            0,
-            NormalizedF64::new(0.1),
-            AutomationCurveType::Exponential,
-        ));
-        lane.add_point(AutomationPoint::new(480, NormalizedF64::new(0.9)));
-        lane.points[0].tension = BipolarF64::new(0.4);
-        let audio_lane = crate::audio::render_state::AudioAutomationLane::from(lane.clone());
-
-        for tick in [0, 120, 240, 360, 480, 960] {
-            let expected = lane.value_at(tick).map_or(f64::NAN, NormalizedF64::get);
-            assert_eq!(audio_lane.value_at_ticks(tick), expected);
-        }
-    }
-
     const ALL_CURVES: [AutomationCurveType; 12] = [
         AutomationCurveType::Linear,
         AutomationCurveType::Exponential,
@@ -1052,7 +1107,11 @@ mod tests {
     fn tension_moves_bendable_curves_in_the_direction_their_traits_report() {
         for curve in ALL_CURVES {
             let traits = curve.traits();
-            if !traits.supports_tension || traits.tension_is_count {
+            // Step tension picks a side instead of bending the segment.
+            if !traits.supports_tension
+                || traits.tension_is_count
+                || curve == AutomationCurveType::Step
+            {
                 continue;
             }
             let direction = if traits.tension_inverted { -1.0 } else { 1.0 };

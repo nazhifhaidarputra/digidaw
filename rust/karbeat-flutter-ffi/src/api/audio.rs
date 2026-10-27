@@ -9,8 +9,8 @@ use crate::api::project::{
 };
 use crate::frb_generated::StreamSink;
 use flutter_rust_bridge::frb;
-use karbeat_core::audio::event::{PluginTarget, TransportFeedback};
-use karbeat_core::commands::{AudioFeedback, EffectTarget, MixerChannelTarget};
+use karbeat_audio::commands::{AudioFeedback, EffectTarget, MixerChannelTarget};
+use karbeat_audio::event::{PluginTarget, TransportFeedback};
 use karbeat_core::core::project::{AudioSourceId, GeneratorId, TrackId};
 use karbeat_core_api::{audio_api, audio_waveform_api};
 

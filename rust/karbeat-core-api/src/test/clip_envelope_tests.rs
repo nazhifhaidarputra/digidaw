@@ -7,7 +7,7 @@ mod tests {
     use crate as api;
     use crate::test::helpers::{add_dc_audio_source, make_seeded_ctx};
     use crate::{audio_waveform_api, clip_api};
-    use karbeat_core::context::DawContext;
+    use karbeat_audio::context::DawContext;
     use karbeat_core::core::project::{
         DawSource, EnvelopePoint, Fade, GainEnvelope, clip::ClipSourceType,
     };

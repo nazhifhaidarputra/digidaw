@@ -1,4 +1,4 @@
-pub(crate) use karbeat_core::context::INIT_LOGGER;
+pub(crate) use karbeat_audio::context::INIT_LOGGER;
 
 #[allow(
     clippy::as_conversions,

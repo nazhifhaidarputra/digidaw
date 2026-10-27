@@ -360,7 +360,7 @@ mod tests {
         let root = dir.path().to_path_buf();
         check_random(
             move || {
-                let session = DawContext::new(karbeat_core::context::DawContext::new());
+                let session = DawContext::new(karbeat_audio::context::DawContext::new());
                 assert_eq!(
                     auto_save_once(&session).expect("unconfigured"),
                     AutoSaveOutcome::Idle

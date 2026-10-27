@@ -10,6 +10,8 @@ crate-type = ["cdylib", "staticlib"]
 
 
 [dependencies]
+karbeat-audio.workspace = true
+karbeat-core.workspace = true
 karbeat-core-api.workspace = true
 karbeat-vst3.workspace = true
 karbeat-clap.workspace = true
@@ -37,11 +39,8 @@ ndk-context = { version = "0.1.1" }
 jni = { version = "0.22.4" }
 
 [target.'cfg(target_os = "windows")'.dependencies]
-karbeat-core = { workspace = true, features = ["asio"] }
+karbeat-audio = { workspace = true, features = ["asio"] }
 karbeat-host-api.workspace = true
-
-[target.'cfg(not(target_os = "windows"))'.dependencies]
-karbeat-core.workspace = true
 
 [dev-dependencies]
 shuttle.workspace = true

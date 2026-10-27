@@ -1,5 +1,5 @@
-use karbeat_core::{
-    audio::backend::{
+use karbeat_audio::{
+    backend::{
         self, AudioDeviceInfo, AudioRuntimeSettings, OutputDeviceSelection, OutputHostSelection,
         RequestedOutputConfig,
     },
@@ -159,8 +159,8 @@ pub fn select_output(
 )]
 mod tests {
     use super::{select_output, set_dsp_config};
-    use karbeat_core::{
-        audio::backend::{OutputDeviceSelection, OutputHostSelection},
+    use karbeat_audio::{
+        backend::{OutputDeviceSelection, OutputHostSelection},
         context::DawContext,
     };
 

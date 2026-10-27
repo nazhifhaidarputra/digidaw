@@ -1,6 +1,6 @@
-use karbeat_core::commands::AudioCommand;
-use karbeat_core::commands::MixerChannelTarget;
-use karbeat_core::context::DawContext;
+use karbeat_audio::commands::AudioCommand;
+use karbeat_audio::commands::MixerChannelTarget;
+use karbeat_audio::context::DawContext;
 use karbeat_core::core::history::actions::{
     StructureRecorder, TrackRecolored, TrackRenamed, TracksReordered,
 };
@@ -171,7 +171,7 @@ pub fn delete_track(ctx: &mut DawContext, track_id: TrackId) -> anyhow::Result<R
     }
     for effect_id in effect_ids {
         let _ = ctx.send_audio_command(AudioCommand::RemoveEffect {
-            target: karbeat_core::commands::EffectTarget::Track(track_id),
+            target: karbeat_audio::commands::EffectTarget::Track(track_id),
             effect_id,
         });
     }

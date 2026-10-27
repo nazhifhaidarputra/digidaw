@@ -1,7 +1,7 @@
 use smallvec::SmallVec;
 
 use crate::{
-    commands::EffectTarget,
+    core::project::EffectTarget,
     shared::id::{AudioSourceId, AutomationId, BusId, EffectId, GeneratorId, TrackId},
 };
 

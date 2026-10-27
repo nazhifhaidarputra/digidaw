@@ -5,9 +5,9 @@
     reason = "integration test assertions"
 )]
 
-use karbeat_core::{
-    audio::engine::{AudioEngine, AudioEngineTelemetry},
+use karbeat_audio::{
     context::DawContext,
+    engine::{AudioEngine, AudioEngineTelemetry},
     message::TelemetryRegistry,
 };
 use karbeat_core_api::{
@@ -71,9 +71,8 @@ fn workflow(descriptor: PluginDescriptor) {
         let registry = ctx.plugin_catalog.resolve(&descriptor.identity).unwrap().id;
         let first = track_api::add_midi_track_with_generator_id(&mut ctx, registry).unwrap();
         let second = track_api::add_midi_track_with_generator_id(&mut ctx, registry).unwrap();
-        let target = karbeat_core::audio::event::PluginTarget::Generator(
-            first.generator.as_ref().unwrap().id,
-        );
+        let target =
+            karbeat_audio::event::PluginTarget::Generator(first.generator.as_ref().unwrap().id);
         assert!(
             external_plugin_api::capabilities(&mut ctx, target)
                 .unwrap()
@@ -215,9 +214,8 @@ fn workflow(descriptor: PluginDescriptor) {
         track_api::delete_track(&mut ctx, first.id).unwrap();
         assert_eq!(ctx.external_plugin_failures.len(), 1);
         ctx.plugin_catalog.merge([descriptor]);
-        let second_target = karbeat_core::audio::event::PluginTarget::Generator(
-            second.generator.as_ref().unwrap().id,
-        );
+        let second_target =
+            karbeat_audio::event::PluginTarget::Generator(second.generator.as_ref().unwrap().id);
         external_plugin_api::retry(&mut ctx, second_target).unwrap();
         assert!(ctx.external_plugin_failures.is_empty());
         audible.store(false, Ordering::Release);

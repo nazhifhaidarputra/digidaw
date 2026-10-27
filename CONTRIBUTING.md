@@ -39,7 +39,8 @@ DigiDAW follows a feature-driven modular structure. Keep domain logic, UI screen
 
 | Crate | Purpose |
 | --- | --- |
-| `karbeat-core` | Project model, commands, file management, and audio engine ownership. |
+| `karbeat-core` | Persisted project model, file management, history, mitigation, shared IDs, and domain utilities. No real-time audio engine. |
+| `karbeat-audio` | DSP audio engine, device stream/backend, render state, plugin hosting, telemetry, export writers, and the audio control plane (`commands`, `context`, `init`, `message`). |
 | `karbeat-core-api` | UI-independent API layer between the core modules and UI bridges: modules → core API → FFI. |
 | `karbeat-dsp` | DSP primitives. Keep this crate generic and reusable. Time stretching and pitch shifting go through the traits in `stretcher/backend.rs`; the `Default*` aliases in `stretcher/mod.rs` pick the algorithm. |
 | `karbeat-rb` | Rubber Band bindings and safe wrappers. The only crate that links native Rubber Band or calls its C API. Used for offline renders. |
@@ -55,7 +56,9 @@ Within the Rust workspace, respect crate boundaries:
 
 * User and project API behavior goes in `karbeat-core-api`. Core modules never depend on it.
 * Project domain state goes in `karbeat-core/src/core/project`.
-* Audio callback logic goes in `karbeat-core/src/audio`.
+* Audio callback logic goes in `karbeat-audio/src/engine`.
+* Device stream, sample-rate bridging, and stream supervision live in `karbeat-audio/src/backend.rs` and `rate_bridge.rs`.
+* The audio control plane (`commands`, `context`, `init`, `message`) lives in `karbeat-audio`; `karbeat-core` must not depend on `karbeat-audio`.
 * Generic DSP goes in `karbeat-dsp`.
 * Rubber Band FFI goes in `karbeat-rb`, and Signalsmith Stretch FFI in `karbeat-signalsmith`. Everything else reaches them through the `karbeat-dsp` stretch and pitch traits.
 * Bridge DTOs and functions go in `karbeat-flutter-ffi`.
@@ -201,10 +204,10 @@ What to run depends on what you touched:
 | FFI shape | Regenerate the bridge, then run Dart analysis and the relevant Rust tests |
 | Plugin manifest | Regenerate plugin manifests and check that the Flutter registry still maps every custom plugin screen |
 
-Changes to the engine's block pipeline (`rust/karbeat-core/src/audio/engine`) are pinned by reference renders:
+Changes to the engine's block pipeline (`rust/karbeat-audio/src/engine`) are pinned by reference renders:
 
-* `cargo test -p karbeat-core --lib engine::golden` compares each scenario with the render stored in `rust/karbeat-core/tests/fixtures/engine_golden`. When a change is meant to alter the sound, regenerate the stored renders with `UPDATE_ENGINE_GOLDEN=1` and say so in the pull request.
-* `cargo bench -p karbeat-core --bench engine_block --features bench-support` reports the time per block. Include before and after numbers for performance changes.
+* `cargo test -p karbeat-audio --lib engine::golden` compares each scenario with the render stored in `rust/karbeat-audio/tests/fixtures/engine_golden`. When a change is meant to alter the sound, regenerate the stored renders with `UPDATE_ENGINE_GOLDEN=1` and say so in the pull request.
+* `cargo bench -p karbeat-audio --bench engine_block --features bench-support` reports the time per block. Include before and after numbers for performance changes.
 
 If a command can't run because a tool, platform library, or network access is unavailable, say so in your pull request, including the command and the reason.
 

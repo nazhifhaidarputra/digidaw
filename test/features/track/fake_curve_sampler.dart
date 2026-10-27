@@ -30,9 +30,7 @@ class FakeCurveSampler extends CurveSampler {
   @override
   AutomationCurveTraitsDto traits(AutomationCurveTypeDto curveType) =>
       AutomationCurveTraitsDto(
-        supportsTension:
-            curveType != AutomationCurveTypeDto.step &&
-            curveType != AutomationCurveTypeDto.bezier,
+        supportsTension: curveType != AutomationCurveTypeDto.bezier,
         tensionInverted: curveType == AutomationCurveTypeDto.exponential,
         tensionIsCount: curveType == AutomationCurveTypeDto.stairs,
         usesHandles: curveType == AutomationCurveTypeDto.bezier,

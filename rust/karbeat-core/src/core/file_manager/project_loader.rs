@@ -419,7 +419,6 @@ mod test {
 
     #[test]
     fn extracted_audio_is_deleted_with_the_last_project_state() {
-        use crate::audio::render_state::AudioGraphState;
         use crate::core::file_manager::audio_loader::AudioLoader;
 
         let dir = tempdir().unwrap();
@@ -443,12 +442,6 @@ mod test {
         let extracted = loaded.asset_library.source_map.values().next().unwrap();
         assert!(extracted.file_path.starts_with(&session));
         assert!(extracted.file_path.is_file());
-        assert!(
-            AudioGraphState::from(&loaded)
-                .asset_library
-                .session_dir
-                .is_none()
-        );
 
         let clone = loaded.clone();
         drop(loaded);

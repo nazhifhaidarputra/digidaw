@@ -3,7 +3,7 @@
 //! BPM is also persisted in ApplicationState for project serialization.
 
 use flutter_rust_bridge::frb;
-use karbeat_core::audio::engine::PlaybackMode;
+use karbeat_audio::engine::PlaybackMode;
 use karbeat_core_api::transport_api;
 
 use crate::api::context::DawContext;

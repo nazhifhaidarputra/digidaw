@@ -15,8 +15,8 @@ use std::{
 
 use anyhow::Context;
 use karbeat_analysis::{AnalysisError, AudioInput, ModelPaths, analyze_tempo};
+use karbeat_audio::context::DawContext;
 use karbeat_core::{
-    context::DawContext,
     core::{
         file_manager::audio_loader::CachedSamplesWriter,
         history::{

@@ -3,9 +3,9 @@
 #[cfg(test)]
 mod tests {
     use crate::mixer_api;
-    use karbeat_core::audio::event::PluginTarget;
-    use karbeat_core::commands::{AudioCommand, MixerChannelTarget};
-    use karbeat_core::context::DawContext;
+    use karbeat_audio::commands::{AudioCommand, MixerChannelTarget};
+    use karbeat_audio::context::DawContext;
+    use karbeat_audio::event::PluginTarget;
     use karbeat_core::core::project::automation::{
         AutomationTarget, EffectAutomationTarget, MixerChannelParamTarget, TrackAutomationTarget,
     };

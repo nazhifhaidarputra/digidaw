@@ -8,7 +8,8 @@
     reason = "the API boundary converts validated UI identifiers and intentionally emits best-effort engine notifications"
 )]
 
-use karbeat_core::{context::DawContext, core::history::HistoryError};
+use karbeat_audio::context::DawContext;
+use karbeat_core::core::history::HistoryError;
 
 /// Tempo fitting and offline renders of audio sources.
 pub mod audio_analysis_api;

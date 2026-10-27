@@ -2,15 +2,11 @@ use std::{collections::HashSet, path::PathBuf, sync::Arc};
 
 use anyhow::Context;
 
-use karbeat_core::{
-    context::DawContext,
-    core::{
-        file_manager::audio_loader::{AudioLoader, load_audio_file},
-        history::actions::{AudioSourceRemoved, ClipEditRecorder, SourceEnvelopeChanged},
-        project::{
-            AudioSourceId, AudioWaveform, ClipId, DawSource, GainEnvelope, TrackId, TrackType,
-        },
-    },
+use karbeat_audio::context::DawContext;
+use karbeat_core::core::{
+    file_manager::audio_loader::{AudioLoader, load_audio_file},
+    history::actions::{AudioSourceRemoved, ClipEditRecorder, SourceEnvelopeChanged},
+    project::{AudioSourceId, AudioWaveform, ClipId, DawSource, GainEnvelope, TrackId, TrackType},
 };
 
 /// Get audio waveform clips data from Application and map them into U value

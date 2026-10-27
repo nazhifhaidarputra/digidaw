@@ -2,12 +2,12 @@ use std::{collections::HashMap, sync::Arc};
 
 use flutter_rust_bridge::frb;
 use jiff::Timestamp;
-use karbeat_core::audio::exporter::{ExportRange, RenderOptions, RenderPurpose, TailHandling};
-use karbeat_core::audio::writer::{
+use karbeat_audio::context::DawContext as CoreDawContext;
+use karbeat_audio::exporter::{ExportRange, RenderOptions, RenderPurpose, TailHandling};
+use karbeat_audio::writer::{
     AudioExportConfig, BitDepth, flac::FlacAudioWriterConfig, ogg::OggOpusAudioWriterConfig,
     wav::WavAudioWriterConfig,
 };
-use karbeat_core::context::DawContext as CoreDawContext;
 use karbeat_core::core::file_manager::audio_loader::AudioLoader;
 use karbeat_core::core::project::{
     ApplicationState, CoverArt, CoverImage, EnvelopeCursor, EnvelopePoint, Fade, GainEnvelope,

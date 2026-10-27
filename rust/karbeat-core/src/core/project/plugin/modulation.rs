@@ -4,10 +4,9 @@ use karbeat_utils::types::{BipolarF64, NormalizedF64};
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    audio::event::PluginTarget,
     core::project::{
         ApplicationState, AutomationCurveType, AutomationLane, AutomationPoint, BezierHandles,
-        automation::AutomationTarget,
+        PluginTarget, automation::AutomationTarget,
     },
     shared::{AutomationId, BusId, ModulationId, ModulationLinkId, TrackId},
 };

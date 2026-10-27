@@ -5,21 +5,19 @@ use karbeat_host::{
     ProcessingConfig, ReconfigureRequest, SetParameterRequest,
 };
 
-use karbeat_core::{
-    audio::{
-        event::PluginTarget,
-        hosted_plugin::{
-            HostedInstallResult, HostedPluginInstall, HostedPluginReconfiguration,
-            HostedPluginReplacement, HostedTrackGraph, retire_control_transfer,
-        },
-    },
+use karbeat_audio::{
     commands::{AudioCommand, EffectTarget},
     context::{ControlHandles, DawContext},
-    core::project::{
-        ApplicationState, AudioTrack, GeneratorInstanceType, TrackType,
-        mixer::{EffectInstance, MixerChannel},
-        plugin::{ExternalPluginInstance, PluginInstance},
+    event::PluginTarget,
+    hosted_plugin::{
+        HostedInstallResult, HostedPluginInstall, HostedPluginReconfiguration,
+        HostedPluginReplacement, HostedTrackGraph, retire_control_transfer,
     },
+};
+use karbeat_core::core::project::{
+    ApplicationState, AudioTrack, GeneratorInstanceType, TrackType,
+    mixer::{EffectInstance, MixerChannel},
+    plugin::{ExternalPluginInstance, PluginInstance},
 };
 
 pub enum HostedTargetLookup {
@@ -52,16 +50,16 @@ pub fn prepare_hosted_target(
         "External plugin is unavailable; retry loading it first"
     );
     match ctx.hosted_targets.get(&target) {
-        Some(karbeat_core::context::HostedTargetState::Active(active)) => {
+        Some(karbeat_audio::context::HostedTargetState::Active(active)) => {
             Ok(HostedTargetLookup::Resolved {
                 client: ctx.external_plugins.clone(),
                 instance: active.state().instance,
             })
         }
-        Some(karbeat_core::context::HostedTargetState::Transitioning(_)) => {
+        Some(karbeat_audio::context::HostedTargetState::Transitioning(_)) => {
             anyhow::bail!("External plugin lifecycle operation is in progress")
         }
-        Some(karbeat_core::context::HostedTargetState::Failed(failed)) => {
+        Some(karbeat_audio::context::HostedTargetState::Failed(failed)) => {
             anyhow::bail!("External plugin is unavailable: {}", failed.state().reason)
         }
         None => Ok(HostedTargetLookup::Query {
@@ -216,12 +214,12 @@ pub struct PendingPluginInstall {
 pub struct CompletedPluginInstall {
     staged: ApplicationState,
     target: PluginTarget,
-    telemetry: Option<triple_buffer::Output<karbeat_core::audio::engine::PluginTelemetrySnapshot>>,
+    telemetry: Option<triple_buffer::Output<karbeat_audio::engine::PluginTelemetrySnapshot>>,
     installed: InstalledPlugin,
     instance: ExternalPluginInstanceHandle,
 }
 
-pub(crate) use karbeat_core::audio::hosted_plugin::hosted_processing_config;
+pub(crate) use karbeat_audio::hosted_plugin::hosted_processing_config;
 
 fn begin_install(
     ctx: &DawContext,
@@ -290,10 +288,8 @@ pub fn begin_add_effect(
 }
 
 fn wait_for_install(
-    mut receipt: karbeat_core::audio::hosted_plugin::HostedInstallReceipt,
-) -> anyhow::Result<
-    Option<triple_buffer::Output<karbeat_core::audio::engine::PluginTelemetrySnapshot>>,
-> {
+    mut receipt: karbeat_audio::hosted_plugin::HostedInstallReceipt,
+) -> anyhow::Result<Option<triple_buffer::Output<karbeat_audio::engine::PluginTelemetrySnapshot>>> {
     match futures_lite::future::block_on(receipt.wait())? {
         HostedInstallResult::Installed => Ok(receipt.take_telemetry()),
         result => anyhow::bail!("Audio engine rejected plugin installation: {result:?}"),
@@ -565,7 +561,7 @@ pub fn begin_delete_bus(
 }
 
 pub fn execute_removal(pending: PendingPluginRemoval) -> anyhow::Result<CompletedPluginRemoval> {
-    use karbeat_core::audio::hosted_plugin::{HostedPluginRemoval, HostedRemovalResult};
+    use karbeat_audio::hosted_plugin::{HostedPluginRemoval, HostedRemovalResult};
 
     let mut expected = Vec::with_capacity(pending.targets.len());
     for (target, active) in &pending.targets {
@@ -908,7 +904,7 @@ pub struct PendingPluginRetry {
 pub struct CompletedPluginRetry {
     target: PluginTarget,
     instance: ExternalPluginInstanceHandle,
-    telemetry: Option<triple_buffer::Output<karbeat_core::audio::engine::PluginTelemetrySnapshot>>,
+    telemetry: Option<triple_buffer::Output<karbeat_audio::engine::PluginTelemetrySnapshot>>,
 }
 
 pub fn begin_retry(ctx: &DawContext, target: PluginTarget) -> anyhow::Result<PendingPluginRetry> {

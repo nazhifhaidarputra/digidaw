@@ -2,10 +2,8 @@ use anyhow::Context;
 use karbeat_plugin_types::{ParameterSpec, ParameterValueType};
 use karbeat_utils::types::{BipolarF64, NormalizedF64};
 
+use karbeat_audio::{commands::AudioCommand, context::DawContext, engine::AudioMixerChannelValues};
 use karbeat_core::{
-    audio::engine::AudioMixerChannelValues,
-    commands::AudioCommand,
-    context::DawContext,
     core::{
         history::actions::AutomationRecorder,
         project::{

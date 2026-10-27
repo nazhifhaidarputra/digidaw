@@ -1,6 +1,6 @@
 pub use sysinfo::{CpuRefreshKind, MemoryRefreshKind, System};
 
-use karbeat_core::audio::engine::{get_current_dsp_load, get_current_pdc_latency_samples};
+use karbeat_audio::engine::{get_current_dsp_load, get_current_pdc_latency_samples};
 #[derive(Clone, Debug)]
 /// Point-in-time operating-system and audio callback load reported to the UI monitor.
 pub struct PerformanceMetrics {

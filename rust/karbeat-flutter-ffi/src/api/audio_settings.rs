@@ -1,7 +1,7 @@
 use crate::api::context::DawContext;
 use crate::api::jobs::run_job;
 use flutter_rust_bridge::frb;
-use karbeat_core::audio::backend::{
+use karbeat_audio::backend::{
     ActualDeviceStreamConfig, AudioDeviceInfo, AudioRuntimeSettings, DeviceStreamStatus,
     OutputDeviceSelection, OutputHostSelection, RequestedDspConfig, RequestedOutputConfig,
 };
@@ -278,7 +278,7 @@ impl From<AudioRuntimeSettings> for UiAudioRuntimeSettings {
 #[cfg(test)]
 mod tests {
     use super::{UiOutputDeviceInfo, UiOutputHostSelection};
-    use karbeat_core::audio::backend::{AudioDeviceInfo, OutputHostSelection};
+    use karbeat_audio::backend::{AudioDeviceInfo, OutputHostSelection};
 
     #[test]
     fn default_host_is_a_typed_variant() {

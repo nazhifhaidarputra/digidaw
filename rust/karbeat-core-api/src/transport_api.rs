@@ -1,6 +1,6 @@
-use karbeat_core::audio::engine::PlaybackMode;
-use karbeat_core::commands::AudioCommand;
-use karbeat_core::context::DawContext;
+use karbeat_audio::commands::AudioCommand;
+use karbeat_audio::context::DawContext;
+use karbeat_audio::engine::PlaybackMode;
 use karbeat_core::core::history::actions::TempoChanged;
 use karbeat_core::shared::{GeneratorId, PatternId};
 

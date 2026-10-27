@@ -2,18 +2,16 @@ use std::path::Path;
 
 use jiff::Timestamp;
 
-use karbeat_core::{
-    context::DawContext,
-    core::{
-        file_manager::project_loader::load_daw_project,
-        mitigation::{
-            AutoSaveSettings, CrashReporter, CrashSource, CrashStore, FlutterCrashSource,
-            MitigationError, MitigationPaths, MitigationState, RecoveryInfo, RecoveryStore,
-            RustCrashSource, StoredCrashReport, UserDevice, crash, session_marker,
-            session_marker::PreviousSession,
-        },
-        project::ApplicationState,
+use karbeat_audio::context::DawContext;
+use karbeat_core::core::{
+    file_manager::project_loader::load_daw_project,
+    mitigation::{
+        AutoSaveSettings, CrashReporter, CrashSource, CrashStore, FlutterCrashSource,
+        MitigationError, MitigationPaths, MitigationState, RecoveryInfo, RecoveryStore,
+        RustCrashSource, StoredCrashReport, UserDevice, crash, session_marker,
+        session_marker::PreviousSession,
     },
+    project::ApplicationState,
 };
 
 /// What the previous run left behind, reported once at startup.

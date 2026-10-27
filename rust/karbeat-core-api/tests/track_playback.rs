@@ -5,12 +5,14 @@
     reason = "integration test fixtures fail immediately"
 )]
 
-use karbeat_core::{
-    audio::engine::{AudioEngine, AudioEngineTelemetry, PlaybackMode},
+use karbeat_audio::{
     commands::AudioCommand,
     context::DawContext,
-    core::project::{audio_waveform::AudioSampleMode, clip::ClipSourceType},
+    engine::{AudioEngine, AudioEngineTelemetry, PlaybackMode},
     message::TelemetryRegistry,
+};
+use karbeat_core::{
+    core::project::{audio_waveform::AudioSampleMode, clip::ClipSourceType},
     shared::id::AudioSourceId,
 };
 use karbeat_core_api::{

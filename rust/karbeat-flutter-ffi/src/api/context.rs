@@ -4,7 +4,7 @@ use std::{
 };
 
 use crate::sync::{Mutex, MutexGuard, RwLock, RwLockReadGuard, RwLockWriteGuard};
-use karbeat_core::context::DawContext as CoreDawContext;
+use karbeat_audio::context::DawContext as CoreDawContext;
 
 pub(crate) use crate::api::project::DawContext;
 
@@ -193,11 +193,11 @@ mod tests {
     use super::DawContext;
     use crate::sync::{check_random, mpsc, thread};
 
-    fn project_name(ctx: &karbeat_core::context::DawContext) -> &str {
+    fn project_name(ctx: &karbeat_audio::context::DawContext) -> &str {
         &ctx.app_state.metadata.name
     }
 
-    fn set_project_name(ctx: &mut karbeat_core::context::DawContext, name: &str) {
+    fn set_project_name(ctx: &mut karbeat_audio::context::DawContext, name: &str) {
         ctx.app_state.metadata.name = name.into();
     }
 
@@ -205,7 +205,7 @@ mod tests {
     fn guards_deref_to_the_core_context() {
         check_random(
             || {
-                let session = DawContext::new(karbeat_core::context::DawContext::new());
+                let session = DawContext::new(karbeat_audio::context::DawContext::new());
                 let read = session.read();
                 assert_eq!(project_name(&read), "Untitled");
                 drop(read);
@@ -224,7 +224,7 @@ mod tests {
     fn writes_report_a_changed_saved_status_once() {
         check_random(
             || {
-                let session = DawContext::new(karbeat_core::context::DawContext::new());
+                let session = DawContext::new(karbeat_audio::context::DawContext::new());
                 let reported = std::sync::Arc::new(parking_lot::Mutex::new(Vec::new()));
                 let sink = reported.clone();
                 session.set_save_status_listener(Box::new(move |saved| {
@@ -252,7 +252,7 @@ mod tests {
     fn a_listener_that_stops_listening_is_removed() {
         check_random(
             || {
-                let session = DawContext::new(karbeat_core::context::DawContext::new());
+                let session = DawContext::new(karbeat_audio::context::DawContext::new());
                 let calls = std::sync::Arc::new(parking_lot::Mutex::new(0));
                 let counter = calls.clone();
                 session.set_save_status_listener(Box::new(move |_| {
@@ -276,7 +276,7 @@ mod tests {
     fn project_operation_does_not_hold_the_core_lock() {
         check_random(
             || {
-                let session = DawContext::new(karbeat_core::context::DawContext::new());
+                let session = DawContext::new(karbeat_audio::context::DawContext::new());
                 let operation = session.begin_project_operation();
                 assert!(session.try_runtime_operation().is_none());
 

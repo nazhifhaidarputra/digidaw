@@ -38,7 +38,8 @@ impl BypassDelay {
         self.latency
     }
 
-    /// Always record dry input; write outputs only when bypass or suspension is active.
+    /// Records dry input only while a latency line exists; writes outputs only when bypass or
+    /// suspension is active.
     pub fn process(&mut self, buffers: &mut AudioBuffers, render: bool) {
         let frames = buffers
             .main_outputs
@@ -47,50 +48,91 @@ impl BypassDelay {
             .map(|channel| channel.len())
             .max()
             .unwrap_or(0);
-        for frame in 0..frames {
-            let mut input = buffers
+        if frames == 0 {
+            return;
+        }
+
+        if self.latency == 0 {
+            // No history is needed for a zero-latency endpoint. The active path does nothing;
+            // the suspended path copies the dry signal through.
+            if render {
+                let mut inputs = buffers
+                    .main_inputs
+                    .iter()
+                    .flat_map(|bus| bus.channel_data.iter());
+                for output in buffers
+                    .main_outputs
+                    .iter_mut()
+                    .flat_map(|bus| bus.channel_data.iter_mut())
+                {
+                    let count = frames.min(output.len());
+                    if let Some(input) = inputs.next() {
+                        let count = count.min(input.len());
+                        output[..count].copy_from_slice(&input[..count]);
+                        output[count..].fill(0.0);
+                    } else {
+                        output[..count].fill(0.0);
+                    }
+                }
+                clear_aux_outputs(buffers);
+            }
+            return;
+        }
+
+        // At most two planes exist; pull them once instead of rebuilding the iterator chain
+        // for every frame.
+        let mut inputs: [Option<&[f32]>; 2] = [None, None];
+        {
+            let mut planes = buffers
                 .main_inputs
                 .iter()
                 .flat_map(|bus| bus.channel_data.iter());
-            for (index, output) in buffers
+            inputs[0] = planes.next().map(|plane| &**plane);
+            inputs[1] = planes.next().map(|plane| &**plane);
+        }
+        let mut outputs: [Option<&mut [f32]>; 2] = [None, None];
+        {
+            let mut planes = buffers
                 .main_outputs
                 .iter_mut()
-                .flat_map(|bus| bus.channel_data.iter_mut())
-                .enumerate()
-            {
-                let dry = input
-                    .next()
+                .flat_map(|bus| bus.channel_data.iter_mut());
+            outputs[0] = planes.next().map(|plane| &mut **plane);
+            outputs[1] = planes.next().map(|plane| &mut **plane);
+        }
+
+        for frame in 0..frames {
+            for (index, output) in outputs.iter_mut().enumerate() {
+                let Some(delay) = self.channels.get_mut(index) else {
+                    continue;
+                };
+                let dry = inputs[index]
                     .and_then(|channel| channel.get(frame))
                     .copied()
                     .unwrap_or(0.0);
-                let sample = if self.latency == 0 {
-                    dry
-                } else if let Some(delay) = self.channels.get_mut(index) {
-                    let previous = delay[self.cursor];
-                    delay[self.cursor] = dry;
-                    previous
-                } else {
-                    0.0
-                };
-                if render {
-                    if let Some(output) = output.get_mut(frame) {
-                        *output = sample;
-                    }
+                let previous = delay[self.cursor];
+                delay[self.cursor] = dry;
+                if render
+                    && let Some(sample) = output.as_mut().and_then(|plane| plane.get_mut(frame))
+                {
+                    *sample = previous;
                 }
             }
-            if self.latency > 0 {
-                self.cursor += 1;
-                if self.cursor == self.latency {
-                    self.cursor = 0;
-                }
+            self.cursor += 1;
+            if self.cursor == self.latency {
+                self.cursor = 0;
             }
         }
+
         if render {
-            for bus in buffers.aux_outputs.iter_mut() {
-                for channel in bus.channel_data.iter_mut() {
-                    channel.fill(0.0);
-                }
-            }
+            clear_aux_outputs(buffers);
+        }
+    }
+}
+
+fn clear_aux_outputs(buffers: &mut AudioBuffers) {
+    for bus in buffers.aux_outputs.iter_mut() {
+        for channel in bus.channel_data.iter_mut() {
+            channel.fill(0.0);
         }
     }
 }

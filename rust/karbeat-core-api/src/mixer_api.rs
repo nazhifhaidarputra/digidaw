@@ -1,8 +1,11 @@
 use anyhow::Context;
-use karbeat_core::{
-    audio::{engine::MixerTelemetrySnapshot, event::PluginTarget},
+use karbeat_audio::{
     commands::{AudioCommand, EffectTarget, MixerChannelTarget},
     context::DawContext,
+    engine::MixerTelemetrySnapshot,
+    event::PluginTarget,
+};
+use karbeat_core::{
     core::{
         history::actions::{
             AutomationRecorder, BusRecolored, BusRenamed, EffectBypassed, EffectMoved,

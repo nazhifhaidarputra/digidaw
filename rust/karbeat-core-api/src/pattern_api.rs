@@ -1,11 +1,7 @@
-use karbeat_core::{
-    audio::engine::PlaybackMode,
-    commands::AudioCommand,
-    context::DawContext,
-    core::{
-        history::actions::PatternRenamed,
-        project::{DawSource, GeneratorId, Pattern, PatternId},
-    },
+use karbeat_audio::{commands::AudioCommand, context::DawContext, engine::PlaybackMode};
+use karbeat_core::core::{
+    history::actions::PatternRenamed,
+    project::{DawSource, GeneratorId, Pattern, PatternId},
 };
 
 /// Returns a cloned MIDI pattern or an error when the identifier is absent.

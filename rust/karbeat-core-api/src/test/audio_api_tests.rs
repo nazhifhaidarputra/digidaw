@@ -5,7 +5,7 @@ mod tests {
     use crate::audio_api;
     use crate::test::helpers::make_ctx;
     use crate::track_api;
-    use karbeat_core::commands::AudioCommand;
+    use karbeat_audio::commands::AudioCommand;
     use karbeat_core::shared::id::{AudioSourceId, TrackId};
     use rtrb::RingBuffer;
 

@@ -1,5 +1,5 @@
+use karbeat_audio::context::DawContext;
 use karbeat_core::{
-    context::DawContext,
     core::{
         history::actions::{ClipEditRecorder, NotesChanged},
         project::{Clip, ClipboardContent, Note, clip::ClipTimeUnit},

@@ -4,6 +4,18 @@ use karbeat_plugin_api::prelude::*;
 /// Maximum number of native instances accepted by one host implementation.
 pub const MAX_HOSTED_INSTANCES: usize = 256;
 
+/// Tail used for hosted formats that cannot report one, in seconds.
+pub const FALLBACK_TAIL_SECONDS: u32 = 5;
+
+/// Converts the fallback tail into samples at `sample_rate`.
+#[allow(
+    clippy::as_conversions,
+    reason = "the fallback duration is a small bounded constant and the result is a sample count"
+)]
+pub fn fallback_tail_samples(sample_rate: f64) -> u32 {
+    (sample_rate * f64::from(FALLBACK_TAIL_SECONDS)) as u32
+}
+
 /// Format-independent owned DSP endpoint. Core retires this concrete envelope to the UI
 /// thread before destruction; its inner native processor is never cloned.
 pub struct HostedProcessor {
@@ -11,6 +23,11 @@ pub struct HostedProcessor {
     /// Runtime handle used to correlate this endpoint with its native control owner.
     pub instance: HostInstanceId,
     bypass: bool,
+    /// Opt-in for endpoints that must run even when their channel is silent.
+    continuous_processing: bool,
+    /// Tail used when the format cannot report one, so a parked hosted endpoint still rings
+    /// out for a bounded time after its last active block.
+    fallback_tail_samples: u32,
     processing_status: Option<std::sync::Arc<std::sync::atomic::AtomicI32>>,
     retirement: Option<rtrb::Producer<Box<HostedProcessor>>>,
 }
@@ -21,9 +38,21 @@ impl HostedProcessor {
             inner,
             instance,
             bypass: false,
+            continuous_processing: false,
+            fallback_tail_samples: 0,
             processing_status: None,
             retirement: None,
         }
+    }
+
+    /// Sets the tail reported while a format backend cannot provide one.
+    pub fn set_fallback_tail_samples(&mut self, samples: u32) {
+        self.fallback_tail_samples = samples;
+    }
+
+    /// Marks an endpoint that must keep processing while its channel is silent.
+    pub fn set_continuous_processing(&mut self, continuous: bool) {
+        self.continuous_processing = continuous;
     }
 
     /// Returns the last bypass state sent through this wrapper.
@@ -184,13 +213,22 @@ impl AudioPlugin for HostedProcessor {
         self.inner.latency_samples()
     }
     fn tail_samples(&self) -> u32 {
-        self.inner.tail_samples()
+        let reported = self.inner.tail_samples();
+        if reported > 0 {
+            reported
+        } else {
+            self.fallback_tail_samples
+        }
     }
     fn has_latency_changed(&mut self) -> bool {
         self.inner.has_latency_changed()
     }
     fn needs_continuous_processing(&self) -> bool {
-        true
+        // Hosted endpoints are parked like built-in processors by default. The engine keeps
+        // them alive while they carry signal and for their reported (or fallback) tail; the
+        // native host's existing flush transaction delivers parameter edits when one wakes.
+        // Endpoints that genuinely generate or scan audio without input opt in explicitly.
+        self.continuous_processing || self.inner.needs_continuous_processing()
     }
     fn set_parameter(&mut self, id: u32, value: f32) {
         self.inner.set_parameter(id, value);
@@ -261,6 +299,39 @@ mod tests {
         thread,
     };
 
+    struct ParkProbe;
+
+    impl AudioPlugin for ParkProbe {
+        fn name(&self) -> &str {
+            "park probe"
+        }
+        fn category(&self) -> PluginCategory {
+            PluginCategory::Effect
+        }
+        fn prepare(&mut self, _: f32, _: usize) {}
+        fn reset(&mut self) {}
+        fn set_io_layout(&mut self, _: &[BusConfig], _: &[BusConfig]) {}
+        fn process(&mut self, _: &mut AudioBuffers, _: &ProcessContext) {}
+        fn set_parameter(&mut self, _: u32, _: f32) {}
+        fn get_parameter(&self, _: u32) -> f32 {
+            0.0
+        }
+        fn apply_automation(&mut self, _: u32, _: f32) {}
+        fn clear_automation(&mut self, _: u32) {}
+        fn default_parameters(&self) -> HashMap<u32, f32> {
+            HashMap::new()
+        }
+        fn static_parameter_specs() -> Vec<ParameterSpec> {
+            Vec::new()
+        }
+        fn get_parameter_specs(&self) -> Vec<ParameterSpec> {
+            Vec::new()
+        }
+        fn as_any(&self) -> &dyn std::any::Any {
+            self
+        }
+    }
+
     struct Probe(Arc<Mutex<Option<thread::ThreadId>>>);
     impl Drop for Probe {
         fn drop(&mut self) {
@@ -296,6 +367,17 @@ mod tests {
         fn as_any(&self) -> &dyn std::any::Any {
             self
         }
+    }
+
+    #[test]
+    fn hosted_endpoints_park_by_default_and_can_opt_into_continuous_processing() {
+        let mut endpoint = HostedProcessor::new(Box::new(ParkProbe), HostInstanceId(1));
+        assert!(!endpoint.needs_continuous_processing());
+        endpoint.set_continuous_processing(true);
+        assert!(endpoint.needs_continuous_processing());
+        assert_eq!(endpoint.tail_samples(), 0);
+        endpoint.set_fallback_tail_samples(1_234);
+        assert_eq!(endpoint.tail_samples(), 1_234);
     }
 
     #[test]

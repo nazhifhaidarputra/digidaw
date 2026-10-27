@@ -1,13 +1,13 @@
 use std::path::Path;
 
-use karbeat_core::audio::exporter::{
+use karbeat_audio::exporter::{
     PendingAudioExport, RenderOptions, begin_export, execute_export,
     export_project as export_project_internal,
 };
 
-use karbeat_core::audio::writer::AudioExportConfig;
-use karbeat_core::commands::AudioCommand;
-use karbeat_core::context::DawContext;
+use karbeat_audio::commands::AudioCommand;
+use karbeat_audio::context::DawContext;
+use karbeat_audio::writer::AudioExportConfig;
 use karbeat_core::core::file_manager::project_loader::load_daw_project;
 use karbeat_core::core::history::actions::MetadataChanged;
 use karbeat_core::core::project::ApplicationState;

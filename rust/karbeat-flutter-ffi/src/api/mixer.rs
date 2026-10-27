@@ -1,9 +1,8 @@
 use std::collections::HashMap;
 
 use flutter_rust_bridge::frb;
-use karbeat_core::{
-    audio::engine::MixerTelemetrySnapshot, commands::MixerChannelSnapshot, shared::id::*,
-};
+use karbeat_audio::{commands::MixerChannelSnapshot, engine::MixerTelemetrySnapshot};
+use karbeat_core::shared::id::*;
 pub use karbeat_core::{
     core::project::TrackId,
     plugin_types::{ParameterSpec, ParameterValueType},
@@ -11,8 +10,8 @@ pub use karbeat_core::{
 
 use crate::api::jobs::run_job;
 use crate::api::{automation::RemovedAutomationDto, context::DawContext, plugin::UiPluginTarget};
-use karbeat_core::audio::event::PluginTarget;
-use karbeat_core::commands::MixerChannelTarget;
+use karbeat_audio::commands::MixerChannelTarget;
+use karbeat_audio::event::PluginTarget;
 use karbeat_core::core::project::mixer::{
     BusMixerChannel, EffectInstance, MixerChannel, MixerChannelParams, MixerState,
     RoutingConnection, RoutingNode, RoutingTap, SidechainRoute,
@@ -576,7 +575,7 @@ fn add_effect_to_mixer_channel_by_id_blocking(
     registry_id: u32,
 ) -> Result<(), String> {
     let operation = ctx.begin_project_operation();
-    let target = karbeat_core::commands::EffectTarget::Track(TrackId::from_u64(track_id));
+    let target = karbeat_audio::commands::EffectTarget::Track(TrackId::from_u64(track_id));
     let external = operation
         .read_core()
         .plugin_catalog
@@ -695,20 +694,20 @@ fn remove_effect_from_target_mixer_channel_blocking(
     let operation = ctx.begin_project_operation();
     let mixer_target = MixerChannelTarget::from(&target);
     let effect_target = match &mixer_target {
-        MixerChannelTarget::Track(id) => karbeat_core::commands::EffectTarget::Track(*id),
-        MixerChannelTarget::Bus(id) => karbeat_core::commands::EffectTarget::Bus(*id),
-        MixerChannelTarget::Master => karbeat_core::commands::EffectTarget::Master,
+        MixerChannelTarget::Track(id) => karbeat_audio::commands::EffectTarget::Track(*id),
+        MixerChannelTarget::Bus(id) => karbeat_audio::commands::EffectTarget::Bus(*id),
+        MixerChannelTarget::Master => karbeat_audio::commands::EffectTarget::Master,
     };
     let effect_id = EffectId::from_u64(effect_instance_id);
     let plugin_target = match effect_target {
-        karbeat_core::commands::EffectTarget::Track(id) => {
-            karbeat_core::audio::event::PluginTarget::TrackEffect(id, effect_id)
+        karbeat_audio::commands::EffectTarget::Track(id) => {
+            karbeat_audio::event::PluginTarget::TrackEffect(id, effect_id)
         }
-        karbeat_core::commands::EffectTarget::Bus(id) => {
-            karbeat_core::audio::event::PluginTarget::BusEffect(id, effect_id)
+        karbeat_audio::commands::EffectTarget::Bus(id) => {
+            karbeat_audio::event::PluginTarget::BusEffect(id, effect_id)
         }
-        karbeat_core::commands::EffectTarget::Master => {
-            karbeat_core::audio::event::PluginTarget::MasterEffect(effect_id)
+        karbeat_audio::commands::EffectTarget::Master => {
+            karbeat_audio::event::PluginTarget::MasterEffect(effect_id)
         }
     };
     let external =
@@ -765,7 +764,7 @@ fn add_effect_to_master_bus_blocking(ctx: &DawContext, registry_id: u32) -> Resu
             let core = operation.read_core();
             karbeat_core_api::external_plugin_api::begin_add_effect(
                 &core,
-                karbeat_core::commands::EffectTarget::Master,
+                karbeat_audio::commands::EffectTarget::Master,
                 registry_id,
             )
             .map_err(|error| error.to_string())?
@@ -901,7 +900,7 @@ fn add_effect_to_bus_blocking(
             let core = operation.read_core();
             karbeat_core_api::external_plugin_api::begin_add_effect(
                 &core,
-                karbeat_core::commands::EffectTarget::Bus(bus),
+                karbeat_audio::commands::EffectTarget::Bus(bus),
                 registry_id,
             )
             .map_err(|error| error.to_string())?
@@ -1061,7 +1060,7 @@ mod tests {
     fn mixer_lookup_rejects_a_deleted_track_id() {
         crate::sync::check_random(
             || {
-                let mut core = karbeat_core::context::DawContext::new();
+                let mut core = karbeat_audio::context::DawContext::new();
                 let removed = core.app_state.add_new_audio_track().id;
                 core.app_state.remove_track(removed).expect("remove track");
                 let replacement = core.app_state.add_new_audio_track().id;

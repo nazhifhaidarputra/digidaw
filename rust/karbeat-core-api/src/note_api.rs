@@ -1,4 +1,4 @@
-use karbeat_core::context::DawContext;
+use karbeat_audio::context::DawContext;
 use karbeat_core::core::history::actions::{NoteMove, NotesChanged, NotesMoved, NotesResized};
 use karbeat_core::core::project::track::midi::Pattern;
 use karbeat_core::core::project::track::note_transform::{self, NoteEdit, NoteParams};

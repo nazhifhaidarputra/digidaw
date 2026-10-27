@@ -1,11 +1,9 @@
-use karbeat_core::{
-    audio::{engine::MetronomeClick, event::TransportFeedback},
-    commands::AudioCommand,
-    context::DawContext,
-    core::{
-        file_manager::audio_loader::{AudioLoader, load_audio_file},
-        project::{AudioHardwareConfig, AudioSourceId, AudioWaveform, GeneratorId, TrackId},
-    },
+use karbeat_audio::{
+    commands::AudioCommand, context::DawContext, engine::MetronomeClick, event::TransportFeedback,
+};
+use karbeat_core::core::{
+    file_manager::audio_loader::{AudioLoader, load_audio_file},
+    project::{AudioHardwareConfig, AudioSourceId, AudioWaveform, GeneratorId, TrackId},
 };
 use karbeat_plugin_api::types::MidiEvent;
 

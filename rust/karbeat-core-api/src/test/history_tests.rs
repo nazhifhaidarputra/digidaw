@@ -13,8 +13,8 @@ mod tests {
         automation_api, clip_api, mixer_api, note_api, pattern_api, project_api, track_api,
         transport_api,
     };
-    use karbeat_core::commands::{EffectTarget, MixerChannelTarget};
-    use karbeat_core::context::DawContext;
+    use karbeat_audio::commands::{EffectTarget, MixerChannelTarget};
+    use karbeat_audio::context::DawContext;
     use karbeat_core::core::history::PluginSync;
     use karbeat_core::core::project::{
         AutomationLane, ModulationSource,
@@ -638,7 +638,7 @@ mod tests {
         let (mut ctx, audio, ..) = make_seeded_ctx();
         // Bypass changes are only accepted with an engine queue attached.
         let (producer, _engine) =
-            rtrb::RingBuffer::<karbeat_core::commands::AudioCommand>::new(4096);
+            rtrb::RingBuffer::<karbeat_audio::commands::AudioCommand>::new(4096);
         *ctx.command_sender.lock() = Some(producer);
         let target = MixerChannelTarget::Track(audio);
         assert_round_trip(
