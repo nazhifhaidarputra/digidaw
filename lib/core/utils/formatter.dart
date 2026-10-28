@@ -14,21 +14,33 @@ String formatTimeFromSamples(int playheadSamples, int sampleRate) {
   return "$mm:$ss:$mms";
 }
 
+/// Note names for the twelve pitch classes, ordered from C to B.
+const List<String> midiPitchClassNames = [
+  "C",
+  "C#",
+  "D",
+  "D#",
+  "E",
+  "F",
+  "F#",
+  "G",
+  "G#",
+  "A",
+  "A#",
+  "B",
+];
+
+/// Scientific pitch octave of a MIDI note, where C4 is note 60.
+int midiKeyOctave(int key) => key ~/ 12 - 1;
+
+/// Pitch class of a MIDI note, `0` for C through `11` for B.
+int midiKeyPitchClass(int key) => key % 12;
+
+/// Name of a pitch class, `0` for C through `11` for B.
+String midiPitchClassName(int pitchClass) =>
+    midiPitchClassNames[pitchClass % 12];
+
 String numToMidiKey(int key) {
-  final labels = [
-    "C",
-    "C#",
-    "D",
-    "D#",
-    "E",
-    "F",
-    "F#",
-    "G",
-    "G#",
-    "A",
-    "A#",
-    "B",
-  ];
-  final octave = key ~/ 12 - 1;
-  return "${labels[key % 12]}$octave";
+  return "${midiPitchClassName(midiKeyPitchClass(key))}"
+      "${midiKeyOctave(key)}";
 }

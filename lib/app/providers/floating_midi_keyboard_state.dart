@@ -23,7 +23,7 @@ abstract class FloatingMidiKeyboardState with _$FloatingMidiKeyboardState {
 
     /// Number of keys shown on the keyboard.
     /// Clamped to [12, 24] by [FloatingMidiKeyboardNotifier.setKeyRange].
-    @Default(15) int keyRange,
+    @Default(24) int keyRange,
 
     /// The generator whose sound is triggered by key presses.
     /// `null` means no generator is selected yet.

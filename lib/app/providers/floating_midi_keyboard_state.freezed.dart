@@ -216,7 +216,7 @@ return $default(_that.showed,_that.baseKey,_that.keyRange,_that.selectedGenerato
 
 
 class _FloatingMidiKeyboardState implements FloatingMidiKeyboardState {
-  const _FloatingMidiKeyboardState({this.showed = false, this.baseKey = 48, this.keyRange = 15, this.selectedGeneratorId});
+  const _FloatingMidiKeyboardState({this.showed = false, this.baseKey = 48, this.keyRange = 24, this.selectedGeneratorId});
   
 
 /// Whether the keyboard panel is currently visible.

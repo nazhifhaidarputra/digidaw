@@ -224,6 +224,31 @@ class _FloatingMidiKeyboardState extends ConsumerState<FloatingMidiKeyboard> {
                           ),
                         ),
                         const Spacer(),
+                        Tooltip(
+                          message:
+                              "Octave ${kState.baseOctave} · "
+                              "Key ${midiPitchClassName(kState.basePitchClass)}",
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 2,
+                            ),
+                            decoration: BoxDecoration(
+                              color: colors.surfaceContainerLowest,
+                              borderRadius: BorderRadius.circular(4),
+                              border: Border.all(color: colors.outlineVariant),
+                            ),
+                            child: Text(
+                              kState.baseNoteLabel,
+                              style: TextStyle(
+                                color: colors.primary,
+                                fontSize: 12,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
                         InkWell(
                           onTap: () =>
                               workspaceNotifier.toggleFloatingMidiKeyboard(),
@@ -244,72 +269,76 @@ class _FloatingMidiKeyboardState extends ConsumerState<FloatingMidiKeyboard> {
                   color: colors.surfaceContainerLow,
                   child: Row(
                     children: [
-                      _buildControlKnob(
-                        "BASE KEY",
-                        numToMidiKey(kState.baseKey),
-                        () {
-                          workspaceNotifier.setMidiKeyboardBaseKey(
-                            kState.baseKey - 1,
-                          );
-                        },
-                        () {
-                          workspaceNotifier.setMidiKeyboardBaseKey(
-                            kState.baseKey + 1,
-                          );
-                        },
+                      _buildStepControl(
+                        "OCTAVE",
+                        "${kState.baseOctave}",
+                        () => workspaceNotifier.setMidiKeyboardOctave(
+                          kState.baseOctave - 1,
+                        ),
+                        () => workspaceNotifier.setMidiKeyboardOctave(
+                          kState.baseOctave + 1,
+                        ),
                       ),
-                      const SizedBox(width: 20),
-                      _buildControlKnob(
+                      const SizedBox(width: 12),
+                      _buildKeySelector(
+                        kState.basePitchClass,
+                        workspaceNotifier.setMidiKeyboardKey,
+                      ),
+                      const SizedBox(width: 12),
+                      _buildStepControl(
                         "RANGE",
-                        "+${kState.keyRange}",
-                        () {
-                          workspaceNotifier.setMidiKeyboardRange(
-                            kState.keyRange - 1,
-                          );
-                        },
-                        () {
-                          workspaceNotifier.setMidiKeyboardRange(
-                            kState.keyRange + 1,
-                          );
-                        },
+                        "${kState.keyRange}",
+                        () => workspaceNotifier.setMidiKeyboardRange(
+                          kState.keyRange - 1,
+                        ),
+                        () => workspaceNotifier.setMidiKeyboardRange(
+                          kState.keyRange + 1,
+                        ),
                       ),
                       const Spacer(),
-                      Container(
-                        height: 36,
-                        padding: const EdgeInsets.symmetric(horizontal: 12),
-                        decoration: BoxDecoration(
-                          color: colors.surfaceContainerLowest,
-                          border: Border.all(color: colors.outlineVariant),
-                          borderRadius: BorderRadius.circular(4),
-                        ),
-                        child: DropdownButtonHideUnderline(
-                          child: DropdownButton<int>(
-                            value: activeGeneratorId,
-                            hint: Text(
-                              "Select Synth",
+                      SizedBox(
+                        width: 168,
+                        child: Container(
+                          height: 36,
+                          padding: const EdgeInsets.symmetric(horizontal: 12),
+                          decoration: BoxDecoration(
+                            color: colors.surfaceContainerLowest,
+                            border: Border.all(color: colors.outlineVariant),
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                          child: DropdownButtonHideUnderline(
+                            child: DropdownButton<int>(
+                              value: activeGeneratorId,
+                              isExpanded: true,
+                              hint: Text(
+                                "Select Synth",
+                                style: TextStyle(
+                                  color: colors.onSurfaceVariant,
+                                  fontSize: 12,
+                                ),
+                              ),
+                              dropdownColor: colors.surfaceContainerHigh,
+                              icon: Icon(
+                                Icons.arrow_drop_down,
+                                color: colors.primary,
+                              ),
                               style: TextStyle(
-                                color: colors.onSurfaceVariant,
+                                color: colors.primary,
                                 fontSize: 12,
                               ),
+                              onChanged: (val) {
+                                workspaceNotifier.setMidiKeyboardGenerator(val);
+                              },
+                              items: generators.entries.map((e) {
+                                return DropdownMenuItem(
+                                  value: e.key,
+                                  child: Text(
+                                    _getGeneratorName(e.value),
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                );
+                              }).toList(),
                             ),
-                            dropdownColor: colors.surfaceContainerHigh,
-                            icon: Icon(
-                              Icons.arrow_drop_down,
-                              color: colors.primary,
-                            ),
-                            style: TextStyle(
-                              color: colors.primary,
-                              fontSize: 12,
-                            ),
-                            onChanged: (val) {
-                              workspaceNotifier.setMidiKeyboardGenerator(val);
-                            },
-                            items: generators.entries.map((e) {
-                              return DropdownMenuItem(
-                                value: e.key,
-                                child: Text(_getGeneratorName(e.value)),
-                              );
-                            }).toList(),
                           ),
                         ),
                       ),
@@ -337,7 +366,7 @@ class _FloatingMidiKeyboardState extends ConsumerState<FloatingMidiKeyboard> {
     );
   }
 
-  Widget _buildControlKnob(
+  Widget _buildStepControl(
     String label,
     String value,
     VoidCallback onDec,
@@ -355,39 +384,95 @@ class _FloatingMidiKeyboardState extends ConsumerState<FloatingMidiKeyboard> {
           ),
         ),
         const SizedBox(height: 4),
-        Row(
-          children: [
-            InkWell(
-              onTap: onDec,
-              child: Icon(
-                Icons.remove_circle_outline,
-                color: colors.onSurfaceVariant,
-                size: 20,
-              ),
-            ),
-            const SizedBox(width: 8),
-            Container(
-              width: 50,
-              alignment: Alignment.center,
-              child: Text(
-                value,
-                style: TextStyle(
-                  color: colors.primary,
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
+        SizedBox(
+          height: 32,
+          child: Row(
+            children: [
+              InkWell(
+                onTap: onDec,
+                child: Icon(
+                  Icons.remove_circle_outline,
+                  color: colors.onSurfaceVariant,
+                  size: 20,
                 ),
               ),
-            ),
-            const SizedBox(width: 8),
-            InkWell(
-              onTap: onInc,
-              child: Icon(
-                Icons.add_circle_outline,
-                color: colors.onSurfaceVariant,
-                size: 20,
+              const SizedBox(width: 6),
+              Container(
+                width: 36,
+                alignment: Alignment.center,
+                child: Text(
+                  value,
+                  style: TextStyle(
+                    color: colors.primary,
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
               ),
+              const SizedBox(width: 6),
+              InkWell(
+                onTap: onInc,
+                child: Icon(
+                  Icons.add_circle_outline,
+                  color: colors.onSurfaceVariant,
+                  size: 20,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildKeySelector(int pitchClass, ValueChanged<int> onChanged) {
+    final colors = Theme.of(context).colorScheme;
+    return Column(
+      children: [
+        Text(
+          "KEY",
+          style: TextStyle(
+            color: colors.onSurfaceVariant,
+            fontSize: 10,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        const SizedBox(height: 4),
+        Container(
+          height: 32,
+          padding: const EdgeInsets.symmetric(horizontal: 8),
+          decoration: BoxDecoration(
+            color: colors.surfaceContainerLowest,
+            border: Border.all(color: colors.outlineVariant),
+            borderRadius: BorderRadius.circular(4),
+          ),
+          child: DropdownButtonHideUnderline(
+            child: DropdownButton<int>(
+              value: pitchClass,
+              isDense: true,
+              dropdownColor: colors.surfaceContainerHigh,
+              icon: Icon(
+                Icons.arrow_drop_down,
+                color: colors.primary,
+                size: 18,
+              ),
+              style: TextStyle(
+                color: colors.primary,
+                fontSize: 12,
+                fontWeight: FontWeight.bold,
+              ),
+              onChanged: (value) {
+                if (value != null) onChanged(value);
+              },
+              items: [
+                for (var pitch = 0; pitch < midiPitchClassNames.length; pitch++)
+                  DropdownMenuItem<int>(
+                    value: pitch,
+                    child: Text(midiPitchClassNames[pitch]),
+                  ),
+              ],
             ),
-          ],
+          ),
         ),
       ],
     );
@@ -453,79 +538,90 @@ class _CustomVirtualKeyboard extends StatelessWidget {
     return n == 1 || n == 3 || n == 6 || n == 8 || n == 10;
   }
 
+  /// The white key at or immediately below [note].
+  ///
+  /// Every black key has a white key right below it, so this walks back at
+  /// most one semitone.
+  int _whiteKeyAtOrBefore(int note) {
+    var result = note;
+    while (_isBlack(result) && result > 0) {
+      result--;
+    }
+    return result;
+  }
+
+  /// The white key at or immediately above [note].
+  int _whiteKeyAtOrAfter(int note) {
+    var result = note;
+    while (_isBlack(result) && result < 127) {
+      result++;
+    }
+    return result;
+  }
+
   @override
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (context, constraints) {
-        // Calculate number of white keys in the range
-        int whiteKeyCount = 0;
-        for (int i = 0; i < totalKeys; i++) {
-          if (!_isBlack(startNote + i)) {
-            whiteKeyCount++;
-          }
-        }
+        final lastNote = (startNote + totalKeys - 1).clamp(0, 127);
 
-        if (whiteKeyCount == 0) whiteKeyCount = 1; // Prevent division by zero
+        // A piano is built from white keys: each black key sits in the gap
+        // between the two white keys it belongs to. Striking a range that
+        // starts or ends on a black key would leave that key without a gap,
+        // so the drawn range is extended to the surrounding white keys.
+        final firstDrawnNote = _whiteKeyAtOrBefore(startNote.clamp(0, 127));
+        final lastDrawnNote = _whiteKeyAtOrAfter(lastNote);
 
-        double whiteKeyWidth = constraints.maxWidth / whiteKeyCount;
+        final whiteNotes = <int>[
+          for (var note = firstDrawnNote; note <= lastDrawnNote; note++)
+            if (!_isBlack(note)) note,
+        ];
+        if (whiteNotes.isEmpty) return const SizedBox.shrink();
 
-        List<Widget> whiteKeys = [];
-        List<Widget> blackKeys = [];
-
-        int whiteIndex = 0;
-
-        for (int i = 0; i < totalKeys; i++) {
-          final note = startNote + i;
-          final isBlack = _isBlack(note);
-          final isPressed = activeNotes.contains(note);
-
-          if (!isBlack) {
-            whiteKeys.add(
-              _PianoKey(
-                note: note,
-                isBlack: false,
-                width: whiteKeyWidth,
-                height: constraints.maxHeight,
-                isPressed: isPressed,
-                onNoteOn: onNoteOn,
-                onNoteOff: onNoteOff,
-              ),
-            );
-            whiteIndex++;
-          } else {
-            // Because our loop processes keys sequentially, if the current key is black,
-            // the `whiteIndex` holds the index of the next white key in the array.
-            // A black key sits between `whiteIndex - 1` and `whiteIndex`.
-            // So we position it anchored to `whiteIndex * whiteKeyWidth` offset to the left.
-
-            double left = (whiteIndex * whiteKeyWidth) - (whiteKeyWidth * 0.35);
-
-            // Protect against left clamping if sequence starts precisely with a black key
-            if (left < 0) left = 0;
-
-            blackKeys.add(
-              Positioned(
-                left: left,
-                width: whiteKeyWidth * 0.7,
-                height: constraints.maxHeight * 0.6,
-                child: _PianoKey(
-                  note: note,
-                  isBlack: true,
-                  width: whiteKeyWidth * 0.7,
-                  height: constraints.maxHeight * 0.6,
-                  isPressed: isPressed,
-                  onNoteOn: onNoteOn,
-                  onNoteOff: onNoteOff,
-                ),
-              ),
-            );
-          }
-        }
+        final whiteKeyWidth = constraints.maxWidth / whiteNotes.length;
+        final blackKeyWidth = whiteKeyWidth * 0.62;
+        final blackKeyHeight = constraints.maxHeight * 0.6;
+        final whiteIndexByNote = <int, int>{
+          for (var index = 0; index < whiteNotes.length; index++)
+            whiteNotes[index]: index,
+        };
 
         return Stack(
           children: [
-            Row(children: whiteKeys),
-            ...blackKeys,
+            Row(
+              children: [
+                for (final note in whiteNotes)
+                  _PianoKey(
+                    note: note,
+                    isBlack: false,
+                    width: whiteKeyWidth,
+                    height: constraints.maxHeight,
+                    isPressed: activeNotes.contains(note),
+                    onNoteOn: onNoteOn,
+                    onNoteOff: onNoteOff,
+                  ),
+              ],
+            ),
+            for (var note = firstDrawnNote; note <= lastDrawnNote; note++)
+              if (_isBlack(note))
+                Positioned(
+                  // Black keys are centred on the boundary of the white keys
+                  // before and after them.
+                  left:
+                      (whiteIndexByNote[note - 1]! + 1) * whiteKeyWidth -
+                      (blackKeyWidth / 2),
+                  width: blackKeyWidth,
+                  height: blackKeyHeight,
+                  child: _PianoKey(
+                    note: note,
+                    isBlack: true,
+                    width: blackKeyWidth,
+                    height: blackKeyHeight,
+                    isPressed: activeNotes.contains(note),
+                    onNoteOn: onNoteOn,
+                    onNoteOff: onNoteOff,
+                  ),
+                ),
           ],
         );
       },

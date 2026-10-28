@@ -9,7 +9,7 @@ void main() {
     expect(initial, const FloatingMidiKeyboardState());
     expect(initial.showed, isFalse);
     expect(initial.baseKey, 48);
-    expect(initial.keyRange, 15);
+    expect(initial.keyRange, 24);
     expect(initial.selectedGeneratorId, isNull);
 
     final selected = initial.copyWith(selectedGeneratorId: 42);
