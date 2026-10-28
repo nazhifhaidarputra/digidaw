@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 
 use crate::api::context::DawContext;
+use crate::api::project::UiApplicationState;
 use flutter_rust_bridge::frb;
 use karbeat_core::core::project::{
     GeneratorId, Note, NoteId, track::midi::Pattern, track::note_transform,
@@ -124,6 +125,15 @@ pub fn rename_pattern(ctx: &DawContext, pattern_id: u64, new_name: &str) -> Resu
     crate::api::context::project_ctx!(ctx);
     pattern_api::rename_pattern(ctx, PatternId::from_u64(pattern_id), new_name)
         .map_err(|error| error.to_string())
+}
+
+/// Deletes a MIDI pattern and every clip that plays it as one undoable step, and returns the
+/// project as it is afterwards.
+pub fn delete_pattern(ctx: &DawContext, pattern_id: u64) -> Result<UiApplicationState, String> {
+    let mut core = ctx.project_write();
+    pattern_api::delete_pattern(&mut core, PatternId::from_u64(pattern_id))
+        .map_err(|error| error.to_string())?;
+    Ok(UiApplicationState::from(core.app_state.clone()))
 }
 
 pub fn add_note(

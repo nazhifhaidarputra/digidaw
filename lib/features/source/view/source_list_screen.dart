@@ -122,6 +122,70 @@ class SourceListScreen extends ConsumerWidget {
     await ref.read(projectProvider.notifier).removeAudioSource(sourceId);
   }
 
+  /// Number of timeline clips that play the MIDI pattern [patternId].
+  static int patternClipCount(Iterable<UiTrack> tracks, int patternId) => tracks
+      .expand((track) => track.clips)
+      .where(
+        (clip) => switch (clip.source) {
+          UiClipSource_Midi(patternId: final id) => id == patternId,
+          _ => false,
+        },
+      )
+      .length;
+
+  /// Asks before deleting a pattern, naming how many clips go with it.
+  Future<void> _deletePattern(
+    BuildContext context,
+    WidgetRef ref,
+    int patternId,
+    String name,
+  ) async {
+    final tracks =
+        ref.read(projectProvider).value?.tracks.values ?? const <UiTrack>[];
+    final clipCount = patternClipCount(tracks, patternId);
+    final clipText = switch (clipCount) {
+      0 => 'No clip on the timeline uses it.',
+      1 => '1 clip that plays it will be removed from the timeline.',
+      _ => '$clipCount clips that play it will be removed from the timeline.',
+    };
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Delete pattern?'),
+        content: Text(
+          '“$name” will be removed from the project. $clipText\n\n'
+          'You can undo this.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+
+    // A placement of this pattern would create a clip with nothing to play.
+    final placement = ref.read(clipPlacementProvider);
+    if (placement.sourceType == UiSourceType.midi &&
+        placement.sourceId == patternId) {
+      ref.read(clipPlacementProvider.notifier).cancelPlacement();
+    }
+
+    // The editor would otherwise keep a pattern that no longer exists open.
+    if (ref.read(pianoRollProvider).editingPatternId == patternId) {
+      ref.read(pianoRollProvider.notifier).clearEditingPattern();
+    }
+
+    await ref.read(projectProvider.notifier).removePattern(patternId);
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final colors = Theme.of(context).colorScheme;
@@ -367,6 +431,7 @@ class SourceListScreen extends ConsumerWidget {
                       );
                 },
                 onRename: () => _renamePattern(context, ref, id, pattern.name),
+                onDelete: () => _deletePattern(context, ref, id, pattern.name),
               );
             }, childCount: patterns.length),
           ),

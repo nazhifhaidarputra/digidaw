@@ -1381,6 +1381,66 @@ fn pattern_transport_pauses_seeks_and_loops_a_region() {
     assert_eq!(engine.transport.song.playhead_samples, 5_000);
 }
 
+#[test]
+fn switching_patterns_retargets_playback_and_keeps_its_play_state() {
+    use crate::engine::PlaybackMode;
+    use karbeat_core::core::project::track::midi::Pattern;
+
+    let (_, command_consumer) = RingBuffer::<AudioCommand>::new(32);
+    let (position_producer, _) = RingBuffer::<TransportFeedback>::new(64);
+    let (feedback_producer, _) = RingBuffer::<AudioFeedback>::new(32);
+    let (telemetry_sender, _) = mpsc::sync_channel::<TelemetryRegistration>(32);
+    let mut engine = AudioEngine::new(
+        command_consumer,
+        position_producer,
+        feedback_producer,
+        48_000,
+        2,
+        120.0,
+        64,
+        AudioEngineTelemetry::new_for_export(),
+        telemetry_sender,
+    );
+    let mut app_state = ApplicationState::default();
+    let first = app_state.pattern_pool.insert_with_key(|id| Pattern {
+        id,
+        ..Pattern::default()
+    });
+    let second = app_state.pattern_pool.insert_with_key(|id| Pattern {
+        id,
+        ..Pattern::default()
+    });
+    let generator_id = karbeat_core::shared::GeneratorId::from(1);
+
+    engine.process_command(AudioCommand::TogglePatternPlayback {
+        pattern_id: first,
+        generator_id,
+    });
+    engine.process_command(AudioCommand::SetPatternLoop(Some((960, 1_920))));
+    engine.process_command(AudioCommand::SetPatternPlayhead(1_000));
+    assert!(engine.transport.pattern.is_playing);
+
+    engine.process_command(AudioCommand::SwitchPattern(second));
+
+    assert_eq!(
+        engine.transport.mode,
+        PlaybackMode::Pattern {
+            pattern_id: second,
+            generator_id
+        }
+    );
+    // Playback follows the opened pattern, starting it from the top with no stale loop.
+    assert!(engine.transport.pattern.is_playing);
+    assert_eq!(engine.transport.pattern.playhead_samples, 0);
+    assert_eq!(engine.transport.pattern.loop_region, None);
+
+    // Outside pattern mode, opening a pattern for editing must not start playback.
+    engine.process_command(AudioCommand::SetPlaybackMode(PlaybackMode::Song));
+    engine.process_command(AudioCommand::SwitchPattern(first));
+    assert_eq!(engine.transport.mode, PlaybackMode::Song);
+    assert!(!engine.transport.pattern.is_playing);
+}
+
 /// Generator that records which keys it is holding, from the MIDI it actually receives.
 struct HeldKeysRecorder(std::sync::Arc<std::sync::Mutex<Vec<u8>>>);
 

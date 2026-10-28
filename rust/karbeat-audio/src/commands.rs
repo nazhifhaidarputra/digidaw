@@ -122,6 +122,10 @@ pub enum AudioCommand {
     /// Hot-swaps the active generator while pattern playback is running
     SwitchPatternGenerator(karbeat_core::shared::id::GeneratorId),
 
+    /// Retargets pattern playback at another pattern without changing whether it is playing.
+    /// The new pattern starts from its beginning with no loop region. No-op outside pattern mode.
+    SwitchPattern(karbeat_core::shared::id::PatternId),
+
     // =========================================================================
     // Generator Plugin Commands
     // =========================================================================

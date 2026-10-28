@@ -70,6 +70,7 @@ class _ProjectNotifier extends ProjectNotifier {
 
   final IMap<int, UiPattern> patterns;
   final List<int> removedSources = [];
+  final List<int> removedPatterns = [];
 
   @override
   Future<ApplicationDataStore> build() async => ApplicationDataStore(
@@ -108,6 +109,12 @@ class _ProjectNotifier extends ProjectNotifier {
     removedSources.add(sourceId);
     return Result.ok(null);
   }
+
+  @override
+  Future<Result<void>> removePattern(int patternId) async {
+    removedPatterns.add(patternId);
+    return Result.ok(null);
+  }
 }
 
 void main() {
@@ -115,6 +122,11 @@ void main() {
     expect(SourceListScreen.audioSourceClipCount(_tracks.values, _sourceId), 2);
     expect(SourceListScreen.audioSourceClipCount(_tracks.values, 99), 1);
     expect(SourceListScreen.audioSourceClipCount(_tracks.values, 5), 0);
+  });
+
+  test('only clips of the pattern are counted', () {
+    expect(SourceListScreen.patternClipCount(_tracks.values, _sourceId), 1);
+    expect(SourceListScreen.patternClipCount(_tracks.values, 99), 0);
   });
 
   testWidgets('Delete asks first, then removes the audio source', (
@@ -162,6 +174,52 @@ void main() {
     await tester.tap(find.widgetWithText(FilledButton, 'Delete'));
     await tester.pumpAndSettle();
     expect(project.removedSources, [_sourceId]);
+  });
+
+  testWidgets('Deleting a pattern asks first, then removes it', (tester) async {
+    final project = _ProjectNotifier(
+      patterns: IMap({
+        _sourceId: const UiPattern(
+          id: _sourceId,
+          name: 'Lead',
+          lengthTicks: 3840,
+          notes: [],
+        ),
+      }),
+    );
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          projectProvider.overrideWith(() => project),
+          audioSourcesProvider.overrideWith((ref) async => const {}),
+        ],
+        child: const MaterialApp(home: SourceListScreen()),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    Future<void> openDeleteDialog() async {
+      await tester.tap(find.byIcon(Icons.more_vert));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Delete'));
+      await tester.pumpAndSettle();
+    }
+
+    await openDeleteDialog();
+    expect(find.text('Delete pattern?'), findsOneWidget);
+    expect(
+      find.textContaining('1 clip that plays it will be removed'),
+      findsOneWidget,
+    );
+
+    await tester.tap(find.text('Cancel'));
+    await tester.pumpAndSettle();
+    expect(project.removedPatterns, isEmpty);
+
+    await openDeleteDialog();
+    await tester.tap(find.widgetWithText(FilledButton, 'Delete'));
+    await tester.pumpAndSettle();
+    expect(project.removedPatterns, [_sourceId]);
   });
 
   testWidgets('tapping a pattern opens it in the piano roll', (tester) async {

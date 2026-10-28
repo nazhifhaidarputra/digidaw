@@ -84,6 +84,13 @@ Future<void> switchPatternGenerator({
   generatorId: generatorId,
 );
 
+/// Retarget pattern playback at another pattern without changing whether it is playing.
+Future<void> switchPattern({required DawContext ctx, required int patternId}) =>
+    RustLib.instance.api.crateApiTransportSwitchPattern(
+      ctx: ctx,
+      patternId: patternId,
+    );
+
 @freezed
 sealed class PlaybackModeDto with _$PlaybackModeDto {
   const PlaybackModeDto._();

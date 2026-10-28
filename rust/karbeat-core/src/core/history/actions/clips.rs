@@ -123,6 +123,34 @@ impl AudioSourceRemoved {
 
 swap_action!(AudioSourceRemoved, "Delete Audio Source");
 
+/// A MIDI pattern deleted together with the clips that played it.
+///
+/// Holds the clip changes and the detached pattern. Undo reattaches the pattern and its clips
+/// under the same keys; redo detaches them again.
+#[derive(Debug)]
+pub struct PatternRemoved {
+    clips: ClipsChanged,
+    pattern: PoolSwap<PatternId, Pattern>,
+}
+
+impl PatternRemoved {
+    /// Records the deletion from the clip changes and the pattern the project detached.
+    pub fn new(clips: ClipsChanged, pattern_id: PatternId, pattern: Pattern) -> Self {
+        Self {
+            clips,
+            pattern: PoolSwap::from_entries(vec![(pattern_id, Some(pattern))]),
+        }
+    }
+
+    fn swap(&mut self, app: &mut ApplicationState) -> Result<EngineSync, HistoryError> {
+        // The pattern goes first on undo so its clips never point at missing notes.
+        self.pattern.swap(&mut app.pattern_pool, "Pattern")?;
+        self.clips.swap(app)
+    }
+}
+
+swap_action!(PatternRemoved, "Delete Pattern");
+
 /// Captures the tracks and clips a clip edit is about to touch, then builds the
 /// [`ClipsChanged`] record once the edit has run.
 ///

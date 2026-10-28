@@ -112,3 +112,8 @@ pub fn set_pattern_loop(
 pub fn switch_pattern_generator(ctx: &DawContext, generator_id: u64) {
     transport_api::switch_pattern_generator(&mut ctx.project_write(), generator_id.into());
 }
+
+/// Retarget pattern playback at another pattern without changing whether it is playing.
+pub fn switch_pattern(ctx: &DawContext, pattern_id: u64) {
+    transport_api::switch_pattern(&mut ctx.project_write(), pattern_id.into());
+}

@@ -1504,6 +1504,10 @@ class _PianoRollToolbar extends ConsumerWidget {
 
     final selectedTool = pianoRollState.tool;
     final generators = projectState.value?.generators ?? const IMapConst({});
+    final patterns =
+        projectState.value?.patterns ?? const IMapConst<int, UiPattern>({});
+    final sortedPatterns = patterns.entries.toList()
+      ..sort((a, b) => a.value.name.compareTo(b.value.name));
     final previewGeneratorId = pianoRollState.previewGeneratorId;
     // Samplers have no plugin screen, so only plugin generators can be opened.
     final previewPlugin = previewGeneratorId == null
@@ -1557,12 +1561,47 @@ class _PianoRollToolbar extends ConsumerWidget {
             _buildDivider(context),
             const SizedBox(width: 8),
 
-            // Pattern name
-            Text(
-              name,
-              style: TextStyle(
-                color: colors.onSurface,
-                fontWeight: FontWeight.bold,
+            // Pattern name, with a scrollable selector to switch patterns in place.
+            Tooltip(
+              message: 'Switch pattern',
+              child: DropdownButton<int>(
+                value: patterns.containsKey(patternId) ? patternId : null,
+                hint: Text(
+                  name,
+                  style: TextStyle(
+                    color: colors.onSurface,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                isDense: true,
+                menuMaxHeight: 320,
+                dropdownColor: colors.surfaceContainerHigh,
+                underline: const SizedBox(),
+                icon: Icon(
+                  Icons.arrow_drop_down,
+                  color: colors.primary,
+                  size: 20,
+                ),
+                style: TextStyle(
+                  color: colors.onSurface,
+                  fontWeight: FontWeight.bold,
+                ),
+                items: [
+                  for (final entry in sortedPatterns)
+                    DropdownMenuItem<int>(
+                      value: entry.key,
+                      child: Text(entry.value.name),
+                    ),
+                ],
+                onChanged: (value) {
+                  if (value == null || value == patternId) return;
+                  ref
+                      .read(pianoRollProvider.notifier)
+                      .openPattern(
+                        value,
+                        previewGeneratorId: previewGeneratorId,
+                      );
+                },
               ),
             ),
             const SizedBox(width: 16),

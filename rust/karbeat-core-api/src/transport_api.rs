@@ -81,3 +81,11 @@ pub fn set_pattern_loop(ctx: &mut DawContext, region: Option<(u64, u64)>) -> any
 pub fn switch_pattern_generator(ctx: &mut DawContext, generator_id: GeneratorId) {
     let _ = ctx.send_audio_command(AudioCommand::SwitchPatternGenerator(generator_id));
 }
+
+/// Retargets pattern playback at another pattern, keeping its play state.
+///
+/// The new pattern starts from its beginning. Nothing happens outside pattern mode, so the song
+/// transport is never interrupted by opening a pattern for editing.
+pub fn switch_pattern(ctx: &mut DawContext, pattern_id: PatternId) {
+    let _ = ctx.send_audio_command(AudioCommand::SwitchPattern(pattern_id));
+}

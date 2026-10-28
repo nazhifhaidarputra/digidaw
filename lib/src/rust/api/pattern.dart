@@ -4,9 +4,13 @@
 // ignore_for_file: invalid_use_of_internal_member, unused_import, unnecessary_import
 
 import '../frb_generated.dart';
+import 'automation.dart';
+import 'mixer.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 import 'package:freezed_annotation/freezed_annotation.dart' hide protected;
+import 'plugin.dart';
 import 'project.dart';
+import 'timeline.dart';
 part 'pattern.freezed.dart';
 
 // These functions are ignored because they are not marked as `pub`: `note_ids`
@@ -31,6 +35,16 @@ Future<void> renamePattern({
   ctx: ctx,
   patternId: patternId,
   newName: newName,
+);
+
+/// Deletes a MIDI pattern and every clip that plays it as one undoable step, and returns the
+/// project as it is afterwards.
+Future<UiApplicationState> deletePattern({
+  required DawContext ctx,
+  required int patternId,
+}) => RustLib.instance.api.crateApiPatternDeletePattern(
+  ctx: ctx,
+  patternId: patternId,
 );
 
 Future<UiNote> addNote({

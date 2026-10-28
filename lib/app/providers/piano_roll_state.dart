@@ -151,15 +151,39 @@ class PianoRollNotifier extends Notifier<PianoRollStateData> {
 
   void scaleKeyHeight(double factor) => setKeyHeight(state.keyHeight * factor);
 
+  /// Opens [patternId] for editing, resetting selection and per-pattern state.
+  ///
+  /// The selected preview generator is kept unless [previewGeneratorId] is given, so switching
+  /// patterns keeps playing through the same instrument.
   void openPattern(int patternId, {int? previewGeneratorId}) {
     final changed = state.editingPatternId != patternId;
     state = state.copyWith(
       editingPatternId: patternId,
       selectedNoteIds: const ISetConst({}),
-      previewGeneratorId: previewGeneratorId,
+      previewGeneratorId: previewGeneratorId ?? state.previewGeneratorId,
       loopRegion: changed ? null : state.loopRegion,
       drawTemplate: changed ? const IListConst([]) : state.drawTemplate,
     );
+  }
+
+  /// Points an active pattern playback at [patternId] after the editor switches patterns.
+  ///
+  /// The engine ignores this outside pattern mode, so opening a pattern for editing never
+  /// interrupts song playback. A running preview keeps playing, now with the opened pattern.
+  Future<void> followPlaybackPattern(int patternId) async {
+    final generatorId = state.previewGeneratorId;
+    final result = await AsyncValue.guard(() async {
+      if (generatorId != null) {
+        await transport_api.switchPatternGenerator(
+          ctx: _ctx,
+          generatorId: generatorId,
+        );
+      }
+      await transport_api.switchPattern(ctx: _ctx, patternId: patternId);
+    });
+    if (result.hasError) {
+      AppLogger.error('Could not switch pattern playback: ${result.error}');
+    }
   }
 
   void clearEditingPattern() {

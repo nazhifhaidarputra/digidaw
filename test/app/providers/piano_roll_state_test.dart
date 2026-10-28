@@ -96,7 +96,21 @@ void main() {
     RustLib.initMock(api: api);
   });
 
-  setUp(() => reset(api));
+  setUp(() {
+    reset(api);
+    when(
+      () => api.crateApiTransportSwitchPattern(
+        ctx: any(named: 'ctx'),
+        patternId: any(named: 'patternId'),
+      ),
+    ).thenAnswer((_) async {});
+    when(
+      () => api.crateApiTransportSwitchPatternGenerator(
+        ctx: any(named: 'ctx'),
+        generatorId: any(named: 'generatorId'),
+      ),
+    ).thenAnswer((_) async {});
+  });
 
   Future<ProviderContainer> createContainer() async {
     final container = ProviderContainer.test(
@@ -108,6 +122,37 @@ void main() {
         .openPattern(_patternId, previewGeneratorId: 9);
     return container;
   }
+
+  group('pattern switching', () {
+    test('opening another pattern keeps the selected generator', () async {
+      final container = await createContainer();
+
+      container.read(pianoRollProvider.notifier).openPattern(4);
+
+      expect(container.read(pianoRollProvider).previewGeneratorId, 9);
+    });
+
+    test('following the opened pattern retargets pattern playback', () async {
+      final container = await createContainer();
+      final notifier = container.read(pianoRollProvider.notifier);
+
+      notifier.openPattern(4);
+      await notifier.followPlaybackPattern(4);
+
+      verify(
+        () => api.crateApiTransportSwitchPatternGenerator(
+          ctx: any(named: 'ctx'),
+          generatorId: 9,
+        ),
+      ).called(1);
+      verify(
+        () => api.crateApiTransportSwitchPattern(
+          ctx: any(named: 'ctx'),
+          patternId: 4,
+        ),
+      ).called(1);
+    });
+  });
 
   group('snap steps', () {
     test('the draw step follows the grid until set on its own', () {

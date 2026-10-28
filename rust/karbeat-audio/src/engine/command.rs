@@ -956,6 +956,26 @@ impl AudioEngine {
                     }
                 }
             }
+            AudioCommand::SwitchPattern(new_pattern_id) => {
+                if let PlaybackMode::Pattern {
+                    pattern_id: current,
+                    generator_id,
+                } = self.transport.mode
+                    && current != new_pattern_id
+                {
+                    // Silence the previous pattern so its held notes do not hang.
+                    self.stop_all_active_generators();
+                    self.transport.mode = PlaybackMode::Pattern {
+                        pattern_id: new_pattern_id,
+                        generator_id,
+                    };
+                    // The new pattern starts at its beginning, without the old loop region.
+                    self.reset_pattern_state();
+                    self.transport.pattern.loop_region = None;
+                    self.release_manual_parameter_overrides();
+                    self.emit_current_playback_position();
+                }
+            }
             AudioCommand::ExecutePluginCommand {
                 target,
                 command,

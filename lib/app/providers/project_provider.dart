@@ -188,15 +188,6 @@ class ProjectNotifier extends AsyncNotifier<ApplicationDataStore> {
   // Rather than making `TrackListNotifier` duplicate large maps,
   // it can push updates into this central truth repository.
 
-  void removePattern(int patternId) {
-    if (state.hasValue) {
-      final current = state.requireValue;
-      state = AsyncValue.data(
-        current.copyWith(patterns: current.patterns.remove(patternId)),
-      );
-    }
-  }
-
   /// Removes a track and its owned generator in O(1) time.
   void removeTrack(int trackId) {
     if (state.hasValue) {
@@ -239,6 +230,15 @@ class ProjectNotifier extends AsyncNotifier<ApplicationDataStore> {
     return _applyHistoryOperation(
       () => audio_api.removeAudioSource(ctx: dawContext, sourceId: sourceId),
       errorTitle: 'Could not delete the audio source',
+    );
+  }
+
+  /// Deletes a pattern and every clip that plays it as one undo step, then
+  /// publishes the project the backend returns.
+  Future<Result<void>> removePattern(int patternId) {
+    return _applyHistoryOperation(
+      () => deletePattern(ctx: dawContext, patternId: patternId),
+      errorTitle: 'Could not delete the pattern',
     );
   }
 
