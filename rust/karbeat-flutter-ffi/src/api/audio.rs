@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 use std::sync::Arc;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use crate::api::context::DawContext;
 use crate::api::plugins::opaque::ZeroCopyHandle;
@@ -11,6 +11,7 @@ use crate::frb_generated::StreamSink;
 use flutter_rust_bridge::frb;
 use karbeat_audio::commands::{AudioFeedback, EffectTarget, MixerChannelTarget};
 use karbeat_audio::event::{PluginTarget, TransportFeedback};
+use karbeat_audio::playback_sync::PlayheadSync;
 use karbeat_core::core::project::{AudioSourceId, GeneratorId, TrackId};
 use karbeat_core_api::{audio_api, audio_waveform_api};
 
@@ -347,24 +348,31 @@ pub fn create_position_stream(
     sink: StreamSink<UiTransportFeedback>,
     ctx: &DawContext,
 ) -> Result<(), String> {
-    let consumer_slot = Arc::clone(&ctx.read().position_consumer);
+    let (consumer_slot, output_clock) = {
+        let ctx = ctx.read();
+        (
+            Arc::clone(&ctx.position_consumer),
+            Arc::clone(&ctx.output_clock),
+        )
+    };
 
     // Take the consumer out of the Mutex so we own it
-    let mut consumer = consumer_slot
+    let consumer = consumer_slot
         .lock()
         .take()
         .ok_or("Position consumer is already running in another stream!")?;
 
-    // Spawn a thread to poll the ring buffer
+    // Spawn a thread that forwards each position once the device plays it
     std::thread::spawn(move || {
+        let mut sync = PlayheadSync::new(consumer, output_clock);
         loop {
-            while let Ok(feedback) = consumer.pop() {
+            if let Some(feedback) = sync.poll(Instant::now()) {
                 let ui_feedback = UiTransportFeedback::from(feedback);
 
                 // Send to Flutter
                 if sink.add(ui_feedback).is_err() {
                     log::info!("[Rust] PlaybackPosition Stream disconnected! Stopping thread.");
-                    *consumer_slot.lock() = Some(consumer);
+                    *consumer_slot.lock() = Some(sync.into_consumer());
                     return;
                 }
             }

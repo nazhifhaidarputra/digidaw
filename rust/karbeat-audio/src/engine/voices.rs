@@ -11,10 +11,9 @@ use crate::{
 };
 use karbeat_core::{
     core::project::{
-        AudioWaveform, EnvelopeCursor, GainEnvelope, GeneratorInstance, Note, Pattern,
-        audio_waveform::AudioSampleMode, equal_power,
+        AudioWaveform, ClipTimeUnit, EnvelopeCursor, GainEnvelope, GeneratorInstance, Note,
+        Pattern, TickScale, audio_waveform::AudioSampleMode, equal_power,
     },
-    shared::constants::f64::PPQ,
     shared::{ClipId, GeneratorId, TrackId},
 };
 
@@ -99,8 +98,10 @@ pub struct GeneratorVoice {
 #[cfg(test)]
 mod midi_tests {
     use super::{PlayingNote, VoiceState};
+    use crate::engine::schedule::clip_span_samples;
+    use karbeat_core::core::project::{ClipTimeUnit, Note, Pattern, TickScale};
     use karbeat_core::shared::{NoteId, PatternId};
-    use karbeat_plugin_api::types::{MidiMessage, NoteExpressionType};
+    use karbeat_plugin_api::types::{MidiEvent, MidiMessage, NoteExpressionType};
     use smallvec::SmallVec;
 
     #[test]
@@ -158,8 +159,7 @@ mod midi_tests {
             &mut events,
             PatternId::from(1),
             &[note],
-            48_000,
-            120.0,
+            TickScale::new(120.0, 48_000),
             0,
             64,
         );
@@ -260,6 +260,164 @@ mod midi_tests {
         assert_ne!(
             VoiceState::note_event_id(PatternId::from(1), note_id),
             VoiceState::note_event_id(PatternId::from(2), note_id)
+        );
+    }
+
+    /// Tempos whose samples per beat are fractional as well as whole.
+    const TEMPOS: [f32; 5] = [97.0, 120.0, 128.5, 130.0, 173.0];
+    const SAMPLE_RATES: [u32; 2] = [44_100, 48_000];
+
+    fn note(start_tick: u64, duration: u64) -> Note {
+        Note {
+            id: NoteId::from(1),
+            start_tick,
+            duration,
+            key: 60,
+            velocity: 100,
+            probability: 1.0,
+            micro_offset: 0,
+            mute: false,
+            pan: 0.0,
+            pitch: 0.0,
+        }
+    }
+
+    fn pattern(notes: Vec<Note>) -> Pattern {
+        Pattern {
+            id: PatternId::from(1),
+            length_ticks: 7_680,
+            notes,
+            ..Pattern::default()
+        }
+    }
+
+    /// Absolute sample positions of the note-ons and note-offs scheduled in `start..end`.
+    fn scheduled(
+        pattern: &Pattern,
+        time: &ClipTimeUnit,
+        scale: TickScale,
+        start: u32,
+        end: u32,
+    ) -> (Vec<u32>, Vec<u32>) {
+        let mut events = SmallVec::new();
+        VoiceState::schedule_midi_events(&mut events, pattern, time, scale, start, end);
+        let at = |event: &MidiEvent| start + event.sample_offset as u32;
+        let ons = events
+            .iter()
+            .filter(|event| matches!(event.data, MidiMessage::NoteOn { .. }))
+            .map(at)
+            .collect();
+        let offs = events
+            .iter()
+            .filter(|event| matches!(event.data, MidiMessage::NoteOff { .. }))
+            .map(at)
+            .collect();
+        (ons, offs)
+    }
+
+    #[test]
+    fn cut_clip_plays_the_note_on_its_cut_point() {
+        for bpm in TEMPOS {
+            for sample_rate in SAMPLE_RATES {
+                let scale = TickScale::new(bpm, sample_rate);
+                for cut in [1, 240, 959, 961, 3_841] {
+                    let pattern = pattern(vec![note(cut, 480)]);
+                    let time = ClipTimeUnit::Ticks {
+                        start_time: 7_777,
+                        loop_length: 1_920,
+                        offset_start: cut as u32,
+                    };
+                    let (clip_start, _, _) = clip_span_samples(&time, scale);
+                    let (ons, _) =
+                        scheduled(&pattern, &time, scale, clip_start - 128, clip_start + 128);
+                    assert_eq!(
+                        ons,
+                        vec![clip_start],
+                        "{bpm} BPM @ {sample_rate} Hz, cut {cut}"
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn note_held_across_the_cut_plays_from_the_clip_start() {
+        for bpm in TEMPOS {
+            for sample_rate in SAMPLE_RATES {
+                let scale = TickScale::new(bpm, sample_rate);
+                let pattern = pattern(vec![note(0, 1_920)]);
+                let time = ClipTimeUnit::Ticks {
+                    start_time: 3_000,
+                    loop_length: 3_840,
+                    offset_start: 960,
+                };
+                let (clip_start, _, _) = clip_span_samples(&time, scale);
+                let note_off = scale.to_samples(3_000 + 960) as u32;
+                let (ons, offs) = scheduled(&pattern, &time, scale, clip_start, note_off + 1);
+                assert_eq!(ons, vec![clip_start], "{bpm} BPM @ {sample_rate} Hz");
+                assert_eq!(offs, vec![note_off], "{bpm} BPM @ {sample_rate} Hz");
+            }
+        }
+    }
+
+    #[test]
+    fn notes_ending_at_the_cut_stay_in_the_left_clip() {
+        let scale = TickScale::new(130.0, 48_000);
+        let pattern = pattern(vec![note(0, 960)]);
+        let time = ClipTimeUnit::Ticks {
+            start_time: 960,
+            loop_length: 960,
+            offset_start: 960,
+        };
+        assert_eq!(
+            scheduled(&pattern, &time, scale, 0, u32::MAX),
+            (vec![], vec![])
+        );
+    }
+
+    #[test]
+    fn split_clips_tile_without_a_gap() {
+        for bpm in TEMPOS {
+            for sample_rate in SAMPLE_RATES {
+                let scale = TickScale::new(bpm, sample_rate);
+                for cut in [1_001, 1_919, 2_881] {
+                    let left = ClipTimeUnit::Ticks {
+                        start_time: 1_000,
+                        loop_length: cut - 1_000,
+                        offset_start: 0,
+                    };
+                    let right = ClipTimeUnit::Ticks {
+                        start_time: cut,
+                        loop_length: 3_000 - (cut - 1_000),
+                        offset_start: cut - 1_000,
+                    };
+                    let (left_start, left_length, _) = clip_span_samples(&left, scale);
+                    let (right_start, _, _) = clip_span_samples(&right, scale);
+                    assert_eq!(left_start + left_length, right_start);
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn pattern_mode_notes_use_the_shared_scale() {
+        let scale = TickScale::new(128.5, 44_100);
+        let mut events = SmallVec::new();
+        VoiceState::schedule_pattern_notes(
+            &mut events,
+            PatternId::from(1),
+            &[note(1_000_003, 480)],
+            scale,
+            0,
+            u32::MAX,
+        );
+        let positions: Vec<_> = events
+            .iter()
+            .map(|event| event.sample_offset as u64)
+            .collect();
+        assert_eq!(
+            positions,
+            vec![scale.to_samples(1_000_003), scale.to_samples(1_000_483)]
         );
     }
 }
@@ -1094,40 +1252,59 @@ impl VoiceState {
         });
     }
 
+    /// Queues the note-ons and note-offs of a MIDI clip that fall in
+    /// `buffer_start..buffer_end`.
+    ///
+    /// Which notes play is decided in whole ticks, and each absolute tick is converted to
+    /// samples once through `scale`. A note on the clip's cut point therefore lands exactly
+    /// on the clip's first sample, the sample block scheduling compares against. A note
+    /// still sounding at the cut point plays from the clip start for its remaining length.
     pub fn schedule_midi_events(
         events: &mut SmallVec<[MidiEvent; 4]>,
-        sample_rate: u32,
-        tempo: f32,
         pattern: &Pattern,
-        clip_start: u32,
-        clip_loop_length: u32,
-        clip_offset: u32,
+        clip_time: &ClipTimeUnit,
+        scale: TickScale,
         buffer_start: u32,
         buffer_end: u32,
     ) {
-        let samples_per_beat = ((60.0 / tempo) * sample_rate as f32) as u32;
-        if samples_per_beat == 0 {
+        if pattern.length_ticks == 0 {
             return;
         }
-        let pattern_frames = (pattern.length_ticks as f64 / PPQ * samples_per_beat as f64) as u32;
-        if pattern_frames == 0 {
-            return;
-        }
-
-        let clip_end = clip_start + clip_loop_length;
+        let (clip_start, clip_length, clip_offset) = match *clip_time {
+            ClipTimeUnit::Ticks {
+                start_time,
+                loop_length,
+                offset_start,
+            } => (
+                u64::from(start_time),
+                u64::from(loop_length),
+                u64::from(offset_start),
+            ),
+            // Legacy sample placement; MIDI clips are created in ticks.
+            ClipTimeUnit::Samples {
+                start_time,
+                loop_length,
+                offset_start,
+            } => (
+                scale.to_ticks(start_time),
+                scale.to_ticks(loop_length),
+                scale.to_ticks(offset_start),
+            ),
+            ClipTimeUnit::Audio { .. } => return,
+        };
+        let clip_end = clip_start + clip_length;
+        let content_end = clip_offset + clip_length;
+        let to_samples = |ticks: u64| u32::try_from(scale.to_samples(ticks)).unwrap_or(u32::MAX);
 
         for note in &pattern.notes {
+            let note_end = note.start_tick + note.duration;
+            if note_end <= clip_offset || note.start_tick >= content_end {
+                continue;
+            }
             let note_id = Self::note_event_id(pattern.id, note.id);
-            let note_start = (note.start_tick as f64 / PPQ * samples_per_beat as f64) as u32;
-            let note_duration = (note.duration as f64 / PPQ * samples_per_beat as f64) as u32;
-            if note_start < clip_offset {
-                continue;
-            }
-            let absolute_start = clip_start + note_start - clip_offset;
-            if absolute_start >= clip_end {
-                continue;
-            }
-            let absolute_end = (absolute_start + note_duration).min(clip_end);
+            let absolute_start =
+                to_samples(clip_start + note.start_tick.saturating_sub(clip_offset));
+            let absolute_end = to_samples((clip_start + (note_end - clip_offset)).min(clip_end));
 
             if absolute_start >= buffer_start && absolute_start < buffer_end {
                 let sample_offset = (absolute_start - buffer_start) as usize;
@@ -1159,16 +1336,15 @@ impl VoiceState {
         events: &mut SmallVec<[MidiEvent; 4]>,
         pattern_id: karbeat_core::shared::PatternId,
         notes: &[Note],
-        sample_rate: u32,
-        tempo: f32,
+        scale: TickScale,
         buffer_start: u32,
         buffer_end: u32,
     ) {
-        let samples_per_tick = (60.0 / tempo) * sample_rate as f32 / PPQ as f32;
+        let to_samples = |ticks: u64| u32::try_from(scale.to_samples(ticks)).unwrap_or(u32::MAX);
         for note in notes {
             let note_id = Self::note_event_id(pattern_id, note.id);
-            let note_start = (note.start_tick as f32 * samples_per_tick) as u32;
-            let note_end = note_start + (note.duration as f32 * samples_per_tick) as u32;
+            let note_start = to_samples(note.start_tick);
+            let note_end = to_samples(note.start_tick + note.duration);
             if note_start >= buffer_start && note_start < buffer_end {
                 let sample_offset = (note_start - buffer_start) as usize;
                 events.push(MidiEvent {

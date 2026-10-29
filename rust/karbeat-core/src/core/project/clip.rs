@@ -164,16 +164,12 @@ impl ClipTimeUnit {
     /// Converts 960-PPQN ticks to samples, rounding to the nearest whole sample.
     /// Non-positive tempo uses the same 120 BPM fallback as [`Self::samples_per_tick`].
     pub fn ticks_to_samples(ticks: u64, bpm: f32, sample_rate: u32) -> u64 {
-        ((ticks as f64) * Self::samples_per_tick(bpm, sample_rate)).round() as u64
+        TickScale::new(bpm, sample_rate).to_samples(ticks)
     }
 
     /// Converts samples to 960-PPQN ticks, rounding to the nearest whole tick.
     pub fn samples_to_ticks(samples: u64, bpm: f32, sample_rate: u32) -> u64 {
-        let samples_per_tick = Self::samples_per_tick(bpm, sample_rate);
-        if samples_per_tick <= 0.0 {
-            return 0;
-        }
-        ((samples as f64) / samples_per_tick).round() as u64
+        TickScale::new(bpm, sample_rate).to_ticks(samples)
     }
 
     fn tick_delta_to_samples(delta_ticks: i64, bpm: f32, sample_rate: u32) -> i64 {
@@ -183,6 +179,49 @@ impl ClipTimeUnit {
         } else {
             magnitude as i64
         }
+    }
+}
+
+/// The one tick-to-sample conversion shared by project edits and the audio engine.
+///
+/// Every timeline position goes through [`Self::to_samples`] exactly once, from an absolute
+/// tick. Positions that are equal in ticks are therefore equal in samples: a note on a clip's
+/// cut point lands on the clip's first sample, and split clips tile without gaps.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct TickScale {
+    samples_per_tick: f64,
+}
+
+impl TickScale {
+    /// Scale for `bpm` at `sample_rate`, with the 120 BPM fallback of
+    /// [`ClipTimeUnit::samples_per_tick`].
+    pub fn new(bpm: f32, sample_rate: u32) -> Self {
+        Self {
+            samples_per_tick: ClipTimeUnit::samples_per_tick(bpm, sample_rate),
+        }
+    }
+
+    /// Samples per 960-PPQN tick.
+    pub fn samples_per_tick(self) -> f64 {
+        self.samples_per_tick
+    }
+
+    /// Converts ticks to samples, rounding to the nearest whole sample.
+    pub fn to_samples(self, ticks: u64) -> u64 {
+        ((ticks as f64) * self.samples_per_tick).round() as u64
+    }
+
+    /// Converts samples to ticks, rounding to the nearest whole tick.
+    pub fn to_ticks(self, samples: u64) -> u64 {
+        if self.samples_per_tick <= 0.0 {
+            return 0;
+        }
+        ((samples as f64) / self.samples_per_tick).round() as u64
+    }
+
+    /// Bit pattern of the scale, for caches keyed on tempo.
+    pub fn bits(self) -> u64 {
+        self.samples_per_tick.to_bits()
     }
 }
 
@@ -1318,5 +1357,42 @@ impl ApplicationState {
         );
         clip.envelope = (!envelope.is_identity()).then(|| Arc::new(envelope.normalized()));
         Ok(clip.clone())
+    }
+}
+
+#[cfg(test)]
+mod tick_scale_tests {
+    use super::{ClipTimeUnit, TickScale};
+
+    #[test]
+    fn tick_scale_is_the_clip_time_conversion() {
+        for (bpm, sample_rate) in [
+            (97.0, 44_100),
+            (128.5, 48_000),
+            (130.0, 48_000),
+            (0.0, 48_000),
+        ] {
+            let scale = TickScale::new(bpm, sample_rate);
+            for ticks in [0, 1, 239, 960, 3_841, 1_000_003] {
+                assert_eq!(
+                    scale.to_samples(ticks),
+                    ClipTimeUnit::ticks_to_samples(ticks, bpm, sample_rate)
+                );
+                let samples = scale.to_samples(ticks);
+                assert_eq!(
+                    scale.to_ticks(samples),
+                    ClipTimeUnit::samples_to_ticks(samples, bpm, sample_rate)
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn tick_scale_round_trips_whole_ticks() {
+        // A tick spans more than one sample at these tempos, so rounding recovers it.
+        let scale = TickScale::new(130.0, 48_000);
+        for ticks in (0..200_000).step_by(37) {
+            assert_eq!(scale.to_ticks(scale.to_samples(ticks)), ticks);
+        }
     }
 }

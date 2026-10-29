@@ -16,7 +16,7 @@ use crate::{
         voices::{ClipSpan, GeneratorVoice, NeighbourCrossfade, VoiceState},
         workspace::RenderWorkspace,
     },
-    event::{PluginTarget, TransportFeedback},
+    event::{FeedbackTiming, PluginTarget, TransportFeedback},
     render_state::{
         AudioAutomationLane, AudioEffectInstance, AudioGraphState, AudioPluginSnapshotState,
         AudioPluginState, AudioRenderState,
@@ -545,6 +545,7 @@ impl AudioEngine {
     }
 
     fn process_interleaved(&mut self, output_buffer: &mut [f32]) {
+        let block_start_frame = self.transport.render_frame;
         for changes in self.modulation.block_param_changes.values_mut() {
             changes.clear();
         }
@@ -622,10 +623,18 @@ impl AudioEngine {
             self.emit_all_mixer_snapshots();
             self.emit_plugin_telemetry();
         }
+
+        self.transport.render_frame = block_start_frame + frame_count as u64;
+    }
+
+    /// Output frames rendered since the engine started.
+    pub fn rendered_frames(&self) -> u64 {
+        self.transport.render_frame
     }
 
     fn advance_song_playhead(&mut self, frame_count: usize) {
         self.transport.song.playhead_samples += frame_count as u32;
+        self.transport.render_frame += frame_count as u64;
         self.recalculate_beat_bar();
         self.emit_playback_position();
         self.cleanup_finished_voices(frame_count);
@@ -633,6 +642,7 @@ impl AudioEngine {
 
     fn advance_pattern_playhead(&mut self, frame_count: usize) {
         self.transport.pattern.playhead_samples += frame_count as u32;
+        self.transport.render_frame += frame_count as u64;
         self.recalculate_pattern_beat_bar();
         self.emit_playback_position();
         self.cleanup_finished_voices(frame_count);
@@ -680,10 +690,10 @@ impl AudioEngine {
                 self.voices.active_oneshots.clear();
 
                 self.process_block_song_mode(frame_count, output_buffer, channels);
-                self.emit_current_playback_position();
+                self.emit_current_playback_position(FeedbackTiming::Audible);
             } else {
-                // If not looping, stop playback normally
-                self.stop_playback();
+                // If not looping, stop playback normally, once the song's end is heard
+                self.stop_playback(FeedbackTiming::Audible);
                 self.render_voices_to_buffer(output_buffer, channels, false);
                 self.cleanup_finished_voices(frame_count);
             }
@@ -743,7 +753,7 @@ impl AudioEngine {
         if remaining > 0 {
             self.process_block_song_mode(remaining, after_start, channels);
         }
-        self.emit_current_playback_position();
+        self.emit_current_playback_position(FeedbackTiming::Audible);
     }
 
     // Process a block of frame rendering in SONG mode (normal playback)
@@ -776,23 +786,20 @@ impl AudioEngine {
     ) {
         let Some(pattern) = self.current_state.graph.patterns.get(&pattern_id) else {
             // Pattern deleted? Stop.
-            self.stop_playback();
+            self.stop_playback(FeedbackTiming::Immediate);
             return;
         };
 
         // Verify the generator exists in plugin_state
         if self.plugin_state.get_generator(generator_id).is_none() {
             log::warn!("Pattern preview: Generator {:?} not found", generator_id);
-            self.stop_playback();
+            self.stop_playback(FeedbackTiming::Immediate);
             return;
         }
 
-        let tempo = self.transport.bpm;
-        let sample_rate = self.config.sample_rate as f32;
-
-        let samples_per_beat = (60.0 / tempo) * sample_rate;
+        let scale = TickScale::new(self.transport.bpm, self.config.sample_rate);
         let ticks_to_samples =
-            |ticks: u64| (((ticks as f32) / PPQ as f32) * samples_per_beat) as u32;
+            |ticks: u64| u32::try_from(scale.to_samples(ticks)).unwrap_or(u32::MAX);
         let (loop_start_samples, loop_end_samples) = match self.transport.pattern.loop_region {
             Some((start, end)) => (ticks_to_samples(start), ticks_to_samples(end)),
             None => (0, ticks_to_samples(pattern.length_ticks)),
@@ -844,8 +851,7 @@ impl AudioEngine {
             &mut gen_voice.midi_events,
             pattern_id,
             &pattern.notes,
-            self.config.sample_rate,
-            tempo,
+            scale,
             start_time,
             end_time,
         );
@@ -870,7 +876,7 @@ impl AudioEngine {
     }
 
     /// Stop and reset the playhead to 0
-    pub(super) fn stop_playback(&mut self) {
+    pub(super) fn stop_playback(&mut self, timing: FeedbackTiming) {
         self.transport.song.is_playing = false;
         self.transport.pattern.is_playing = false;
         self.stop_all_active_generators();
@@ -880,7 +886,7 @@ impl AudioEngine {
         self.reset_pattern_state();
 
         // Emit exactly ONCE after both playheads are perfectly zeroed out
-        self.emit_static_position();
+        self.emit_static_position(timing);
     }
 
     pub(super) fn stop_all_active_generators(&mut self) {
@@ -992,7 +998,7 @@ impl AudioEngine {
                 let _ = self
                     .io
                     .position_producer
-                    .push(self.build_position_struct(Some(true)));
+                    .push(self.build_position_struct(Some(true), FeedbackTiming::Audible));
             }
             match self.transport.mode {
                 PlaybackMode::Song => {
@@ -1006,26 +1012,30 @@ impl AudioEngine {
         }
     }
 
-    fn emit_static_position(&mut self) {
+    fn emit_static_position(&mut self, timing: FeedbackTiming) {
         if !self.io.position_producer.is_full() {
             let _ = self
                 .io
                 .position_producer
-                .push(self.build_position_struct(Some(false)));
+                .push(self.build_position_struct(Some(false), timing));
         }
     }
 
-    fn build_position_struct(&self, is_playing: Option<bool>) -> TransportFeedback {
+    fn build_position_struct(
+        &self,
+        is_playing: Option<bool>,
+        timing: FeedbackTiming,
+    ) -> TransportFeedback {
         self.transport
-            .position_feedback(self.config.sample_rate, is_playing)
+            .position_feedback(self.config.sample_rate, is_playing, timing)
     }
 
-    pub(super) fn emit_current_playback_position(&mut self) {
+    pub(super) fn emit_current_playback_position(&mut self, timing: FeedbackTiming) {
         if !self.io.position_producer.is_full() {
             let _ = self
                 .io
                 .position_producer
-                .push(self.build_position_struct(None));
+                .push(self.build_position_struct(None, timing));
         }
     }
 
@@ -1916,16 +1926,12 @@ impl AudioEngine {
         let end_time = start_time + (buffer_size as u32);
 
         let tracks = std::mem::take(&mut self.current_state.graph.tracks);
-        let samples_per_beat =
-            ((60.0 / self.transport.bpm) * (self.config.sample_rate as f32)) as f64;
-        self.clip_schedule.ensure(
-            &tracks,
-            &self.current_state.graph.clips,
-            samples_per_beat / PPQ,
-        );
+        let scale = TickScale::new(self.transport.bpm, self.config.sample_rate);
+        self.clip_schedule
+            .ensure(&tracks, &self.current_state.graph.clips, scale);
 
         for (track_index, track) in tracks.iter().enumerate() {
-            self.process_track(track_index, track, start_time, end_time);
+            self.process_track(track_index, track, scale, start_time, end_time);
         }
 
         self.current_state.graph.tracks = tracks;
@@ -1935,6 +1941,7 @@ impl AudioEngine {
         &mut self,
         track_index: usize,
         track: &AudioTrack,
+        scale: TickScale,
         start_time: u32,
         end_time: u32,
     ) {
@@ -1950,10 +1957,6 @@ impl AudioEngine {
             );
         }
 
-        let samples_per_beat =
-            ((60.0 / self.transport.bpm) * (self.config.sample_rate as f32)) as f64;
-        let samples_per_tick = samples_per_beat / PPQ;
-
         let clip_ids = track.clips();
         // Only the clips that can overlap this block; the checks below still decide.
         for index in self
@@ -1966,8 +1969,7 @@ impl AudioEngine {
             let Some(clip_data) = self.current_state.graph.clips.get(clip_id) else {
                 continue;
             };
-            let (clip_start, clip_length, clip_offset) =
-                clip_span_samples(&clip_data.time, samples_per_tick);
+            let (clip_start, clip_length, clip_offset) = clip_span_samples(&clip_data.time, scale);
 
             if clip_start > end_time {
                 break;
@@ -1990,10 +1992,10 @@ impl AudioEngine {
                         let span_at = |neighbour: usize| {
                             let clip = graph_clips.get(clip_ids.get(neighbour)?)?;
                             matches!(clip.source, Some(DawSource::Audio(_)))
-                                .then(|| audio_clip_span(clip, samples_per_tick))
+                                .then(|| audio_clip_span(clip, scale))
                         };
                         let crossfade = NeighbourCrossfade::for_clip(
-                            audio_clip_span(clip_data, samples_per_tick),
+                            audio_clip_span(clip_data, scale),
                             index.checked_sub(1).and_then(span_at),
                             span_at(index + 1),
                         );
@@ -2019,14 +2021,11 @@ impl AudioEngine {
                     if let Some(pattern) = fresh_pattern {
                         if let Some(idx) = gen_voice_idx {
                             let gen_voice = &mut self.voices.active_generators[idx];
-                            Self::schedule_midi_events(
+                            VoiceState::schedule_midi_events(
                                 &mut gen_voice.midi_events,
-                                self.config.sample_rate,
-                                self.transport.bpm,
                                 pattern,
-                                clip_start,
-                                clip_length,
-                                clip_offset,
+                                &clip_data.time,
+                                scale,
                                 start_time,
                                 end_time,
                             );
@@ -2064,37 +2063,12 @@ impl AudioEngine {
             .render_previews(output, channels, self.config.sample_rate);
     }
 
-    fn schedule_midi_events(
-        events: &mut SmallVec<[MidiEvent; 4]>,
-        sample_rate: u32,
-        tempo: f32,
-        pattern: &Pattern,
-        clip_start: u32,
-        clip_loop_length: u32,
-        clip_offset: u32,
-        buffer_start: u32,
-        buffer_end: u32,
-    ) {
-        VoiceState::schedule_midi_events(
-            events,
-            sample_rate,
-            tempo,
-            pattern,
-            clip_start,
-            clip_loop_length,
-            clip_offset,
-            buffer_start,
-            buffer_end,
-        );
-    }
-
     // Helper to schedule notes without a Clip wrapper
     fn schedule_pattern_notes_raw(
         events: &mut SmallVec<[MidiEvent; 4]>,
         pattern_id: PatternId,
         notes: &[karbeat_core::core::project::Note],
-        sample_rate: u32,
-        tempo: f32,
+        scale: TickScale,
         buffer_start: u32,
         buffer_end: u32,
     ) {
@@ -2102,8 +2076,7 @@ impl AudioEngine {
             events,
             pattern_id,
             notes,
-            sample_rate,
-            tempo,
+            scale,
             buffer_start,
             buffer_end,
         );
@@ -2476,8 +2449,7 @@ impl AudioEngine {
     /// Recalculate max samples index of the timeline after
     /// changes in the tracks
     pub(super) fn recalculate_max_sample_index(&mut self) {
-        let bpm = self.transport.bpm as f64;
-        let sample_rate = self.config.sample_rate as f64;
+        let scale = TickScale::new(self.transport.bpm, self.config.sample_rate);
         let mut max_clip_end: u32 = 0;
 
         // Find the absolute furthest boundary of any clip on the timeline
@@ -2486,32 +2458,8 @@ impl AudioEngine {
                 let Some(clip) = self.current_state.graph.clips.get(clip_id) else {
                     continue;
                 };
-                let end_sample = match &clip.time {
-                    karbeat_core::core::project::clip::ClipTimeUnit::Samples {
-                        start_time,
-                        loop_length,
-                        ..
-                    } => (*start_time + *loop_length) as u32,
-                    karbeat_core::core::project::clip::ClipTimeUnit::Ticks {
-                        start_time,
-                        loop_length,
-                        ..
-                    } => {
-                        let end_tick = *start_time + *loop_length;
-                        // Accurately project MIDI ticks into exact sample lengths
-                        ((end_tick as f64) * (60.0 / bpm) * (sample_rate / PPQ)) as u32
-                    }
-                    karbeat_core::core::project::clip::ClipTimeUnit::Audio {
-                        start_tick,
-                        loop_length,
-                        ..
-                    } => {
-                        let start_sample =
-                            ((*start_tick as f64) * (60.0 / bpm) * (sample_rate / PPQ)).round()
-                                as u32;
-                        start_sample.saturating_add(*loop_length as u32)
-                    }
-                };
+                let (start, length, _) = clip_span_samples(&clip.time, scale);
+                let end_sample = start.saturating_add(length);
                 if end_sample > max_clip_end {
                     max_clip_end = end_sample;
                 }
@@ -2575,8 +2523,8 @@ impl AudioEngine {
 }
 
 /// Timeline span and crossfade length of an audio clip, for neighbour crossfades.
-fn audio_clip_span(clip: &Clip, samples_per_tick: f64) -> ClipSpan {
-    let (start, length, _) = clip_span_samples(&clip.time, samples_per_tick);
+fn audio_clip_span(clip: &Clip, scale: TickScale) -> ClipSpan {
+    let (start, length, _) = clip_span_samples(&clip.time, scale);
     ClipSpan {
         start,
         length,

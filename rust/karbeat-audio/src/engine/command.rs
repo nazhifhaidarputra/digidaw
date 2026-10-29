@@ -11,7 +11,7 @@ use crate::{
         AudioCommand, AudioFeedback, EffectParameterSnapshot, EffectTarget,
         GeneratorParameterSnapshot, TelemetryRegistration,
     },
-    event::PluginTarget,
+    event::{FeedbackTiming, PluginTarget},
     render_state::{AudioEffectInstance, AudioGeneratorInstance},
 };
 use hashbrown::{HashMap, HashSet};
@@ -104,14 +104,14 @@ impl AudioEngine {
                 }
 
                 self.release_manual_parameter_overrides();
-                self.emit_current_playback_position();
+                self.emit_current_playback_position(FeedbackTiming::Immediate);
             }
             AudioCommand::SetLooping(val) => {
                 self.transport.song.is_looping = val;
-                self.emit_current_playback_position();
+                self.emit_current_playback_position(FeedbackTiming::Audible);
             }
             AudioCommand::StopAndReset => {
-                self.stop_playback();
+                self.stop_playback(FeedbackTiming::Immediate);
             }
             AudioCommand::SetPlayhead(samples) => {
                 log::debug!(
@@ -124,7 +124,7 @@ impl AudioEngine {
                 self.transport.song.last_emitted_samples = self.transport.song.playhead_samples;
                 self.release_manual_parameter_overrides();
                 self.evaluate_pre_block_modulations(0);
-                self.emit_current_playback_position();
+                self.emit_current_playback_position(FeedbackTiming::Immediate);
             }
             AudioCommand::PlayPreviewNote {
                 note_key,
@@ -151,7 +151,7 @@ impl AudioEngine {
             }
             AudioCommand::SetBPM(bpm) => {
                 self.transport.bpm = bpm;
-                self.emit_current_playback_position();
+                self.emit_current_playback_position(FeedbackTiming::Audible);
                 self.recalculate_max_sample_index();
             }
             AudioCommand::SetPlaybackMode(playback_mode) => {
@@ -178,7 +178,7 @@ impl AudioEngine {
                 self.transport.mode = playback_mode;
 
                 // Snap UI to the beginning immediately
-                self.emit_current_playback_position();
+                self.emit_current_playback_position(FeedbackTiming::Immediate);
             }
             AudioCommand::AddGenerator {
                 generator_id,
@@ -866,7 +866,7 @@ impl AudioEngine {
                     }
                 }
                 self.release_manual_parameter_overrides();
-                self.emit_current_playback_position();
+                self.emit_current_playback_position(FeedbackTiming::Immediate);
             }
             AudioCommand::TogglePatternPlayback {
                 pattern_id,
@@ -907,14 +907,14 @@ impl AudioEngine {
                 }
 
                 self.release_manual_parameter_overrides();
-                self.emit_current_playback_position();
+                self.emit_current_playback_position(FeedbackTiming::Immediate);
             }
             AudioCommand::StopPatternPlayback => {
                 self.transport.pattern.is_playing = false;
                 self.stop_all_active_generators();
                 self.reset_pattern_state();
                 self.release_manual_parameter_overrides();
-                self.emit_current_playback_position();
+                self.emit_current_playback_position(FeedbackTiming::Immediate);
             }
             AudioCommand::SetPatternPlayhead(samples) => {
                 self.stop_all_active_generators();
@@ -922,7 +922,7 @@ impl AudioEngine {
                 self.transport.pattern.last_emitted_samples = samples;
                 self.recalculate_pattern_beat_bar();
                 self.release_manual_parameter_overrides();
-                self.emit_current_playback_position();
+                self.emit_current_playback_position(FeedbackTiming::Immediate);
             }
             AudioCommand::SetPatternLoop(region) => {
                 self.transport.pattern.loop_region = region.filter(|(start, end)| end > start);
@@ -973,7 +973,7 @@ impl AudioEngine {
                     self.reset_pattern_state();
                     self.transport.pattern.loop_region = None;
                     self.release_manual_parameter_overrides();
-                    self.emit_current_playback_position();
+                    self.emit_current_playback_position(FeedbackTiming::Immediate);
                 }
             }
             AudioCommand::ExecutePluginCommand {

@@ -79,6 +79,13 @@ impl DeviceRateBridge {
         self.maximum_output_samples
     }
 
+    /// Output frames by which the bridge delays its input; zero in passthrough.
+    pub fn output_delay_frames(&self) -> usize {
+        self.resampler
+            .as_ref()
+            .map_or(0, |resampler| resampler.output_delay())
+    }
+
     pub fn process<'a>(&'a mut self, input: &'a [f32]) -> &'a [f32] {
         let Some(resampler) = self.resampler.as_mut() else {
             return input;

@@ -50,6 +50,8 @@ pub mod missing_plugin;
 pub mod plugin_catalog;
 /// Project-state save feedback routed through the audio feedback channel.
 pub mod project_state;
+/// Output clock and relay that show transport feedback when its audio is heard.
+pub mod playback_sync;
 /// FFT device-rate bridge between the DSP engine and the negotiated device rate.
 pub mod rate_bridge;
 /// Audio-thread-owned render state and plugin snapshots.

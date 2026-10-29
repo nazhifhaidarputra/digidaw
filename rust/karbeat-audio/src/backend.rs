@@ -22,6 +22,7 @@ use crate::{
     engine::{AudioEngine, AudioEngineTelemetry, record_dsp_load, record_stream_load},
     event::TransportFeedback,
     message::TelemetryRegistry,
+    playback_sync::OutputEpoch,
     rate_bridge::DeviceRateBridge,
 };
 
@@ -45,12 +46,14 @@ fn sanitize_output_sample(sample: f32) -> f32 {
     }
 }
 
+/// Fills a device buffer from the engine queue and returns how many engine frames it used.
 #[inline]
 fn write_output_data<T>(
     data: &mut [T],
     device_channels: usize,
     consumer: &mut Consumer<OutputFrame>,
-) where
+) -> usize
+where
     T: SizedSample + FromSample<f32>,
 {
     debug_assert!(device_channels >= OUTPUT_CHANNELS);
@@ -58,7 +61,9 @@ fn write_output_data<T>(
     let wanted = output_frames.len();
     // One bulk read instead of a queue operation per frame.
     let available = consumer.slots().min(wanted);
+    let mut consumed = 0;
     if let Ok(chunk) = consumer.read_chunk(available) {
+        consumed = available;
         let (first, second) = chunk.as_slices();
         for (output_frame, engine_frame) in (&mut output_frames).zip(first.iter().chain(second)) {
             write_output_frame(output_frame, *engine_frame);
@@ -76,6 +81,7 @@ fn write_output_data<T>(
     for output in output_frames.into_remainder() {
         *output = T::from_sample(0.0);
     }
+    consumed
 }
 
 /// Writes one engine frame to the first two channels of a device frame and silences the rest.
@@ -119,22 +125,32 @@ enum RestartReason {
 /// $config: cpal config
 /// $ctx: The AudioContext (moved into the closure)
 /// $consumer: The RingBuffer consumer (moved into the closure)
+/// $clock: The output clock the callback reports its playback position to
 /// $sample_type: The primitive type (f32, i16, etc)
 macro_rules! run_stream {
     (
         $device:expr,
         $config:expr,
         $consumer:expr,
+        $clock:expr,
         $sample_type:ty,
         $err_fn:expr
     ) => {{
         let mut consumer = $consumer;
+        let clock = Arc::clone(&$clock);
         let device_channels = usize::from($config.channels);
 
         $device.build_output_stream(
             &$config,
-            move |data: &mut [$sample_type], _: &OutputCallbackInfo| {
-                write_output_data(data, device_channels, &mut consumer);
+            move |data: &mut [$sample_type], info: &OutputCallbackInfo| {
+                let now = Instant::now();
+                let frames = write_output_data(data, device_channels, &mut consumer);
+                let timestamp = info.timestamp();
+                let playback_delay = timestamp
+                    .playback
+                    .duration_since(&timestamp.callback)
+                    .unwrap_or_default();
+                clock.record_callback(now, frames, playback_delay);
             },
             $err_fn,
             None,
@@ -758,6 +774,8 @@ pub fn start_audio_stream(
 
     let (pos_producer, pos_consumer) = RingBuffer::<TransportFeedback>::new(100);
     ctx.position_consumer = Arc::new(Mutex::new(Some(pos_consumer)));
+    let dsp_output_clock = Arc::clone(&ctx.output_clock);
+    let output_clock = Arc::clone(&ctx.output_clock);
 
     let (feedback_producer, feedback_consumer) =
         RingBuffer::<crate::commands::AudioFeedback>::new(512);
@@ -831,6 +849,14 @@ pub fn start_audio_stream(
                 }
             };
 
+            // The stream's first device frame carries the next engine frame rendered.
+            dsp_output_clock.attach(OutputEpoch {
+                engine_frame: engine.rendered_frames(),
+                dsp_rate: dsp_config.sample_rate,
+                device_rate: device_sample_rate,
+                bridge_delay_frames: rate_bridge.output_delay_frames() as u64,
+            });
+
             let maximum_device_frames = rate_bridge.maximum_output_samples() / OUTPUT_CHANNELS;
             let ring_buffer_capacity = (maximum_device_frames * 8).next_power_of_two().max(4_096);
             let (mut producer, consumer) = RingBuffer::<OutputFrame>::new(ring_buffer_capacity);
@@ -847,6 +873,7 @@ pub fn start_audio_stream(
 
             if ready_tx.send(Ok(consumer)).is_err() {
                 // The monitor abandoned this attach attempt.
+                dsp_output_clock.detach();
                 continue;
             }
 
@@ -890,6 +917,7 @@ pub fn start_audio_stream(
                     std::thread::sleep(Duration::from_millis(1));
                 }
             }
+            dsp_output_clock.detach();
         }
 
         // `engine` is dropped here, on the same DSP thread where it was created.
@@ -1041,22 +1069,42 @@ pub fn start_audio_stream(
             };
 
             let stream_result = match sample_format {
-                cpal::SampleFormat::I8 => run_stream!(device, config, consumer, i8, err_fn),
-                cpal::SampleFormat::I16 => run_stream!(device, config, consumer, i16, err_fn),
+                cpal::SampleFormat::I8 => {
+                    run_stream!(device, config, consumer, output_clock, i8, err_fn)
+                }
+                cpal::SampleFormat::I16 => {
+                    run_stream!(device, config, consumer, output_clock, i16, err_fn)
+                }
                 cpal::SampleFormat::I24 => {
-                    run_stream!(device, config, consumer, cpal::I24, err_fn)
+                    run_stream!(device, config, consumer, output_clock, cpal::I24, err_fn)
                 }
-                cpal::SampleFormat::I32 => run_stream!(device, config, consumer, i32, err_fn),
-                cpal::SampleFormat::I64 => run_stream!(device, config, consumer, i64, err_fn),
-                cpal::SampleFormat::U8 => run_stream!(device, config, consumer, u8, err_fn),
-                cpal::SampleFormat::U16 => run_stream!(device, config, consumer, u16, err_fn),
+                cpal::SampleFormat::I32 => {
+                    run_stream!(device, config, consumer, output_clock, i32, err_fn)
+                }
+                cpal::SampleFormat::I64 => {
+                    run_stream!(device, config, consumer, output_clock, i64, err_fn)
+                }
+                cpal::SampleFormat::U8 => {
+                    run_stream!(device, config, consumer, output_clock, u8, err_fn)
+                }
+                cpal::SampleFormat::U16 => {
+                    run_stream!(device, config, consumer, output_clock, u16, err_fn)
+                }
                 cpal::SampleFormat::U24 => {
-                    run_stream!(device, config, consumer, cpal::U24, err_fn)
+                    run_stream!(device, config, consumer, output_clock, cpal::U24, err_fn)
                 }
-                cpal::SampleFormat::U32 => run_stream!(device, config, consumer, u32, err_fn),
-                cpal::SampleFormat::U64 => run_stream!(device, config, consumer, u64, err_fn),
-                cpal::SampleFormat::F32 => run_stream!(device, config, consumer, f32, err_fn),
-                cpal::SampleFormat::F64 => run_stream!(device, config, consumer, f64, err_fn),
+                cpal::SampleFormat::U32 => {
+                    run_stream!(device, config, consumer, output_clock, u32, err_fn)
+                }
+                cpal::SampleFormat::U64 => {
+                    run_stream!(device, config, consumer, output_clock, u64, err_fn)
+                }
+                cpal::SampleFormat::F32 => {
+                    run_stream!(device, config, consumer, output_clock, f32, err_fn)
+                }
+                cpal::SampleFormat::F64 => {
+                    run_stream!(device, config, consumer, output_clock, f64, err_fn)
+                }
                 _ => Err(cpal::BuildStreamError::StreamConfigNotSupported),
             };
 

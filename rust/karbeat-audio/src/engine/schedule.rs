@@ -3,7 +3,7 @@
 use hashbrown::HashMap;
 
 use karbeat_core::{
-    core::project::{AudioTrack, Clip, ClipTimeUnit},
+    core::project::{AudioTrack, Clip, ClipTimeUnit, TickScale},
     shared::ClipId,
 };
 
@@ -40,13 +40,12 @@ impl ClipSchedule {
         &mut self,
         tracks: &[AudioTrack],
         clips: &HashMap<ClipId, Clip>,
-        samples_per_tick: f64,
+        scale: TickScale,
     ) {
-        let scale = samples_per_tick.to_bits();
-        if self.samples_per_tick == Some(scale) && self.tracks.len() == tracks.len() {
+        if self.samples_per_tick == Some(scale.bits()) && self.tracks.len() == tracks.len() {
             return;
         }
-        self.samples_per_tick = Some(scale);
+        self.samples_per_tick = Some(scale.bits());
         self.tracks.resize_with(tracks.len(), TrackSpans::default);
         for (spans, track) in self.tracks.iter_mut().zip(tracks) {
             spans.start_ceiling.clear();
@@ -55,7 +54,7 @@ impl ClipSchedule {
             for clip_id in track.clips() {
                 // A stale clip ID plays nothing and must not hide the clips after it.
                 if let Some(clip) = clips.get(clip_id) {
-                    let (start, length, _) = clip_span_samples(&clip.time, samples_per_tick);
+                    let (start, length, _) = clip_span_samples(&clip.time, scale);
                     latest_start = latest_start.max(start);
                     latest_end = latest_end.max(start.wrapping_add(length));
                 }
@@ -89,7 +88,11 @@ impl ClipSchedule {
 }
 
 /// Timeline start, length, and source offset of a clip in project samples.
-pub(super) fn clip_span_samples(time: &ClipTimeUnit, samples_per_tick: f64) -> (u32, u32, u32) {
+///
+/// Tick clips convert their absolute start and end ticks, so a clip ends on the sample where
+/// a clip placed at its end tick starts.
+pub(super) fn clip_span_samples(time: &ClipTimeUnit, scale: TickScale) -> (u32, u32, u32) {
+    let to_samples = |ticks: u64| scale.to_samples(ticks) as u32;
     match time {
         ClipTimeUnit::Samples {
             start_time,
@@ -105,17 +108,21 @@ pub(super) fn clip_span_samples(time: &ClipTimeUnit, samples_per_tick: f64) -> (
             loop_length,
             offset_start,
         } => {
-            let st = ((*start_time as f64) * samples_per_tick) as u32;
-            let ll = ((*loop_length as f64) * samples_per_tick) as u32;
-            let os = ((*offset_start as f64) * samples_per_tick) as u32;
-            (st, ll, os)
+            let start = u64::from(*start_time);
+            let st = to_samples(start);
+            let end = to_samples(start + u64::from(*loop_length));
+            (
+                st,
+                end.saturating_sub(st),
+                to_samples(u64::from(*offset_start)),
+            )
         }
         ClipTimeUnit::Audio {
             start_tick,
             loop_length,
             offset_start,
         } => (
-            ((*start_tick as f64) * samples_per_tick).round() as u32,
+            to_samples(*start_tick),
             *loop_length as u32,
             *offset_start as u32,
         ),
@@ -190,7 +197,7 @@ mod tests {
         ];
         let (tracks, clips) = track(&spans);
         let mut schedule = ClipSchedule::default();
-        schedule.ensure(&tracks, &clips, 25.0);
+        schedule.ensure(&tracks, &clips, TickScale::new(120.0, 48_000));
         for start_time in (0..2_400).step_by(37) {
             for length in [1, 64, 512] {
                 let end_time = start_time + length;
@@ -222,17 +229,17 @@ mod tests {
             offset_start: 0,
         };
         let mut schedule = ClipSchedule::default();
-        schedule.ensure(&tracks, &clips, 25.0);
+        schedule.ensure(&tracks, &clips, TickScale::new(120.0, 48_000));
         assert_eq!(schedule.candidates(0, 250, 260), 0..1);
         assert!(schedule.candidates(0, 500, 510).is_empty());
         // Twice the samples per tick moves the clip to 500..600.
-        schedule.ensure(&tracks, &clips, 50.0);
+        schedule.ensure(&tracks, &clips, TickScale::new(60.0, 48_000));
         assert_eq!(schedule.candidates(0, 500, 510), 0..1);
 
         // A graph edit is picked up after invalidation.
         tracks.clear();
         schedule.invalidate();
-        schedule.ensure(&tracks, &clips, 50.0);
+        schedule.ensure(&tracks, &clips, TickScale::new(60.0, 48_000));
         assert!(schedule.candidates(0, 500, 510).is_empty());
     }
 }

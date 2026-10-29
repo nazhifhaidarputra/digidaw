@@ -64,6 +64,8 @@ pub struct DawContext {
 
     /// Playback position ring buffer consumer
     pub position_consumer: Arc<Mutex<Option<rtrb::Consumer<TransportFeedback>>>>,
+    /// Device playback clock that delays position feedback until its audio is heard.
+    pub output_clock: Arc<crate::playback_sync::OutputClock>,
 
     /// Plugin factory registry
     pub plugin_registry: PluginRegistry,
@@ -199,6 +201,7 @@ impl DawContext {
             project_state_feedback: Arc::new(Mutex::new(Default::default())),
             stream_guard: None,
             position_consumer: Arc::new(Mutex::new(None)),
+            output_clock: Arc::new(crate::playback_sync::OutputClock::new()),
             plugin_registry,
             plugin_catalog,
             host_state_capture: Arc::new(external_plugins.clone()),

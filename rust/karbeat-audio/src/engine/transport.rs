@@ -1,5 +1,8 @@
-use crate::event::TransportFeedback;
-use karbeat_core::shared::{GeneratorId, PatternId, constants::f64::PPQ};
+use crate::event::{FeedbackTiming, TransportFeedback};
+use karbeat_core::{
+    core::project::TickScale,
+    shared::{GeneratorId, PatternId},
+};
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 /// Selects which timeline advances during an engine render block.
@@ -89,6 +92,8 @@ pub(super) struct TransportState {
     pub song: SongPlaybackState,
     pub pattern: PatternPlaybackState,
     pub mode: PlaybackMode,
+    /// Output frames rendered since the engine started, up to the current playhead sample.
+    pub render_frame: u64,
 }
 
 impl TransportState {
@@ -100,6 +105,7 @@ impl TransportState {
             song: SongPlaybackState::default(),
             pattern: PatternPlaybackState::default(),
             mode: PlaybackMode::Song,
+            render_frame: 0,
         }
     }
 
@@ -144,6 +150,7 @@ impl TransportState {
         &self,
         sample_rate: u32,
         is_playing: Option<bool>,
+        timing: FeedbackTiming,
     ) -> TransportFeedback {
         let is_playing = is_playing.unwrap_or_else(|| self.is_playing());
         let is_pattern_mode = matches!(self.mode, PlaybackMode::Pattern { .. });
@@ -164,6 +171,8 @@ impl TransportState {
             pattern_ticks: self.samples_to_ticks(self.pattern.playhead_samples, sample_rate),
             pattern_beat: self.pattern.current_beat,
             pattern_bar: self.pattern.current_bar,
+            render_frame: self.render_frame,
+            timing,
         }
     }
 
@@ -179,7 +188,8 @@ impl TransportState {
         if self.bpm <= 0.0 || sample_rate == 0 {
             return 0;
         }
-        (samples as f64 * (self.bpm as f64 / 60.0) * (PPQ / sample_rate as f64)) as u32
+        let ticks = TickScale::new(self.bpm, sample_rate).to_ticks(u64::from(samples));
+        u32::try_from(ticks).unwrap_or(u32::MAX)
     }
 }
 

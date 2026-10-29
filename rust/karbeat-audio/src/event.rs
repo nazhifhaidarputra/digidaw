@@ -1,6 +1,6 @@
 /// Transport feedback struct sent from the audio thread to Flutter.
 /// This is the single source of truth for all runtime transport state.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub struct TransportFeedback {
     /// Song playhead position in engine-rate samples.
     pub samples: u32,
@@ -34,6 +34,22 @@ pub struct TransportFeedback {
     pub pattern_beat: usize,
     /// One-based bar index within pattern playback.
     pub pattern_bar: usize,
+
+    /// Engine output frame, counted since the engine started, at which the reported playhead
+    /// sample is rendered. Matched against the output clock to show it when it is heard.
+    pub render_frame: u64,
+    /// When the UI should show this feedback.
+    pub timing: FeedbackTiming,
+}
+
+/// When a [`TransportFeedback`] should reach the UI.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum FeedbackTiming {
+    /// Once the output device plays the frame it was rendered at.
+    Audible,
+    /// Right away, replacing feedback still waiting to be heard. Used for user actions such as
+    /// seeking or stopping, which the playhead should follow at once.
+    Immediate,
 }
 
 pub use karbeat_core::core::project::PluginTarget;
