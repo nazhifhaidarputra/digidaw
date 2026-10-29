@@ -1,11 +1,8 @@
 use hashbrown::HashMap;
 
-use crate::{
-    engine::kernels::mix_gain,
-    render_state::{AudioEffectInstance, AudioGraphState, AudioPluginState},
-};
+use crate::render_state::{AudioEffectInstance, AudioGraphState, AudioPluginState};
 use karbeat_core::{
-    core::project::{RoutingConnection, RoutingNode, RoutingTap, SidechainRoute},
+    core::project::{RoutingConnection, RoutingNode, SidechainRoute},
     shared::{BusId, EffectId, TrackId},
 };
 
@@ -177,16 +174,6 @@ fn sync_delay_lines<K: Copy + Eq + std::hash::Hash>(
     }
 }
 
-/// Buffers a routed signal can be mixed into during one render block.
-pub(super) struct RouteTargets<'a> {
-    /// Interleaved master input.
-    pub output: &'a mut [f32],
-    pub bus_buffers: &'a mut HashMap<BusId, Vec<f32>>,
-    pub aux_buffers: &'a mut HashMap<SidechainRoute, Vec<f32>>,
-    /// Scratch used to delay one connection without touching the source signal.
-    pub edge_buffer: &'a mut [f32],
-}
-
 #[derive(Default)]
 pub(super) struct RoutingState {
     pub cached_order: Vec<RoutingNode>,
@@ -194,7 +181,6 @@ pub(super) struct RoutingState {
     pub track_tails: HashMap<TrackId, u32>,
     pub bus_tails: HashMap<BusId, u32>,
     pub master_tail: u32,
-    pub node_has_signal: HashMap<RoutingNode, bool>,
     /// Latency of the master output from the latest compensation plan.
     pub system_latency: u32,
     /// Set by commands that change routing or chain latency; the next block replans.
@@ -274,72 +260,6 @@ impl RoutingState {
         sync_delay_lines(&mut self.edge_delay_lines, &plan.edge_delays, channels);
         self.system_latency = plan.system_latency;
         plan.system_latency
-    }
-
-    /// Mixes a channel's signal into each of its destinations for one render block.
-    ///
-    /// Each connection reads the post- or pre-fader signal chosen by its tap, passes it through
-    /// its compensation delay when it has one, and mixes it at the connection's send level. A
-    /// channel without routes is unlinked and reaches nothing. Real-time safe: all buffers are
-    /// sized before the render loop and missing destinations are skipped.
-    pub fn route_signal(
-        &mut self,
-        source: RoutingNode,
-        routes: &[RoutingConnection],
-        post_fader: &[f32],
-        pre_fader: &[f32],
-        channels: usize,
-        targets: &mut RouteTargets<'_>,
-    ) {
-        for route in routes {
-            let signal = match route.tap {
-                RoutingTap::PostFader => post_fader,
-                RoutingTap::PreFader => pre_fader,
-            };
-            self.mix_connection(
-                source,
-                route.destination,
-                signal,
-                route.send_level,
-                channels,
-                targets,
-            );
-        }
-    }
-
-    fn mix_connection(
-        &mut self,
-        source: RoutingNode,
-        destination: RoutingNode,
-        signal: &[f32],
-        gain: f32,
-        channels: usize,
-        targets: &mut RouteTargets<'_>,
-    ) {
-        let delayed = self
-            .edge_delay_lines
-            .get_mut(&(source, destination))
-            .zip(targets.edge_buffer.get_mut(..signal.len()));
-        let signal = match delayed {
-            Some((delay_line, delayed)) => {
-                delayed.copy_from_slice(signal);
-                delay_line.process_block(delayed, channels);
-                &*delayed
-            }
-            None => signal,
-        };
-        let buffer = match destination {
-            RoutingNode::Master => Some(&mut *targets.output),
-            RoutingNode::Bus(bus) => targets.bus_buffers.get_mut(&bus).map(Vec::as_mut_slice),
-            RoutingNode::PluginSidechain(route) => {
-                targets.aux_buffers.get_mut(&route).map(Vec::as_mut_slice)
-            }
-            RoutingNode::Track(_) => None,
-        };
-        if let Some(buffer) = buffer {
-            mix_gain(buffer, signal, gain);
-            self.node_has_signal.insert(destination, true);
-        }
     }
 
     /// Drops every delay line; the next recalculation rebuilds them with cleared history.

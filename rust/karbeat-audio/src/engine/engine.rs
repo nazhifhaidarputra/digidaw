@@ -1,13 +1,18 @@
 use crate::{
     apply_mix_param,
     commands::{AudioCommand, AudioFeedback, EffectTarget, TelemetryRegistration},
+    dsp_engine::{AudioWorkerPool, LevelJob, MAX_DSP_WORKERS},
     engine::{
         buffer::AudioBuffer,
         helper::*,
-        kernels::apply_fader,
+        input::{InputCapture, InputSource, InputState},
         metronome::MetronomeState,
         modulation::{LiveModulationSource, ModulationState},
-        routing::{RouteTargets, RoutingState},
+        render_plan::{
+            BlockCtx, GatherSources, PlanGraph, PlanNodeKind, RenderJob, RenderPlan, SendPtr,
+            group_voices_by_track, voice_range,
+        },
+        routing::RoutingState,
         runtime::*,
         schedule::{ClipSchedule, clip_span_samples},
         telemetry::{AudioEngineTelemetry, PluginTelemetrySnapshot},
@@ -70,6 +75,13 @@ pub struct AudioEngine {
 
     /// Clip spans per track for the current graph and tempo.
     pub(super) clip_schedule: ClipSchedule,
+
+    /// The routing graph compiled for the worker pool.
+    pub(super) render_plan: RenderPlan,
+    /// Threads that render the graph alongside this one; `None` renders serially.
+    pub(super) workers: Option<AudioWorkerPool>,
+    /// Device input feeding level −1 of the graph.
+    pub(super) input: InputState,
 }
 
 pub(super) enum RetiredGraphState {
@@ -85,6 +97,7 @@ pub(super) enum RetiredGraphState {
     AudioSource(std::sync::Arc<AudioWaveform>),
     TelemetryProducer(triple_buffer::Input<PluginTelemetrySnapshot>),
     TelemetrySubscription(HashSet<String>),
+    RenderPlan(Box<RenderPlan>),
 }
 
 fn graph_retirement_queue() -> Producer<RetiredGraphState> {
@@ -107,6 +120,7 @@ fn graph_retirement_queue() -> Producer<RetiredGraphState> {
                     RetiredGraphState::AudioSource(waveform) => drop(waveform),
                     RetiredGraphState::TelemetryProducer(producer) => drop(producer),
                     RetiredGraphState::TelemetrySubscription(subscription) => drop(subscription),
+                    RetiredGraphState::RenderPlan(plan) => drop(plan),
                 },
                 Err(rtrb::PopError::Empty) if abandoned => break,
                 Err(rtrb::PopError::Empty) => {
@@ -293,6 +307,9 @@ impl AudioEngine {
             graph_retirement: graph_retirement_queue(),
             bypass_master: false,
             clip_schedule: ClipSchedule::default(),
+            render_plan: RenderPlan::default(),
+            workers: None,
+            input: InputState::default(),
         }
     }
 
@@ -434,6 +451,9 @@ impl AudioEngine {
             graph_retirement: graph_retirement_queue(),
             bypass_master,
             clip_schedule: ClipSchedule::default(),
+            render_plan: RenderPlan::default(),
+            workers: None,
+            input: InputState::default(),
         };
         engine.recalculate_latencies();
         Ok(engine)
@@ -588,6 +608,7 @@ impl AudioEngine {
         output_buffer.fill(0.0);
         let channels = 2;
         let frame_count = output_buffer.len() / channels;
+        self.input.capture(frame_count);
 
         // Transport Logic
         let is_currently_playing = self.transport.is_playing();
@@ -625,6 +646,29 @@ impl AudioEngine {
         }
 
         self.transport.render_frame = block_start_frame + frame_count as u64;
+    }
+
+    /// Installs the device input stream that feeds level −1, returning the previous one.
+    /// Allocates; call when the input stream starts.
+    pub fn attach_input(&mut self, capture: InputCapture) -> Option<InputCapture> {
+        let block_frames = self.current_state.graph.buffer_size.max(1);
+        self.input.attach(capture, block_frames)
+    }
+
+    /// Removes the device input stream.
+    pub fn detach_input(&mut self) -> Option<InputCapture> {
+        self.input.detach()
+    }
+
+    /// Whether the input of the next block of `frames` has arrived. Always true without an
+    /// input stream.
+    pub fn input_ready(&self, frames: usize) -> bool {
+        self.input.ready(frames)
+    }
+
+    /// Blocks rendered with silent input because the device input fell behind.
+    pub fn input_underruns(&self) -> u64 {
+        self.input.underruns
     }
 
     /// Output frames rendered since the engine started.
@@ -687,7 +731,7 @@ impl AudioEngine {
                 // Kill trailing notes/audio to prevent a massive wall of sound
                 // from release tails accumulating when jumping back to bar 1
                 self.stop_all_active_generators();
-                self.voices.active_oneshots.clear();
+                self.voices.clear_oneshots();
 
                 self.process_block_song_mode(frame_count, output_buffer, channels);
                 self.emit_current_playback_position(FeedbackTiming::Audible);
@@ -747,7 +791,7 @@ impl AudioEngine {
         self.recalculate_beat_bar();
         // Release held notes and one-shots so tails from the loop end do not pile up
         self.stop_all_active_generators();
-        self.voices.active_oneshots.clear();
+        self.voices.clear_oneshots();
 
         let remaining = frame_count.saturating_sub(frames_to_end);
         if remaining > 0 {
@@ -1081,7 +1125,7 @@ impl AudioEngine {
             }
         }
 
-        self.voices.active_oneshots.clear();
+        self.voices.clear_oneshots();
         self.voices.stretch_pool.end_block();
     }
 
@@ -1204,40 +1248,12 @@ impl AudioEngine {
         }
         self.mixer_state.master.decay_magnitude(release_factor);
 
-        // Clear signal flow tracker for this new frame
-        self.routing.node_has_signal.clear();
-
-        // Ensure bus buffers are properly sized
-        for (_bus_id, buf) in self.workspace.bus_buffers.iter_mut() {
-            if buf.len() != buf_len {
-                buf.resize(buf_len, 0.0);
-            }
-            buf.fill(0.0);
-        }
-
-        // Ensure aux (sidechain) buffers are properly sized and cleared
-        for (_aux_id, buf) in self.workspace.aux_buffers.iter_mut() {
-            if buf.len() != buf_len {
-                buf.resize(buf_len, 0.0);
-            }
-            buf.fill(0.0);
-        }
-
-        // Pre-fader taps and connection delays share block-sized scratch reserved up front
-        for scratch in [
-            &mut self.workspace.pre_fader_buffer,
-            &mut self.workspace.edge_buffer,
-        ] {
-            if scratch.len() != buf_len {
-                scratch.resize(buf_len, 0.0);
-            }
-        }
-
         // Check for solo state
         let is_any_solo = self.mixer_state.track_channels.values().any(|ch| ch.solo);
 
-        let cached_order = std::mem::take(&mut self.routing.cached_order);
-        let outgoing_routes = std::mem::take(&mut self.routing.outgoing_routes);
+        if self.render_plan.is_stale() || self.render_plan.workers() != self.dsp_workers() {
+            self.rebuild_render_plan();
+        }
 
         let sample_rate = self.config.sample_rate as f64;
         let bpm = self.transport.bpm as f64;
@@ -1288,637 +1304,135 @@ impl AudioEngine {
             param_changes: &[],
         };
 
-        // Iterate through tracks, buses, and master in topological order
-        for node in &cached_order {
-            match node {
-                RoutingNode::Track(track_id) => {
-                    // Read channel DSP values from audio-thread-owned mixer state
-                    let channel_mut = self
-                        .mixer_state
-                        .track_channels
-                        .entry(*track_id)
-                        .or_default();
-                    channel_mut.prepare_smoothing(self.config.sample_rate);
-
-                    // Check mute/solo
-                    if channel_mut.mute {
-                        continue;
-                    }
-                    if is_any_solo && !channel_mut.solo {
-                        continue;
-                    }
-
-                    // Ensure mix_buffer is sized correctly
-                    if self.workspace.mix_buffer.len() != buf_len {
-                        self.workspace.mix_buffer.resize(buf_len, 0.0);
-                    }
-                    self.workspace.mix_buffer.fill(0.0);
-
-                    let mut has_signal = false;
-
-                    // Generator Voice
-                    if let Some(gen_voice) = self
-                        .voices
-                        .active_generators
-                        .iter()
-                        .find(|g| g.track_id == *track_id && g.active)
-                    {
-                        let gen_id = gen_voice.id;
-                        let events = &gen_voice.midi_events;
-
-                        if let Some(gen_instance) = self.plugin_state.get_generator_mut(gen_id) {
-                            let sidechain_id = SidechainRoute::Generator(gen_id);
-                            let aux = self
-                                .workspace
-                                .aux_buffers
-                                .get(&sidechain_id)
-                                .map(|b| b.as_slice());
-                            // PROCESS AUDIO
-                            // Build context for the generator — MIDI events are passed via ProcessContext
-                            let mut gen_ctx = base_ctx.clone();
-                            gen_ctx.midi_events = events;
-
-                            let pt = PluginTarget::Generator(gen_id);
-                            let changes = self
-                                .modulation
-                                .block_param_changes
-                                .get(&pt)
-                                .map(|v| v.as_slice())
-                                .unwrap_or(&[]);
-                            gen_ctx.param_changes = changes;
-
-                            process_plugin_wrapper(
-                                &mut *gen_instance.plugin,
-                                &mut self.workspace.mix_buffer,
-                                aux,
-                                channels,
-                                &gen_ctx,
-                                &mut self.workspace.channel_buffers_in,
-                                &mut self.workspace.channel_buffers_out,
-                                &mut self.workspace.aux_channel_buffers,
-                            );
-                            if let Some(voice) = self
-                                .voices
-                                .active_generators
-                                .iter_mut()
-                                .find(|voice| voice.id == gen_id)
-                            {
-                                voice.delivered = true;
-                            }
-                            has_signal = true;
-                        }
-                    }
-
-                    // Audio Voice
-                    if self.render_oneshots(
-                        // &mut self.voices.active_oneshots,
-                        // self.config.sample_rate,
-                        *track_id, // &mut self.workspace.mix_buffer,
-                        channels,
-                    ) {
-                        has_signal = true;
-                    }
-
-                    // A silent channel still runs its effects while a sidechain feeds them,
-                    // so gates and duckers keep reacting to their key signal, and while a
-                    // hosted plugin needs its process callback.
-                    if !has_signal
-                        && self
-                            .plugin_state
-                            .get_track_effects(track_id.to_u32() as usize)
-                            .is_some_and(|effects| {
-                                effects.iter().any(|effect| {
-                                    effect.keeps_processing()
-                                        || self.routing.node_has_signal.contains_key(
-                                            &RoutingNode::PluginSidechain(
-                                                SidechainRoute::TrackEffect(*track_id, effect.id),
-                                            ),
-                                        )
-                                })
-                            })
-                    {
-                        has_signal = true;
-                    }
-
-                    // track tail handling
-                    let track_effects_tail = self
-                        .plugin_state
-                        .get_track_effects(track_id.to_u32() as usize)
-                        .map(|effects| {
-                            effects
-                                .iter()
-                                .map(|e| e.plugin.tail_samples().min(max_effect_tail))
-                                .max()
-                                .unwrap_or(0)
-                        })
-                        .unwrap_or(0);
-
-                    if has_signal {
-                        self.routing
-                            .track_tails
-                            .insert(*track_id, track_effects_tail);
-                    } else {
-                        let current_tail =
-                            self.routing.track_tails.get(track_id).copied().unwrap_or(0);
-                        if current_tail > 0 {
-                            let new_tail = current_tail.saturating_sub(buf_len as u32);
-                            self.routing.track_tails.insert(*track_id, new_tail);
-                            if new_tail == 0 {
-                                if let Some(effects) = self
-                                    .plugin_state
-                                    .get_track_effects_mut(track_id.to_u32() as usize)
-                                {
-                                    effects.iter_mut().for_each(|e| e.plugin.reset());
-                                }
-                                continue;
-                            }
-                            // has_signal = true;
-                        } else {
-                            continue;
-                        }
-                    }
-
-                    // Align the track with any later-arriving sidechain source before its effects
-                    if let Some(delay_line) = self.routing.track_input_delay_lines.get_mut(track_id)
-                    {
-                        delay_line.process_block(&mut self.workspace.mix_buffer, channels);
-                    }
-
-                    // Apply track phase and effects
-                    // Effects receive an empty MIDI slice — track routing is audio-only at this stage
-                    Self::apply_track_effects(
-                        &mut self
-                            .mixer_state
-                            .track_channels
-                            .entry(*track_id)
-                            .or_default(),
-                        &mut self.plugin_state.track_effects,
-                        *track_id,
-                        &mut self.workspace.mix_buffer,
-                        channels,
-                        &base_ctx,
-                        &self.workspace.aux_buffers,
-                        &mut self.workspace.channel_buffers_in,
-                        &mut self.workspace.channel_buffers_out,
-                        &mut self.workspace.aux_channel_buffers,
-                        &self.modulation.block_param_changes,
-                    );
-
-                    let track_routes = outgoing_routes
-                        .get(&RoutingNode::Track(*track_id))
-                        .map_or(&[][..], Vec::as_slice);
-                    if track_routes
-                        .iter()
-                        .any(|route| route.tap == RoutingTap::PreFader)
-                    {
-                        self.workspace
-                            .pre_fader_buffer
-                            .copy_from_slice(&self.workspace.mix_buffer);
-                    }
-
-                    let channel = self
-                        .mixer_state
-                        .track_channels
-                        .entry(*track_id)
-                        .or_default();
-                    let peak = apply_fader(
-                        &mut self.workspace.mix_buffer,
-                        channels,
-                        &mut channel.volume,
-                        &mut channel.pan,
-                    );
-                    channel.observe_peak(peak);
-
-                    // Route the track signal to destinations based on routing matrix
-                    let workspace = &mut self.workspace;
-                    self.routing.route_signal(
-                        RoutingNode::Track(*track_id),
-                        track_routes,
-                        &workspace.mix_buffer,
-                        &workspace.pre_fader_buffer,
-                        channels,
-                        &mut RouteTargets {
-                            output: &mut *output,
-                            bus_buffers: &mut workspace.bus_buffers,
-                            aux_buffers: &mut workspace.aux_buffers,
-                            edge_buffer: &mut workspace.edge_buffer,
-                        },
-                    );
-                }
-                RoutingNode::Bus(bus_id) => {
-                    if !self.workspace.bus_buffers.contains_key(bus_id) {
-                        continue;
-                    }
-
-                    // Get bus channel settings from audio-thread-owned mixer state
-                    let bus_settings_channel =
-                        self.mixer_state.bus_channels.entry(*bus_id).or_default();
-                    bus_settings_channel.prepare_smoothing(self.config.sample_rate);
-
-                    // Skip if muted
-                    if bus_settings_channel.mute {
-                        continue;
-                    }
-
-                    // ================= Bus Tail Handling ===================
-                    // Sidechain input counts as signal so keyed effects keep processing, and
-                    // so does a hosted plugin that needs its process callback.
-                    let mut bus_has_signal = self
-                        .routing
-                        .node_has_signal
-                        .get(&RoutingNode::Bus(*bus_id))
-                        .copied()
-                        .unwrap_or(false)
-                        || self
-                            .plugin_state
-                            .get_bus_effects(bus_id.to_u32() as usize)
-                            .is_some_and(|effects| {
-                                effects.iter().any(|effect| {
-                                    effect.keeps_processing()
-                                        || self.routing.node_has_signal.contains_key(
-                                            &RoutingNode::PluginSidechain(
-                                                SidechainRoute::BusEffect(*bus_id, effect.id),
-                                            ),
-                                        )
-                                })
-                            });
-                    let bus_effects_tail = self
-                        .plugin_state
-                        .get_bus_effects(bus_id.to_u32() as usize)
-                        .map(|effects| {
-                            effects
-                                .iter()
-                                .map(|e| e.plugin.tail_samples().min(max_effect_tail))
-                                .max()
-                                .unwrap_or(0)
-                        })
-                        .unwrap_or(0);
-                    if bus_has_signal {
-                        self.routing.bus_tails.insert(*bus_id, bus_effects_tail);
-                    } else {
-                        let current_tail = self.routing.bus_tails.get(bus_id).copied().unwrap_or(0);
-                        if current_tail > 0 {
-                            let new_tail = current_tail.saturating_sub(buf_len as u32);
-                            self.routing.bus_tails.insert(*bus_id, new_tail);
-                            if new_tail == 0 {
-                                if let Some(effects) = self
-                                    .plugin_state
-                                    .get_bus_effects_mut(bus_id.to_u32() as usize)
-                                {
-                                    effects.iter_mut().for_each(|e| e.plugin.reset());
-                                }
-                                continue;
-                            }
-                            // Tail is ringing, keep bus alive
-                            bus_has_signal = true;
-                        } else {
-                            // Since it has no input signal, no tail -> skip processing
-                            continue;
-                        }
-                    }
-
-                    // The bus sum becomes the working buffer. What the bus keeps instead is
-                    // scratch that the next block clears before anything is routed into it.
-                    if self.workspace.mix_buffer.len() != buf_len {
-                        self.workspace.mix_buffer.resize(buf_len, 0.0);
-                    }
-                    if let Some(bus_buffer) = self.workspace.bus_buffers.get_mut(bus_id) {
-                        std::mem::swap(&mut self.workspace.mix_buffer, bus_buffer);
-                    }
-
-                    // Apply bus effects
-                    if let Some(effects) = self
-                        .plugin_state
-                        .get_bus_effects_mut(bus_id.to_u32() as usize)
-                    {
-                        let frames = if effects.is_empty() {
-                            None
-                        } else {
-                            prepare_planar_input(
-                                &self.workspace.mix_buffer,
-                                channels,
-                                &mut self.workspace.channel_buffers_in,
-                                &self.workspace.channel_buffers_out,
-                            )
-                        };
-                        let mut chain_valid = frames.is_some() || effects.is_empty();
-                        for effect in effects.iter_mut() {
-                            if effect.bypass {
-                                continue;
-                            }
-                            let sidechain_id = SidechainRoute::BusEffect(*bus_id, effect.id);
-                            let aux = self
-                                .workspace
-                                .aux_buffers
-                                .get(&sidechain_id)
-                                .map(|b| b.as_slice());
-
-                            let pt = PluginTarget::BusEffect(*bus_id, effect.id);
-                            let mut ctx = base_ctx.clone();
-                            ctx.param_changes = self
-                                .modulation
-                                .block_param_changes
-                                .get(&pt)
-                                .map(|v| v.as_slice())
-                                .unwrap_or(&[]);
-
-                            let Some(frames) = frames else {
-                                self.workspace.mix_buffer.fill(0.0);
-                                chain_valid = false;
-                                break;
-                            };
-                            if !process_plugin_planar(
-                                &mut *effect.plugin,
-                                aux,
-                                channels,
-                                frames,
-                                &ctx,
-                                &mut self.workspace.channel_buffers_in,
-                                &mut self.workspace.channel_buffers_out,
-                                &mut self.workspace.aux_channel_buffers,
-                            ) {
-                                self.workspace.mix_buffer.fill(0.0);
-                                chain_valid = false;
-                                break;
-                            }
-                        }
-                        if chain_valid && let Some(frames) = frames {
-                            finish_planar_output(
-                                &mut self.workspace.mix_buffer,
-                                &self.workspace.channel_buffers_in,
-                                channels,
-                                frames,
-                            );
-                        }
-                    }
-
-                    let bus_routes = outgoing_routes
-                        .get(&RoutingNode::Bus(*bus_id))
-                        .map_or(&[][..], Vec::as_slice);
-                    if bus_routes
-                        .iter()
-                        .any(|route| route.tap == RoutingTap::PreFader)
-                    {
-                        self.workspace
-                            .pre_fader_buffer
-                            .copy_from_slice(&self.workspace.mix_buffer);
-                    }
-
-                    let bus_settings_channel =
-                        self.mixer_state.bus_channels.entry(*bus_id).or_default();
-                    let peak = apply_fader(
-                        &mut self.workspace.mix_buffer,
-                        channels,
-                        &mut bus_settings_channel.volume,
-                        &mut bus_settings_channel.pan,
-                    );
-                    bus_settings_channel.observe_peak(peak);
-
-                    // Route bus output to destinations
-                    let workspace = &mut self.workspace;
-                    self.routing.route_signal(
-                        RoutingNode::Bus(*bus_id),
-                        bus_routes,
-                        &workspace.mix_buffer,
-                        &workspace.pre_fader_buffer,
-                        channels,
-                        &mut RouteTargets {
-                            output: &mut *output,
-                            bus_buffers: &mut workspace.bus_buffers,
-                            aux_buffers: &mut workspace.aux_buffers,
-                            edge_buffer: &mut workspace.edge_buffer,
-                        },
-                    );
-                }
-                // Everything routed to the master is already summed into the output. A bounce
-                // plays back through one more channel than the audio it replaces, whose centre
-                // pan passes 1/sqrt(2) per side, so it is rendered that much louder
-                RoutingNode::Master if self.bypass_master => {
-                    output
-                        .iter_mut()
-                        .for_each(|sample| *sample *= std::f32::consts::SQRT_2);
-                }
-                RoutingNode::Master => {
-                    // TAIL HANDLING
-                    let master_has_signal = self
-                        .routing
-                        .node_has_signal
-                        .get(&RoutingNode::Master)
-                        .copied()
-                        .unwrap_or(false)
-                        || self.plugin_state.master_effects.iter().any(|effect| {
-                            effect.keeps_processing()
-                                || self.routing.node_has_signal.contains_key(
-                                    &RoutingNode::PluginSidechain(SidechainRoute::MasterEffect(
-                                        effect.id,
-                                    )),
-                                )
-                        });
-                    let master_effects_tail = self
-                        .plugin_state
-                        .master_effects
-                        .iter()
-                        .map(|e| e.plugin.tail_samples().min(max_effect_tail))
-                        .max()
-                        .unwrap_or(0);
-
-                    if master_has_signal {
-                        self.routing.master_tail = master_effects_tail;
-                    } else {
-                        if self.routing.master_tail > 0 {
-                            self.routing.master_tail =
-                                self.routing.master_tail.saturating_sub(buf_len as u32);
-                            // If the tail becomes 0, then master has finally gone silent!
-                            if self.routing.master_tail == 0 {
-                                self.plugin_state
-                                    .master_effects
-                                    .iter_mut()
-                                    .for_each(|e| e.plugin.reset());
-                            }
-                        }
-                    }
-
-                    if master_has_signal || self.routing.master_tail > 0 {
-                        let master_bus_mut = &mut self.mixer_state.master;
-                        master_bus_mut.prepare_smoothing(self.config.sample_rate);
-
-                        Self::apply_master_bus_with_effects(
-                            master_bus_mut,
-                            &mut self.plugin_state.master_effects,
-                            output,
-                            channels,
-                            &base_ctx,
-                            &self.workspace.aux_buffers,
-                            &mut self.workspace.channel_buffers_in,
-                            &mut self.workspace.channel_buffers_out,
-                            &mut self.workspace.aux_channel_buffers,
-                            &self.modulation.block_param_changes,
-                        );
-                    } else {
-                        // output silent buffer
-                        output.fill(0.0);
-                    }
-                }
-                // Sidechain inputs are filled while routing their sources; they are never
-                // scheduled as nodes of their own.
-                RoutingNode::PluginSidechain(_) => {}
-            }
-        }
-
-        self.routing.cached_order = cached_order;
-        self.routing.outgoing_routes = outgoing_routes;
-    }
-
-    fn render_oneshots(&mut self, track_id: TrackId, channels: usize) -> bool {
-        self.voices.render_oneshots(
-            self.config.sample_rate,
-            track_id,
-            &mut self.workspace.mix_buffer,
-            channels,
-            self.transport.bpm,
-        )
-    }
-
-    /// Apply a track's phase setting and effects chain from plugin_state. Fader and pan are
-    /// applied by the caller so pre-fader connections can tap the signal in between.
-    fn apply_track_effects<'a>(
-        mixer_channel: &mut AudioMixerChannelValues,
-        track_effects: &mut Vec<Vec<AudioEffectInstance>>,
-        track_id: TrackId,
-        buffer: &mut [f32],
-        channels: usize,
-        process_ctx: &ProcessContext<'a>,
-        aux_buffers: &'a HashMap<SidechainRoute, Vec<f32>>,
-        channel_buffers_in: &mut [Vec<f32>],
-        channel_buffers_out: &mut [Vec<f32>],
-        aux_channel_buffers: &mut [Vec<f32>],
-        block_param_changes: &'a HashMap<PluginTarget, Vec<ParamChange>>,
-    ) {
-        // ==== SIMD Phase Inversion ====
-        if mixer_channel.inverted_phase {
-            apply_phase_inversion_simd(buffer);
-        }
-
-        // Effects chain from plugin_state
-        if let Some(effects) = track_effects.get_mut(track_id.to_u32() as usize) {
-            let frames = if effects.is_empty() {
-                None
-            } else {
-                prepare_planar_input(buffer, channels, channel_buffers_in, channel_buffers_out)
-            };
-            for effect in effects.iter_mut() {
-                if effect.bypass {
-                    continue;
-                }
-                let sidechain_id = SidechainRoute::TrackEffect(track_id, effect.id);
-                let aux = aux_buffers.get(&sidechain_id).map(|b| b.as_slice());
-
-                let pt = PluginTarget::TrackEffect(track_id, effect.id);
-                let mut ctx = process_ctx.clone();
-                ctx.param_changes = block_param_changes
-                    .get(&pt)
-                    .map(|v| v.as_slice())
-                    .unwrap_or(&[]);
-
-                let Some(frames) = frames else {
-                    buffer.fill(0.0);
-                    return;
-                };
-                if !process_plugin_planar(
-                    &mut *effect.plugin,
-                    aux,
-                    channels,
+        // Shared state is claimed here, in the order the graph renders in, so a parallel render
+        // claims exactly what a serial one does.
+        group_voices_by_track(&mut self.voices.active_oneshots);
+        for track_id in self.render_plan.tracks() {
+            let heard = self
+                .mixer_state
+                .track_channels
+                .get(&track_id)
+                .is_none_or(|channel| !channel.mute && (!is_any_solo || channel.solo));
+            if heard {
+                let range = voice_range(&self.voices.active_oneshots, track_id);
+                self.voices.lease_stretchers(
+                    range,
+                    self.config.sample_rate,
+                    self.transport.bpm,
                     frames,
-                    &ctx,
-                    channel_buffers_in,
-                    channel_buffers_out,
-                    aux_channel_buffers,
-                ) {
-                    buffer.fill(0.0);
-                    return;
+                );
+            }
+        }
+
+        self.render_plan.gather(GatherSources {
+            mixer: &mut self.mixer_state,
+            plugins: &mut self.plugin_state,
+            generators: &mut self.voices.active_generators,
+            oneshots: &mut self.voices.active_oneshots,
+            track_tails: &mut self.routing.track_tails,
+            bus_tails: &mut self.routing.bus_tails,
+            master_tail: &mut self.routing.master_tail,
+            track_input_delays: &mut self.routing.track_input_delay_lines,
+            edge_delays: &mut self.routing.edge_delay_lines,
+            bus_buffers: &mut self.workspace.bus_buffers,
+            sidechain_buffers: &mut self.workspace.aux_buffers,
+        });
+
+        let input_channels = self.input.device_channels();
+        let (input, _) = self.input.take(frames);
+        let ctx = BlockCtx {
+            base: base_ctx,
+            param_changes: &self.modulation.block_param_changes,
+            channels,
+            sample_rate: self.config.sample_rate,
+            bpm: self.transport.bpm,
+            is_any_solo,
+            max_effect_tail,
+            bypass_master: self.bypass_master,
+            input,
+            input_channels,
+        };
+        let job = RenderJob {
+            plan: &self.render_plan,
+            ctx: &ctx,
+            output: SendPtr::new(output.as_mut_ptr()),
+            output_len: buf_len,
+        };
+        match self.workers.as_mut() {
+            Some(pool) => pool.run(&job),
+            None => {
+                for level in 0..job.levels() {
+                    job.run(0, level);
                 }
             }
-            if let Some(frames) = frames {
-                finish_planar_output(buffer, channel_buffers_in, channels, frames);
-            }
         }
+
+        self.voices.return_stretchers();
+        let blocks_per_second = (self.config.sample_rate as usize / frames.max(1)).max(1);
+        self.render_plan
+            .finish_block(u32::try_from(blocks_per_second).unwrap_or(u32::MAX));
     }
 
-    /// Apply master bus settings (volume, pan, phase) and effects from plugin_state
-    ///
-    /// # Parameters
-    ///
-    /// * `master_bus` - The master bus settings
-    /// * `master_effects` - The master bus effects chain
-    /// * `buffer` - The buffer to apply the master bus settings to
-    /// * `channels` - The number of channels in the buffer
-    fn apply_master_bus_with_effects<'a>(
-        master_bus: &mut AudioMixerChannelValues,
-        master_effects: &mut [AudioEffectInstance],
-        buffer: &mut [f32],
-        channels: usize,
-        process_ctx: &ProcessContext<'a>,
-        aux_buffers: &'a HashMap<SidechainRoute, Vec<f32>>,
-        channel_buffers_in: &mut [Vec<f32>],
-        channel_buffers_out: &mut [Vec<f32>],
-        aux_channel_buffers: &mut [Vec<f32>],
-        block_param_changes: &'a HashMap<PluginTarget, Vec<ParamChange>>,
-    ) {
-        // ==== SIMD Phase Inversion ====
-        if master_bus.inverted_phase {
-            apply_phase_inversion_simd(buffer);
+    /// Threads rendering the graph, this one included.
+    pub fn dsp_workers(&self) -> usize {
+        self.workers.as_ref().map_or(1, AudioWorkerPool::workers)
+    }
+
+    /// Renders the graph on `workers` threads, this one included; 1 renders serially.
+    /// Spawns or joins threads, so call it from setup, never from `process`.
+    pub fn set_dsp_workers(&mut self, workers: usize) {
+        if workers.clamp(1, MAX_DSP_WORKERS) == self.dsp_workers() {
+            return;
         }
-
-        // Master effects chain
-        let frames = if master_effects.is_empty() {
-            None
-        } else {
-            prepare_planar_input(buffer, channels, channel_buffers_in, channel_buffers_out)
-        };
-        for effect in master_effects.iter_mut() {
-            if effect.bypass {
-                continue;
-            }
-            let sidechain_id = SidechainRoute::MasterEffect(effect.id);
-            let aux = aux_buffers.get(&sidechain_id).map(|b| b.as_slice());
-
-            let pt = PluginTarget::MasterEffect(effect.id);
-            let mut ctx = process_ctx.clone();
-            ctx.param_changes = block_param_changes
-                .get(&pt)
-                .map(|v| v.as_slice())
-                .unwrap_or(&[]);
-
-            let Some(frames) = frames else {
-                buffer.fill(0.0);
-                return;
-            };
-            if !process_plugin_planar(
-                &mut *effect.plugin,
-                aux,
-                channels,
-                frames,
-                &ctx,
-                channel_buffers_in,
-                channel_buffers_out,
-                aux_channel_buffers,
-            ) {
-                buffer.fill(0.0);
-                return;
-            }
-        }
-        if let Some(frames) = frames {
-            finish_planar_output(buffer, channel_buffers_in, channels, frames);
-        }
-
-        // ==== SIMD Apply Gain and Pan ====
-        let peak = apply_fader(
-            buffer,
-            channels,
-            &mut master_bus.volume,
-            &mut master_bus.pan,
+        self.workers = None;
+        self.workers = AudioWorkerPool::new(
+            workers,
+            self.current_state.graph.buffer_size,
+            self.config.sample_rate,
         );
-        master_bus.observe_peak(peak);
+        self.render_plan.mark_stale();
+    }
+
+    /// Compiles the routing graph for the worker pool. Allocates; runs only after the graph
+    /// changed.
+    fn rebuild_render_plan(&mut self) {
+        let tracks = &self.current_state.graph.tracks;
+        let sidechains: Vec<(SidechainRoute, RoutingNode)> = self
+            .workspace
+            .aux_buffers
+            .keys()
+            .filter_map(|route| Some((*route, sidechain_owner(tracks, *route)?)))
+            .collect();
+        let monitored: Vec<(TrackId, InputSource)> = tracks
+            .iter()
+            .filter_map(|track| {
+                let input = self.input.tracks.get(&track.id)?;
+                input.monitor.then_some((track.id, input.source))
+            })
+            .collect();
+        let plugin_state = &self.plugin_state;
+        let plan = RenderPlan::build(
+            &PlanGraph {
+                order: &self.routing.cached_order,
+                outgoing: &self.routing.outgoing_routes,
+                sidechains: &sidechains,
+                monitored: &monitored,
+                workers: self.dsp_workers(),
+                block_samples: self.workspace.mix_buffer.capacity(),
+                channels: self.config.num_channels as usize,
+            },
+            |kind| {
+                let effects = match kind {
+                    PlanNodeKind::Input(_) => return 0.5,
+                    PlanNodeKind::Track(id) => plugin_state.get_track_effects(id.to_u32() as usize),
+                    PlanNodeKind::Bus(id) => plugin_state.get_bus_effects(id.to_u32() as usize),
+                    PlanNodeKind::Master => Some(&plugin_state.master_effects),
+                };
+                1.0 + effects.map_or(0, Vec::len) as f32
+            },
+        );
+        let retired = std::mem::replace(&mut self.render_plan, plan);
+        self.retire_graph_state(RetiredGraphState::RenderPlan(Box::new(retired)));
     }
 
     fn resolve_sequencer_events(&mut self, buffer_size: usize) {

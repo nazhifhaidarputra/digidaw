@@ -77,8 +77,6 @@ impl StretchRate {
 
 struct StretchSlot {
     stretcher: DefaultRealtimeStretcher,
-    owner: Option<StretchKey>,
-    used: bool,
     /// Content frame of the next output frame.
     next_content: u64,
     /// Next unwrapped source frame to feed.
@@ -154,79 +152,33 @@ impl StretchSlot {
     }
 }
 
-/// Fixed set of realtime stretchers shared by the voices stretching at once.
-pub struct StretchPool {
-    slots: Vec<StretchSlot>,
-    sample_rate: u32,
+/// A stretcher taken out of the pool for one voice and one block, so voices rendered on
+/// different workers never share pool state. Hand it back with [`StretchPool::give_back`].
+pub struct StretchLease {
+    index: usize,
+    /// Voice the slot played before this lease.
+    previous: Option<StretchKey>,
+    /// Whether the slot last played another voice and must be primed.
+    fresh: bool,
+    slot: StretchSlot,
 }
 
-impl StretchPool {
-    /// A pool without stretchers, used until [`Self::prepare`] runs.
-    pub fn empty() -> Self {
-        Self {
-            slots: Vec::new(),
-            sample_rate: 0,
-        }
-    }
-
-    /// Builds the stretchers for `sample_rate`, unless they already run at it. Allocates, so
-    /// call it at setup or on a sample-rate change, never from `process`.
-    pub fn prepare(&mut self, sample_rate: u32) {
-        if sample_rate == self.sample_rate && !self.slots.is_empty() {
-            return;
-        }
-        self.sample_rate = sample_rate;
-        self.slots = (0..STRETCH_SLOTS)
-            .filter_map(|_| DefaultRealtimeStretcher::new(sample_rate, REALTIME_CHANNELS).ok())
-            .map(|stretcher| {
-                let input = stretcher.seek_frames().max(CHUNK * MAX_FEED_RATIO);
-                StretchSlot {
-                    stretcher,
-                    owner: None,
-                    used: false,
-                    next_content: 0,
-                    source_position: 0.0,
-                    feed_debt: 0.0,
-                    discard: 0,
-                    input: [vec![0.0; input], vec![0.0; input]],
-                    output: [vec![0.0; CHUNK], vec![0.0; CHUNK]],
-                }
-            })
-            .collect();
-        if self.slots.len() < STRETCH_SLOTS {
-            log::warn!(
-                "Only {} of {STRETCH_SLOTS} realtime stretchers could be created",
-                self.slots.len()
-            );
-        }
-    }
-
-    /// Renders `frames` stretched output frames of voice `key` starting at content frame
-    /// `content`, handing each to `write(index, frame)`.
-    ///
-    /// Returns `false`, rendering nothing, when every stretcher is busy with another voice.
+impl StretchLease {
+    /// Renders `frames` stretched output frames starting at content frame `content`, handing
+    /// each to `write(index, frame)`.
     pub fn render(
         &mut self,
-        key: StretchKey,
         content: u64,
         rate: StretchRate,
         source: &StretchSource<'_>,
         frames: usize,
         mut write: impl FnMut(usize, [f32; 2]),
-    ) -> bool {
-        let index = self
-            .slots
-            .iter()
-            .position(|slot| slot.owner == Some(key))
-            .or_else(|| self.slots.iter().position(|slot| slot.owner.is_none()));
-        let Some(slot) = index.and_then(|index| self.slots.get_mut(index)) else {
-            return false;
-        };
-        slot.used = true;
+    ) {
+        let slot = &mut self.slot;
         slot.stretcher.set_pitch_scale(rate.pitch_scale);
         slot.stretcher.set_preserve_formants(rate.preserve_formants);
-        if slot.owner != Some(key) || slot.next_content != content {
-            slot.owner = Some(key);
+        if self.fresh || slot.next_content != content {
+            self.fresh = false;
             slot.prime(content, rate, source);
         }
 
@@ -253,16 +205,122 @@ impl StretchPool {
             written += take;
         }
         slot.next_content = content + frames as u64;
+    }
+}
+
+/// Fixed set of realtime stretchers shared by the voices stretching at once.
+pub struct StretchPool {
+    /// `None` while the slot is leased to a voice.
+    slots: Vec<Option<StretchSlot>>,
+    /// Owner of each slot, kept here so leased slots stay claimed.
+    owners: Vec<Option<StretchKey>>,
+    used: Vec<bool>,
+    sample_rate: u32,
+}
+
+impl StretchPool {
+    /// A pool without stretchers, used until [`Self::prepare`] runs.
+    pub fn empty() -> Self {
+        Self {
+            slots: Vec::new(),
+            owners: Vec::new(),
+            used: Vec::new(),
+            sample_rate: 0,
+        }
+    }
+
+    /// Builds the stretchers for `sample_rate`, unless they already run at it. Allocates, so
+    /// call it at setup or on a sample-rate change, never from `process`.
+    pub fn prepare(&mut self, sample_rate: u32) {
+        if sample_rate == self.sample_rate && !self.slots.is_empty() {
+            return;
+        }
+        self.sample_rate = sample_rate;
+        self.slots = (0..STRETCH_SLOTS)
+            .filter_map(|_| DefaultRealtimeStretcher::new(sample_rate, REALTIME_CHANNELS).ok())
+            .map(|stretcher| {
+                let input = stretcher.seek_frames().max(CHUNK * MAX_FEED_RATIO);
+                Some(StretchSlot {
+                    stretcher,
+                    next_content: 0,
+                    source_position: 0.0,
+                    feed_debt: 0.0,
+                    discard: 0,
+                    input: [vec![0.0; input], vec![0.0; input]],
+                    output: [vec![0.0; CHUNK], vec![0.0; CHUNK]],
+                })
+            })
+            .collect();
+        self.owners = vec![None; self.slots.len()];
+        self.used = vec![false; self.slots.len()];
+        if self.slots.len() < STRETCH_SLOTS {
+            log::warn!(
+                "Only {} of {STRETCH_SLOTS} realtime stretchers could be created",
+                self.slots.len()
+            );
+        }
+    }
+
+    /// Takes the stretcher of voice `key` for this block: the one it already plays through,
+    /// else a free one. Returns `None` when every stretcher is busy with another voice.
+    pub fn lease(&mut self, key: StretchKey) -> Option<StretchLease> {
+        let index = self
+            .owners
+            .iter()
+            .position(|owner| *owner == Some(key))
+            .or_else(|| self.owners.iter().position(Option::is_none))?;
+        let slot = self.slots.get_mut(index)?.take()?;
+        let previous = self.owners[index];
+        let fresh = previous != Some(key);
+        self.owners[index] = Some(key);
+        self.used[index] = true;
+        Some(StretchLease {
+            index,
+            previous,
+            fresh,
+            slot,
+        })
+    }
+
+    /// Returns a leased stretcher to the pool.
+    pub fn give_back(&mut self, lease: StretchLease) {
+        if let Some(place) = self.slots.get_mut(lease.index) {
+            if lease.fresh {
+                // Never rendered: the slot still holds the previous voice's stream.
+                self.owners[lease.index] = lease.previous;
+            }
+            *place = Some(lease.slot);
+        }
+    }
+
+    /// Renders `frames` stretched output frames of voice `key` starting at content frame
+    /// `content`, handing each to `write(index, frame)`.
+    ///
+    /// Returns `false`, rendering nothing, when every stretcher is busy with another voice.
+    pub fn render(
+        &mut self,
+        key: StretchKey,
+        content: u64,
+        rate: StretchRate,
+        source: &StretchSource<'_>,
+        frames: usize,
+        write: impl FnMut(usize, [f32; 2]),
+    ) -> bool {
+        let Some(mut lease) = self.lease(key) else {
+            return false;
+        };
+        lease.render(content, rate, source, frames, write);
+        self.give_back(lease);
         true
     }
 
     /// Frees the stretchers of voices that did not play this block. Call once per block.
     pub fn end_block(&mut self) {
-        for slot in &mut self.slots {
-            if !slot.used {
-                slot.owner = None;
+        for (owner, used) in self.owners.iter_mut().zip(&mut self.used) {
+            if !*used {
+                *owner = None;
             }
-            slot.used = false;
+            *used = false;
         }
     }
 }

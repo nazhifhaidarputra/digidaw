@@ -39,6 +39,15 @@ impl AudioEngine {
                 | AudioCommand::ReplaceFullGraph { .. }
         ) {
             self.routing.latency_dirty = true;
+            self.render_plan.mark_stale();
+        }
+        if matches!(
+            cmd,
+            AudioCommand::HydratePlugin { .. }
+                | AudioCommand::UpdateAudioConfig { .. }
+                | AudioCommand::SetTrackInput { .. }
+        ) {
+            self.render_plan.mark_stale();
         }
         match cmd {
             AudioCommand::InstallHostedProject(mut transfer) => {
@@ -1156,6 +1165,14 @@ impl AudioEngine {
                     self.retire_graph_state(RetiredGraphState::Automation(previous));
                 }
             }
+            AudioCommand::SetTrackInput { track_id, input } => match input {
+                Some(input) => {
+                    self.input.tracks.insert(track_id, input);
+                }
+                None => {
+                    self.input.tracks.remove(&track_id);
+                }
+            },
             AudioCommand::UpdateAudioConfig {
                 sample_rate,
                 buffer_size,

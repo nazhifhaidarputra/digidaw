@@ -19,14 +19,18 @@ use serde::{Deserialize, Serialize};
 use crate::{
     commands::{AudioCommand, TelemetryRegistration},
     context::DawContext,
-    engine::{AudioEngine, AudioEngineTelemetry, record_dsp_load, record_stream_load},
+    dsp_engine::{REALTIME_SLICE, RealtimeSlice, auto_worker_count, promote_current_thread},
+    engine::{
+        AudioEngine, AudioEngineTelemetry, InputCapture, record_dsp_load, record_stream_load,
+    },
     event::TransportFeedback,
     message::TelemetryRegistry,
-    playback_sync::OutputEpoch,
+    playback_sync::{InputClock, OutputEpoch},
     rate_bridge::DeviceRateBridge,
 };
 
 static OUTPUT_UNDERRUN_SAMPLES: AtomicU64 = AtomicU64::new(0);
+static INPUT_OVERRUN_FRAMES: AtomicU64 = AtomicU64::new(0);
 const OUTPUT_CHANNELS: usize = 2;
 const OUTPUT_CHANNELS_U16: u16 = 2;
 const OUTPUT_CHANNELS_U64: u64 = 2;
@@ -43,6 +47,37 @@ fn sanitize_output_sample(sample: f32) -> f32 {
         sample.clamp(-1.0, 1.0)
     } else {
         0.0
+    }
+}
+
+/// Returns the cumulative number of device input frames dropped because the engine fell behind.
+pub fn input_overrun_frames() -> u64 {
+    INPUT_OVERRUN_FRAMES.load(Ordering::Relaxed)
+}
+
+/// Queues a device input buffer for the engine and returns how many frames it queued. A buffer
+/// that does not fit is dropped whole, so the queue never holds half a frame.
+#[inline]
+fn read_input_data<T>(data: &[T], device_channels: usize, producer: &mut Producer<f32>) -> usize
+where
+    T: SizedSample,
+    f32: FromSample<T>,
+{
+    let frames = data.len() / device_channels.max(1);
+    let samples = frames * device_channels;
+    match producer.write_chunk_uninit(samples) {
+        Ok(chunk) => {
+            chunk.fill_from_iter(
+                data[..samples]
+                    .iter()
+                    .map(|sample| <f32 as FromSample<T>>::from_sample_(*sample)),
+            );
+            frames
+        }
+        Err(_) => {
+            INPUT_OVERRUN_FRAMES.fetch_add(frames as u64, Ordering::Relaxed);
+            0
+        }
     }
 }
 
@@ -157,6 +192,103 @@ macro_rules! run_stream {
         )
     }};
 }
+macro_rules! run_input_stream {
+    (
+        $device:expr,
+        $config:expr,
+        $producer:expr,
+        $clock:expr,
+        $sample_type:ty,
+        $err_fn:expr
+    ) => {{
+        let mut producer = $producer;
+        let clock = Arc::clone(&$clock);
+        let device_channels = usize::from($config.channels);
+
+        $device.build_input_stream(
+            &$config,
+            move |data: &[$sample_type], info: &cpal::InputCallbackInfo| {
+                let now = Instant::now();
+                let frames = read_input_data(data, device_channels, &mut producer);
+                let timestamp = info.timestamp();
+                let capture_delay = timestamp
+                    .callback
+                    .duration_since(&timestamp.capture)
+                    .unwrap_or_default();
+                clock.record_callback(now, frames, capture_delay);
+            },
+            $err_fn,
+            None,
+        )
+    }};
+}
+
+/// Device input handed to the DSP thread with a stream attach.
+struct InputAttach {
+    consumer: Consumer<f32>,
+    device_rate: u32,
+    device_channels: usize,
+}
+
+/// Builds and starts the input stream that feeds level −1 of the graph. Not real-time safe.
+fn start_input_stream(
+    host: &cpal::Host,
+    request: &RequestedInputConfig,
+    clock: &Arc<InputClock>,
+) -> Result<(cpal::Stream, InputAttach)> {
+    let device = match &request.device_id {
+        Some(requested) => {
+            let requested = DeviceId::from_str(requested)
+                .map_err(|error| anyhow!("invalid input device id '{requested}': {error}"))?;
+            host.input_devices()?
+                .find(|device| device.id().is_ok_and(|id| id == requested))
+                .context("requested input device not found")?
+        }
+        None => host
+            .default_input_device()
+            .context("no audio input device available")?,
+    };
+    let supported = device
+        .default_input_config()
+        .context("no default input config available")?;
+    let sample_format = supported.sample_format();
+    let config: cpal::StreamConfig = supported.config();
+    let device_channels = usize::from(config.channels);
+    // Half a second of input absorbs any scheduling hiccup of the DSP thread.
+    let capacity = (config.sample_rate as usize / 2).max(4_096) * device_channels;
+    let (producer, consumer) = RingBuffer::<f32>::new(capacity);
+    clock.reset();
+    let err_fn = |error: cpal::StreamError| log::warn!("Audio input stream error: {error}");
+    let stream = match sample_format {
+        cpal::SampleFormat::I8 => run_input_stream!(device, config, producer, clock, i8, err_fn),
+        cpal::SampleFormat::I16 => run_input_stream!(device, config, producer, clock, i16, err_fn),
+        cpal::SampleFormat::I24 => {
+            run_input_stream!(device, config, producer, clock, cpal::I24, err_fn)
+        }
+        cpal::SampleFormat::I32 => run_input_stream!(device, config, producer, clock, i32, err_fn),
+        cpal::SampleFormat::I64 => run_input_stream!(device, config, producer, clock, i64, err_fn),
+        cpal::SampleFormat::U8 => run_input_stream!(device, config, producer, clock, u8, err_fn),
+        cpal::SampleFormat::U16 => run_input_stream!(device, config, producer, clock, u16, err_fn),
+        cpal::SampleFormat::U24 => {
+            run_input_stream!(device, config, producer, clock, cpal::U24, err_fn)
+        }
+        cpal::SampleFormat::U32 => run_input_stream!(device, config, producer, clock, u32, err_fn),
+        cpal::SampleFormat::U64 => run_input_stream!(device, config, producer, clock, u64, err_fn),
+        cpal::SampleFormat::F32 => run_input_stream!(device, config, producer, clock, f32, err_fn),
+        cpal::SampleFormat::F64 => run_input_stream!(device, config, producer, clock, f64, err_fn),
+        _ => Err(cpal::BuildStreamError::StreamConfigNotSupported),
+    }?;
+    stream.play()?;
+    Ok((
+        stream,
+        InputAttach {
+            consumer,
+            device_rate: config.sample_rate,
+            device_channels,
+        },
+    ))
+}
+
 /// Resolve the automatic host.
 ///
 /// CPAL's platform default is deliberately used here because it is the host
@@ -300,6 +432,20 @@ pub struct RequestedDspConfig {
     pub sample_rate: u32,
     /// Number of frames rendered per engine block.
     pub block_size: u32,
+    /// Threads that render the graph, the DSP thread included; `None` picks one per core but
+    /// one, and 1 renders serially.
+    #[serde(default)]
+    pub dsp_workers: Option<usize>,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
+/// Device input the engine captures for level −1 of the graph.
+pub struct RequestedInputConfig {
+    /// Whether an input stream is opened at all; off by default, so the app does not ask for
+    /// the microphone until something listens.
+    pub enabled: bool,
+    /// Backend-specific device identifier; `None` follows the system default input.
+    pub device_id: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -345,6 +491,9 @@ pub struct AudioRuntimeSettings {
     pub requested_output: RequestedOutputConfig,
     /// Sample rate and block size at which the engine should render.
     pub requested_dsp: RequestedDspConfig,
+    /// Device input captured alongside the output.
+    #[serde(default)]
+    pub requested_input: RequestedInputConfig,
     /// Negotiated device configuration while a stream is active.
     pub actual_stream: Option<ActualDeviceStreamConfig>,
     /// Current stream startup or recovery state.
@@ -487,7 +636,9 @@ impl Default for AudioRuntimeSettings {
             requested_dsp: RequestedDspConfig {
                 sample_rate: 48_000,
                 block_size: 1_024,
+                dsp_workers: None,
             },
+            requested_input: RequestedInputConfig::default(),
             actual_stream: None,
             stream_status: DeviceStreamStatus::Starting,
         }
@@ -776,6 +927,7 @@ pub fn start_audio_stream(
     ctx.position_consumer = Arc::new(Mutex::new(Some(pos_consumer)));
     let dsp_output_clock = Arc::clone(&ctx.output_clock);
     let output_clock = Arc::clone(&ctx.output_clock);
+    let input_clock = Arc::clone(&ctx.input_clock);
 
     let (feedback_producer, feedback_consumer) =
         RingBuffer::<crate::commands::AudioFeedback>::new(512);
@@ -798,6 +950,7 @@ pub fn start_audio_stream(
             dsp_config: RequestedDspConfig,
             device_sample_rate: u32,
             ready_tx: std::sync::mpsc::SyncSender<Result<Consumer<OutputFrame>, String>>,
+            input: Option<InputAttach>,
         },
         Detach,
     }
@@ -818,23 +971,48 @@ pub fn start_audio_stream(
             telemetry_reg_sender,
         );
 
+        let mut _priority = None;
+        let mut realtime_slice = RealtimeSlice::new(REALTIME_SLICE);
         'dsp_lifetime: loop {
             let attach = match dsp_control_rx.recv() {
                 Ok(DspControl::Attach {
                     dsp_config,
                     device_sample_rate,
                     ready_tx,
-                }) => (dsp_config, device_sample_rate, ready_tx),
+                    input,
+                }) => (dsp_config, device_sample_rate, ready_tx, input),
                 Ok(DspControl::Detach) => continue,
                 Err(_) => break,
             };
 
-            let (dsp_config, device_sample_rate, ready_tx) = attach;
+            let (dsp_config, device_sample_rate, ready_tx, input) = attach;
+            let block_frames = dsp_config.block_size as usize;
 
             engine.process_command(AudioCommand::UpdateAudioConfig {
                 sample_rate: Some(dsp_config.sample_rate),
-                buffer_size: Some(dsp_config.block_size as usize),
+                buffer_size: Some(block_frames),
             });
+            if _priority.is_none() {
+                _priority = promote_current_thread(block_frames, dsp_config.sample_rate);
+            }
+            engine.set_dsp_workers(dsp_config.dsp_workers.unwrap_or_else(auto_worker_count));
+            let previous_input = match input {
+                Some(input) => match InputCapture::new(
+                    input.consumer,
+                    input.device_channels,
+                    input.device_rate,
+                    dsp_config.sample_rate,
+                    block_frames,
+                ) {
+                    Ok(capture) => engine.attach_input(capture),
+                    Err(error) => {
+                        log::warn!("Audio input is unavailable: {error}");
+                        engine.detach_input()
+                    }
+                },
+                None => engine.detach_input(),
+            };
+            drop(previous_input);
 
             let mut rate_bridge = match DeviceRateBridge::new(
                 dsp_config.sample_rate,
@@ -864,7 +1042,9 @@ pub fn start_audio_stream(
 
             // Build the latency cushion before the CPAL stream is started.
             let prefill_blocks = ((ring_buffer_capacity / 2) / maximum_device_frames).max(1);
+            realtime_slice.blocked();
             for _ in 0..prefill_blocks {
+                realtime_slice.yield_if_due();
                 engine.process(&mut staging_buffer);
                 let queued =
                     push_output_frames(&mut producer, rate_bridge.process(&staging_buffer));
@@ -894,7 +1074,13 @@ pub fn start_audio_stream(
                     Err(std::sync::mpsc::TryRecvError::Empty) => {}
                 }
 
-                if producer.slots() >= maximum_device_frames {
+                // With an input stream, a block waits for its input unless the output is
+                // about to run dry, which would be the worse dropout.
+                let output_low = producer.slots() >= ring_buffer_capacity / 4 * 3;
+                if producer.slots() >= maximum_device_frames
+                    && (output_low || engine.input_ready(block_frames))
+                {
+                    realtime_slice.yield_if_due();
                     let render_started = Instant::now();
                     engine.process(&mut staging_buffer);
                     let render_elapsed = render_started.elapsed().as_secs_f32();
@@ -915,9 +1101,11 @@ pub fn start_audio_stream(
                     );
                 } else {
                     std::thread::sleep(Duration::from_millis(1));
+                    realtime_slice.blocked();
                 }
             }
             dsp_output_clock.detach();
+            drop(engine.detach_input());
         }
 
         // `engine` is dropped here, on the same DSP thread where it was created.
@@ -974,6 +1162,21 @@ pub fn start_audio_stream(
                 current_config_pref = cfg.clone();
             }
 
+            // The input stream starts first, so its ring is filling by the time the DSP thread
+            // renders; without it, output still plays.
+            let current_input = runtime_settings_arc.read().requested_input.clone();
+            let (input_stream, input_attach) = if current_input.enabled {
+                match start_input_stream(&current_host, &current_input, &input_clock) {
+                    Ok((stream, attach)) => (Some(stream), Some(attach)),
+                    Err(error) => {
+                        log::warn!("Monitor: Could not open the audio input: {error}");
+                        (None, None)
+                    }
+                }
+            } else {
+                (None, None)
+            };
+
             // Ask the DSP thread to create the rate bridge + output ring. The returned
             // Consumer is the only DSP-owned data path that crosses into the monitor.
             let (ready_tx, ready_rx) =
@@ -984,6 +1187,7 @@ pub fn start_audio_stream(
                     dsp_config: current_dsp_config,
                     device_sample_rate,
                     ready_tx,
+                    input: input_attach,
                 })
                 .is_err()
             {
@@ -1154,9 +1358,15 @@ pub fn start_audio_stream(
                 }
 
                 let latest_config = active_config_arc.read().clone();
-                let latest_dsp_config = runtime_settings_arc.read().requested_dsp;
+                let (latest_dsp_config, latest_input) = {
+                    let runtime = runtime_settings_arc.read();
+                    (runtime.requested_dsp, runtime.requested_input.clone())
+                };
 
-                if latest_config != current_config_pref || latest_dsp_config != current_dsp_config {
+                if latest_config != current_config_pref
+                    || latest_dsp_config != current_dsp_config
+                    || latest_input != current_input
+                {
                     log::info!(
                         "Monitor: Audio configuration changed by user. Restarting stream..."
                     );
@@ -1186,6 +1396,7 @@ pub fn start_audio_stream(
             // Stop the callback first so it no longer consumes from this ring, then
             // detach the producer/rate bridge on the DSP thread.
             drop(stream);
+            drop(input_stream);
             if dsp_control_tx.send(DspControl::Detach).is_err() {
                 log::error!("DSP thread exited during stream cleanup.");
                 return;

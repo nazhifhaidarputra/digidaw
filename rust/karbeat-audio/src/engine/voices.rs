@@ -5,7 +5,7 @@ use std::sync::Arc;
 use crate::{
     engine::{
         helper::{FrameGain, LoopBounds, calc_fade, render_audio_waveform},
-        stretch_pool::{StretchKey, StretchPool, StretchRate, StretchSource},
+        stretch_pool::{StretchKey, StretchLease, StretchPool, StretchRate, StretchSource},
     },
     render_state::AudioPluginState,
 };
@@ -93,6 +93,212 @@ pub struct GeneratorVoice {
     pub delivered: bool,
     /// Frames still owed after the last note/event before the generator can park.
     pub tail_remaining: u32,
+}
+
+/// What one audio voice plays in a block, decided before anything renders.
+struct VoiceBlock<'a> {
+    source: &'a [f32],
+    source_channels: usize,
+    playback_rate: f64,
+    pitch_step: f64,
+    step: f64,
+    source_frames: f64,
+    is_looping: bool,
+    loop_crossfade: f64,
+    frames: usize,
+    keeps_pitch: bool,
+    pitch_scale: f64,
+    preserve_formants: bool,
+}
+
+impl<'a> VoiceBlock<'a> {
+    /// `None` when the voice has nothing to play this block.
+    fn new(
+        waveform: &'a AudioWaveform,
+        source_read_index: f64,
+        output_offset_samples: usize,
+        sample_rate: u32,
+        bpm: f32,
+        buffer_frames: usize,
+    ) -> Option<Self> {
+        let source = waveform.get_playable_buffer()?;
+        let source_channels = waveform.channels as usize;
+        let playback_rate = waveform.tempo_rate(bpm);
+        let pitch_step = waveform.sample_rate as f64 / sample_rate as f64;
+        let step = pitch_step * playback_rate;
+        let source_frames = (source.len() / source_channels) as f64;
+        let is_looping = waveform.is_looping && source_frames > 0.0;
+        let loop_crossfade = if is_looping {
+            waveform.envelope.loop_crossfade(source_frames as u64) as f64
+        } else {
+            0.0
+        };
+        let mut frames = buffer_frames.saturating_sub(output_offset_samples);
+        if !is_looping {
+            let max_steps = (source_frames - 1.0 - source_read_index) / step;
+            frames = if max_steps < 0.0 {
+                0
+            } else {
+                frames.min(max_steps.floor() as usize + 1)
+            };
+        }
+        if frames == 0 {
+            return None;
+        }
+        let (pitch_scale, preserve_formants) = waveform.realtime_pitch().unwrap_or((1.0, false));
+        Some(Self {
+            source,
+            source_channels,
+            playback_rate,
+            pitch_step,
+            step,
+            source_frames,
+            is_looping,
+            loop_crossfade,
+            frames,
+            keeps_pitch: waveform.sample_mode == AudioSampleMode::Stretch,
+            pitch_scale,
+            preserve_formants,
+        })
+    }
+
+    /// Stretch mode off its own tempo keeps the pitch, and a realtime pitch shift moves it,
+    /// through a realtime stretcher; without one the voice falls back to resampling.
+    fn wants_stretch(&self) -> bool {
+        (self.keeps_pitch && (self.playback_rate - 1.0).abs() > 1e-9)
+            || (self.pitch_scale - 1.0).abs() > 1e-9
+    }
+}
+
+/// Renders one track's audio voices into `output`. Stretching voices play through the
+/// stretchers leased to them by [`VoiceState::lease_stretchers`]. Returns whether any voice
+/// played.
+pub(super) fn render_oneshot_voices(
+    voices: &mut [AudioVoice],
+    sample_rate: u32,
+    output: &mut [f32],
+    channels: usize,
+    bpm: f32,
+) -> bool {
+    let mut did_render = false;
+    let buffer_frames = output.len() / channels;
+    let declick_samples = (sample_rate as f32 * 0.002) as u32;
+
+    for voice in voices.iter_mut() {
+        did_render = true;
+        let waveform = &*voice.waveform;
+        let Some(block) = VoiceBlock::new(
+            waveform,
+            voice.source_read_index,
+            voice.output_offset_samples,
+            sample_rate,
+            bpm,
+            buffer_frames,
+        ) else {
+            continue;
+        };
+        let VoiceBlock {
+            source,
+            source_channels,
+            step,
+            source_frames,
+            is_looping,
+            loop_crossfade,
+            frames: frames_to_process,
+            ..
+        } = block;
+
+        let clip_envelope = voice
+            .clip_envelope
+            .as_deref()
+            .filter(|envelope| envelope.shapes_gain());
+        let waveform_envelope = Some(&waveform.envelope).filter(|e| e.shapes_gain());
+        let content_start = voice.clip_content_offset + u64::from(voice.clip_elapsed_samples);
+        let mut gain = ClipGain {
+            start_elapsed: voice.clip_elapsed_samples,
+            clip_length: voice.clip_loop_length,
+            declick_samples,
+            clip_envelope,
+            clip_cursor: clip_envelope
+                .map(|envelope| EnvelopeCursor::seek(envelope, content_start))
+                .unwrap_or_default(),
+            content_offset: voice.clip_content_offset,
+            waveform_envelope,
+            waveform_cursor: waveform_envelope
+                .map(|envelope| EnvelopeCursor::seek(envelope, voice.source_read_index as u64))
+                .unwrap_or_default(),
+            waveform_frames: source_frames as u64,
+            crossfade: voice.crossfade,
+        };
+
+        let start = voice.output_offset_samples * channels;
+        let end = start + frames_to_process * channels;
+        let level = waveform.playback_gain();
+        let bounds = LoopBounds::new(is_looping, source_frames, loop_crossfade);
+        let stretched = match voice.stretch.as_mut() {
+            Some(lease) if block.wants_stretch() => {
+                lease.render(
+                    content_start,
+                    StretchRate {
+                        step,
+                        feed_step: if block.keeps_pitch {
+                            block.pitch_step
+                        } else {
+                            step
+                        },
+                        pitch_scale: block.pitch_scale,
+                        preserve_formants: block.preserve_formants,
+                    },
+                    &StretchSource {
+                        buffer: source,
+                        channels: source_channels,
+                        bounds,
+                        frames: source_frames,
+                        is_looping,
+                    },
+                    frames_to_process,
+                    |index, frame| {
+                        let read_pos =
+                            bounds.read_pos(0.0, (content_start + index as u64) as f64 * step);
+                        let frame_gain = gain.at(index as u32, read_pos) * level;
+                        let at = start + index * channels;
+                        match output.get_mut(at..at + channels) {
+                            Some([left, right, ..]) => {
+                                *left += frame[0] * frame_gain;
+                                *right += frame[1] * frame_gain;
+                            }
+                            Some([mono]) => *mono += frame[0] * frame_gain,
+                            _ => {}
+                        }
+                    },
+                );
+                true
+            }
+            _ => false,
+        };
+        if stretched {
+            voice.source_read_index =
+                bounds.read_pos(voice.source_read_index, frames_to_process as f64 * step);
+        } else {
+            render_audio_waveform(
+                source,
+                source_channels,
+                &mut output[start..end],
+                channels,
+                &mut voice.source_read_index,
+                step,
+                is_looping,
+                source_frames,
+                loop_crossfade,
+                level,
+                gain,
+            );
+        }
+        voice.clip_elapsed_samples += frames_to_process as u32;
+        voice.output_offset_samples = 0;
+    }
+
+    did_render
 }
 
 #[cfg(test)]
@@ -596,6 +802,8 @@ pub struct AudioVoice {
     pub clip_content_offset: u64,
     /// Equal-power crossfades with overlapping neighbour clips.
     pub crossfade: NeighbourCrossfade,
+    /// Stretcher leased for this block, when the voice stretches.
+    pub stretch: Option<StretchLease>,
 }
 
 /// Equal-power crossfades of an audio clip with the clips overlapping its edges on its track.
@@ -910,149 +1118,54 @@ impl VoiceState {
         None
     }
 
-    pub fn render_oneshots(
+    /// Leases stretchers, in voice order, to the voices in `range` that stretch this block, so
+    /// they claim the same stretchers as when every voice rendered on one thread.
+    pub fn lease_stretchers(
         &mut self,
+        range: std::ops::Range<usize>,
         sample_rate: u32,
-        track_id: TrackId,
-        output: &mut [f32],
-        channels: usize,
         bpm: f32,
-    ) -> bool {
-        let mut did_render = false;
-        let buffer_frames = output.len() / channels;
-        let declick_samples = (sample_rate as f32 * 0.002) as u32;
+        buffer_frames: usize,
+    ) {
         let Self {
             active_oneshots,
             stretch_pool,
             ..
         } = self;
-
-        for voice in active_oneshots
-            .iter_mut()
-            .filter(|voice| voice.track_id == track_id)
-        {
-            did_render = true;
-            let waveform = &*voice.waveform;
-            let Some(source) = waveform.get_playable_buffer() else {
-                continue;
-            };
-            let source_channels = waveform.channels as usize;
-
-            let playback_rate = waveform.tempo_rate(bpm);
-
-            let pitch_step = waveform.sample_rate as f64 / sample_rate as f64;
-            let step = pitch_step * playback_rate;
-            let source_frames = (source.len() / source_channels) as f64;
-            let is_looping = waveform.is_looping && source_frames > 0.0;
-            let loop_crossfade = if is_looping {
-                waveform.envelope.loop_crossfade(source_frames as u64) as f64
-            } else {
-                0.0
-            };
-            let mut frames_to_process = buffer_frames.saturating_sub(voice.output_offset_samples);
-
-            if !is_looping {
-                let max_steps = (source_frames - 1.0 - voice.source_read_index) / step;
-                frames_to_process = if max_steps < 0.0 {
-                    0
-                } else {
-                    frames_to_process.min(max_steps.floor() as usize + 1)
-                };
+        for voice in active_oneshots.get_mut(range).unwrap_or_default() {
+            let wants_stretch = VoiceBlock::new(
+                &voice.waveform,
+                voice.source_read_index,
+                voice.output_offset_samples,
+                sample_rate,
+                bpm,
+                buffer_frames,
+            )
+            .is_some_and(|block| block.wants_stretch());
+            if wants_stretch && voice.stretch.is_none() {
+                voice.stretch = stretch_pool.lease(StretchKey::Clip(voice.track_id, voice.clip_id));
             }
-            if frames_to_process == 0 {
-                continue;
-            }
-
-            let clip_envelope = voice
-                .clip_envelope
-                .as_deref()
-                .filter(|envelope| envelope.shapes_gain());
-            let waveform_envelope = Some(&waveform.envelope).filter(|e| e.shapes_gain());
-            let content_start = voice.clip_content_offset + u64::from(voice.clip_elapsed_samples);
-            let mut gain = ClipGain {
-                start_elapsed: voice.clip_elapsed_samples,
-                clip_length: voice.clip_loop_length,
-                declick_samples,
-                clip_envelope,
-                clip_cursor: clip_envelope
-                    .map(|envelope| EnvelopeCursor::seek(envelope, content_start))
-                    .unwrap_or_default(),
-                content_offset: voice.clip_content_offset,
-                waveform_envelope,
-                waveform_cursor: waveform_envelope
-                    .map(|envelope| EnvelopeCursor::seek(envelope, voice.source_read_index as u64))
-                    .unwrap_or_default(),
-                waveform_frames: source_frames as u64,
-                crossfade: voice.crossfade,
-            };
-
-            let start = voice.output_offset_samples * channels;
-            let end = start + frames_to_process * channels;
-            let level = waveform.playback_gain();
-            let bounds = LoopBounds::new(is_looping, source_frames, loop_crossfade);
-            // Stretch mode off its own tempo keeps the pitch, and a realtime pitch shift moves
-            // it, through a realtime stretcher; when every stretcher is busy it falls back to
-            // resampling below.
-            let keeps_pitch = waveform.sample_mode == AudioSampleMode::Stretch;
-            let (pitch_scale, preserve_formants) =
-                waveform.realtime_pitch().unwrap_or((1.0, false));
-            let stretched = ((keeps_pitch && (playback_rate - 1.0).abs() > 1e-9)
-                || (pitch_scale - 1.0).abs() > 1e-9)
-                && stretch_pool.render(
-                    StretchKey::Clip(voice.track_id, voice.clip_id),
-                    content_start,
-                    StretchRate {
-                        step,
-                        feed_step: if keeps_pitch { pitch_step } else { step },
-                        pitch_scale,
-                        preserve_formants,
-                    },
-                    &StretchSource {
-                        buffer: source,
-                        channels: source_channels,
-                        bounds,
-                        frames: source_frames,
-                        is_looping,
-                    },
-                    frames_to_process,
-                    |index, frame| {
-                        let read_pos =
-                            bounds.read_pos(0.0, (content_start + index as u64) as f64 * step);
-                        let frame_gain = gain.at(index as u32, read_pos) * level;
-                        let at = start + index * channels;
-                        match output.get_mut(at..at + channels) {
-                            Some([left, right, ..]) => {
-                                *left += frame[0] * frame_gain;
-                                *right += frame[1] * frame_gain;
-                            }
-                            Some([mono]) => *mono += frame[0] * frame_gain,
-                            _ => {}
-                        }
-                    },
-                );
-            if stretched {
-                voice.source_read_index =
-                    bounds.read_pos(voice.source_read_index, frames_to_process as f64 * step);
-            } else {
-                render_audio_waveform(
-                    source,
-                    source_channels,
-                    &mut output[start..end],
-                    channels,
-                    &mut voice.source_read_index,
-                    step,
-                    is_looping,
-                    source_frames,
-                    loop_crossfade,
-                    level,
-                    gain,
-                );
-            }
-            voice.clip_elapsed_samples += frames_to_process as u32;
-            voice.output_offset_samples = 0;
         }
+    }
 
-        did_render
+    /// Returns every leased stretcher to the pool.
+    pub fn return_stretchers(&mut self) {
+        let Self {
+            active_oneshots,
+            stretch_pool,
+            ..
+        } = self;
+        for voice in active_oneshots.iter_mut() {
+            if let Some(lease) = voice.stretch.take() {
+                stretch_pool.give_back(lease);
+            }
+        }
+    }
+
+    /// Drops the audio voices, returning their stretchers first.
+    pub fn clear_oneshots(&mut self) {
+        self.return_stretchers();
+        self.active_oneshots.clear();
     }
 
     pub fn render_previews(&mut self, output: &mut [f32], channels: usize, sample_rate: u32) {
@@ -1249,6 +1362,7 @@ impl VoiceState {
             clip_loop_length,
             clip_content_offset: u64::from(clip_offset),
             crossfade,
+            stretch: None,
         });
     }
 
@@ -1481,7 +1595,13 @@ mod clip_gain_tests {
             120.0,
         );
         let mut output = vec![0.0; BLOCK * 2];
-        voices.render_oneshots(SAMPLE_RATE, track, &mut output, 2, 120.0);
+        super::render_oneshot_voices(
+            &mut voices.active_oneshots,
+            SAMPLE_RATE,
+            &mut output,
+            2,
+            120.0,
+        );
         output.chunks(2).map(|frame| frame[0]).collect()
     }
 
@@ -1657,9 +1777,17 @@ mod tempo_playback_tests {
                 bpm,
             );
             let mut block = vec![0.0; frames as usize * 2];
-            voices.render_oneshots(ENGINE_RATE, track, &mut block, 2, bpm);
+            let voice_count = voices.active_oneshots.len();
+            voices.lease_stretchers(0..voice_count, ENGINE_RATE, bpm, frames as usize);
+            super::render_oneshot_voices(
+                &mut voices.active_oneshots,
+                ENGINE_RATE,
+                &mut block,
+                2,
+                bpm,
+            );
             output.extend(block.chunks(2).map(|frame| frame[0]));
-            voices.active_oneshots.clear();
+            voices.clear_oneshots();
             voices.stretch_pool.end_block();
             start += frames;
         }

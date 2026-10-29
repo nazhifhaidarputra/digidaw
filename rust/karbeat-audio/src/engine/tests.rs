@@ -953,6 +953,105 @@ impl karbeat_plugin_api::traits::AudioPlugin for AuxProbe {
     }
 }
 
+/// Effect that panics on every block, standing in for a crashing plugin.
+struct PanicEffect;
+
+impl karbeat_plugin_api::traits::AudioPlugin for PanicEffect {
+    test_effect_boilerplate!();
+    #[allow(clippy::panic, reason = "the test plugin crashes on purpose")]
+    fn process(
+        &mut self,
+        _: &mut karbeat_plugin_api::types::AudioBuffers,
+        _: &karbeat_plugin_api::types::ProcessContext,
+    ) {
+        panic!("test plugin crashed");
+    }
+}
+
+/// Two tone tracks into master on `workers` threads; the second one's chain ends in a crashing
+/// plugin when `crash`, or the track is muted otherwise.
+fn render_with_crashing_track(workers: usize, crash: bool) -> Vec<f32> {
+    let (_, command_consumer) = RingBuffer::<AudioCommand>::new(32);
+    let (position_producer, _) = RingBuffer::<TransportFeedback>::new(32);
+    let (feedback_producer, _) = RingBuffer::<AudioFeedback>::new(32);
+    let (telemetry_sender, _) = mpsc::sync_channel::<TelemetryRegistration>(32);
+    let mut engine = AudioEngine::new(
+        command_consumer,
+        position_producer,
+        feedback_producer,
+        48_000,
+        2,
+        120.0,
+        64,
+        AudioEngineTelemetry::new_for_export(),
+        telemetry_sender,
+    );
+    engine.set_dsp_workers(workers);
+    let mut app_state = ApplicationState::default();
+    let tracks: Vec<_> = ["Healthy", "Crashing"]
+        .into_iter()
+        .map(|name| {
+            app_state.tracks.insert_with_key(|id| {
+                AudioTrack::new(id, name, Color::new_from_rgb(0, 0, 0), TrackType::Audio)
+            })
+        })
+        .collect();
+    engine.process_command(AudioCommand::ReplaceFullGraph {
+        graph: AudioGraphState::from(&app_state),
+    });
+    engine.process_command(AudioCommand::UpdateRouting {
+        routing: tracks
+            .iter()
+            .map(|&track| {
+                karbeat_core::core::project::RoutingConnection::new(
+                    karbeat_core::core::project::RoutingNode::Track(track),
+                    karbeat_core::core::project::RoutingNode::Master,
+                )
+            })
+            .collect(),
+    });
+    for (index, &track) in tracks.iter().enumerate() {
+        engine.process_command(AudioCommand::InstallEffect {
+            target: EffectTarget::Track(track),
+            effect_id: karbeat_core::shared::EffectId::from(index as u32 * 2 + 1),
+            registry_id: 0,
+            plugin: Box::new(ToneEffect),
+            telemetry: None,
+        });
+        // The tone effects have no clips to render, so a ringing tail keeps them processing.
+        engine.routing.track_tails.insert(track, u32::MAX);
+    }
+    if crash {
+        engine.process_command(AudioCommand::InstallEffect {
+            target: EffectTarget::Track(tracks[1]),
+            effect_id: karbeat_core::shared::EffectId::from(4),
+            registry_id: 0,
+            plugin: Box::new(PanicEffect),
+            telemetry: None,
+        });
+    } else {
+        let mut muted = crate::engine::AudioMixerChannelValues::default();
+        muted.mute = true;
+        engine.mixer_state.track_channels.insert(tracks[1], muted);
+    }
+    let mut output = Vec::new();
+    let mut block = vec![0.0_f32; 128];
+    for _ in 0..8 {
+        engine.process(&mut block);
+        output.extend_from_slice(&block);
+    }
+    output
+}
+
+#[test]
+fn a_crashing_plugin_silences_its_track_without_stalling_the_pool() {
+    let expected = render_with_crashing_track(1, false);
+    assert!(expected.iter().any(|sample| sample.abs() > 0.1));
+    for workers in [1, 2] {
+        assert_eq!(render_with_crashing_track(workers, true), expected);
+    }
+}
+
 /// Renders a tone track through a bus into the sidechain of a probe effect on a silent track,
 /// with the source fader pulled down, and returns the sidechain energy the probe received.
 fn render_bus_keyed_sidechain(tap: karbeat_core::core::project::RoutingTap) -> f32 {

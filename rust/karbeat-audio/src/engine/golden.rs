@@ -716,6 +716,57 @@ fn playing_projects_render_without_allocating() {
     }
 }
 
+/// The worker pool renders every scenario sample for sample like a single thread, and the
+/// coordinating thread still never allocates.
+#[test]
+fn parallel_renders_match_the_serial_render() {
+    let scenarios: [(&str, fn() -> Scenario); 11] = [
+        ("clip_static", clip_static),
+        ("clip_resampled_loop", clip_resampled_loop),
+        ("clip_tempo_modes", clip_tempo_modes),
+        ("synth_chain", synth_chain),
+        ("routing_pdc", routing_pdc),
+        ("fader_moves", fader_moves),
+        ("channel_switches", channel_switches),
+        ("transport_edges", transport_edges),
+        ("pattern_mode", pattern_mode),
+        ("hosted_idle", hosted_idle),
+        ("bounce", bounce),
+    ];
+    for (name, build) in scenarios {
+        for block in [64, 441] {
+            let serial = build().render(block);
+            for workers in [2, 4] {
+                let mut scenario = build();
+                scenario.engine.set_dsp_workers(workers);
+                assert_eq!(scenario.engine.dsp_workers(), workers);
+                let parallel = scenario.render(block);
+                let first_difference = serial
+                    .iter()
+                    .zip(&parallel)
+                    .position(|(serial, parallel)| serial.to_bits() != parallel.to_bits());
+                assert_eq!(
+                    first_difference, None,
+                    "{name} block {block} on {workers} workers differs from the serial render"
+                );
+            }
+        }
+    }
+
+    let _serial = ALLOCATION_TESTS.lock().unwrap();
+    for block in BLOCKS {
+        let mut scenario = channel_switches_without_effects();
+        scenario.engine.set_dsp_workers(2);
+        ALLOCATIONS.store(0, Ordering::Relaxed);
+        scenario.render_watched(block, 1_024);
+        assert_eq!(
+            ALLOCATIONS.load(Ordering::Relaxed),
+            0,
+            "the coordinator allocated while rendering blocks of {block} on 2 workers"
+        );
+    }
+}
+
 /// Mute, solo and phase switches on two clip tracks, with no plugin in the project.
 fn channel_switches_without_effects() -> Scenario {
     let mut app = project();

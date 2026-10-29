@@ -41,15 +41,9 @@ pub struct OutputEpoch {
 /// loop.
 pub struct OutputClock {
     origin: Instant,
-    /// Odd while the callback is writing `first_frame`, `frames` and `playback_at_nanos`.
-    sequence: AtomicU64,
-    /// Device frames the stream consumed before the latest callback.
-    first_frame: AtomicU64,
-    /// Device frames the latest callback consumed, not counting underrun silence.
-    frames: AtomicU64,
-    /// When the latest callback's first frame reaches the hardware, in nanoseconds since
-    /// `origin`.
-    playback_at_nanos: AtomicU64,
+    /// The latest callback: device frames consumed before it, frames it consumed (not
+    /// counting underrun silence), and when its first frame reaches the hardware.
+    latest: CallbackRecord,
     /// Device frames the stream consumed in total.
     consumed_frames: AtomicU64,
     /// Whether the attached stream has run a callback yet.
@@ -67,10 +61,7 @@ impl OutputClock {
     pub fn new() -> Self {
         Self {
             origin: Instant::now(),
-            sequence: AtomicU64::new(0),
-            first_frame: AtomicU64::new(0),
-            frames: AtomicU64::new(0),
-            playback_at_nanos: AtomicU64::new(0),
+            latest: CallbackRecord::default(),
             consumed_frames: AtomicU64::new(0),
             started: AtomicBool::new(false),
             epoch: Mutex::new(None),
@@ -94,20 +85,9 @@ impl OutputClock {
     /// frame reaches the hardware `playback_delay` later. Real-time safe.
     pub fn record_callback(&self, now: Instant, frames: usize, playback_delay: Duration) {
         let first_frame = self.consumed_frames.load(Ordering::Relaxed);
-        let playback_at = self
-            .nanos_since_origin(now)
+        let playback_at = nanos_since(self.origin, now)
             .saturating_add(u64::try_from(playback_delay.as_nanos()).unwrap_or(u64::MAX));
-
-        let sequence = self.sequence.load(Ordering::Relaxed);
-        self.sequence
-            .store(sequence.wrapping_add(1), Ordering::Relaxed);
-        fence(Ordering::Release);
-        self.first_frame.store(first_frame, Ordering::Relaxed);
-        self.frames.store(frames as u64, Ordering::Relaxed);
-        self.playback_at_nanos.store(playback_at, Ordering::Relaxed);
-        self.sequence
-            .store(sequence.wrapping_add(2), Ordering::Release);
-
+        self.latest.publish(first_frame, frames as u64, playback_at);
         self.consumed_frames
             .store(first_frame + frames as u64, Ordering::Relaxed);
         self.started.store(true, Ordering::Release);
@@ -119,11 +99,11 @@ impl OutputClock {
         if !self.started.load(Ordering::Acquire) || epoch.device_rate == 0 {
             return None;
         }
-        let (first_frame, frames, playback_at) = self.latest_callback();
+        let (first_frame, frames, playback_at) = self.latest.read();
 
         // Frames before the latest callback's first one are still playing until it lands;
         // frames it has not received yet (an underrun) cannot be heard.
-        let elapsed_nanos = i128::from(self.nanos_since_origin(now)) - i128::from(playback_at);
+        let elapsed_nanos = i128::from(nanos_since(self.origin, now)) - i128::from(playback_at);
         let elapsed_frames = elapsed_nanos * i128::from(epoch.device_rate) / 1_000_000_000;
         let heard_device = (i128::from(first_frame) + elapsed_frames)
             .clamp(0, i128::from(first_frame + frames)) as u64;
@@ -133,8 +113,35 @@ impl OutputClock {
             u128::from(heard_bridged) * u128::from(epoch.dsp_rate) / u128::from(epoch.device_rate);
         Some(epoch.engine_frame + u64::try_from(heard_engine).unwrap_or(u64::MAX))
     }
+}
 
-    fn latest_callback(&self) -> (u64, u64, u64) {
+/// The latest device callback, published with a seqlock so the callback never waits: the
+/// device frames before it, its frame count, and when its first frame met the hardware, in
+/// nanoseconds since the clock's origin.
+#[derive(Default)]
+struct CallbackRecord {
+    /// Odd while the callback is writing.
+    sequence: AtomicU64,
+    first_frame: AtomicU64,
+    frames: AtomicU64,
+    at_nanos: AtomicU64,
+}
+
+impl CallbackRecord {
+    /// Real-time safe; only the device callback publishes.
+    fn publish(&self, first_frame: u64, frames: u64, at_nanos: u64) {
+        let sequence = self.sequence.load(Ordering::Relaxed);
+        self.sequence
+            .store(sequence.wrapping_add(1), Ordering::Relaxed);
+        fence(Ordering::Release);
+        self.first_frame.store(first_frame, Ordering::Relaxed);
+        self.frames.store(frames, Ordering::Relaxed);
+        self.at_nanos.store(at_nanos, Ordering::Relaxed);
+        self.sequence
+            .store(sequence.wrapping_add(2), Ordering::Release);
+    }
+
+    fn read(&self) -> (u64, u64, u64) {
         loop {
             let before = self.sequence.load(Ordering::Acquire);
             if before % 2 == 1 {
@@ -144,7 +151,7 @@ impl OutputClock {
             let values = (
                 self.first_frame.load(Ordering::Relaxed),
                 self.frames.load(Ordering::Relaxed),
-                self.playback_at_nanos.load(Ordering::Relaxed),
+                self.at_nanos.load(Ordering::Relaxed),
             );
             fence(Ordering::Acquire);
             if self.sequence.load(Ordering::Relaxed) == before {
@@ -152,9 +159,69 @@ impl OutputClock {
             }
         }
     }
+}
 
-    fn nanos_since_origin(&self, instant: Instant) -> u64 {
-        u64::try_from(instant.saturating_duration_since(self.origin).as_nanos()).unwrap_or(u64::MAX)
+fn nanos_since(origin: Instant, instant: Instant) -> u64 {
+    u64::try_from(instant.saturating_duration_since(origin).as_nanos()).unwrap_or(u64::MAX)
+}
+
+/// When device input was captured, published by the input callback, so a recording can be
+/// placed on the timeline where it was played.
+pub struct InputClock {
+    origin: Instant,
+    /// The latest callback: frames captured before it, frames it delivered, and when its
+    /// first frame was captured.
+    latest: CallbackRecord,
+    /// Frames captured in total.
+    captured_frames: AtomicU64,
+    started: AtomicBool,
+}
+
+impl Default for InputClock {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl InputClock {
+    pub fn new() -> Self {
+        Self {
+            origin: Instant::now(),
+            latest: CallbackRecord::default(),
+            captured_frames: AtomicU64::new(0),
+            started: AtomicBool::new(false),
+        }
+    }
+
+    /// Starts counting a new input stream. Call before the stream runs its first callback.
+    pub fn reset(&self) {
+        self.started.store(false, Ordering::Release);
+        self.captured_frames.store(0, Ordering::Relaxed);
+    }
+
+    /// Records an input callback at `now` that delivered `frames` frames, the first of which
+    /// was captured `capture_delay` earlier. Real-time safe.
+    pub fn record_callback(&self, now: Instant, frames: usize, capture_delay: Duration) {
+        let first_frame = self.captured_frames.load(Ordering::Relaxed);
+        let captured_at = nanos_since(self.origin, now)
+            .saturating_sub(u64::try_from(capture_delay.as_nanos()).unwrap_or(u64::MAX));
+        self.latest.publish(first_frame, frames as u64, captured_at);
+        self.captured_frames
+            .store(first_frame + frames as u64, Ordering::Relaxed);
+        self.started.store(true, Ordering::Release);
+    }
+
+    /// When input frame `frame` of the stream was, or will be, captured at `device_rate`, or
+    /// `None` before the stream's first callback.
+    pub fn captured_at(&self, frame: u64, device_rate: u32) -> Option<Instant> {
+        if !self.started.load(Ordering::Acquire) || device_rate == 0 {
+            return None;
+        }
+        let (first_frame, _, captured_at) = self.latest.read();
+        let offset_nanos =
+            (i128::from(frame) - i128::from(first_frame)) * 1_000_000_000 / i128::from(device_rate);
+        let nanos = (i128::from(captured_at) + offset_nanos).max(0) as u64;
+        Some(self.origin + Duration::from_nanos(nanos))
     }
 }
 
@@ -430,5 +497,21 @@ mod tests {
         };
         advance_to_heard(&mut stopped, 10_500, None);
         assert_eq!(stopped.samples, 10_000);
+    }
+
+    #[test]
+    fn input_frames_map_to_their_capture_time() {
+        let clock = InputClock::new();
+        let origin = clock.origin;
+        assert_eq!(clock.captured_at(0, 48_000), None);
+        // The first callback delivers 480 frames captured 10 ms before it ran.
+        clock.record_callback(after(origin, 30), 480, Duration::from_millis(10));
+        assert_eq!(clock.captured_at(0, 48_000), Some(after(origin, 20)));
+        // The second delivers the next 480, each a 48th of a millisecond later.
+        clock.record_callback(after(origin, 40), 480, Duration::from_millis(10));
+        assert_eq!(clock.captured_at(480, 48_000), Some(after(origin, 30)));
+        assert_eq!(clock.captured_at(960, 48_000), Some(after(origin, 40)));
+        clock.reset();
+        assert_eq!(clock.captured_at(0, 48_000), None);
     }
 }

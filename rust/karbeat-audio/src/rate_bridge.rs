@@ -22,6 +22,8 @@ pub struct DeviceRateBridge {
     output: Vec<f32>,
     output_len: usize,
     maximum_output_samples: usize,
+    /// Frames each call takes in passthrough, and the largest input a call takes otherwise.
+    maximum_input_frames: usize,
     indexing: Indexing,
 }
 
@@ -32,10 +34,44 @@ impl DeviceRateBridge {
         channels: usize,
         maximum_input_frames: usize,
     ) -> anyhow::Result<Self> {
+        Self::build(
+            input_rate,
+            output_rate,
+            channels,
+            maximum_input_frames,
+            FixedSync::Input,
+        )
+    }
+
+    /// A bridge whose every call produces exactly `output_frames` frames, taking as many input
+    /// frames as [`Self::input_frames_next`] asks for. Used to bring device input to the DSP
+    /// rate one engine block at a time.
+    pub fn with_fixed_output(
+        input_rate: u32,
+        output_rate: u32,
+        channels: usize,
+        output_frames: usize,
+    ) -> anyhow::Result<Self> {
+        Self::build(
+            input_rate,
+            output_rate,
+            channels,
+            output_frames,
+            FixedSync::Output,
+        )
+    }
+
+    fn build(
+        input_rate: u32,
+        output_rate: u32,
+        channels: usize,
+        chunk_frames: usize,
+        fixed: FixedSync,
+    ) -> anyhow::Result<Self> {
         anyhow::ensure!(input_rate > 0, "DSP sample rate must be positive");
         anyhow::ensure!(output_rate > 0, "Device sample rate must be positive");
         anyhow::ensure!(channels > 0, "Channel count must be positive");
-        anyhow::ensure!(maximum_input_frames > 0, "DSP block size must be positive");
+        anyhow::ensure!(chunk_frames > 0, "DSP block size must be positive");
 
         let resampler = if input_rate == output_rate {
             None
@@ -44,9 +80,9 @@ impl DeviceRateBridge {
                 Fft::<f32>::new(
                     input_rate as usize,
                     output_rate as usize,
-                    maximum_input_frames,
+                    chunk_frames,
                     channels,
-                    FixedSync::Input,
+                    fixed,
                 )
                 .map_err(|e| anyhow::anyhow!("failed to build device rate bridge: {e}"))?,
             )
@@ -55,7 +91,10 @@ impl DeviceRateBridge {
         let max_output_frames = resampler
             .as_ref()
             .map(|r| r.output_frames_max())
-            .unwrap_or(maximum_input_frames);
+            .unwrap_or(chunk_frames);
+        let maximum_input_frames = resampler
+            .as_ref()
+            .map_or(chunk_frames, |r| r.input_frames_max());
 
         let maximum_output_samples = max_output_frames * channels;
         Ok(Self {
@@ -68,6 +107,7 @@ impl DeviceRateBridge {
             },
             output_len: 0,
             maximum_output_samples,
+            maximum_input_frames,
             indexing: Indexing::new(),
         })
     }
@@ -77,6 +117,18 @@ impl DeviceRateBridge {
     /// actually produces.
     pub fn maximum_output_samples(&self) -> usize {
         self.maximum_output_samples
+    }
+
+    /// Most input frames one call takes.
+    pub fn maximum_input_frames(&self) -> usize {
+        self.maximum_input_frames
+    }
+
+    /// Input frames the next call takes.
+    pub fn input_frames_next(&self) -> usize {
+        self.resampler
+            .as_ref()
+            .map_or(self.maximum_input_frames, |r| r.input_frames_next())
     }
 
     /// Output frames by which the bridge delays its input; zero in passthrough.
@@ -173,6 +225,21 @@ mod tests {
             assert!(output.len() <= capacity);
         }
         assert_eq!(bridge.maximum_output_samples(), capacity);
+    }
+
+    #[test]
+    fn fixed_output_bridges_produce_whole_blocks() {
+        let mut bridge = DeviceRateBridge::with_fixed_output(44_100, 48_000, 2, 256).unwrap();
+        let mut produced = 0;
+        for _ in 0..20 {
+            let input = vec![0.1; bridge.input_frames_next() * 2];
+            let output = bridge.process(&input);
+            assert_eq!(output.len(), 256 * 2);
+            produced += output.len() / 2;
+        }
+        assert_eq!(produced, 20 * 256);
+        let passthrough = DeviceRateBridge::with_fixed_output(48_000, 48_000, 2, 256).unwrap();
+        assert_eq!(passthrough.input_frames_next(), 256);
     }
 
     #[test]

@@ -401,6 +401,14 @@ pub enum AudioCommand {
         id: AutomationId,
     },
 
+    /// Sets the device input a track listens to, or clears it with `None`.
+    SetTrackInput {
+        /// Track that listens.
+        track_id: TrackId,
+        /// Input channels and whether they are heard through the track.
+        input: Option<crate::engine::TrackInput>,
+    },
+
     /// Update audio engine config (sample_rate, buffer_size).
     /// Sent when the audio device is reconfigured at runtime.
     UpdateAudioConfig {

@@ -1,46 +1,21 @@
 use hashbrown::HashMap;
 
-use crate::engine::runtime::consts::MAX_ENGINE_CHANNELS;
 use karbeat_core::{core::project::SidechainRoute, shared::BusId};
 
 pub(super) struct RenderWorkspace {
+    /// Sized for one block of interleaved samples; its capacity sizes every node buffer.
     pub mix_buffer: Vec<f32>,
     pub bus_buffers: HashMap<BusId, Vec<f32>>,
     pub aux_buffers: HashMap<SidechainRoute, Vec<f32>>,
-    /// Channel signal after effects and before fader/pan, for pre-fader connections.
-    pub pre_fader_buffer: Vec<f32>,
-    /// Scratch for delaying one routed connection.
-    pub edge_buffer: Vec<f32>,
-
-    pub channel_buffers_in: Vec<Vec<f32>>,
-    pub channel_buffers_out: Vec<Vec<f32>>,
-    pub aux_channel_buffers: Vec<Vec<f32>>,
 }
 
 impl RenderWorkspace {
     pub fn new(max_frames: usize, num_channels: u16) -> Self {
-        let max_plugin_frames = max_frames.max(4096);
-        let max_plugin_channels = num_channels.min(MAX_ENGINE_CHANNELS) as usize;
-        let interleaved_samples = max_frames * max_plugin_channels;
-
+        let channels = num_channels.min(super::runtime::consts::MAX_ENGINE_CHANNELS) as usize;
         Self {
-            mix_buffer: Vec::with_capacity(interleaved_samples),
+            mix_buffer: Vec::with_capacity(max_frames * channels),
             bus_buffers: HashMap::new(),
             aux_buffers: HashMap::new(),
-            pre_fader_buffer: Vec::with_capacity(interleaved_samples),
-            edge_buffer: Vec::with_capacity(interleaved_samples),
-
-            channel_buffers_in: (0..max_plugin_channels)
-                .map(|_| vec![0.0; max_plugin_frames])
-                .collect(),
-
-            channel_buffers_out: (0..max_plugin_channels)
-                .map(|_| vec![0.0; max_plugin_frames])
-                .collect(),
-
-            aux_channel_buffers: (0..max_plugin_channels)
-                .map(|_| vec![0.0; max_plugin_frames])
-                .collect(),
         }
     }
 
