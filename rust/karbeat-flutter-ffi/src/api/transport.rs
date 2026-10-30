@@ -3,7 +3,7 @@
 //! BPM is also persisted in ApplicationState for project serialization.
 
 use flutter_rust_bridge::frb;
-use karbeat_core::audio::engine::PlaybackMode;
+use karbeat_audio::engine::PlaybackMode;
 use karbeat_core_api::transport_api;
 
 use crate::api::context::DawContext;
@@ -62,10 +62,13 @@ pub fn set_looping(ctx: &DawContext, val: bool) -> Result<(), String> {
 
 /// set the BPM of the transport.
 /// writes to both ApplicationState (for serialization) and AudioCommand (for audio thread)
-pub fn set_bpm(ctx: &DawContext, val: f32) -> Result<(), String> {
-    transport_api::set_bpm(&mut ctx.project_write(), val).map_err(|e| e.to_string())?;
+///
+/// Returns whether clips of tempo-following audio were rescaled, so the UI should refetch them.
+pub fn set_bpm(ctx: &DawContext, val: f32) -> Result<bool, String> {
+    let rescaled =
+        transport_api::set_bpm(&mut ctx.project_write(), val).map_err(|e| e.to_string())?;
     crate::api::audio_analysis::schedule_source_renders(ctx, true);
-    Ok(())
+    Ok(rescaled)
 }
 
 /// stop the song playback and reset the playhead to 0
@@ -111,4 +114,9 @@ pub fn set_pattern_loop(
 
 pub fn switch_pattern_generator(ctx: &DawContext, generator_id: u64) {
     transport_api::switch_pattern_generator(&mut ctx.project_write(), generator_id.into());
+}
+
+/// Retarget pattern playback at another pattern without changing whether it is playing.
+pub fn switch_pattern(ctx: &DawContext, pattern_id: u64) {
+    transport_api::switch_pattern(&mut ctx.project_write(), pattern_id.into());
 }

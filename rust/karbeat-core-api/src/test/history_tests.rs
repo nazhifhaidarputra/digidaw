@@ -8,13 +8,15 @@ mod tests {
 
     use crate as api;
     use crate::test::helpers::make_seeded_ctx;
-    use crate::test::helpers::{karbeatzer_v2_registry_id, param_eq_registry_id};
+    use crate::test::helpers::{
+        karbeatzer_v2_registry_id, my_retro_registry_id, param_eq_registry_id,
+    };
     use crate::{
         automation_api, clip_api, mixer_api, note_api, pattern_api, project_api, track_api,
         transport_api,
     };
-    use karbeat_core::commands::{EffectTarget, MixerChannelTarget};
-    use karbeat_core::context::DawContext;
+    use karbeat_audio::commands::{EffectTarget, MixerChannelTarget};
+    use karbeat_audio::context::DawContext;
     use karbeat_core::core::history::PluginSync;
     use karbeat_core::core::project::{
         AutomationLane, ModulationSource,
@@ -606,6 +608,77 @@ mod tests {
     }
 
     #[test]
+    fn replacing_a_generator_keeps_the_track_and_round_trips() {
+        let (mut ctx, _, midi, _) = make_seeded_ctx();
+        let previous = ctx.app_state.tracks[midi]
+            .generator
+            .as_ref()
+            .expect("generator")
+            .id;
+        let clips = ctx.app_state.tracks[midi].clips.clone();
+        let generator_of = |ctx: &DawContext| {
+            ctx.app_state.tracks[midi]
+                .generator
+                .as_ref()
+                .map(|generator| generator.id)
+        };
+
+        assert_round_trip(
+            &mut ctx,
+            "Change Instrument",
+            |ctx| {
+                track_api::replace_track_generator(ctx, midi, my_retro_registry_id())
+                    .expect("replace generator");
+            },
+            |ctx| (structure(ctx), generator_of(ctx)),
+        );
+
+        let replacement = generator_of(&ctx).expect("replacement");
+        assert_ne!(replacement, previous);
+        assert!(!ctx.app_state.generator_pool.contains_key(previous));
+        assert_eq!(ctx.app_state.tracks[midi].clips, clips);
+
+        let sync = ctx.history.undo(&mut ctx.app_state).expect("undo");
+        assert!(sync.plugins.contains(&PluginSync::InstallGenerator {
+            generator_id: previous,
+            track_id: midi,
+        }));
+        assert!(sync.plugins.contains(&PluginSync::RemoveGenerator {
+            generator_id: replacement,
+        }));
+    }
+
+    #[test]
+    fn replacing_a_generator_removes_its_automation() {
+        let (mut ctx, _, midi, _) = make_seeded_ctx();
+        let generator = ctx.app_state.tracks[midi]
+            .generator
+            .as_ref()
+            .expect("generator")
+            .id;
+        let param_id = ctx
+            .plugin_registry
+            .get_plugin_parameter_specs_by_id(karbeatzer_v2_registry_id())
+            .and_then(|specs| specs.first().map(|spec| spec.id))
+            .expect("generator parameter");
+        automation_api::add_automation_lane(
+            &mut ctx,
+            AutomationTarget::Generator {
+                generator_id: generator,
+                param_id,
+            },
+            "Cutoff",
+            None,
+        )
+        .expect("lane");
+        assert!(!ctx.app_state.automation_pool.is_empty());
+
+        track_api::replace_track_generator(&mut ctx, midi, my_retro_registry_id())
+            .expect("replace generator");
+        assert!(ctx.app_state.automation_pool.is_empty());
+    }
+
+    #[test]
     fn buses_round_trip() {
         let (mut ctx, ..) = make_seeded_ctx();
         assert_round_trip(
@@ -638,7 +711,7 @@ mod tests {
         let (mut ctx, audio, ..) = make_seeded_ctx();
         // Bypass changes are only accepted with an engine queue attached.
         let (producer, _engine) =
-            rtrb::RingBuffer::<karbeat_core::commands::AudioCommand>::new(4096);
+            rtrb::RingBuffer::<karbeat_audio::commands::AudioCommand>::new(4096);
         *ctx.command_sender.lock() = Some(producer);
         let target = MixerChannelTarget::Track(audio);
         assert_round_trip(

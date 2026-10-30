@@ -1,4 +1,4 @@
-//! Non-blocking forwarding of Rust `log` records to the Flutter log viewer.
+//! Non-blocking forwarding of Rust `tracing` events to the Flutter log viewer.
 //!
 //! Logging call sites only perform a bounded `try_send`: they never wait on
 //! Flutter, on the drain thread, or on any lock owned by this module. A
@@ -12,8 +12,14 @@
 
 use std::cell::Cell;
 use std::collections::VecDeque;
+use std::fmt::{self, Write as _};
 use std::sync::{Arc, OnceLock};
 use std::time::{SystemTime, UNIX_EPOCH};
+
+use tracing::field::{Field, Visit};
+use tracing_log::NormalizeEvent;
+use tracing_subscriber::Layer;
+use tracing_subscriber::layer::Context;
 
 use crate::api::logging::{RustLogEntryDto, RustLogLevel};
 use crate::sync::atomic::{AtomicU64, Ordering};
@@ -41,7 +47,7 @@ pub(crate) trait LogBatchSink: Send {
     fn send_batch(&self, batch: &[RustLogEntryDto]) -> bool;
 }
 
-/// Starts the process-wide bridge used by [`KarbeatLogger`].
+/// Starts the process-wide bridge used by [`LogBridgeLayer`].
 pub(crate) fn install() -> std::io::Result<&'static LogBridge> {
     if let Some(bridge) = LOG_BRIDGE.get() {
         return Ok(bridge);
@@ -91,17 +97,17 @@ impl LogBridge {
         })
     }
 
-    /// Queues `record` without blocking; records are dropped (and counted)
-    /// when the queue is full.
-    pub(crate) fn push(&self, record: &log::Record<'_>) {
+    /// Queues an entry without blocking; entries are dropped (and counted)
+    /// when the queue is full. `message` only runs when the entry is forwarded.
+    fn push(&self, level: RustLogLevel, target: &str, message: impl FnOnce() -> String) {
         if FORWARDING.with(Cell::get) {
             return;
         }
         let entry = RustLogEntryDto {
             timestamp_millis: now_millis(),
-            level: record.level().into(),
-            target: record.target().to_owned(),
-            message: record.args().to_string(),
+            level,
+            target: target.to_owned(),
+            message: message(),
         };
         match self.sender.try_send(entry) {
             Ok(()) => {}
@@ -214,40 +220,66 @@ fn now_millis() -> i64 {
         .unwrap_or_default()
 }
 
-/// Process logger writing to stdout through `env_logger` and forwarding every
-/// accepted record to Flutter through the bridge.
-pub(crate) struct KarbeatLogger {
-    stdout: env_logger::Logger,
-    bridge: Option<&'static LogBridge>,
+/// Subscriber layer forwarding every event accepted by the process filter to
+/// Flutter through the bridge.
+pub(crate) struct LogBridgeLayer {
+    bridge: &'static LogBridge,
 }
 
-impl KarbeatLogger {
-    pub(crate) fn new(stdout: env_logger::Logger, bridge: Option<&'static LogBridge>) -> Self {
-        Self { stdout, bridge }
-    }
-
-    pub(crate) fn filter(&self) -> log::LevelFilter {
-        self.stdout.filter()
+impl LogBridgeLayer {
+    pub(crate) fn new(bridge: &'static LogBridge) -> Self {
+        Self { bridge }
     }
 }
 
-impl log::Log for KarbeatLogger {
-    fn enabled(&self, metadata: &log::Metadata<'_>) -> bool {
-        self.stdout.enabled(metadata)
+impl<S: tracing::Subscriber> Layer<S> for LogBridgeLayer {
+    fn on_event(&self, event: &tracing::Event<'_>, _context: Context<'_, S>) {
+        push_event(self.bridge, event);
     }
+}
 
-    fn log(&self, record: &log::Record<'_>) {
-        if !self.stdout.matches(record) {
-            return;
+fn push_event(bridge: &LogBridge, event: &tracing::Event<'_>) {
+    // Records bridged from the `log` crate carry their real target in fields.
+    let normalized = event.normalized_metadata();
+    let metadata = normalized.as_ref().unwrap_or_else(|| event.metadata());
+    bridge.push((*metadata.level()).into(), metadata.target(), || {
+        let mut visitor = MessageVisitor::default();
+        event.record(&mut visitor);
+        visitor.finish()
+    });
+}
+
+/// Renders an event as its message followed by any structured `name=value` fields.
+#[derive(Default)]
+struct MessageVisitor {
+    message: String,
+    fields: String,
+}
+
+impl MessageVisitor {
+    fn finish(mut self) -> String {
+        if self.message.is_empty() {
+            return self.fields;
         }
-        self.stdout.log(record);
-        if let Some(bridge) = self.bridge {
-            bridge.push(record);
+        if !self.fields.is_empty() {
+            self.message.push(' ');
+            self.message.push_str(&self.fields);
         }
+        self.message
     }
+}
 
-    fn flush(&self) {
-        self.stdout.flush();
+impl Visit for MessageVisitor {
+    fn record_debug(&mut self, field: &Field, value: &dyn fmt::Debug) {
+        let written = if field.name() == "message" {
+            write!(self.message, "{value:?}")
+        } else if field.name().starts_with("log.") {
+            Ok(())
+        } else {
+            let separator = if self.fields.is_empty() { "" } else { " " };
+            write!(self.fields, "{separator}{}={value:?}", field.name())
+        };
+        debug_assert!(written.is_ok(), "writing to a String cannot fail");
     }
 }
 
@@ -258,6 +290,9 @@ impl log::Log for KarbeatLogger {
     reason = "log bridge tests fail immediately when the drain thread cannot start"
 )]
 mod tests {
+    use tracing_log::log;
+    use tracing_subscriber::layer::SubscriberExt as _;
+
     use super::*;
     use crate::sync::{atomic::AtomicBool, check_random};
 
@@ -286,14 +321,28 @@ mod tests {
         (Box::new(sink), receiver, open)
     }
 
-    fn log(bridge: &LogBridge, level: log::Level, message: &str) {
-        bridge.push(
-            &log::Record::builder()
-                .level(level)
-                .target("karbeat::test")
-                .args(format_args!("{message}"))
-                .build(),
-        );
+    fn log(bridge: &LogBridge, level: RustLogLevel, message: &str) {
+        bridge.push(level, "karbeat::test", || message.to_owned());
+    }
+
+    /// Forwards events to an owned bridge, unlike the production layer's `'static` one.
+    struct OwnedBridgeLayer(Arc<LogBridge>);
+
+    impl<S: tracing::Subscriber> Layer<S> for OwnedBridgeLayer {
+        fn on_event(&self, event: &tracing::Event<'_>, _context: Context<'_, S>) {
+            push_event(&self.0, event);
+        }
+    }
+
+    /// Runs `emit` under a subscriber holding only a bridge layer, then returns what it forwarded.
+    fn capture(emit: impl FnOnce()) -> Vec<RustLogEntryDto> {
+        let bridge = Arc::new(LogBridge::start(16, 16, 4).unwrap());
+        let (sink, receiver, _open) = sink();
+        bridge.attach(sink);
+        let subscriber = tracing_subscriber::registry().with(OwnedBridgeLayer(Arc::clone(&bridge)));
+        tracing::subscriber::with_default(subscriber, emit);
+        drop(bridge);
+        receiver.iter().flatten().collect()
     }
 
     /// Drops the bridge so the drain thread flushes its queue and releases the sink, then
@@ -321,13 +370,13 @@ mod tests {
         check_random(
             || {
                 let bridge = LogBridge::start(16, 16, 4).unwrap();
-                log(&bridge, log::Level::Info, "first");
-                log(&bridge, log::Level::Warn, "second");
+                log(&bridge, RustLogLevel::Info, "first");
+                log(&bridge, RustLogLevel::Warn, "second");
                 wait_until(&bridge, |state| state.backlog.len() >= 2);
 
                 let (sink, receiver, _open) = sink();
                 bridge.attach(sink);
-                log(&bridge, log::Level::Error, "third");
+                log(&bridge, RustLogLevel::Error, "third");
 
                 assert_eq!(
                     close_and_collect(bridge, &receiver),
@@ -346,7 +395,7 @@ mod tests {
                 let (first_sink, _first_receiver, first_open) = sink();
                 bridge.attach(first_sink);
                 first_open.store(false, Ordering::SeqCst);
-                log(&bridge, log::Level::Info, "kept");
+                log(&bridge, RustLogLevel::Info, "kept");
                 wait_until(&bridge, |state| state.backlog.len() >= 1);
 
                 let (second_sink, second_receiver, _open) = sink();
@@ -363,9 +412,9 @@ mod tests {
         check_random(
             || {
                 let bridge = LogBridge::start(16, 2, 1).unwrap();
-                log(&bridge, log::Level::Info, "a");
-                log(&bridge, log::Level::Info, "b");
-                log(&bridge, log::Level::Info, "c");
+                log(&bridge, RustLogLevel::Info, "a");
+                log(&bridge, RustLogLevel::Info, "b");
+                log(&bridge, RustLogLevel::Info, "c");
                 wait_until(&bridge, |state| state.overflowed == 1);
 
                 let (sink, receiver, _open) = sink();
@@ -385,8 +434,8 @@ mod tests {
         check_random(
             || {
                 let bridge = LogBridge::start(16, 16, 4).unwrap();
-                forwarding(|| log(&bridge, log::Level::Info, "re-entrant"));
-                log(&bridge, log::Level::Info, "normal");
+                forwarding(|| log(&bridge, RustLogLevel::Info, "re-entrant"));
+                log(&bridge, RustLogLevel::Info, "normal");
                 wait_until(&bridge, |state| state.backlog.len() >= 1);
 
                 let (sink, receiver, _open) = sink();
@@ -415,9 +464,49 @@ mod tests {
                     })),
                 };
                 for _ in 0..8 {
-                    log(&bridge, log::Level::Info, "lost");
+                    log(&bridge, RustLogLevel::Info, "lost");
                 }
                 assert_eq!(bridge.dropped.load(Ordering::Relaxed), 7);
+            },
+            1,
+        );
+    }
+    #[test]
+    fn events_keep_their_level_target_and_fields() {
+        check_random(
+            || {
+                let entries = capture(|| {
+                    tracing::warn!(target: "karbeat::test", voice = 3, "stolen {}", "note");
+                });
+
+                assert_eq!(entries.len(), 1);
+                assert_eq!(entries[0].level, RustLogLevel::Warn);
+                assert_eq!(entries[0].target, "karbeat::test");
+                assert_eq!(entries[0].message, "stolen note voice=3");
+            },
+            1,
+        );
+    }
+
+    #[test]
+    fn log_crate_records_keep_their_real_target() {
+        check_random(
+            || {
+                let entries = capture(|| {
+                    log::Log::log(
+                        &tracing_log::LogTracer::new(),
+                        &log::Record::builder()
+                            .level(log::Level::Error)
+                            .target("cpal::host")
+                            .args(format_args!("stream lost"))
+                            .build(),
+                    );
+                });
+
+                assert_eq!(entries.len(), 1);
+                assert_eq!(entries[0].level, RustLogLevel::Error);
+                assert_eq!(entries[0].target, "cpal::host");
+                assert_eq!(entries[0].message, "stream lost");
             },
             1,
         );

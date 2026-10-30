@@ -11,6 +11,7 @@ import 'package:karbeat/app/providers/notification_provider.dart';
 import 'package:karbeat/app/providers/project_provider.dart';
 import 'package:karbeat/app/providers/transport_state.dart';
 import 'package:karbeat/core/widgets/context_menu.dart';
+import 'package:karbeat/core/widgets/overlap_shade.dart';
 import 'package:karbeat/features/piano_roll/view/scrollable_virtual_keyboard.dart';
 import 'package:karbeat/features/piano_roll/view/note_param_editor.dart';
 import 'package:karbeat/features/piano_roll/view/pattern_ruler.dart';
@@ -293,21 +294,25 @@ class PianoRollScreenState extends ConsumerState<PianoRollScreen> {
     return step <= 1 ? tick : (tick / step).round() * step;
   }
 
-  /// Draw-tool stamp at the pointer: a copy of the latest selection (FL
-  /// Studio style), or a single step-long note when nothing was selected yet.
+  /// Draw-tool stamp at the pointer: a copy of the highlighted selection, the
+  /// last interacted single note when nothing is selected, or a single
+  /// step-long note when there is no template yet.
   ///
   /// Dragging repeats the stamp every span from where the stroke began, so
   /// copies line up end to end without overlapping. Each copy follows the
   /// pointer's pitch.
-  void _handleBrushAdd(Offset localPos) {
+  void _handleBrushAdd(Offset localPos, UiPattern pattern) {
     final state = ref.read(pianoRollProvider);
     final step = max(1, _stepTicks);
     final pointerTick = max(0, (localPos.dx / state.zoomLevelTick).floor());
     final tick = step <= 1 ? pointerTick : pointerTick ~/ step * step;
     final pointerKey = (127 - (localPos.dy / _keyHeight).floor()).clamp(0, 127);
 
-    final template = state.drawTemplate.isNotEmpty
-        ? state.drawTemplate.toList()
+    final drawTemplate = ref
+        .read(pianoRollProvider.notifier)
+        .drawTemplateFor(pattern);
+    final template = drawTemplate.isNotEmpty
+        ? drawTemplate.toList()
         : [
             UiNote(
               id: -1,
@@ -394,21 +399,50 @@ class PianoRollScreenState extends ConsumerState<PianoRollScreen> {
     int keyIndex = (localPos.dy / _keyHeight).floor();
     int midiKey = (127 - keyIndex).clamp(0, 127);
 
-    bool added = false;
+    // Only the topmost note under the pointer is erased, so stacked notes
+    // come off one layer at a time. Selected notes are painted above the rest,
+    // and later notes above earlier ones.
+    final selectedIds = ref.read(pianoRollProvider).selectedNoteIds;
+    UiNote? topNote;
+    var topIsSelected = false;
     for (final note in pattern.notes) {
-      if (note.key == midiKey &&
-          tick >= note.startTick &&
-          tick < note.startTick + note.duration) {
-        if (!_brushDeleteNoteIds.contains(note.id)) {
-          _brushDeleteNoteIds.add(note.id);
-          added = true;
-        }
+      if (note.key != midiKey ||
+          tick < note.startTick ||
+          tick >= note.startTick + note.duration) {
+        continue;
+      }
+      final isSelected = selectedIds.contains(note.id);
+      if (isSelected || !topIsSelected) {
+        topNote = note;
+        topIsSelected = isSelected;
       }
     }
 
-    if (added) {
+    if (topNote != null && _brushDeleteNoteIds.add(topNote.id)) {
       setState(() {});
     }
+  }
+
+  /// Shades every region where notes on the same key overlap.
+  List<Widget> _buildNoteOverlapShades(UiPattern pattern, double zoomX) {
+    final spansByKey = <int, List<LaneSpan>>{};
+    for (final note in pattern.notes) {
+      spansByKey
+          .putIfAbsent(note.key, () => [])
+          .add((start: note.startTick, end: note.startTick + note.duration));
+    }
+    return [
+      for (final MapEntry(key: key, value: spans) in spansByKey.entries)
+        if (spans.length > 1)
+          for (final overlap in overlapSpans(spans))
+            Positioned(
+              top: (127 - key) * _keyHeight + 1,
+              left: overlap.start * zoomX,
+              width: max(2.0, (overlap.end - overlap.start) * zoomX),
+              height: _keyHeight - 2,
+              child: const OverlapShade(),
+            ),
+    ];
   }
 
   void _submitBrushDelete(int patternId) {
@@ -716,6 +750,7 @@ class PianoRollScreenState extends ConsumerState<PianoRollScreen> {
     final isZoom = selectedTool == PianoRollToolSelection.zoom;
     final isSelecting = selectedTool == PianoRollToolSelection.select;
     final isSlicing = selectedTool == PianoRollToolSelection.slice;
+    final isStretching = selectedTool == PianoRollToolSelection.stretch;
     final timelineWidth = _effectiveTimelineWidth(pattern, zoomX);
 
     return Stack(
@@ -888,7 +923,10 @@ class PianoRollScreenState extends ConsumerState<PianoRollScreen> {
 
                                     if (isDrawing) {
                                       _resetPaintState();
-                                      _handleBrushAdd(event.localPosition);
+                                      _handleBrushAdd(
+                                        event.localPosition,
+                                        pattern,
+                                      );
                                     } else if (isSlicing) {
                                       _handleSlice(
                                         event.localPosition,
@@ -914,7 +952,10 @@ class PianoRollScreenState extends ConsumerState<PianoRollScreen> {
                                       return;
                                     }
                                     if (isDrawing) {
-                                      _handleBrushAdd(event.localPosition);
+                                      _handleBrushAdd(
+                                        event.localPosition,
+                                        pattern,
+                                      );
                                     } else if (isDeleting) {
                                       _handleBrushDelete(
                                         event.localPosition,
@@ -1017,6 +1058,8 @@ class PianoRollScreenState extends ConsumerState<PianoRollScreen> {
                                             ? SystemMouseCursors.move
                                             : isZoom
                                             ? SystemMouseCursors.resizeUpDown
+                                            : isStretching
+                                            ? SystemMouseCursors.resizeLeftRight
                                             : SystemMouseCursors.basic,
                                         child: SizedBox(
                                           height: 128 * _keyHeight,
@@ -1064,7 +1107,7 @@ class PianoRollScreenState extends ConsumerState<PianoRollScreen> {
                                                       .pasteNotesFromClipboardToPattern(
                                                         pattern.id,
                                                         snappedTick,
-                                                        midiKey,
+                                                        newKey: midiKey,
                                                       );
                                                 },
                                               ),
@@ -1171,6 +1214,12 @@ class PianoRollScreenState extends ConsumerState<PianoRollScreen> {
                                                       _stopAutoScroll();
                                                     },
                                                   ),
+
+                                                // LAYER B3: Stacked note markers
+                                                ..._buildNoteOverlapShades(
+                                                  pattern,
+                                                  zoomX,
+                                                ),
 
                                                 // LAYER C: Preview Add Notes
                                                 ..._brushAddNotes.map((
@@ -1491,6 +1540,10 @@ class _PianoRollToolbar extends ConsumerWidget {
 
     final selectedTool = pianoRollState.tool;
     final generators = projectState.value?.generators ?? const IMapConst({});
+    final patterns =
+        projectState.value?.patterns ?? const IMapConst<int, UiPattern>({});
+    final sortedPatterns = patterns.entries.toList()
+      ..sort((a, b) => a.value.name.compareTo(b.value.name));
     final previewGeneratorId = pianoRollState.previewGeneratorId;
     // Samplers have no plugin screen, so only plugin generators can be opened.
     final previewPlugin = previewGeneratorId == null
@@ -1544,12 +1597,47 @@ class _PianoRollToolbar extends ConsumerWidget {
             _buildDivider(context),
             const SizedBox(width: 8),
 
-            // Pattern name
-            Text(
-              name,
-              style: TextStyle(
-                color: colors.onSurface,
-                fontWeight: FontWeight.bold,
+            // Pattern name, with a scrollable selector to switch patterns in place.
+            Tooltip(
+              message: 'Switch pattern',
+              child: DropdownButton<int>(
+                value: patterns.containsKey(patternId) ? patternId : null,
+                hint: Text(
+                  name,
+                  style: TextStyle(
+                    color: colors.onSurface,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                isDense: true,
+                menuMaxHeight: 320,
+                dropdownColor: colors.surfaceContainerHigh,
+                underline: const SizedBox(),
+                icon: Icon(
+                  Icons.arrow_drop_down,
+                  color: colors.primary,
+                  size: 20,
+                ),
+                style: TextStyle(
+                  color: colors.onSurface,
+                  fontWeight: FontWeight.bold,
+                ),
+                items: [
+                  for (final entry in sortedPatterns)
+                    DropdownMenuItem<int>(
+                      value: entry.key,
+                      child: Text(entry.value.name),
+                    ),
+                ],
+                onChanged: (value) {
+                  if (value == null || value == patternId) return;
+                  ref
+                      .read(pianoRollProvider.notifier)
+                      .openPattern(
+                        value,
+                        previewGeneratorId: previewGeneratorId,
+                      );
+                },
               ),
             ),
             const SizedBox(width: 16),
@@ -1603,6 +1691,14 @@ class _PianoRollToolbar extends ConsumerWidget {
               isActive: selectedTool == PianoRollToolSelection.slice,
               onTap: () =>
                   notifier.selectPianoRollTool(PianoRollToolSelection.slice),
+            ),
+            _ToolButton(
+              icon: Icons.swap_horiz,
+              label: 'Stretch selected notes (Alt+9)',
+              isActive: selectedTool == PianoRollToolSelection.stretch,
+              onTap: () => notifier.selectPianoRollTool(
+                PianoRollToolSelection.stretch,
+              ),
             ),
             _ToolButton(
               icon: Icons.pan_tool,
@@ -1909,7 +2005,25 @@ class _PianoKeyState extends State<_PianoKey> {
 }
 
 // ignore: unused_field
-enum _NoteDragMode { none, move, resizeLeft, resizeRight }
+enum _NoteDragMode { none, move, resizeLeft, resizeRight, stretch }
+
+/// Widest right-edge resize band, so wide notes keep a large move area.
+const double _maxNoteResizeEdge = 10.0;
+
+/// Width of the right-edge resize band for a note of [width] pixels. It grows
+/// with the note but never takes more than half of it, so even a tiny note has
+/// a move area. Keeping this band explicit separates resizing from moving
+/// instead of relying on an ambiguous "near the edge" test.
+double _noteResizeEdge(double width) {
+  final preferred = max(3.0, width * 0.3);
+  return min(width / 2, min(_maxNoteResizeEdge, preferred));
+}
+
+/// What a pointer at [localX] inside a [width]-wide note starts.
+_NoteDragMode _noteHitMode(double localX, double width) {
+  final edge = _noteResizeEdge(width);
+  return localX >= width - edge ? _NoteDragMode.resizeRight : _NoteDragMode.move;
+}
 
 class _InteractiveNote extends ConsumerStatefulWidget {
   final UiNote note;
@@ -1957,6 +2071,13 @@ class _InteractiveNoteState extends ConsumerState<_InteractiveNote> {
   // double _startDragY = 0;
   _NoteDragMode _mode = _NoteDragMode.none;
 
+  /// Horizontal drag of the stretch tool and the preview scale it produces.
+  double _stretchDragDeltaX = 0;
+  double _stretchFactor = 1;
+
+  /// Whether the pointer is over the resize band, for the cursor feedback.
+  bool _hoveringResizeEdge = false;
+
   int? _currentPreviewKey;
 
   @override
@@ -2000,12 +2121,25 @@ class _InteractiveNoteState extends ConsumerState<_InteractiveNote> {
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
-    // Determine cursor based on tool
-    MouseCursor cursor = SystemMouseCursors.click;
+    final renderedWidth = max(5.0, _localWidth);
+    final previewWidth = _mode == _NoteDragMode.stretch
+        ? renderedWidth * _stretchFactor
+        : renderedWidth;
+    final allowsStretch =
+        widget.selectedTool == PianoRollToolSelection.stretch;
+
+    // Determine cursor based on tool and the explicit note hit zones.
+    MouseCursor cursor;
     if (widget.selectedTool == PianoRollToolSelection.delete) {
       cursor = SystemMouseCursors.basic;
-    } else if (_mode != _NoteDragMode.none) {
+    } else if (_mode == _NoteDragMode.resizeRight ||
+        _mode == _NoteDragMode.resizeLeft ||
+        _mode == _NoteDragMode.stretch) {
+      cursor = SystemMouseCursors.resizeLeftRight;
+    } else if (_mode == _NoteDragMode.move) {
       cursor = SystemMouseCursors.grabbing;
+    } else if (allowsStretch || _hoveringResizeEdge) {
+      cursor = SystemMouseCursors.resizeLeftRight;
     } else {
       cursor = SystemMouseCursors.click;
     }
@@ -2013,12 +2147,26 @@ class _InteractiveNoteState extends ConsumerState<_InteractiveNote> {
     return Positioned(
       top: _localTop + 1,
       left: _localLeft,
-      width: _localWidth < 5 ? 5 : _localWidth,
+      width: previewWidth,
       height: widget.keyHeight - 2,
       child: Opacity(
         opacity: widget.opacity,
         child: MouseRegion(
           cursor: cursor,
+          onHover: (event) {
+            if (widget.selectedTool != PianoRollToolSelection.grab) return;
+            final overEdge =
+                _noteHitMode(event.localPosition.dx, renderedWidth) ==
+                _NoteDragMode.resizeRight;
+            if (overEdge != _hoveringResizeEdge) {
+              setState(() => _hoveringResizeEdge = overEdge);
+            }
+          },
+          onExit: (_) {
+            if (_hoveringResizeEdge) {
+              setState(() => _hoveringResizeEdge = false);
+            }
+          },
           child: IgnorePointer(
             ignoring: widget.selectedTool == PianoRollToolSelection.pan,
             // Right-clicking an unselected note selects it, so the grid's
@@ -2060,22 +2208,34 @@ class _InteractiveNoteState extends ConsumerState<_InteractiveNote> {
               }
             },
             onPanStart: (details) {
-              if (widget.selectedTool != PianoRollToolSelection.grab) return;
+              if (widget.selectedTool == PianoRollToolSelection.stretch) {
+                ref
+                    .read(pianoRollProvider.notifier)
+                    .rememberSingleNote(widget.noteId);
+                setState(() {
+                  _mode = _NoteDragMode.stretch;
+                  _stretchDragDeltaX = 0;
+                  _stretchFactor = 1;
+                });
+                _currentPreviewKey = widget.note.key;
+                _playNote(_currentPreviewKey!, true);
+                return;
+              }
+              if (widget.selectedTool != PianoRollToolSelection.grab) {
+                return;
+              }
 
-              final renderBox = context.findRenderObject() as RenderBox;
-              final localPos = renderBox.globalToLocal(details.globalPosition);
+              ref
+                  .read(pianoRollProvider.notifier)
+                  .rememberSingleNote(widget.noteId);
 
-              // Hit test edge for resizing
-              const edgeThreshold = 10.0;
-
+              // `details.localPosition` is relative to this note's own box, so
+              // the hit zone never depends on the group or other notes.
               setState(() {
-                if (localPos.dx > _localWidth - edgeThreshold) {
-                  _mode = _NoteDragMode.resizeRight;
-                } else {
-                  _mode = _NoteDragMode.move;
-                }
-                // _startDragX = _localLeft;
-                // _startDragY = _localTop;
+                _mode = _noteHitMode(
+                  details.localPosition.dx,
+                  max(5.0, _localWidth),
+                );
               });
 
               // Play sound on touch
@@ -2103,8 +2263,12 @@ class _InteractiveNoteState extends ConsumerState<_InteractiveNote> {
                 } else if (_mode == _NoteDragMode.resizeRight) {
                   _localWidth += details.delta.dx;
                   if (_localWidth < 5) _localWidth = 5;
+                } else if (_mode == _NoteDragMode.stretch) {
+                  _stretchDragDeltaX += details.delta.dx;
+                  final baseWidth = max(5.0, _localWidth);
+                  _stretchFactor = ((baseWidth + _stretchDragDeltaX) / baseWidth)
+                      .clamp(0.05, 20.0);
                 }
-                // SUGGESTION: Implement Resize Left logic if needed (requires shifting start tick)
               });
               widget.onDragUpdate?.call(details.globalPosition);
             },
@@ -2133,7 +2297,13 @@ class _InteractiveNoteState extends ConsumerState<_InteractiveNote> {
 
               int snap = widget.snapTicks;
 
-              if (_mode == _NoteDragMode.move) {
+              if (_mode == _NoteDragMode.stretch) {
+                if ((_stretchFactor - 1).abs() > 0.001) {
+                  ref
+                      .read(pianoRollProvider.notifier)
+                      .stretchNotes(_stretchFactor, noteIds: [widget.noteId]);
+                }
+              } else if (_mode == _NoteDragMode.move) {
                 int keyIndex = (_localTop / widget.keyHeight).round();
                 int newKey = (127 - keyIndex).clamp(0, 127);
 
@@ -2222,6 +2392,8 @@ class _InteractiveNoteState extends ConsumerState<_InteractiveNote> {
               }
               setState(() {
                 _mode = _NoteDragMode.none;
+                _stretchDragDeltaX = 0;
+                _stretchFactor = 1;
                 // Snap visual state immediately to grid so it looks clean
                 // _localTop =
                 //     (_localTop / widget.keyHeight).round() * widget.keyHeight;
@@ -2398,6 +2570,13 @@ class _InteractiveNoteGroupState extends ConsumerState<_InteractiveNoteGroup> {
   double _dragWidthDelta = 0;
   _NoteDragMode _mode = _NoteDragMode.none;
 
+  /// Horizontal drag of the stretch tool and the preview scale it produces.
+  double _stretchDragDeltaX = 0;
+  double _stretchFactor = 1;
+
+  /// Whether the pointer is over a note's resize band, for cursor feedback.
+  bool _hoveringResizeEdge = false;
+
   int? _currentPreviewKey;
 
   void _playNote(int key, bool on) {
@@ -2431,20 +2610,32 @@ class _InteractiveNoteGroupState extends ConsumerState<_InteractiveNoteGroup> {
     double baseTop = (127 - maxKey) * widget.keyHeight;
     double baseWidth = (maxTick - minTick) * widget.zoomX;
     double baseHeight = (maxKey - minKey + 1) * widget.keyHeight;
+    final stretchScale = _mode == _NoteDragMode.stretch ? _stretchFactor : 1.0;
+    final allowsStretch =
+        widget.selectedTool == PianoRollToolSelection.stretch;
 
-    MouseCursor cursor = SystemMouseCursors.click;
+    MouseCursor cursor;
     if (widget.selectedTool == PianoRollToolSelection.delete) {
       cursor = SystemMouseCursors.basic;
-    } else if (_mode != _NoteDragMode.none) {
+    } else if (_mode == _NoteDragMode.resizeRight ||
+        _mode == _NoteDragMode.stretch) {
+      cursor = SystemMouseCursors.resizeLeftRight;
+    } else if (_mode == _NoteDragMode.move) {
       cursor = SystemMouseCursors.grabbing;
+    } else if (allowsStretch || _hoveringResizeEdge) {
+      cursor = SystemMouseCursors.resizeLeftRight;
     } else {
       cursor = SystemMouseCursors.click;
     }
 
+    final groupWidth = _mode == _NoteDragMode.stretch
+        ? baseWidth * stretchScale
+        : baseWidth + _dragWidthDelta;
+
     return Positioned(
       left: baseLeft + _dragOffsetX,
       top: baseTop + _dragOffsetY,
-      width: max(0, baseWidth + _dragWidthDelta),
+      width: max(0, groupWidth),
       height: baseHeight,
       child: MouseRegion(
         cursor: cursor,
@@ -2453,9 +2644,10 @@ class _InteractiveNoteGroupState extends ConsumerState<_InteractiveNoteGroup> {
           child: Stack(
             clipBehavior: Clip.none,
             children: widget.notes.map((note) {
-            double noteLeft = (note.startTick - minTick) * widget.zoomX;
+            double noteLeft =
+                (note.startTick - minTick) * widget.zoomX * stretchScale;
             double noteTop = (maxKey - note.key) * widget.keyHeight;
-            double noteWidth = note.duration * widget.zoomX;
+            double noteWidth = note.duration * widget.zoomX * stretchScale;
 
             if (_mode == _NoteDragMode.resizeRight) {
               noteWidth += _dragWidthDelta;
@@ -2471,7 +2663,25 @@ class _InteractiveNoteGroupState extends ConsumerState<_InteractiveNoteGroup> {
               height: widget.keyHeight - 2,
               child: Opacity(
                 opacity: isPendingDelete ? 0.3 : 1.0,
-                child: GestureDetector(
+                child: MouseRegion(
+                  cursor: cursor,
+                  onHover: (event) {
+                    if (widget.selectedTool != PianoRollToolSelection.grab) {
+                      return;
+                    }
+                    final overEdge =
+                        _noteHitMode(event.localPosition.dx, noteWidth) ==
+                        _NoteDragMode.resizeRight;
+                    if (overEdge != _hoveringResizeEdge) {
+                      setState(() => _hoveringResizeEdge = overEdge);
+                    }
+                  },
+                  onExit: (_) {
+                    if (_hoveringResizeEdge) {
+                      setState(() => _hoveringResizeEdge = false);
+                    }
+                  },
+                  child: GestureDetector(
                   behavior: HitTestBehavior.opaque,
                   onTap: () {
                     if (widget.selectedTool == PianoRollToolSelection.delete) {
@@ -2482,26 +2692,44 @@ class _InteractiveNoteGroupState extends ConsumerState<_InteractiveNoteGroup> {
                             noteIds: widget.notes.map((e) => e.id).toList(),
                           );
                       ref.read(pianoRollProvider.notifier).clearNoteSelection();
+                    } else {
+                      ref
+                          .read(pianoRollProvider.notifier)
+                          .rememberSingleNote(note.id);
                     }
                   },
                   onPanStart: (details) {
+                    if (widget.selectedTool ==
+                        PianoRollToolSelection.stretch) {
+                      ref
+                          .read(pianoRollProvider.notifier)
+                          .rememberSingleNote(note.id);
+                      setState(() {
+                        _mode = _NoteDragMode.stretch;
+                        _stretchDragDeltaX = 0;
+                        _stretchFactor = 1;
+                      });
+                      _currentPreviewKey = note.key;
+                      _playNote(_currentPreviewKey!, true);
+                      return;
+                    }
                     if (widget.selectedTool != PianoRollToolSelection.grab) {
                       return;
                     }
-                    final renderBox = context.findRenderObject() as RenderBox;
-                    final localPos = renderBox.globalToLocal(
-                      details.globalPosition,
-                    );
-                    const edgeThreshold = 10.0;
 
-                    // localPos is relative to the Bounding Box Stack.
-                    // Verify if the grab hits the right-side edge of THIS specific child note.
-                    if (localPos.dx > noteLeft + noteWidth - edgeThreshold &&
-                        localPos.dx <= noteLeft + noteWidth) {
-                      setState(() => _mode = _NoteDragMode.resizeRight);
-                    } else {
-                      setState(() => _mode = _NoteDragMode.move);
-                    }
+                    ref
+                        .read(pianoRollProvider.notifier)
+                        .rememberSingleNote(note.id);
+
+                    // `localPosition` is relative to the grabbed note, so the
+                    // resize band is hit-tested against that note alone
+                    // instead of the whole selection's bounding box.
+                    setState(() {
+                      _mode = _noteHitMode(
+                        details.localPosition.dx,
+                        max(5.0, noteWidth),
+                      );
+                    });
 
                     _currentPreviewKey = note.key;
                     _playNote(_currentPreviewKey!, true);
@@ -2514,6 +2742,14 @@ class _InteractiveNoteGroupState extends ConsumerState<_InteractiveNoteGroup> {
                         _dragOffsetY += details.delta.dy;
                       } else if (_mode == _NoteDragMode.resizeRight) {
                         _dragWidthDelta += details.delta.dx;
+                      } else if (_mode == _NoteDragMode.stretch) {
+                        _stretchDragDeltaX += details.delta.dx;
+                        final span = max(1.0, baseWidth);
+                        _stretchFactor =
+                            ((span + _stretchDragDeltaX) / span).clamp(
+                              0.05,
+                              20.0,
+                            );
                       }
                     });
                     widget.onDragUpdate?.call(details.globalPosition);
@@ -2528,7 +2764,11 @@ class _InteractiveNoteGroupState extends ConsumerState<_InteractiveNoteGroup> {
                     final state = ref.read(pianoRollProvider.notifier);
                     int snap = widget.snapTicks;
 
-                    if (_mode == _NoteDragMode.move) {
+                    if (_mode == _NoteDragMode.stretch) {
+                      if ((_stretchFactor - 1).abs() > 0.001) {
+                        state.stretchNotes(_stretchFactor);
+                      }
+                    } else if (_mode == _NoteDragMode.move) {
                       int rawTickDelta = (_dragOffsetX / widget.zoomX).round();
                       int snappedTickDelta =
                           (rawTickDelta / snap).round() * snap;
@@ -2575,6 +2815,8 @@ class _InteractiveNoteGroupState extends ConsumerState<_InteractiveNoteGroup> {
                       _dragOffsetX = 0;
                       _dragOffsetY = 0;
                       _dragWidthDelta = 0;
+                      _stretchDragDeltaX = 0;
+                      _stretchFactor = 1;
                     });
                     widget.onDragEnd?.call();
                   },
@@ -2601,6 +2843,7 @@ class _InteractiveNoteGroupState extends ConsumerState<_InteractiveNoteGroup> {
                           )
                         : null,
                   ),
+                ),
                 ),
               ),
             );

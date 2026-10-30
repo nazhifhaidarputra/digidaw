@@ -123,7 +123,7 @@ impl PitchShiftEngine {
             self.shifter = match DefaultLivePitchShifter::new(sr, channels, pf) {
                 Ok(shifter) => Some(shifter),
                 Err(error) => {
-                    log::error!("Pitch shifter unavailable: {error}");
+                    tracing::error!("Pitch shifter unavailable: {error}");
                     None
                 }
             };

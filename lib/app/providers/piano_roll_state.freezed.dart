@@ -279,7 +279,9 @@ mixin _$PianoRollStateData {
 /// grid, so a one-beat grid can still place half-beat notes.
  GridSize? get drawStep;/// Height of one key row, in pixels.
  double get keyHeight;/// Loop region for pattern playback; the whole pattern loops when null.
- PatternLoopRegion? get loopRegion;/// Notes the draw tool stamps: the latest selection, like FL Studio.
+ PatternLoopRegion? get loopRegion;/// The last single note the draw tool stamps when nothing is selected.
+/// A multi-note selection is drawn from the live selection instead, so
+/// clearing a range selection does not leave its whole batch armed.
  IList<UiNote> get drawTemplate;
 /// Create a copy of PianoRollStateData
 /// with the given fields replaced by the non-null parameter values.
@@ -512,7 +514,9 @@ class _PianoRollStateData extends PianoRollStateData {
 @override@JsonKey() final  double keyHeight;
 /// Loop region for pattern playback; the whole pattern loops when null.
 @override@JsonKey() final  PatternLoopRegion? loopRegion;
-/// Notes the draw tool stamps: the latest selection, like FL Studio.
+/// The last single note the draw tool stamps when nothing is selected.
+/// A multi-note selection is drawn from the live selection instead, so
+/// clearing a range selection does not leave its whole batch armed.
 @override@JsonKey() final  IList<UiNote> drawTemplate;
 
 /// Create a copy of PianoRollStateData

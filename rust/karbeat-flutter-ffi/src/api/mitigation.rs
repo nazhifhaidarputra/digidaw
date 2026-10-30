@@ -237,7 +237,7 @@ fn load_recovered_project_blocking(ctx: &DawContext) -> anyhow::Result<UiApplica
     let ui_state = restore_loaded_project(&operation, recovered)?;
     drop(operation);
     crate::api::audio_analysis::schedule_source_renders(ctx, false);
-    log::info!("Recovered the auto saved project");
+    tracing::info!("Recovered the auto saved project");
     Ok(ui_state)
 }
 
@@ -335,10 +335,10 @@ fn run_auto_save_worker(session: Weak<DawSessionInner>, wake: mpsc::Receiver<()>
             return;
         };
         match auto_save_once(&inner_context(inner)) {
-            Ok(AutoSaveOutcome::Saved) => log::info!("Auto saved a recovery copy"),
+            Ok(AutoSaveOutcome::Saved) => tracing::info!("Auto saved a recovery copy"),
             Ok(AutoSaveOutcome::Idle) => {}
             Ok(AutoSaveOutcome::Busy) => delay = Some(BUSY_RETRY),
-            Err(error) => log::warn!("Auto save failed: {error:#}"),
+            Err(error) => tracing::warn!("Auto save failed: {error:#}"),
         }
     }
 }
@@ -360,7 +360,7 @@ mod tests {
         let root = dir.path().to_path_buf();
         check_random(
             move || {
-                let session = DawContext::new(karbeat_core::context::DawContext::new());
+                let session = DawContext::new(karbeat_audio::context::DawContext::new());
                 assert_eq!(
                     auto_save_once(&session).expect("unconfigured"),
                     AutoSaveOutcome::Idle

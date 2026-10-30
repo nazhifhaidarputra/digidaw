@@ -12,26 +12,26 @@ pub enum RustLogLevel {
     Error,
 }
 
-impl From<log::Level> for RustLogLevel {
-    fn from(value: log::Level) -> Self {
+impl From<tracing::Level> for RustLogLevel {
+    fn from(value: tracing::Level) -> Self {
         match value {
-            log::Level::Trace => Self::Trace,
-            log::Level::Debug => Self::Debug,
-            log::Level::Info => Self::Info,
-            log::Level::Warn => Self::Warn,
-            log::Level::Error => Self::Error,
+            tracing::Level::TRACE => Self::Trace,
+            tracing::Level::DEBUG => Self::Debug,
+            tracing::Level::INFO => Self::Info,
+            tracing::Level::WARN => Self::Warn,
+            tracing::Level::ERROR => Self::Error,
         }
     }
 }
 
-/// One Rust `log` record forwarded to the Flutter log viewer.
+/// One Rust log event forwarded to the Flutter log viewer.
 #[derive(Clone, Debug)]
 #[frb(dart_metadata=("freezed"))]
 pub struct RustLogEntryDto {
     /// Milliseconds since the Unix epoch at the time the record was logged.
     pub timestamp_millis: i64,
     pub level: RustLogLevel,
-    /// The `log` target, usually the emitting module path.
+    /// The log target, usually the emitting module path.
     pub target: String,
     pub message: String,
 }

@@ -209,6 +209,9 @@ impl PluginInstanceManager for Lv2PluginHost {
         )?;
         slot.endpoint_alive.store(true, Ordering::Release);
         instance.endpoint_taken = true;
+        let fallback_tail = instance.config().map_or(0, |config| {
+            karbeat_host_api::fallback_tail_samples(config.sample_rate)
+        });
         let mut endpoint = HostedProcessor::new(
             Box::new(Lv2Processor {
                 slot: slot.clone(),
@@ -222,6 +225,7 @@ impl PluginInstanceManager for Lv2PluginHost {
             }),
             id,
         );
+        endpoint.set_fallback_tail_samples(fallback_tail);
         endpoint.set_processing_status(instance.exchange.process_error.clone());
         Ok(Box::new(endpoint))
     }
@@ -433,7 +437,7 @@ impl Drop for Lv2PluginHost {
                 .is_some_and(|slot| Arc::strong_count(slot) != 1)
             {
                 // Losing the UI owner before endpoint retirement cannot safely destroy the plugin.
-                log::error!(
+                tracing::error!(
                     "LV2 host dropped before audio endpoint retirement; retaining instance for process lifetime"
                 );
                 std::mem::forget(instance);

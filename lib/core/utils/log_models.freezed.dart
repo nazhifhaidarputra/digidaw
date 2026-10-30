@@ -14,7 +14,7 @@ T _$identity<T>(T value) => value;
 /// @nodoc
 mixin _$AppLogEntry {
 
- int get sequence; DateTime get timestamp; AppLogLevel get level; String get message; AppLogSource get source;/// Rust `log` target (module path); `null` for Flutter entries.
+ int get sequence; DateTime get timestamp; AppLogLevel get level; String get message; AppLogSource get source;/// Rust log target (module path); `null` for Flutter entries.
  String? get target; String? get errorSummary;
 /// Create a copy of AppLogEntry
 /// with the given fields replaced by the non-null parameter values.
@@ -221,7 +221,7 @@ class _AppLogEntry implements AppLogEntry {
 @override final  AppLogLevel level;
 @override final  String message;
 @override@JsonKey() final  AppLogSource source;
-/// Rust `log` target (module path); `null` for Flutter entries.
+/// Rust log target (module path); `null` for Flutter entries.
 @override final  String? target;
 @override final  String? errorSummary;
 

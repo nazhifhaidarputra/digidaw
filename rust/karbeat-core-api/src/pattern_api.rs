@@ -1,12 +1,9 @@
-use karbeat_core::{
-    audio::engine::PlaybackMode,
-    commands::AudioCommand,
-    context::DawContext,
-    core::{
-        history::actions::PatternRenamed,
-        project::{DawSource, GeneratorId, Pattern, PatternId},
-    },
+use karbeat_audio::{commands::AudioCommand, context::DawContext, engine::PlaybackMode};
+use karbeat_core::core::{
+    history::actions::{ClipEditRecorder, PatternRemoved, PatternRenamed},
+    project::{DawSource, GeneratorId, Pattern, PatternId},
 };
+use karbeat_core::shared::id::{ClipId, TrackId};
 
 /// Returns a cloned MIDI pattern or an error when the identifier is absent.
 pub fn get_pattern(ctx: &DawContext, pattern_id: &PatternId) -> anyhow::Result<Pattern> {
@@ -73,6 +70,29 @@ pub fn rename_pattern(
         previous_clip_names,
     ));
     Ok(())
+}
+
+/// Deletes a MIDI pattern and every clip that plays it as one undoable step.
+///
+/// Returns how many clips were deleted with it. The engine receives a track graph update,
+/// which also stops an isolated preview of the deleted pattern.
+pub fn delete_pattern(ctx: &mut DawContext, pattern_id: PatternId) -> anyhow::Result<usize> {
+    let clips = ctx.app_state.pattern_clips(pattern_id);
+    let tracks: Vec<TrackId> = clips.iter().map(|(track_id, _)| *track_id).collect();
+    let clip_ids: Vec<ClipId> = clips.iter().map(|(_, clip_id)| *clip_id).collect();
+
+    let recorder = ClipEditRecorder::begin(&ctx.app_state, "Delete Pattern", &tracks, &clip_ids);
+    let pattern = ctx.app_state.remove_pattern(pattern_id)?;
+    let clip_changes = recorder.finish(&mut ctx.app_state);
+    ctx.push_history(PatternRemoved::new(clip_changes, pattern_id, pattern));
+
+    ctx.broadcast_track_graph();
+    tracing::info!(
+        "Removed pattern {} with {} clip(s)",
+        pattern_id.to_u64(),
+        clip_ids.len()
+    );
+    Ok(clip_ids.len())
 }
 
 /// Toggles isolated preview playback of a pattern through a selected generator.

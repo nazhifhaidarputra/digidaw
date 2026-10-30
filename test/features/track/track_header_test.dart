@@ -280,6 +280,7 @@ ApplicationDataStore _projectData({UiMixerChannel? channel}) {
         clips: [],
         generatorId: 7,
         orderIdx: 0,
+        input: const UiTrackInput(firstChannel: 0, channels: 2, monitor: false),
       ),
     }),
     generators: IMap({

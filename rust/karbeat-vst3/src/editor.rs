@@ -243,7 +243,7 @@ impl Vst3Editor {
 impl Drop for Vst3Editor {
     fn drop(&mut self) {
         if let Err(error) = self.close() {
-            log::warn!("VST3 editor teardown: {error}");
+            tracing::warn!("VST3 editor teardown: {error}");
         }
         // SAFETY: View is detached before releasing its frame owner.
         unsafe { self.view.setFrame(ptr::null_mut()) };

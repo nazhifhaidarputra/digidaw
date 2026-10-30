@@ -1,0 +1,70 @@
+[package]
+name = "karbeat-audio"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "DSP audio engine, device stream, rendering, telemetry, and export for DigiDAW"
+
+[dependencies]
+karbeat-core.workspace = true
+karbeat-dsp.workspace = true
+karbeat-plugin-api.workspace = true
+karbeat-plugins.workspace = true
+karbeat-utils.workspace = true
+karbeat-plugin-types.workspace = true
+karbeat-host.workspace = true
+
+anyhow.workspace = true
+cpal.workspace = true
+tracing.workspace = true
+rtrb.workspace = true
+crossbeam-utils.workspace = true
+atomic-wait.workspace = true
+audio_thread_priority.workspace = true
+serde.workspace = true
+
+thiserror.workspace = true
+smallvec.workspace = true
+hashbrown.workspace = true
+rodio.workspace = true
+dasp.workspace = true
+parking_lot.workspace = true
+memmap2.workspace = true
+bytemuck.workspace = true
+indexmap.workspace = true
+hound.workspace = true
+derive_builder.workspace = true
+serde_json.workspace = true
+wide.workspace = true
+itertools.workspace = true
+mp3lame-encoder = "0.2.4"
+triple_buffer.workspace = true
+slab.workspace = true
+rubato.workspace = true
+futures-lite.workspace = true
+flacenc = "0.5.1"
+opus = "0.4.0"
+ogg = "0.9.2"
+
+[target.'cfg(target_os = "linux")'.dependencies]
+cpal = { workspace = true, features = ["jack"] }
+
+[dev-dependencies]
+criterion.workspace = true
+tempfile.workspace = true
+shuttle.workspace = true
+# Same crate and features rodio already builds; used to read back exported tags.
+symphonia = { version = "0.5.5", default-features = false, features = ["flac", "mp3", "ogg", "wav"] }
+
+[features]
+default = []
+asio = ["cpal/asio"]
+bench-support = []
+
+[[bench]]
+name = "engine_block"
+harness = false
+required-features = ["bench-support"]
+
+[lints]
+workspace = true

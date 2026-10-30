@@ -9,11 +9,43 @@ use slotmap::{SecondaryMap, SlotMap};
 use thiserror::Error;
 
 use crate::{
-    audio::event::PluginTarget,
-    commands::{EffectTarget, MixerChannelTarget},
-    core::project::{ApplicationState, AudioTrack, PluginInstance, TrackId, plugin::AudioPlugin},
+    core::project::{ApplicationState, AudioTrack, PluginInstance, TrackId},
     shared::{BusId, EffectId, GeneratorId, GraphNodeId},
 };
+
+use super::PluginTarget;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+/// Mixer channel addressed by UI mixer operations.
+pub enum MixerChannelTarget {
+    /// Mixer channel owned by a project track.
+    Track(TrackId),
+    /// Auxiliary mixer bus channel.
+    Bus(BusId),
+    /// Final master output channel.
+    Master,
+}
+
+/// Specifies the location of an effect to ensure precise UI syncing.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum EffectTarget {
+    /// Effect chain belonging to a track.
+    Track(TrackId),
+    /// Master output effect chain.
+    Master,
+    /// Effect chain belonging to an auxiliary bus.
+    Bus(BusId),
+}
+
+impl From<EffectTarget> for MixerChannelTarget {
+    fn from(target: EffectTarget) -> Self {
+        match target {
+            EffectTarget::Track(track_id) => Self::Track(track_id),
+            EffectTarget::Bus(bus_id) => Self::Bus(bus_id),
+            EffectTarget::Master => Self::Master,
+        }
+    }
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 /// Identifies the plugin input represented by a sidechain routing destination.
@@ -510,7 +542,7 @@ impl MixerChannel {
                     "Effect with ID {} not found in registry",
                     effect_registry_id
                 );
-                log::error!("{}", message);
+                tracing::error!("{}", message);
                 return Err(anyhow::anyhow!(message));
             }
         };
@@ -578,7 +610,7 @@ impl MixerState {
         let (effect_factory, effect_name, effect_id) =
             mixer_channel.channel.add_effect(registry, registry_id)?;
 
-        log::info!(
+        tracing::info!(
             "Effect {} (registry_id={}) added to track {:?}",
             effect_name,
             registry_id,
@@ -632,7 +664,7 @@ impl MixerState {
         let channel = &mut self.master_bus;
         let (effect_factory, effect_name, effect_id) = channel.add_effect(registry, registry_id)?;
 
-        log::info!(
+        tracing::info!(
             "Effect {} (registry_id={}) added to master bus",
             effect_name,
             registry_id
@@ -732,7 +764,7 @@ impl MixerState {
         let old_name = bus.name.clone();
         bus.name = new_name.to_string();
 
-        log::info!("Bus {:?} renamed from {} to {}", bus_id, old_name, new_name);
+        tracing::info!("Bus {:?} renamed from {} to {}", bus_id, old_name, new_name);
         Ok(())
     }
 
@@ -761,7 +793,7 @@ impl MixerState {
         let (effect_factory, effect_name, effect_id) =
             bus.channel.add_effect(registry, registry_id)?;
 
-        log::info!(
+        tracing::info!(
             "Effect {} (registry_id={}) added to bus {:?}",
             effect_name,
             registry_id,
@@ -1268,6 +1300,11 @@ fn find_track_hosting_generator(
 }
 
 #[cfg(test)]
+#[allow(
+    clippy::expect_used,
+    clippy::unwrap_used,
+    reason = "round-trip fixtures fail immediately when serialization breaks"
+)]
 mod tests {
     use super::*;
 

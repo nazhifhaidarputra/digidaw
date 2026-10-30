@@ -44,6 +44,40 @@ void main() {
     expect(stopCount, 0);
   });
 
+  testWidgets('Ctrl+Alt+R records the selected track and Ctrl+Alt+E stops', (
+    tester,
+  ) async {
+    var recordCount = 0;
+    var stopRecordingCount = 0;
+
+    await _pumpShortcutHarness(
+      tester,
+      onToggle: () {},
+      onStop: () {},
+      extraActions: {
+        RecordSelectedTrackIntent: CallbackAction<RecordSelectedTrackIntent>(
+          onInvoke: (_) {
+            recordCount += 1;
+            return null;
+          },
+        ),
+        StopRecordingIntent: CallbackAction<StopRecordingIntent>(
+          onInvoke: (_) {
+            stopRecordingCount += 1;
+            return null;
+          },
+        ),
+      },
+      child: const Focus(autofocus: true, child: SizedBox()),
+    );
+
+    await _sendChord(tester, LogicalKeyboardKey.keyR);
+    await _sendChord(tester, LogicalKeyboardKey.keyE);
+
+    expect(recordCount, 1);
+    expect(stopRecordingCount, 1);
+  });
+
   testWidgets('focused controls retain their Space activation', (tester) async {
     var toggleCount = 0;
     var buttonCount = 0;
@@ -70,11 +104,21 @@ void main() {
   });
 }
 
+/// Presses Ctrl+Alt+[key].
+Future<void> _sendChord(WidgetTester tester, LogicalKeyboardKey key) async {
+  await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+  await tester.sendKeyDownEvent(LogicalKeyboardKey.altLeft);
+  await tester.sendKeyEvent(key);
+  await tester.sendKeyUpEvent(LogicalKeyboardKey.altLeft);
+  await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+}
+
 Future<void> _pumpShortcutHarness(
   WidgetTester tester, {
   required VoidCallback onToggle,
   required VoidCallback onStop,
   required Widget child,
+  Map<Type, Action<Intent>> extraActions = const {},
 }) async {
   await tester.pumpWidget(
     ProviderScope(
@@ -96,6 +140,7 @@ Future<void> _pumpShortcutHarness(
                     return null;
                   },
                 ),
+                ...extraActions,
               },
               child: Scaffold(body: child),
             ),

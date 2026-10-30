@@ -20,6 +20,23 @@ final shortcutCatalogProvider = Provider<IList<DawShortcut>>(
       workspaceShortcuts.addAll(trackListShortcuts).addAll(pianoRollShortcuts),
 );
 
+/// The chord currently bound to the shortcut [id], or null when the catalog has
+/// no such shortcut.
+final activeShortcutChordProvider = Provider.family<ShortcutChord?, String>((
+  ref,
+  id,
+) {
+  final shortcut = ref
+      .watch(shortcutCatalogProvider)
+      .where((shortcut) => shortcut.id == id)
+      .firstOrNull;
+  if (shortcut == null) return null;
+  final overrides = ref.watch(
+    shortcutManagerProvider.select((state) => state.overrides),
+  );
+  return overrides[id] ?? ShortcutChord.fromActivator(shortcut.defaultKey);
+});
+
 /// The view-specific scope whose shortcuts are active in [view], if any.
 ShortcutScope? shortcutScopeOf(WorkspaceView view) => switch (view) {
   WorkspaceView.trackList => ShortcutScope.trackList,
@@ -78,9 +95,7 @@ class ShortcutManagerNotifier extends Notifier<ShortcutManagerState> {
   Future<Result<void>> remap(String id, ShortcutChord chord) async {
     if (!chord.isSupported) {
       return Result.error(
-        const ShortcutValidationException(
-          'Use a non-modifier key with Ctrl, Alt, or Command.',
-        ),
+        const ShortcutValidationException(shortcutSupportHint),
       );
     }
     final shortcut = shortcutById(id);

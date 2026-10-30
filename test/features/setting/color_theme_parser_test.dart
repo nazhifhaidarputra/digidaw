@@ -109,4 +109,16 @@ void main() {
       expect(result.ok(), isA<AppColorTheme>());
     }
   });
+
+  test('the light theme uses pink control-panel surfaces', () {
+    final theme = parseColorTheme(
+      File(
+        AppearanceAssetService.digidawLightColorThemeSource,
+      ).readAsStringSync(),
+    ).ok();
+
+    expect(theme.brightness, Brightness.light);
+    expect(theme.surfaceContainerLow, const Color(0xFFFFE7F0));
+    expect(theme.surfaceContainer, const Color(0xFFFFE7F0));
+  });
 }

@@ -33,6 +33,11 @@ class DuplicateClipsIntent extends Intent {
   const DuplicateClipsIntent();
 }
 
+/// Deletes the selected clips and clears the selection.
+class DeleteClipsIntent extends Intent {
+  const DeleteClipsIntent();
+}
+
 /// Track-list shortcuts. They are active only in the track list view.
 const trackListShortcuts = IListConst<DawShortcut>([
   DawShortcut(
@@ -122,5 +127,13 @@ const trackListShortcuts = IListConst<DawShortcut>([
     scope: ShortcutScope.trackList,
     intent: DuplicateClipsIntent(),
     defaultKey: SingleActivator(LogicalKeyboardKey.keyB, control: true),
+  ),
+  DawShortcut(
+    id: 'trackList.deleteClips',
+    title: 'Delete Clips',
+    category: 'Track List',
+    scope: ShortcutScope.trackList,
+    intent: DeleteClipsIntent(),
+    defaultKey: SingleActivator(LogicalKeyboardKey.delete),
   ),
 ]);

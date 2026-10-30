@@ -222,7 +222,7 @@ class _InteractiveClipState extends ConsumerState<_InteractiveClip> {
     final double left = _visualStartTime / widget.zoomLevel;
     final double width = _visualLoopLength / widget.zoomLevel;
     final double safeWidth = width < 1 ? 1 : width;
-    const resizeEdgeSize = 20.0;
+    const resizeEdgeSize = 25.0;
 
     final sampleRate = ref.watch(transportProvider).value?.sampleRate ?? 48000;
     final tempo = ref.watch(transportProvider).value?.state?.bpm ?? 120.0;

@@ -258,7 +258,7 @@ fn resolve_cover<R: Read + Seek>(
     let cover_dir = session_dir.join(COVER_ARCHIVE_DIR);
     let local_path = cover_dir.join(file_name);
     if let Err(error) = std::fs::create_dir_all(&cover_dir) {
-        log::warn!("Project cover dropped, session folder unavailable: {error}");
+        tracing::warn!("Project cover dropped, session folder unavailable: {error}");
         return None;
     }
 
@@ -267,7 +267,7 @@ fn resolve_cover<R: Read + Seek>(
             Ok(()) => local_path,
             // Symlinks can need extra privileges (Windows); reading in place is equivalent
             Err(error) => {
-                log::debug!(
+                tracing::debug!(
                     "Cover symlink unavailable, using {}: {error}",
                     linked.display()
                 );
@@ -295,7 +295,7 @@ fn resolve_cover<R: Read + Seek>(
             linked_path: cover.linked_path.clone(),
         }),
         Err(error) => {
-            log::warn!("Project cover dropped, embedded image unavailable: {error}");
+            tracing::warn!("Project cover dropped, embedded image unavailable: {error}");
             None
         }
     }
@@ -320,13 +320,13 @@ fn link_file(_target: &Path, _link: &Path) -> std::io::Result<()> {
 ///
 /// It lives in the on-disk user cache because the system temporary directory is often
 /// RAM-backed tmpfs on Linux.
-fn extraction_session_dir() -> anyhow::Result<tempfile::TempDir> {
+pub(crate) fn extraction_session_dir() -> anyhow::Result<tempfile::TempDir> {
     let mut builder = tempfile::Builder::new();
     builder.prefix("session_");
     if let Some(directory) = app_cache_dir().map(|cache| cache.join("sessions")) {
         match std::fs::create_dir_all(&directory).and_then(|()| builder.tempdir_in(&directory)) {
             Ok(session) => return Ok(session),
-            Err(error) => log::warn!(
+            Err(error) => tracing::warn!(
                 "Project session cache unavailable in {}, using the temporary directory: {error}",
                 directory.display()
             ),
@@ -419,7 +419,6 @@ mod test {
 
     #[test]
     fn extracted_audio_is_deleted_with_the_last_project_state() {
-        use crate::audio::render_state::AudioGraphState;
         use crate::core::file_manager::audio_loader::AudioLoader;
 
         let dir = tempdir().unwrap();
@@ -443,12 +442,6 @@ mod test {
         let extracted = loaded.asset_library.source_map.values().next().unwrap();
         assert!(extracted.file_path.starts_with(&session));
         assert!(extracted.file_path.is_file());
-        assert!(
-            AudioGraphState::from(&loaded)
-                .asset_library
-                .session_dir
-                .is_none()
-        );
 
         let clone = loaded.clone();
         drop(loaded);

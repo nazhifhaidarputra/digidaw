@@ -11,7 +11,7 @@ beat-this = "1.0"
 karbeat-utils.workspace = true
 rten = { version = "0.24", features = ["fft"] }
 rten-tensor = "0.24"
-log.workspace = true
+tracing.workspace = true
 parking_lot.workspace = true
 sysinfo = "0.38.4"
 rayon.workspace = true

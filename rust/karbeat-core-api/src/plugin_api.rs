@@ -1,10 +1,13 @@
 use karbeat_plugin_types::ParameterSpec;
 use karbeat_plugins::registry::PluginInfo;
 
-use karbeat_core::{
-    audio::{engine::PluginTelemetrySnapshot, event::PluginTarget},
+use karbeat_audio::{
     commands::{AudioCommand, EffectTarget},
     context::DawContext,
+    engine::PluginTelemetrySnapshot,
+    event::PluginTarget,
+};
+use karbeat_core::{
     core::project::{
         AutomationTarget, EffectAutomationTarget, GeneratorId, GeneratorInstance,
         MasterAutomationTarget, MixerChannelParamTarget, TrackAutomationTarget, TrackId,

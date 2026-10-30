@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 
 use crate::api::context::DawContext;
+use crate::api::project::UiApplicationState;
 use flutter_rust_bridge::frb;
 use karbeat_core::core::project::{
     GeneratorId, Note, NoteId, track::midi::Pattern, track::note_transform,
@@ -124,6 +125,15 @@ pub fn rename_pattern(ctx: &DawContext, pattern_id: u64, new_name: &str) -> Resu
     crate::api::context::project_ctx!(ctx);
     pattern_api::rename_pattern(ctx, PatternId::from_u64(pattern_id), new_name)
         .map_err(|error| error.to_string())
+}
+
+/// Deletes a MIDI pattern and every clip that plays it as one undoable step, and returns the
+/// project as it is afterwards.
+pub fn delete_pattern(ctx: &DawContext, pattern_id: u64) -> Result<UiApplicationState, String> {
+    let mut core = ctx.project_write();
+    pattern_api::delete_pattern(&mut core, PatternId::from_u64(pattern_id))
+        .map_err(|error| error.to_string())?;
+    Ok(UiApplicationState::from(core.app_state.clone()))
 }
 
 pub fn add_note(
@@ -485,6 +495,25 @@ pub fn transpose_notes(
     .map_err(|e| e.to_string())
 }
 
+/// Scales notes in time around their earliest start, growing both their
+/// positions and their durations by `factor`.
+pub fn stretch_notes(
+    ctx: &DawContext,
+    pattern_id: u64,
+    note_ids: Vec<u32>,
+    factor: f64,
+) -> Result<UiPattern, String> {
+    crate::api::context::project_ctx!(ctx);
+    note_api::stretch_notes(
+        ctx,
+        PatternId::from_u64(pattern_id),
+        &self::note_ids(&note_ids),
+        factor,
+    )
+    .map(|pattern| UiPattern::from(&pattern))
+    .map_err(|e| e.to_string())
+}
+
 /// Moves notes in time by `delta_ticks`.
 pub fn shift_notes(
     ctx: &DawContext,
@@ -542,4 +571,19 @@ pub fn add_note_copies(
     )
     .map(|pattern| UiPattern::from(&pattern))
     .map_err(|e| e.to_string())
+}
+
+/// Duplicates notes after themselves so the earliest copy starts at `start_tick`,
+/// keeping their relative timing and parameters.
+pub fn duplicate_pattern_notes(
+    ctx: &DawContext,
+    pattern_id: u64,
+    note_ids: Vec<u32>,
+    start_tick: u64,
+) -> Result<UiPattern, String> {
+    crate::api::context::project_ctx!(ctx);
+    let note_ids: Vec<NoteId> = note_ids.into_iter().map(NoteId::from).collect();
+    note_api::duplicate_notes(ctx, PatternId::from_u64(pattern_id), &note_ids, start_tick)
+        .map(|pattern| UiPattern::from(&pattern))
+        .map_err(|e| e.to_string())
 }

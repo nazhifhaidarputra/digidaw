@@ -18,6 +18,14 @@ class ImportAudioIntent extends Intent {
   const ImportAudioIntent();
 }
 
+class OpenProjectIntent extends Intent {
+  const OpenProjectIntent();
+}
+
+class NewProjectIntent extends Intent {
+  const NewProjectIntent();
+}
+
 const workspaceShortcuts = IListConst<DawShortcut>([
   DawShortcut(
     id: "transport.togglePlayback",
@@ -46,6 +54,28 @@ const workspaceShortcuts = IListConst<DawShortcut>([
     category: 'Transport',
     intent: ToggleMetronomeIntent(),
     defaultKey: SingleActivator(LogicalKeyboardKey.keyM, control: true),
+  ),
+  DawShortcut(
+    id: 'transport.recordSelectedTrack',
+    title: 'Record Selected Track',
+    category: 'Transport',
+    intent: RecordSelectedTrackIntent(),
+    defaultKey: SingleActivator(
+      LogicalKeyboardKey.keyR,
+      control: true,
+      alt: true,
+    ),
+  ),
+  DawShortcut(
+    id: 'transport.stopRecording',
+    title: 'Stop Recording',
+    category: 'Transport',
+    intent: StopRecordingIntent(),
+    defaultKey: SingleActivator(
+      LogicalKeyboardKey.keyE,
+      control: true,
+      alt: true,
+    ),
   ),
   DawShortcut(
     id: "workspace.save",
@@ -114,5 +144,19 @@ const workspaceShortcuts = IListConst<DawShortcut>([
     category: 'Workspace',
     intent: ImportAudioIntent(),
     defaultKey: SingleActivator(LogicalKeyboardKey.keyI, control: true),
+  ),
+  DawShortcut(
+    id: 'workspace.openProject',
+    title: "Open Project",
+    category: 'Workspace',
+    intent: OpenProjectIntent(),
+    defaultKey: SingleActivator(LogicalKeyboardKey.keyO, control: true),
+  ),
+  DawShortcut(
+    id: 'workspace.newProject',
+    title: "New Empty Project",
+    category: 'Workspace',
+    intent: NewProjectIntent(),
+    defaultKey: SingleActivator(LogicalKeyboardKey.keyN, control: true),
   ),
 ]);

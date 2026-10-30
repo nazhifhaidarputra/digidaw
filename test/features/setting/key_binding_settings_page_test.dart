@@ -119,6 +119,22 @@ void main() {
     );
   });
 
+  testWidgets('captures Backspace as a bare shortcut', (tester) async {
+    await pumpPage(tester);
+
+    await tester.tap(changeButton('workspace.undo'));
+    await tester.pumpAndSettle();
+    await tester.sendKeyEvent(LogicalKeyboardKey.backspace);
+    await tester.pumpAndSettle();
+
+    final remapped = container
+        .read(shortcutManagerProvider.notifier)
+        .activeChords()['workspace.undo'];
+    expect(remapped?.logicalKeyId, LogicalKeyboardKey.backspace.keyId);
+    expect(remapped?.control, isFalse);
+    expect(preferences.saved.containsKey('workspace.undo'), isTrue);
+  });
+
   testWidgets('escape cancels capture without changing state', (tester) async {
     await pumpPage(tester);
 

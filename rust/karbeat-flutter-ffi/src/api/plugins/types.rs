@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use karbeat_core::audio::engine::PluginTelemetrySnapshot;
+use karbeat_audio::engine::PluginTelemetrySnapshot;
 use karbeat_plugin_api::types::BufferDataType;
 
 use crate::api::plugins::opaque::ZeroCopyHandle;

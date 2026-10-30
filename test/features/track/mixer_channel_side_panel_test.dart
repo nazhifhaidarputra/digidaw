@@ -60,6 +60,7 @@ class _ProjectNotifier extends ProjectNotifier {
         trackType: UiTrackType.midi,
         clips: [],
         orderIdx: 0,
+        input: const UiTrackInput(firstChannel: 0, channels: 2, monitor: false),
       ),
     }),
     generators: const IMapConst({}),

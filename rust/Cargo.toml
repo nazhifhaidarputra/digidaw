@@ -13,17 +13,18 @@ members = [
     "karbeat-plugin-api",
     "karbeat-utils",
     "karbeat-macros",
-    "karbeat-plugin-types", "karbeat-vst3", "karbeat-clap", "karbeat-lv2", "karbeat-signalsmith",
+    "karbeat-plugin-types", "karbeat-vst3", "karbeat-clap", "karbeat-lv2", "karbeat-signalsmith", "karbeat-audio",
 ]
 
 [workspace.package]
-version = "0.7.0"
+version = "0.8.0"
 edition = "2024"
 license = "GPL 3.0"
 
 [workspace.dependencies]
 karbeat-core = { path = "karbeat-core" }
 karbeat-core-api = { path = "karbeat-core-api" }
+karbeat-audio = { path = "karbeat-audio" }
 karbeat-analysis = { path = "karbeat-analysis" }
 karbeat-dsp = { path = "karbeat-dsp" }
 karbeat-rb = { path = "karbeat-rb" }
@@ -40,12 +41,16 @@ karbeat-macros = { path = "karbeat-macros" }
 karbeat-plugin-types = { path = "karbeat-plugin-types" }
 anyhow = "1.0.103"
 cpal = { version = "0.17.3"}
-env_logger = "0.11"
 fastrand = "2.4"
-log = "0.4.28"
+tracing = "0.1.44"
+tracing-log = "0.2"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 once_cell = "1.21"
 rodio = {version= "0.22.1", features=["symphonia-all"]}
 rtrb = "0.3.2"
+crossbeam-utils = "0.8.23"
+atomic-wait = "1.1.0"
+audio_thread_priority = "0.38.0"
 serde = { version = "1.0.228", features = ["derive", "rc"] }
 serde_json = { version = "1.0.149", features = ["float_roundtrip"] }
 base64 = "0.22.1"

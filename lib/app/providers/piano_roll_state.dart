@@ -66,7 +66,9 @@ abstract class PianoRollStateData with _$PianoRollStateData {
     /// Loop region for pattern playback; the whole pattern loops when null.
     @Default(null) PatternLoopRegion? loopRegion,
 
-    /// Notes the draw tool stamps: the latest selection, like FL Studio.
+    /// The last single note the draw tool stamps when nothing is selected.
+    /// A multi-note selection is drawn from the live selection instead, so
+    /// clearing a range selection does not leave its whole batch armed.
     @Default(IListConst<UiNote>([])) IList<UiNote> drawTemplate,
   }) = _PianoRollStateData;
 
@@ -149,15 +151,39 @@ class PianoRollNotifier extends Notifier<PianoRollStateData> {
 
   void scaleKeyHeight(double factor) => setKeyHeight(state.keyHeight * factor);
 
+  /// Opens [patternId] for editing, resetting selection and per-pattern state.
+  ///
+  /// The selected preview generator is kept unless [previewGeneratorId] is given, so switching
+  /// patterns keeps playing through the same instrument.
   void openPattern(int patternId, {int? previewGeneratorId}) {
     final changed = state.editingPatternId != patternId;
     state = state.copyWith(
       editingPatternId: patternId,
       selectedNoteIds: const ISetConst({}),
-      previewGeneratorId: previewGeneratorId,
+      previewGeneratorId: previewGeneratorId ?? state.previewGeneratorId,
       loopRegion: changed ? null : state.loopRegion,
       drawTemplate: changed ? const IListConst([]) : state.drawTemplate,
     );
+  }
+
+  /// Points an active pattern playback at [patternId] after the editor switches patterns.
+  ///
+  /// The engine ignores this outside pattern mode, so opening a pattern for editing never
+  /// interrupts song playback. A running preview keeps playing, now with the opened pattern.
+  Future<void> followPlaybackPattern(int patternId) async {
+    final generatorId = state.previewGeneratorId;
+    final result = await AsyncValue.guard(() async {
+      if (generatorId != null) {
+        await transport_api.switchPatternGenerator(
+          ctx: _ctx,
+          generatorId: generatorId,
+        );
+      }
+      await transport_api.switchPattern(ctx: _ctx, patternId: patternId);
+    });
+    if (result.hasError) {
+      AppLogger.error('Could not switch pattern playback: ${result.error}');
+    }
   }
 
   void clearEditingPattern() {
@@ -260,7 +286,7 @@ class PianoRollNotifier extends Notifier<PianoRollStateData> {
     final selection = noteIds.toISet();
     state = state.copyWith(
       selectedNoteIds: selection,
-      drawTemplate: _templateFor(selection) ?? state.drawTemplate,
+      drawTemplate: _singleNoteTemplate(selection) ?? state.drawTemplate,
     );
   }
 
@@ -269,24 +295,66 @@ class PianoRollNotifier extends Notifier<PianoRollStateData> {
     final selection = state.selectedNoteIds.addAll(noteIds);
     state = state.copyWith(
       selectedNoteIds: selection,
-      drawTemplate: _templateFor(selection) ?? state.drawTemplate,
+      drawTemplate: _singleNoteTemplate(selection) ?? state.drawTemplate,
     );
   }
 
-  /// Notes the draw tool stamps after [selection], or null to keep the
-  /// current template when nothing is selected.
-  IList<UiNote>? _templateFor(ISet<int> selection) {
+  /// The last interacted single note in [selection], or null when [selection]
+  /// holds a batch. Batches are stamped from the live selection instead, so
+  /// they never become the single-note draw template.
+  IList<UiNote>? _singleNoteTemplate(ISet<int> selection) {
+    if (selection.length != 1) return null;
     final patternId = state.editingPatternId;
-    if (selection.isEmpty || patternId == null) return null;
+    if (patternId == null) return null;
     final notes = _projectState.value?.patterns[patternId]?.notes ?? const [];
     final template = notes.where((note) => selection.contains(note.id));
     return template.isEmpty ? null : template.toIList();
   }
 
+  /// Notes the draw tool stamps: the highlighted selection as a batch, or the
+  /// last interacted single note when nothing is selected.
+  IList<UiNote> drawTemplateFor(UiPattern pattern) {
+    final selection = state.selectedNoteIds;
+    if (selection.isNotEmpty) {
+      final selected = pattern.notes
+          .where((note) => selection.contains(note.id))
+          .toList();
+      if (selected.isNotEmpty) return selected.toIList();
+    }
+
+    // Read the stored template back from the live pattern so edits to the last
+    // single note are reflected, and a deleted note stops being stamped.
+    final storedIds = state.drawTemplate.map((note) => note.id).toSet();
+    if (storedIds.isEmpty) return const IListConst([]);
+    return pattern.notes.where((note) => storedIds.contains(note.id)).toIList();
+  }
+
+  /// Arms [noteId] as the single note the draw tool stamps when nothing is
+  /// selected, without changing the selection. Called when a note is grabbed,
+  /// so the last touched note stays the single-note brush after a batch is
+  /// deselected.
+  void rememberSingleNote(int noteId) {
+    final patternId = state.editingPatternId;
+    if (patternId == null) return;
+    if (state.drawTemplate.length == 1 &&
+        state.drawTemplate.first.id == noteId) {
+      return;
+    }
+    final notes = _projectState.value?.patterns[patternId]?.notes ?? const [];
+    for (final note in notes) {
+      if (note.id == noteId) {
+        state = state.copyWith(drawTemplate: [note].toIList());
+        return;
+      }
+    }
+  }
+
   void removeNotesFromSelection(Iterable<int> noteIds) {
     // O(1) immutable removal
+    final selection = state.selectedNoteIds.removeAll(noteIds);
     state = state.copyWith(
-      selectedNoteIds: state.selectedNoteIds.removeAll(noteIds),
+      selectedNoteIds: selection,
+      drawTemplate: _singleNoteTemplate(selection) ?? state.drawTemplate,
     );
   }
 
@@ -544,6 +612,13 @@ class PianoRollNotifier extends Notifier<PianoRollStateData> {
     }
   }
 
+  /// Copies the selected notes to the note clipboard.
+  Future<void> copySelectedNotes() async {
+    final patternId = state.editingPatternId;
+    if (patternId == null || state.selectedNoteIds.isEmpty) return;
+    await copyNotesFromPattern(patternId, _targetNoteIds);
+  }
+
   Future<void> cutNotesFromPattern(int patternId, List<int> noteIds) async {
     final patternOriCopy = _projectState.value?.patterns[patternId];
     if (patternOriCopy == null) return;
@@ -628,11 +703,11 @@ class PianoRollNotifier extends Notifier<PianoRollStateData> {
     return Result.ok(null);
   }
 
-  Future<void> pasteNotesFromClipboardToPattern(
+  Future<Result<void>> pasteNotesFromClipboardToPattern(
     int targetPatternId,
-    int newTickStart,
-    int newKey,
-  ) async {
+    int newTickStart, {
+    int? newKey,
+  }) async {
     final result = await ref.guardApi(() async {
       final pastedNotes = await session_api.pastePatternNotes(
         ctx: _ctx,
@@ -650,7 +725,99 @@ class PianoRollNotifier extends Notifier<PianoRollStateData> {
 
     if (result.hasError) {
       AppLogger.error(result.error.toString());
+      return Result.error(Exception(result.error.toString()));
     }
+    return Result.ok(null);
+  }
+
+  /// Pastes the note clipboard after the selected notes, or after the last note
+  /// in the pattern when nothing is selected. The start is rounded up to the
+  /// next draw step.
+  Future<Result<void>> pasteNotesAfterSelection() async {
+    final patternId = state.editingPatternId;
+    final pattern = patternId == null
+        ? null
+        : _projectState.value?.patterns[patternId];
+    if (patternId == null || pattern == null) {
+      return ref.notifyErrorResult(Exception('Pattern not found'));
+    }
+
+    return pasteNotesFromClipboardToPattern(
+      patternId,
+      _nextStepTick(_notesEndTick(pattern, state.selectedNoteIds)),
+    );
+  }
+
+  /// Duplicates the selected notes after themselves without touching the note
+  /// clipboard, then selects the copies. The start is rounded up to the next
+  /// draw step.
+  Future<Result<void>> duplicateSelectedNotes() async {
+    final patternId = state.editingPatternId;
+    final noteIds = _targetNoteIds;
+    final pattern = patternId == null
+        ? null
+        : _projectState.value?.patterns[patternId];
+    if (patternId == null || pattern == null) {
+      return ref.notifyErrorResult(Exception('Pattern not found'));
+    }
+    if (noteIds.isEmpty) return Result.ok(null);
+
+    final result = await AsyncValue.guard(
+      () => pattern_api.duplicatePatternNotes(
+        ctx: _ctx,
+        patternId: patternId,
+        noteIds: noteIds,
+        startTick: _nextStepTick(_notesEndTick(pattern, noteIds)),
+      ),
+    );
+
+    if (result case AsyncData(:final value)) {
+      final existingIds = pattern.notes.map((note) => note.id).toSet();
+      _projectNotifier.upsertPattern(patternId, value);
+      selectNotes(
+        value.notes
+            .where((note) => !existingIds.contains(note.id))
+            .map((note) => note.id),
+      );
+      return Result.ok(null);
+    }
+
+    AppLogger.error('Could not duplicate notes: ${result.error}');
+    return ref.notifyErrorResult(
+      result.error ?? Exception('Unknown error'),
+      title: 'Could not duplicate notes',
+    );
+  }
+
+  /// Deletes the selected notes and clears the note selection.
+  Future<Result<void>> deleteSelectedNotes() async {
+    final patternId = state.editingPatternId;
+    final noteIds = _targetNoteIds;
+    if (patternId == null) {
+      return ref.notifyErrorResult(Exception('Pattern not found'));
+    }
+    if (noteIds.isEmpty) return Result.ok(null);
+
+    clearNoteSelection();
+    return deletePatternNoteBatch(patternId: patternId, noteIds: noteIds);
+  }
+
+  /// Latest end tick among [noteIds], or among every note when it is empty.
+  int _notesEndTick(UiPattern pattern, Iterable<int> noteIds) {
+    final ids = noteIds.toSet();
+    var endTick = 0;
+    for (final note in pattern.notes) {
+      if (ids.isNotEmpty && !ids.contains(note.id)) continue;
+      endTick = max(endTick, note.startTick + note.duration);
+    }
+    return endTick;
+  }
+
+  /// Rounds [tick] up to the next draw step.
+  int _nextStepTick(int tick) {
+    final step = state.stepTicks;
+    if (step <= 1) return tick;
+    return (tick + step - 1) ~/ step * step;
   }
 
   void _applyOptimisticNoteDeletionBatch(int patternId, List<int> noteIds) {
@@ -854,6 +1021,22 @@ class PianoRollNotifier extends Notifier<PianoRollStateData> {
       semitones: semitones,
     ),
   );
+
+  /// Scales notes in time around their earliest start. [factor] above one
+  /// stretches later notes further away and makes every note longer; below one
+  /// squeezes them. Targets the selection, or [noteIds] when given (the stretch
+  /// tool's single-note drag), and falls back to the whole pattern when both are
+  /// empty.
+  Future<Result<void>> stretchNotes(double factor, {Iterable<int>? noteIds}) =>
+      _transformPattern(
+        'stretch',
+        (ctx, patternId) => pattern_api.stretchNotes(
+          ctx: ctx,
+          patternId: patternId,
+          noteIds: (noteIds ?? _targetNoteIds).toList(),
+          factor: factor,
+        ),
+      );
 
   /// Moves notes by [steps] draw steps; negative moves earlier.
   Future<Result<void>> shiftNotes(int steps) => _transformPattern(

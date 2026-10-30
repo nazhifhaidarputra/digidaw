@@ -7,6 +7,7 @@ import 'package:karbeat/app/providers/project_provider.dart';
 import 'package:karbeat/app/providers/workspace_state.dart';
 import 'package:karbeat/core/utils/result_type.dart';
 import 'package:karbeat/features/source/services/audio_waveform_services.dart';
+import 'package:karbeat/features/source/services/source_actions.dart';
 import 'package:karbeat/features/source/view/source_list_screen.dart';
 import 'package:karbeat/shared/enums/global.dart';
 import 'package:karbeat/src/rust/api/automation.dart';
@@ -34,6 +35,7 @@ final _tracks = {
     trackType: UiTrackType.audio,
     clips: [_audioClip(10, _sourceId), _audioClip(11, 99)],
     orderIdx: 0,
+    input: const UiTrackInput(firstChannel: 0, channels: 2, monitor: false),
   ),
   2: UiTrack(
     id: 2,
@@ -53,6 +55,7 @@ final _tracks = {
       ),
     ],
     orderIdx: 1,
+    input: const UiTrackInput(firstChannel: 0, channels: 2, monitor: false),
   ),
 };
 
@@ -70,6 +73,7 @@ class _ProjectNotifier extends ProjectNotifier {
 
   final IMap<int, UiPattern> patterns;
   final List<int> removedSources = [];
+  final List<int> removedPatterns = [];
 
   @override
   Future<ApplicationDataStore> build() async => ApplicationDataStore(
@@ -108,13 +112,24 @@ class _ProjectNotifier extends ProjectNotifier {
     removedSources.add(sourceId);
     return Result.ok(null);
   }
+
+  @override
+  Future<Result<void>> removePattern(int patternId) async {
+    removedPatterns.add(patternId);
+    return Result.ok(null);
+  }
 }
 
 void main() {
   test('only audio clips of the source are counted', () {
-    expect(SourceListScreen.audioSourceClipCount(_tracks.values, _sourceId), 2);
-    expect(SourceListScreen.audioSourceClipCount(_tracks.values, 99), 1);
-    expect(SourceListScreen.audioSourceClipCount(_tracks.values, 5), 0);
+    expect(audioSourceClipCount(_tracks.values, _sourceId), 2);
+    expect(audioSourceClipCount(_tracks.values, 99), 1);
+    expect(audioSourceClipCount(_tracks.values, 5), 0);
+  });
+
+  test('only clips of the pattern are counted', () {
+    expect(patternClipCount(_tracks.values, _sourceId), 1);
+    expect(patternClipCount(_tracks.values, 99), 0);
   });
 
   testWidgets('Delete asks first, then removes the audio source', (
@@ -162,6 +177,52 @@ void main() {
     await tester.tap(find.widgetWithText(FilledButton, 'Delete'));
     await tester.pumpAndSettle();
     expect(project.removedSources, [_sourceId]);
+  });
+
+  testWidgets('Deleting a pattern asks first, then removes it', (tester) async {
+    final project = _ProjectNotifier(
+      patterns: IMap({
+        _sourceId: const UiPattern(
+          id: _sourceId,
+          name: 'Lead',
+          lengthTicks: 3840,
+          notes: [],
+        ),
+      }),
+    );
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          projectProvider.overrideWith(() => project),
+          audioSourcesProvider.overrideWith((ref) async => const {}),
+        ],
+        child: const MaterialApp(home: SourceListScreen()),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    Future<void> openDeleteDialog() async {
+      await tester.tap(find.byIcon(Icons.more_vert));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Delete'));
+      await tester.pumpAndSettle();
+    }
+
+    await openDeleteDialog();
+    expect(find.text('Delete pattern?'), findsOneWidget);
+    expect(
+      find.textContaining('1 clip that plays it will be removed'),
+      findsOneWidget,
+    );
+
+    await tester.tap(find.text('Cancel'));
+    await tester.pumpAndSettle();
+    expect(project.removedPatterns, isEmpty);
+
+    await openDeleteDialog();
+    await tester.tap(find.widgetWithText(FilledButton, 'Delete'));
+    await tester.pumpAndSettle();
+    expect(project.removedPatterns, [_sourceId]);
   });
 
   testWidgets('tapping a pattern opens it in the piano roll', (tester) async {

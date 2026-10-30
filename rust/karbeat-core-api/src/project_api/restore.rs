@@ -1,21 +1,19 @@
 use anyhow::Context;
 use hashbrown::HashMap;
 use indexmap::IndexMap;
-use karbeat_core::{
-    audio::{
-        event::PluginTarget,
-        hosted_plugin::{
-            HostedInstallResult, HostedPluginInstall, HostedProjectInstall, retire_control_transfer,
-        },
-        missing_plugin::MissingPlugin,
-        render_state::AudioGraphState,
-    },
+use karbeat_audio::{
     commands::{AudioCommand, EffectTarget, MixerChannelSeed},
     context::DawContext,
-    core::project::{
-        ApplicationState, GeneratorInstanceType, LoopRegion, mixer::MixerChannel,
-        plugin::PluginInstance,
+    event::PluginTarget,
+    hosted_plugin::{
+        HostedInstallResult, HostedPluginInstall, HostedProjectInstall, retire_control_transfer,
     },
+    missing_plugin::MissingPlugin,
+    render_state::AudioGraphState,
+};
+use karbeat_core::core::project::{
+    ApplicationState, GeneratorInstanceType, LoopRegion, mixer::MixerChannel,
+    plugin::PluginInstance,
 };
 use karbeat_plugins::registry::{PluginFactory, PluginRegistry};
 
@@ -89,7 +87,7 @@ fn seed(channel: &MixerChannel) -> MixerChannelSeed {
     }
 }
 
-use karbeat_core::audio::builtin_plugin::prepare_builtin_plugin;
+use karbeat_audio::builtin_plugin::prepare_builtin_plugin;
 
 pub(super) fn hydration_command(
     app: &ApplicationState,
@@ -171,9 +169,9 @@ fn bypass_commands(app: &ApplicationState) -> Vec<AudioCommand> {
 
 pub struct PendingProjectRestore {
     staged: ApplicationState,
-    handles: karbeat_core::context::ControlHandles,
+    handles: karbeat_audio::context::ControlHandles,
     plugin_registry: PluginRegistry,
-    plugin_catalog: karbeat_core::audio::plugin_catalog::PluginCatalog,
+    plugin_catalog: karbeat_audio::plugin_catalog::PluginCatalog,
     sample_rate: u32,
     block_size: usize,
     has_engine: bool,
@@ -185,7 +183,7 @@ pub struct CompletedProjectRestore {
     receipts: Vec<(
         PluginTarget,
         karbeat_host::ExternalPluginInstanceHandle,
-        karbeat_core::audio::hosted_plugin::HostedInstallReceipt,
+        karbeat_audio::hosted_plugin::HostedInstallReceipt,
     )>,
 }
 
@@ -403,7 +401,7 @@ pub(super) fn commit_replace(ctx: &mut DawContext, completed: CompletedProjectRe
     for (target, reason) in &ctx.external_plugin_failures {
         ctx.hosted_targets.insert(
             *target,
-            karbeat_core::context::HostedTargetState::failed(reason.clone()),
+            karbeat_audio::context::HostedTargetState::failed(reason.clone()),
         );
     }
     ctx.app_state = completed.staged;

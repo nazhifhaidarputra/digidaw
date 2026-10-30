@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:karbeat/app/providers/notification_provider.dart';
+import 'package:karbeat/core/utils/formatter.dart';
 import 'package:karbeat/core/utils/logger.dart';
 import 'package:karbeat/core/utils/result_type.dart';
 import 'package:karbeat/features/workspace/models/browser_panel_state.dart';
@@ -23,15 +24,24 @@ abstract class FloatingMidiKeyboardFieldState
   const factory FloatingMidiKeyboardFieldState({
     int? selectedGeneratorId,
     @Default(48) int baseKey,
-    @Default(15) int keyRange,
+    @Default(24) int keyRange,
     @Default(false) bool showed,
   }) = _FloatingMidiKeyboardFieldState;
+
+  /// Scientific pitch octave of [baseKey], where C4 is note 60.
+  int get baseOctave => midiKeyOctave(baseKey);
+
+  /// Pitch class of [baseKey], `0` for C through `11` for B.
+  int get basePitchClass => midiKeyPitchClass(baseKey);
+
+  /// Display label of [baseKey], combining the octave and the key, e.g. `C4`.
+  String get baseNoteLabel => numToMidiKey(baseKey);
 
   /// Clamped factory that mirrors the original constructor logic
   factory FloatingMidiKeyboardFieldState.create({
     int? selectedGeneratorId,
     int baseKey = 48,
-    int keyRange = 15,
+    int keyRange = 24,
     bool showed = false,
   }) {
     return FloatingMidiKeyboardFieldState(
@@ -457,6 +467,28 @@ class WorkspaceNotifier extends Notifier<WorkspaceState> {
         baseKey: key.clamp(21, 120),
       ),
     );
+  }
+
+  /// Move the keyboard's lowest key to [octave], keeping the selected key.
+  void setMidiKeyboardOctave(int octave) {
+    final pitchClass = state.floatingMidiKeyboardState.basePitchClass;
+    final targetOctave = _midiKeyboardOctaveFor(octave, pitchClass);
+    setMidiKeyboardBaseKey((targetOctave + 1) * 12 + pitchClass);
+  }
+
+  /// Choose the key (pitch class, C through B) of the keyboard's lowest key.
+  void setMidiKeyboardKey(int pitchClass) {
+    final baseKey = state.floatingMidiKeyboardState.baseKey;
+    final key = pitchClass.clamp(0, 11);
+    final targetOctave = _midiKeyboardOctaveFor(midiKeyOctave(baseKey), key);
+    setMidiKeyboardBaseKey((targetOctave + 1) * 12 + key);
+  }
+
+  /// Keeps [pitchClass] inside the playable MIDI range while moving octaves.
+  int _midiKeyboardOctaveFor(int octave, int pitchClass) {
+    final minOctave = ((21 - pitchClass) / 12).ceil() - 1;
+    final maxOctave = ((120 - pitchClass) ~/ 12) - 1;
+    return octave.clamp(minOctave, maxOctave);
   }
 
   void setMidiKeyboardRange(int range) {

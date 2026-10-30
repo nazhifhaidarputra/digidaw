@@ -3,7 +3,7 @@ name = "karbeat-core"
 version.workspace = true
 edition.workspace = true
 license = "GPL-3.0-only"
-description = "Core logic implementation of Karbeat, including audio engine and main business logic"
+description = "Persisted project model, file management, history, and core business logic for Karbeat"
 
 [dependencies]
 karbeat-dsp.workspace = true
@@ -14,17 +14,13 @@ karbeat-plugin-types.workspace = true
 karbeat-host.workspace = true
 
 anyhow.workspace = true
-cpal.workspace = true
-log.workspace = true
-rtrb.workspace = true
+tracing.workspace = true
 serde.workspace = true
 
 thiserror.workspace = true
 smallvec.workspace = true
 hashbrown.workspace = true
 rodio.workspace = true
-dasp.workspace = true
-parking_lot.workspace = true
 memmap2.workspace = true
 bytemuck.workspace = true
 tempfile.workspace = true
@@ -32,47 +28,16 @@ indexmap.workspace = true
 toml.workspace = true
 rmp-serde.workspace = true
 zip.workspace = true
-hound.workspace = true
-derive_builder.workspace = true
 serde_json.workspace = true
-wide.workspace = true
 itertools.workspace = true
 rayon = "1.12.0"
-mp3lame-encoder = "0.2.4"
 sysinfo = "0.38.4"
-triple_buffer.workspace = true
 slotmap.workspace = true
-slab.workspace = true
-rubato.workspace = true
-futures-lite.workspace = true
 jiff.workspace = true
-flacenc = "0.5.1"
-opus = "0.4.0"
-ogg = "0.9.2"
 jpeg-encoder = "0.7.1"
 
 [target.'cfg(unix)'.dependencies]
 signal-hook = "0.3.18"
-
-[target.'cfg(target_os = "linux")'.dependencies]
-cpal = { workspace = true, features = ["jack"] }
-
-[dev-dependencies]
-criterion.workspace = true
-shuttle.workspace = true
-# Same crate and features rodio already builds; used to read back exported tags
-symphonia = { version = "0.5.5", default-features = false, features = ["flac", "mp3", "ogg", "wav"] }
-
-[features]
-default = []
-asio = ["cpal/asio"]
-# Exposes the engine fixture builders to the benchmarks.
-bench-support = []
-
-[[bench]]
-name = "engine_block"
-harness = false
-required-features = ["bench-support"]
 
 [lints]
 workspace = true

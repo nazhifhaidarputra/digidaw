@@ -1,4 +1,4 @@
-use karbeat_core::context::DawContext;
+use karbeat_audio::context::DawContext;
 use karbeat_core::core::history::actions::{NoteMove, NotesChanged, NotesMoved, NotesResized};
 use karbeat_core::core::project::track::midi::Pattern;
 use karbeat_core::core::project::track::note_transform::{self, NoteEdit, NoteParams};
@@ -367,6 +367,23 @@ pub fn transpose_notes(
     })
 }
 
+/// Scales the selection in time around its earliest note start. Starts and
+/// durations both scale, so later notes travel and grow further.
+pub fn stretch_notes(
+    ctx: &mut DawContext,
+    pattern_id: PatternId,
+    note_ids: &[NoteId],
+    factor: f64,
+) -> anyhow::Result<Pattern> {
+    anyhow::ensure!(
+        factor.is_finite() && factor > 0.0,
+        "Stretch factor must be positive"
+    );
+    transform_notes(ctx, pattern_id, "Stretch Notes", note_ids, |notes| {
+        Ok(note_transform::stretch(notes, factor))
+    })
+}
+
 /// Moves notes by `delta_ticks` in time, stopping the group at tick 0.
 pub fn shift_notes(
     ctx: &mut DawContext,
@@ -376,6 +393,19 @@ pub fn shift_notes(
 ) -> anyhow::Result<Pattern> {
     transform_notes(ctx, pattern_id, "Shift Notes", note_ids, |notes| {
         Ok(note_transform::shift(notes, delta_ticks))
+    })
+}
+
+/// Copies notes after themselves so the earliest copy starts at `start_tick`,
+/// keeping their relative timing and parameters. Does not touch the clipboard.
+pub fn duplicate_notes(
+    ctx: &mut DawContext,
+    pattern_id: PatternId,
+    note_ids: &[NoteId],
+    start_tick: u64,
+) -> anyhow::Result<Pattern> {
+    transform_notes(ctx, pattern_id, "Duplicate Notes", note_ids, |notes| {
+        Ok(note_transform::duplicate(notes, start_tick))
     })
 }
 

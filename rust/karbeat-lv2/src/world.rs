@@ -94,7 +94,7 @@ pub fn probe_bundle(path: &Path) -> Result<Vec<PluginDescriptor>, HostError> {
             continue;
         }
         if let Some(reason) = unhostable(&plugin, &uris) {
-            log::debug!("{uri}: skipped, {reason}");
+            tracing::debug!("{uri}: skipped, {reason}");
             continue;
         }
         let Some(name) = plugin.name().as_str().map(str::to_owned) else {

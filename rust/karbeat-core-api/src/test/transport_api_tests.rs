@@ -4,7 +4,7 @@
 mod tests {
     use crate::test::helpers::make_ctx;
     use crate::transport_api;
-    use karbeat_core::audio::engine::PlaybackMode;
+    use karbeat_audio::engine::PlaybackMode;
     use karbeat_core::shared::id::{GeneratorId, PatternId};
 
     #[test]

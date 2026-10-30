@@ -6,6 +6,7 @@ import 'package:flutter/scheduler.dart';
 import 'package:karbeat/app/providers/telemetry_polling_suppression.dart';
 import 'package:karbeat/app/providers/mixer_state.dart';
 import 'package:karbeat/app/providers/notification_provider.dart';
+import 'package:karbeat/app/providers/piano_roll_state.dart';
 import 'package:karbeat/app/providers/project_provider.dart';
 import 'package:karbeat/app/providers/workspace_state.dart';
 import 'package:karbeat/features/workspace/view/control_panel.dart';
@@ -31,6 +32,7 @@ class _MainContentState extends ConsumerState<MainContent>
   late final Ticker _mixerTelemetryTicker;
   late final DawContext _dawContext;
   late final ProviderSubscription<WorkspaceView> _workspaceSubscription;
+  late final ProviderSubscription<int?> _patternSubscription;
   bool _telemetryActive = false;
 
   @override
@@ -44,6 +46,17 @@ class _MainContentState extends ConsumerState<MainContent>
     _workspaceSubscription = ref.listenManual(
       workspaceStateProvider.select((state) => state.currentView),
       (_, view) => _setTelemetryActive(_showsMixerMeters(view)),
+    );
+    // The piano roll screen is rebuilt when the workspace view changes, so playback can only
+    // follow the opened pattern from a listener that is always mounted.
+    _patternSubscription = ref.listenManual(
+      pianoRollProvider.select((state) => state.editingPatternId),
+      (previous, next) {
+        if (next == null || previous == next) return;
+        unawaited(
+          ref.read(pianoRollProvider.notifier).followPlaybackPattern(next),
+        );
+      },
     );
     _setTelemetryActive(
       _showsMixerMeters(ref.read(workspaceStateProvider).currentView),
@@ -79,6 +92,7 @@ class _MainContentState extends ConsumerState<MainContent>
   @override
   void dispose() {
     _workspaceSubscription.close();
+    _patternSubscription.close();
     if (_telemetryActive) {
       unawaited(_updateTelemetrySubscription(false));
     }

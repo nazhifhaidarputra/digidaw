@@ -6,10 +6,24 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:karbeat/core/utils/result_type.dart';
 
 class AppearanceAssetService {
+  /// Asset key of the colour theme used until the user picks another one.
+  static const defaultColorThemeSource = 'assets/themes/digidaw_dark.json';
+
+  static const digidawLightColorThemeSource =
+      'assets/themes/digidaw_light.json';
+  static const digidawDarkColorThemeSource = defaultColorThemeSource;
+
+  static const catppuccinMochaColorThemeSource =
+      'assets/themes/catppuccin_mocha.json';
+  static const catppuccinLatteColorThemeSource =
+      'assets/themes/catppuccin_latte.json';
+
   /// Asset keys of the colour themes shipped with the app, in menu order.
   static const bundledColorThemes = [
-    'assets/themes/catppuccin_mocha.json',
-    'assets/themes/catppuccin_latte.json',
+    digidawDarkColorThemeSource,
+    digidawLightColorThemeSource,
+    catppuccinMochaColorThemeSource,
+    catppuccinLatteColorThemeSource,
   ];
 
   static const maxColorThemeFileBytes = 1024 * 1024;

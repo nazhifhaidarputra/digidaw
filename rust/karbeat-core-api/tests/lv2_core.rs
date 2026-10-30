@@ -19,16 +19,16 @@ fn main() {
     reason = "integration test assertions"
 )]
 mod lv2 {
-    use karbeat_core::{
-        audio::{
+    use karbeat_audio::{
+        commands::EffectTarget,
+        context::DawContext,
+        message::TelemetryRegistry,
+        {
             engine::{AudioEngine, AudioEngineTelemetry},
             event::PluginTarget,
         },
-        commands::EffectTarget,
-        context::DawContext,
-        core::project::GeneratorInstanceType,
-        message::TelemetryRegistry,
     };
+    use karbeat_core::core::project::GeneratorInstanceType;
     use karbeat_core_api::{
         audio_api, audio_settings_api, external_plugin_api, project_api, track_api,
     };

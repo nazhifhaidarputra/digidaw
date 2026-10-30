@@ -43,6 +43,27 @@ class ShiftNotesIntent extends Intent {
   final int steps;
 }
 
+/// Copies the selected notes to the note clipboard.
+class CopyNotesIntent extends Intent {
+  const CopyNotesIntent();
+}
+
+/// Pastes the note clipboard after the selection, snapped up to the draw step.
+class PasteNotesIntent extends Intent {
+  const PasteNotesIntent();
+}
+
+/// Duplicates the selected notes after themselves, without touching the
+/// clipboard.
+class DuplicateNotesIntent extends Intent {
+  const DuplicateNotesIntent();
+}
+
+/// Deletes the selected notes and clears the selection.
+class DeleteNotesIntent extends Intent {
+  const DeleteNotesIntent();
+}
+
 /// Switches the piano-roll tool.
 class SelectPianoRollToolIntent extends Intent {
   const SelectPianoRollToolIntent(this.tool);
@@ -141,6 +162,38 @@ const pianoRollShortcuts = IListConst<DawShortcut>([
     defaultKey: SingleActivator(LogicalKeyboardKey.arrowRight, shift: true),
   ),
   DawShortcut(
+    id: 'pianoRoll.copyNotes',
+    title: 'Copy Notes',
+    category: 'Piano Roll',
+    scope: ShortcutScope.pianoRoll,
+    intent: CopyNotesIntent(),
+    defaultKey: SingleActivator(LogicalKeyboardKey.keyC, control: true),
+  ),
+  DawShortcut(
+    id: 'pianoRoll.pasteNotes',
+    title: 'Paste Notes',
+    category: 'Piano Roll',
+    scope: ShortcutScope.pianoRoll,
+    intent: PasteNotesIntent(),
+    defaultKey: SingleActivator(LogicalKeyboardKey.keyV, control: true),
+  ),
+  DawShortcut(
+    id: 'pianoRoll.duplicateNotes',
+    title: 'Duplicate Notes',
+    category: 'Piano Roll',
+    scope: ShortcutScope.pianoRoll,
+    intent: DuplicateNotesIntent(),
+    defaultKey: SingleActivator(LogicalKeyboardKey.keyB, control: true),
+  ),
+  DawShortcut(
+    id: 'pianoRoll.deleteNotes',
+    title: 'Delete Notes',
+    category: 'Piano Roll',
+    scope: ShortcutScope.pianoRoll,
+    intent: DeleteNotesIntent(),
+    defaultKey: SingleActivator(LogicalKeyboardKey.delete),
+  ),
+  DawShortcut(
     id: 'pianoRoll.tool.grab',
     title: 'Grab Tool',
     category: 'Piano Roll Tools',
@@ -203,5 +256,13 @@ const pianoRollShortcuts = IListConst<DawShortcut>([
     scope: ShortcutScope.pianoRoll,
     intent: SelectPianoRollToolIntent(PianoRollToolSelection.zoom),
     defaultKey: SingleActivator(LogicalKeyboardKey.digit8, alt: true),
+  ),
+  DawShortcut(
+    id: 'pianoRoll.tool.stretch',
+    title: 'Stretch Tool',
+    category: 'Piano Roll Tools',
+    scope: ShortcutScope.pianoRoll,
+    intent: SelectPianoRollToolIntent(PianoRollToolSelection.stretch),
+    defaultKey: SingleActivator(LogicalKeyboardKey.digit9, alt: true),
   ),
 ]);

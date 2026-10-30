@@ -1,4 +1,4 @@
-use karbeat_core::context::DawContext;
+use karbeat_audio::context::DawContext;
 use karbeat_core::core::history::actions::{ClipEditRecorder, ClipsMadeUnique};
 use karbeat_core::core::project::clip::{
     Clip, ClipSourceType, ClipTimeUnit, MadeUnique, ResizeEdge,
@@ -39,7 +39,7 @@ pub fn add_clip(
         .app_state
         .create_new_clip(source_id, source_type, track_id, start_time)
         .map_err(|error| {
-            log::error!("Error creating clip: {error:?}");
+            tracing::error!("Error creating clip: {error:?}");
             error
         })?;
     let action = recorder.finish(&mut ctx.app_state);

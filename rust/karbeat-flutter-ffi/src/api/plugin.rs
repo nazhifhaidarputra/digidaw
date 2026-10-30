@@ -2,7 +2,7 @@ use crate::api::context::DawContext;
 use crate::api::plugins::PluginTelemetrySnapshotDto;
 use crate::api::{mixer::UiEffectInstance, project::UiGeneratorInstance};
 use flutter_rust_bridge::frb;
-use karbeat_core::audio::event::PluginTarget;
+use karbeat_audio::event::PluginTarget;
 use karbeat_core::core::project::TrackId;
 use karbeat_core::plugin_types::ParameterValueType;
 use karbeat_core::shared::id::*;
@@ -82,7 +82,7 @@ impl IntoParamId for UiParamId {
 // ============================================================================
 
 /// Identifies which live plugin instance on the audio thread to target.
-/// Mirrors `karbeat_core::audio::event::PluginTarget` for FRB exposure.
+/// Mirrors `karbeat_audio::event::PluginTarget` for FRB exposure.
 #[derive(Clone, Debug)]
 #[frb(dart_metadata=("freezed"))]
 pub enum UiPluginTarget {
@@ -454,7 +454,7 @@ mod tests {
     fn generator_lookup_rejects_a_deleted_generator_id() {
         crate::sync::check_random(
             || {
-                let mut core = karbeat_core::context::DawContext::new();
+                let mut core = karbeat_audio::context::DawContext::new();
                 let removed = core.app_state.add_generator(Default::default());
                 core.app_state.remove_generator(removed);
                 let replacement = core.app_state.add_generator(Default::default());

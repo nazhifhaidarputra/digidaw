@@ -90,7 +90,7 @@ impl EditorPlan {
             let node = ui.uri();
             // A UI described in its own file is not loaded with the plugin's data.
             if world.load_resource(&node).is_none() {
-                log::debug!("LV2 editor description could not be loaded");
+                tracing::debug!("LV2 editor description could not be loaded");
             }
             let requires_unsupported = world
                 .find_nodes(Some(&node), &uris.required_feature, None)

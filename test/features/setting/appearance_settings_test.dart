@@ -21,7 +21,7 @@ class _FakeAppearanceService extends AppearancePreferencesService {
     backgroundOverlayOpacity: 0.35,
     customFontPath: null,
     customFontFamily: null,
-    colorThemeSource: null,
+    colorThemeSource: AppearanceAssetService.defaultColorThemeSource,
     customColorThemePaths: const [],
   );
   AppearancePreferences? saved;
@@ -42,7 +42,14 @@ class _FakeAssetService extends AppearanceAssetService {
   String? colorThemeSelection;
   final Map<String, String> colorThemeFiles = {
     for (final asset in AppearanceAssetService.bundledColorThemes)
-      asset: _themeJson(asset),
+      asset: _themeJson(
+        asset == AppearanceAssetService.defaultColorThemeSource
+            ? 'DigiDAW Dark'
+            : asset,
+        primary: asset == AppearanceAssetService.defaultColorThemeSource
+            ? '#CFB8D9'
+            : '#CBA6F7',
+      ),
   };
   bool exists = true;
   bool fontLoads = true;
@@ -118,7 +125,19 @@ void main() {
   });
 
   testWidgets('appearance controls update provider state', (tester) async {
-    final service = _FakeAppearanceService();
+    final service = _FakeAppearanceService()
+      ..loaded = (
+        themeMode: AppThemeMode.light,
+        colorPalette: AppColorPalette.teal,
+        backgroundImagePath: null,
+        backgroundFit: AppBackgroundFit.cover,
+        backgroundOverlayOpacity: 0.35,
+        customFontPath: null,
+        customFontFamily: null,
+        colorThemeSource:
+            AppearancePreferencesService.explicitDefaultColorThemeSource,
+        customColorThemePaths: const [],
+      );
     final container = ProviderContainer(
       overrides: [
         appearancePreferencesServiceProvider.overrideWithValue(service),
@@ -352,13 +371,25 @@ void main() {
       final container = containerWith(preferences, _FakeAssetService());
       final notifier = container.read(appearanceSettingsProvider.notifier);
       await notifier.initialize();
-      final mocha = AppearanceAssetService.bundledColorThemes.first;
+      final mocha = AppearanceAssetService.catppuccinMochaColorThemeSource;
+      const defaultSource = AppearanceAssetService.defaultColorThemeSource;
 
       expect(
         container.read(appearanceSettingsProvider).colorThemes.keys,
         containsAll(AppearanceAssetService.bundledColorThemes),
       );
-      expect(container.read(appearanceSettingsProvider).colorTheme, isNull);
+      expect(
+        container.read(appearanceSettingsProvider).colorThemeSource,
+        defaultSource,
+      );
+      expect(
+        container.read(appearanceSettingsProvider).colorTheme?.name,
+        'DigiDAW Dark',
+      );
+      expect(
+        container.read(appearanceSettingsProvider).colorTheme?.primary,
+        const Color(0xFFCFB8D9),
+      );
 
       expect((await notifier.setColorTheme(mocha)).isOk(), isTrue);
       expect(
@@ -379,6 +410,34 @@ void main() {
       await notifier.setColorTheme(null);
       expect(container.read(appearanceSettingsProvider).colorTheme, isNull);
       expect(preferences.saved?.colorThemeSource, isNull);
+    });
+
+    test('a missing theme source uses the bundled default', () {
+      const defaultSource = AppearanceAssetService.defaultColorThemeSource;
+      const explicitDefault =
+          AppearancePreferencesService.explicitDefaultColorThemeSource;
+
+      expect(
+        AppearancePreferencesService.resolveColorThemeSource(
+          hasStoredSource: false,
+          storedSource: null,
+        ),
+        defaultSource,
+      );
+      expect(
+        AppearancePreferencesService.resolveColorThemeSource(
+          hasStoredSource: true,
+          storedSource: explicitDefault,
+        ),
+        isNull,
+      );
+      expect(
+        AppearancePreferencesService.resolveColorThemeSource(
+          hasStoredSource: true,
+          storedSource: '/themes/mine.json',
+        ),
+        '/themes/mine.json',
+      );
     });
 
     test('picked theme files are loaded, applied, and kept', () async {
@@ -448,7 +507,7 @@ void main() {
         expect(preferences.saved?.colorThemeSource, isNull);
         expect(preferences.saved?.customColorThemePaths, isEmpty);
 
-        final mocha = AppearanceAssetService.bundledColorThemes.first;
+        final mocha = AppearanceAssetService.catppuccinMochaColorThemeSource;
         expect((await notifier.removeColorTheme(mocha)).isErr(), isTrue);
         expect(
           container.read(appearanceSettingsProvider).colorThemes.keys,
@@ -472,7 +531,10 @@ void main() {
 
         expect(result.err(), isA<ColorThemeFormatException>());
         final state = container.read(appearanceSettingsProvider);
-        expect(state.colorThemeSource, isNull);
+        expect(
+          state.colorThemeSource,
+          AppearanceAssetService.defaultColorThemeSource,
+        );
         expect(state.customColorThemePaths, isEmpty);
       },
     );
@@ -516,7 +578,7 @@ void main() {
         _FakeAssetService(),
       );
       await container.read(appearanceSettingsProvider.notifier).initialize();
-      final mocha = AppearanceAssetService.bundledColorThemes.first;
+      final mocha = AppearanceAssetService.catppuccinMochaColorThemeSource;
 
       await tester.pumpWidget(
         UncontrolledProviderScope(
@@ -559,7 +621,7 @@ void main() {
           ..colorThemeFiles['/themes/mine.json'] = _themeJson('Mine'),
       );
       await container.read(appearanceSettingsProvider.notifier).initialize();
-      final mocha = AppearanceAssetService.bundledColorThemes.first;
+      final mocha = AppearanceAssetService.catppuccinMochaColorThemeSource;
       const remove = ValueKey('remove-color-theme-/themes/mine.json');
 
       await tester.pumpWidget(

@@ -30,11 +30,11 @@ pub fn compute_pool() -> Option<&'static ThreadPool> {
             .build();
         match pool {
             Ok(pool) => {
-                log::info!("Background compute pool: {threads} thread(s)");
+                tracing::info!("Background compute pool: {threads} thread(s)");
                 Some(pool)
             }
             Err(error) => {
-                log::error!("Could not create the background compute pool: {error}");
+                tracing::error!("Could not create the background compute pool: {error}");
                 None
             }
         }

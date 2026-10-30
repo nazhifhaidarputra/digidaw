@@ -17,6 +17,8 @@ class HostDevicesSettingsPage extends ConsumerWidget {
         state.isLoadingHosts ||
         state.isLoadingOutputDevices ||
         state.isApplyingSelection;
+    final inputBusy =
+        busy || state.isLoadingInputDevices || state.isApplyingInput;
 
     return SingleChildScrollView(
       padding: const EdgeInsets.all(32),
@@ -34,7 +36,7 @@ class HostDevicesSettingsPage extends ConsumerWidget {
               ),
               const SizedBox(height: 8),
               const Text(
-                'Configure output audio only. Input device selection and recording inputs are not available yet.',
+                'Choose where audio plays and which device audio tracks record from.',
               ),
               const SizedBox(height: 24),
               DropdownButtonFormField<String>(
@@ -116,6 +118,83 @@ class HostDevicesSettingsPage extends ConsumerWidget {
               if (busy) ...[
                 const SizedBox(height: 16),
                 const LinearProgressIndicator(),
+              ],
+              const SizedBox(height: 32),
+              Text(
+                'Audio input',
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
+              const SizedBox(height: 8),
+              SwitchListTile(
+                key: const ValueKey('input-enabled'),
+                contentPadding: EdgeInsets.zero,
+                title: const Text('Enable audio input'),
+                subtitle: const Text(
+                  'Lets audio tracks record and monitor the input device. Arming a track turns it on.',
+                ),
+                value: state.inputEnabled,
+                onChanged: inputBusy
+                    ? null
+                    : (enabled) => unawaited(notifier.setInputEnabled(enabled)),
+              ),
+              const SizedBox(height: 8),
+              DropdownButtonFormField<String>(
+                key: ValueKey('input-device-${state.selectedInputDeviceId}'),
+                isExpanded: true,
+                initialValue: state.selectedInputDeviceId ?? _systemDefault,
+                decoration: const InputDecoration(
+                  labelText: 'Input device',
+                  border: OutlineInputBorder(),
+                ),
+                items: state.availableInputDevices.isEmpty
+                    ? const [
+                        DropdownMenuItem(
+                          value: _systemDefault,
+                          child: Text('System default input'),
+                        ),
+                      ]
+                    : state.availableInputDevices
+                          .map(
+                            (device) => DropdownMenuItem(
+                              value: device.deviceId ?? _systemDefault,
+                              child: Text(
+                                device.isCurrentSystemDefault &&
+                                        device.deviceId != null
+                                    ? '${device.displayName} (current default)'
+                                    : device.displayName,
+                              ),
+                            ),
+                          )
+                          .toList(growable: false),
+                onChanged: inputBusy
+                    ? null
+                    : (value) {
+                        if (value != null) {
+                          unawaited(
+                            notifier.selectInputDevice(
+                              value == _systemDefault ? null : value,
+                            ),
+                          );
+                        }
+                      },
+              ),
+              if (state.inputDiscoveryError != null) ...[
+                const SizedBox(height: 8),
+                Text(
+                  state.inputDiscoveryError!,
+                  style: TextStyle(color: Theme.of(context).colorScheme.error),
+                ),
+                TextButton.icon(
+                  onPressed: () => unawaited(notifier.reloadInputDevices()),
+                  icon: const Icon(Icons.refresh),
+                  label: const Text('Retry input discovery'),
+                ),
+              ],
+              if (state.runtimeSettings?.actualInput case final input?) ...[
+                const SizedBox(height: 8),
+                Text(
+                  '${input.deviceName} · ${input.sampleRate} Hz · ${input.channels} channels',
+                ),
               ],
               if (state.discoveryError != null) ...[
                 const SizedBox(height: 16),

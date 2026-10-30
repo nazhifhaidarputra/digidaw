@@ -26,7 +26,7 @@ fn save_project_blocking(ctx: &DawContext, path_name: &str) -> Result<(), String
     let completed = project_api::execute_save_project(pending).map_err(|e| e.to_string())?;
     project_api::commit_save_project(&mut operation.write_core(), completed);
 
-    log::info!("Successfully saved project to {}", path_name);
+    tracing::info!("Successfully saved project to {}", path_name);
     Ok(())
 }
 
@@ -62,7 +62,7 @@ fn load_project_blocking(
     // Rendered edits are not saved; rebuild them from their recipes.
     crate::api::audio_analysis::schedule_source_renders(ctx, false);
 
-    log::info!("Successfully loaded the project {}", path_name);
+    tracing::info!("Successfully loaded the project {}", path_name);
     Ok(ui_state)
 }
 

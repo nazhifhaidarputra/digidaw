@@ -86,7 +86,7 @@ pub async fn start_tempo_detection(ctx: &DawContext, source_id: u64) -> Result<u
                 &mut |fraction| job.progress("analyze", fraction),
             )
             .map_err(|error| error.to_string())?;
-            log::info!(
+            tracing::info!(
                 "Detected {:.1} BPM in audio source {source_id}",
                 completed.grid().bpm
             );

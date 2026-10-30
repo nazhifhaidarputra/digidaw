@@ -26,6 +26,10 @@ enum PianoRollToolSelection {
   slice,
   pan,
   zoom,
+
+  /// Drags selected notes wider or narrower in time, scaling their positions
+  /// and lengths together.
+  stretch,
 }
 
 enum WorkspaceView { trackList, pianoRoll, mixer, source }

@@ -131,7 +131,7 @@ mod tests {
     }
 
     fn pattern_spans(
-        ctx: &karbeat_core::context::DawContext,
+        ctx: &karbeat_audio::context::DawContext,
         pattern_id: karbeat_core::shared::PatternId,
     ) -> Vec<(u32, u64, u64, u8)> {
         ctx.app_state.pattern_pool[pattern_id]
@@ -183,7 +183,7 @@ mod tests {
             )],
         )
         .unwrap();
-        let find = |ctx: &karbeat_core::context::DawContext| {
+        let find = |ctx: &karbeat_audio::context::DawContext| {
             ctx.app_state.pattern_pool[pattern_id]
                 .notes
                 .iter()

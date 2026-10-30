@@ -212,7 +212,7 @@ trait Unfinished: Sized {
             Err(JobError::Cancelled | JobError::ShuttingDown) => JobState::Cancelled,
             Err(error) => {
                 let JobTicket { id, spec, .. } = self.ticket();
-                log::warn!("Background job {id} ({:?}) failed: {error}", spec.kind);
+                tracing::warn!("Background job {id} ({:?}) failed: {error}", spec.kind);
                 JobState::Failed(error.to_string())
             }
         };
@@ -687,7 +687,7 @@ impl JobService {
         let deadline = Instant::now() + timeout;
         while self.active_jobs() > 0 {
             if Instant::now() >= deadline {
-                log::warn!(
+                tracing::warn!(
                     "{} background job(s) still running at shutdown",
                     self.active_jobs()
                 );

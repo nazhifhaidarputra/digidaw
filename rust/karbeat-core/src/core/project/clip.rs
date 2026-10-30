@@ -164,16 +164,36 @@ impl ClipTimeUnit {
     /// Converts 960-PPQN ticks to samples, rounding to the nearest whole sample.
     /// Non-positive tempo uses the same 120 BPM fallback as [`Self::samples_per_tick`].
     pub fn ticks_to_samples(ticks: u64, bpm: f32, sample_rate: u32) -> u64 {
-        ((ticks as f64) * Self::samples_per_tick(bpm, sample_rate)).round() as u64
+        TickScale::new(bpm, sample_rate).to_samples(ticks)
     }
 
     /// Converts samples to 960-PPQN ticks, rounding to the nearest whole tick.
     pub fn samples_to_ticks(samples: u64, bpm: f32, sample_rate: u32) -> u64 {
-        let samples_per_tick = Self::samples_per_tick(bpm, sample_rate);
-        if samples_per_tick <= 0.0 {
-            return 0;
+        TickScale::new(bpm, sample_rate).to_ticks(samples)
+    }
+
+    /// Scales the content length and offset of an audio clip by `factor`, keeping its start.
+    /// Tick-based clips are left unchanged.
+    pub fn scale_content(&mut self, factor: f64) {
+        let scale = |value: &mut u64, min: f64| {
+            *value = (*value as f64 * factor).round().max(min) as u64;
+        };
+        match self {
+            ClipTimeUnit::Samples {
+                loop_length,
+                offset_start,
+                ..
+            }
+            | ClipTimeUnit::Audio {
+                loop_length,
+                offset_start,
+                ..
+            } => {
+                scale(loop_length, 1.0);
+                scale(offset_start, 0.0);
+            }
+            ClipTimeUnit::Ticks { .. } => {}
         }
-        ((samples as f64) / samples_per_tick).round() as u64
     }
 
     fn tick_delta_to_samples(delta_ticks: i64, bpm: f32, sample_rate: u32) -> i64 {
@@ -183,6 +203,49 @@ impl ClipTimeUnit {
         } else {
             magnitude as i64
         }
+    }
+}
+
+/// The one tick-to-sample conversion shared by project edits and the audio engine.
+///
+/// Every timeline position goes through [`Self::to_samples`] exactly once, from an absolute
+/// tick. Positions that are equal in ticks are therefore equal in samples: a note on a clip's
+/// cut point lands on the clip's first sample, and split clips tile without gaps.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct TickScale {
+    samples_per_tick: f64,
+}
+
+impl TickScale {
+    /// Scale for `bpm` at `sample_rate`, with the 120 BPM fallback of
+    /// [`ClipTimeUnit::samples_per_tick`].
+    pub fn new(bpm: f32, sample_rate: u32) -> Self {
+        Self {
+            samples_per_tick: ClipTimeUnit::samples_per_tick(bpm, sample_rate),
+        }
+    }
+
+    /// Samples per 960-PPQN tick.
+    pub fn samples_per_tick(self) -> f64 {
+        self.samples_per_tick
+    }
+
+    /// Converts ticks to samples, rounding to the nearest whole sample.
+    pub fn to_samples(self, ticks: u64) -> u64 {
+        ((ticks as f64) * self.samples_per_tick).round() as u64
+    }
+
+    /// Converts samples to ticks, rounding to the nearest whole tick.
+    pub fn to_ticks(self, samples: u64) -> u64 {
+        if self.samples_per_tick <= 0.0 {
+            return 0;
+        }
+        ((samples as f64) / self.samples_per_tick).round() as u64
+    }
+
+    /// Bit pattern of the scale, for caches keyed on tempo.
+    pub fn bits(self) -> u64 {
+        self.samples_per_tick.to_bits()
     }
 }
 
@@ -201,6 +264,15 @@ pub struct Clip {
     pub time: ClipTimeUnit,
     /// Per-clip gain envelope for audio clips, stacked on top of the waveform envelope.
     /// `None` leaves the audio untouched. Shared behind an `Arc` so clip copies stay cheap.
+    pub envelope: Option<Arc<GainEnvelope>>,
+}
+
+/// A clip's timing and envelope, kept by history when a change of playback speed rescales the
+/// clip.
+#[derive(Debug, Clone, PartialEq)]
+pub struct ClipTiming {
+    pub clip_id: ClipId,
+    pub time: ClipTimeUnit,
     pub envelope: Option<Arc<GainEnvelope>>,
 }
 
@@ -282,6 +354,72 @@ impl Clip {
 }
 
 impl ApplicationState {
+    /// How long each audio source plays relative to its original audio at the current tempo;
+    /// see [`AudioWaveform::duration_scale`].
+    pub fn source_duration_scales(&self) -> Vec<(AudioSourceId, f64)> {
+        let bpm = self.transport.bpm;
+        self.asset_library
+            .source_map
+            .iter()
+            .map(|(id, waveform)| (id, waveform.duration_scale(bpm)))
+            .collect()
+    }
+
+    /// Makes the clips of each source follow a change of the source's playback length:
+    /// `before` holds each source's duration scale from before the change.
+    ///
+    /// A clip keeps its start, and its length, content offset, and envelope scale with the
+    /// audio, so it still ends where its audio ends, and space it was resized beyond the audio
+    /// scales by the same ratio. Returns the rescaled clips' previous timing, for history.
+    pub fn follow_source_durations(&mut self, before: &[(AudioSourceId, f64)]) -> Vec<ClipTiming> {
+        let bpm = self.transport.bpm;
+        let factors: HashMap<AudioSourceId, f64> = before
+            .iter()
+            .filter_map(|(id, before)| {
+                let after = self.asset_library.source_map.get(*id)?.duration_scale(bpm);
+                let factor = after / before;
+                (factor.is_finite() && factor > 0.0 && (factor - 1.0).abs() > 1e-9)
+                    .then_some((*id, factor))
+            })
+            .collect();
+        if factors.is_empty() {
+            return Vec::new();
+        }
+
+        let mut previous = Vec::new();
+        for (clip_id, clip) in self.clips_pool.iter_mut() {
+            let Some(DawSource::Audio(source)) = clip.source else {
+                continue;
+            };
+            let Some(factor) = factors.get(&source) else {
+                continue;
+            };
+            previous.push(ClipTiming {
+                clip_id,
+                time: clip.time.clone(),
+                envelope: clip.envelope.clone(),
+            });
+            clip.time.scale_content(*factor);
+            clip.envelope = clip
+                .envelope
+                .as_ref()
+                .map(|envelope| Arc::new(envelope.scaled(*factor)));
+        }
+        previous
+    }
+
+    /// Puts each clip's timing from `timings` back, leaving what it replaced in `timings`.
+    /// Clips no longer in the project are skipped.
+    pub fn swap_clip_timings(&mut self, timings: &mut [ClipTiming]) {
+        for timing in timings {
+            let Some(clip) = self.clips_pool.get_mut(timing.clip_id) else {
+                continue;
+            };
+            std::mem::swap(&mut clip.time, &mut timing.time);
+            std::mem::swap(&mut clip.envelope, &mut timing.envelope);
+        }
+    }
+
     /// Converts projects saved before audio clip placement used timeline ticks.
     pub fn migrate_legacy_audio_clip_placement(&mut self) -> usize {
         let bpm = self.transport.bpm;
@@ -1318,5 +1456,42 @@ impl ApplicationState {
         );
         clip.envelope = (!envelope.is_identity()).then(|| Arc::new(envelope.normalized()));
         Ok(clip.clone())
+    }
+}
+
+#[cfg(test)]
+mod tick_scale_tests {
+    use super::{ClipTimeUnit, TickScale};
+
+    #[test]
+    fn tick_scale_is_the_clip_time_conversion() {
+        for (bpm, sample_rate) in [
+            (97.0, 44_100),
+            (128.5, 48_000),
+            (130.0, 48_000),
+            (0.0, 48_000),
+        ] {
+            let scale = TickScale::new(bpm, sample_rate);
+            for ticks in [0, 1, 239, 960, 3_841, 1_000_003] {
+                assert_eq!(
+                    scale.to_samples(ticks),
+                    ClipTimeUnit::ticks_to_samples(ticks, bpm, sample_rate)
+                );
+                let samples = scale.to_samples(ticks);
+                assert_eq!(
+                    scale.to_ticks(samples),
+                    ClipTimeUnit::samples_to_ticks(samples, bpm, sample_rate)
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn tick_scale_round_trips_whole_ticks() {
+        // A tick spans more than one sample at these tempos, so rounding recovers it.
+        let scale = TickScale::new(130.0, 48_000);
+        for ticks in (0..200_000).step_by(37) {
+            assert_eq!(scale.to_ticks(scale.to_samples(ticks)), ticks);
+        }
     }
 }

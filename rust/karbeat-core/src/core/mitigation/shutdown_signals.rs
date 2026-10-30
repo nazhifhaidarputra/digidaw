@@ -20,7 +20,7 @@ pub fn watch(marker: PathBuf) {
         let mut signals = match Signals::new([SIGINT, SIGTERM, SIGHUP]) {
             Ok(signals) => signals,
             Err(error) => {
-                log::warn!("Shutdown signals cannot be watched: {error}");
+                tracing::warn!("Shutdown signals cannot be watched: {error}");
                 return;
             }
         };
@@ -28,19 +28,19 @@ pub fn watch(marker: PathBuf) {
             .name("karbeat-shutdown-signals".into())
             .spawn(move || {
                 if let Some(signal) = signals.forever().next() {
-                    log::info!("Received signal {signal}; forcing shutdown");
+                    tracing::info!("Received signal {signal}; forcing shutdown");
                     if let Err(error) = session_marker::mark_forced_shutdown(&marker) {
-                        log::warn!("Could not record the forced shutdown: {error}");
+                        tracing::warn!("Could not record the forced shutdown: {error}");
                     }
                     if let Err(error) = emulate_default_handler(signal) {
-                        log::error!("Could not terminate on signal {signal}: {error}");
+                        tracing::error!("Could not terminate on signal {signal}: {error}");
                         // Skips process teardown, like the signal's default action would.
                         exit(128_i32.saturating_add(signal));
                     }
                 }
             });
         if let Err(error) = spawned {
-            log::warn!("Shutdown signal thread could not start: {error}");
+            tracing::warn!("Shutdown signal thread could not start: {error}");
         }
     });
 }

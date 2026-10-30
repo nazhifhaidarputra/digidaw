@@ -8,7 +8,7 @@ import 'package:karbeat/features/setting/services/app_info_service.dart';
 class InfoSettingsPage extends ConsumerWidget {
   const InfoSettingsPage({super.key});
 
-  static const supportUrl = 'https://codeberg.org/haidarptrw/digidaw/issues';
+  static const supportUrl = 'https://github.com/nazhifhaidarputra/digidaw/issues';
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {

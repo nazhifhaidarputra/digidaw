@@ -1,11 +1,12 @@
-use karbeat_core::commands::AudioCommand;
-use karbeat_core::commands::MixerChannelTarget;
-use karbeat_core::context::DawContext;
+use karbeat_audio::commands::AudioCommand;
+use karbeat_audio::commands::MixerChannelTarget;
+use karbeat_audio::context::DawContext;
+use karbeat_audio::event::PluginTarget;
 use karbeat_core::core::history::actions::{
     StructureRecorder, TrackRecolored, TrackRenamed, TracksReordered,
 };
-use karbeat_core::core::project::AudioTrack;
 use karbeat_core::core::project::track::RemovedTrackType;
+use karbeat_core::core::project::{AudioTrack, TrackInputSettings, TrackType};
 use karbeat_core::shared::id::*;
 use karbeat_utils::color::Color;
 
@@ -47,6 +48,62 @@ pub fn add_midi_track_with_generator_id(
     Ok(audio_track)
 }
 
+/// Swaps the generator of a MIDI track for a built-in generator, keeping the track's clips,
+/// mixer channel, and routing, and records the swap for undo.
+///
+/// A hosted (external) generator on the track must be removed first with
+/// [`super::external_plugin_api::begin_remove_generator`], because its native instance cannot be
+/// retired here. An external replacement goes through
+/// [`super::external_plugin_api::begin_replace_instrument`].
+pub fn replace_track_generator(
+    ctx: &mut DawContext,
+    track_id: TrackId,
+    registry_id: u32,
+) -> anyhow::Result<AudioTrack> {
+    anyhow::ensure!(
+        ctx.plugin_catalog.external(registry_id).is_none(),
+        "External generators are installed through the hosted plugin transaction"
+    );
+    let previous = ctx
+        .app_state
+        .tracks
+        .get(track_id)
+        .and_then(|track| track.generator.as_ref())
+        .map(|generator| PluginTarget::Generator(generator.id));
+    if let Some(previous) = previous {
+        anyhow::ensure!(
+            super::external_plugin_api::descriptor(ctx, previous).is_none(),
+            "Remove the external generator before replacing it"
+        );
+        // Undo reinstalls the previous generator from project state, so keep its live settings.
+        if let Err(error) = super::project_api::capture_live_state(ctx, &[previous], &[]) {
+            tracing::warn!("Replacing generator without its live plugin state: {error:#}");
+        }
+    }
+
+    let structure_before = StructureRecorder::begin(&ctx.app_state, &[], &[]);
+    let (track, previous_id, gen_id, generator_plugin_factory) = ctx
+        .app_state
+        .replace_track_generator_with_id(&mut ctx.plugin_registry, track_id, registry_id)?;
+
+    if let Some(generator_id) = previous_id {
+        let _ = ctx.send_audio_command(AudioCommand::RemoveGenerator { generator_id });
+    }
+    let (plugin, telemetry) = ctx.prepare_plugin_install(generator_plugin_factory);
+    let _ = ctx.send_audio_command(AudioCommand::InstallGenerator {
+        generator_id: gen_id,
+        track_id,
+        registry_id,
+        plugin,
+        telemetry: Some(telemetry),
+    });
+
+    let action = structure_before.finish(&ctx.app_state, "Change Instrument");
+    ctx.push_history(action);
+    ctx.broadcast_track_graph();
+    Ok(track)
+}
+
 /// Renames a track and records the previous name for undo.
 pub fn change_track_name(
     ctx: &mut DawContext,
@@ -83,6 +140,36 @@ pub fn change_track_color(
     let previous = std::mem::replace(&mut track.color, color);
     ctx.push_history(TrackRecolored::new(track_id, previous));
     Ok(())
+}
+
+/// Sets the device input an audio track records and monitors, and publishes the track graph so
+/// the engine monitors the new channels.
+///
+/// Input routing is a setup choice like the audio device, so it is saved with the project but
+/// not recorded in undo history.
+pub fn set_track_input(
+    ctx: &mut DawContext,
+    track_id: TrackId,
+    input: TrackInputSettings,
+) -> anyhow::Result<AudioTrack> {
+    anyhow::ensure!(
+        matches!(input.channels, 1 | 2),
+        "A track records one or two input channels"
+    );
+    let track = ctx
+        .app_state
+        .tracks
+        .get_mut(track_id)
+        .ok_or_else(|| anyhow::anyhow!("Track not found"))?;
+    anyhow::ensure!(
+        track.track_type == TrackType::Audio,
+        "Only audio tracks take device input"
+    );
+    track.input = input;
+    let track = track.clone();
+    ctx.mark_project_modified();
+    ctx.broadcast_track_graph();
+    Ok(track)
 }
 
 /// Creates an audio track, records its insertion, and publishes the updated track graph.
@@ -138,7 +225,7 @@ pub fn delete_track(ctx: &mut DawContext, track_id: TrackId) -> anyhow::Result<R
         &plugins,
         &[MixerChannelTarget::Track(track_id)],
     ) {
-        log::warn!("Deleting track without its live plugin state: {error:#}");
+        tracing::warn!("Deleting track without its live plugin state: {error:#}");
     }
     let structure_before = StructureRecorder::begin(&ctx.app_state, &[track_id], &[]);
     let effect_ids: Vec<_> = ctx
@@ -171,7 +258,7 @@ pub fn delete_track(ctx: &mut DawContext, track_id: TrackId) -> anyhow::Result<R
     }
     for effect_id in effect_ids {
         let _ = ctx.send_audio_command(AudioCommand::RemoveEffect {
-            target: karbeat_core::commands::EffectTarget::Track(track_id),
+            target: karbeat_audio::commands::EffectTarget::Track(track_id),
             effect_id,
         });
     }

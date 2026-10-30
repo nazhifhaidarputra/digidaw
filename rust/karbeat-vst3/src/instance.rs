@@ -62,7 +62,7 @@ pub(crate) fn result_name(code: tresult) -> &'static str {
 
 /// Logs a failed plugin call with its readable result name and converts it to a [`HostError`].
 pub(crate) fn plugin_call_error(operation: &'static str, code: tresult) -> HostError {
-    log::warn!("VST3 {operation} returned {} ({code})", result_name(code));
+    tracing::warn!("VST3 {operation} returned {} ({code})", result_name(code));
     HostError::PluginCall { operation, code }
 }
 
@@ -472,7 +472,7 @@ impl Vst3Instance {
         if code != kResultOk {
             // kResultFalse means the plugin adapted to its closest supported layout; read back
             // what it actually chose and map the engine's channels onto it.
-            log::debug!(
+            tracing::debug!(
                 "{}: setBusArrangements returned {} ({code}); using the plugin's adapted layout",
                 self.descriptor.name,
                 result_name(code)
@@ -542,7 +542,7 @@ impl Vst3Instance {
                 if direction == 1 && plan.role == BusRole::Main {
                     check("component.activateBus(audio)", code)?;
                 } else if code != kResultOk {
-                    log::warn!(
+                    tracing::warn!(
                         "{}: activateBus(audio, {direction}, {index}) returned {} ({code})",
                         self.descriptor.name,
                         result_name(code)
@@ -559,7 +559,7 @@ impl Vst3Instance {
                 let code =
                     unsafe { component.activateBus(1, direction, index, u8::from(index == 0)) };
                 if code != kResultOk {
-                    log::warn!(
+                    tracing::warn!(
                         "{}: activateBus(events, {direction}, {index}) returned {} ({code})",
                         self.descriptor.name,
                         result_name(code)
@@ -655,7 +655,7 @@ impl Vst3Instance {
             self.publish_latency();
         }
         if flags & RestartFlags_::kIoChanged != 0 {
-            log::warn!(
+            tracing::warn!(
                 "{}: plugin changed its audio buses; the new layout applies after the next reconfiguration",
                 self.descriptor.name
             );
@@ -811,7 +811,7 @@ impl Drop for Vst3Instance {
             // Host destruction checks endpoint ownership before dropping an instance.
             // SAFETY: No audio endpoint remains and destruction runs on the owning UI thread.
             if let Err(error) = unsafe { &mut *slot.dsp.get() }.stop() {
-                log::warn!("VST3 stop during teardown: {error}");
+                tracing::warn!("VST3 stop during teardown: {error}");
             }
         }
         if self.active {

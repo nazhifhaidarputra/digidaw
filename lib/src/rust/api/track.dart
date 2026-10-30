@@ -11,7 +11,7 @@ import 'pattern.dart';
 import 'project.dart';
 part 'track.freezed.dart';
 
-// These functions are ignored because they are not marked as `pub`: `add_midi_track_with_generator_id_blocking`, `delete_track_blocking`
+// These functions are ignored because they are not marked as `pub`: `add_midi_track_with_generator_id_blocking`, `delete_track_blocking`, `replace_track_generator_blocking`
 // These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `from`, `from`, `from`
 
 Future<UiClip> createClip({
@@ -98,6 +98,21 @@ Future<UiTrack> addMidiTrackWithGeneratorId({
   required int registryId,
 }) => RustLib.instance.api.crateApiTrackAddMidiTrackWithGeneratorId(
   ctx: ctx,
+  registryId: registryId,
+);
+
+/// Swaps the generator of a MIDI track for another one by its registry ID, keeping the track's
+/// clips, mixer channel, and routing. Returns the updated track.
+///
+/// Automation of the replaced generator is removed. The swap is undoable only when both
+/// generators are built-in.
+Future<UiTrack> replaceTrackGenerator({
+  required DawContext ctx,
+  required int trackId,
+  required int registryId,
+}) => RustLib.instance.api.crateApiTrackReplaceTrackGenerator(
+  ctx: ctx,
+  trackId: trackId,
   registryId: registryId,
 );
 
@@ -192,6 +207,17 @@ Future<void> changeTrackColor({
   ctx: ctx,
   trackId: trackId,
   newColor: newColor,
+);
+
+/// Sets the device input an audio track records and monitors, returning the updated track.
+Future<UiTrack> setTrackInput({
+  required DawContext ctx,
+  required int trackId,
+  required UiTrackInput input,
+}) => RustLib.instance.api.crateApiTrackSetTrackInput(
+  ctx: ctx,
+  trackId: trackId,
+  input: input,
 );
 
 /// Delete a track from the timeline. This function returns a string which will be

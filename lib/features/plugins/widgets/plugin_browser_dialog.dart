@@ -14,10 +14,15 @@ Future<void> showPluginBrowserDialog({
   required BuildContext context,
   required KarbeatPluginType pluginType,
   required AddPluginCallback onAdd,
+  String actionLabel = 'Add Plugin',
 }) {
   return showDialog<void>(
     context: context,
-    builder: (_) => PluginBrowserDialog(pluginType: pluginType, onAdd: onAdd),
+    builder: (_) => PluginBrowserDialog(
+      pluginType: pluginType,
+      onAdd: onAdd,
+      actionLabel: actionLabel,
+    ),
   );
 }
 
@@ -26,10 +31,14 @@ class PluginBrowserDialog extends ConsumerStatefulWidget {
     super.key,
     required this.pluginType,
     required this.onAdd,
+    this.actionLabel = 'Add Plugin',
   });
 
   final KarbeatPluginType pluginType;
   final AddPluginCallback onAdd;
+
+  /// Label of the confirm button, such as "Replace" when swapping a plugin.
+  final String actionLabel;
 
   @override
   ConsumerState<PluginBrowserDialog> createState() =>
@@ -99,6 +108,11 @@ class _PluginBrowserDialogState extends ConsumerState<PluginBrowserDialog> {
                       return ListTile(
                         key: ValueKey('plugin-browser-${entry.favoriteKey}'),
                         selected: selected,
+                        // A tint as well as the text color, since some
+                        // themes make primary match the default text.
+                        selectedTileColor: Theme.of(
+                          context,
+                        ).colorScheme.primary.withValues(alpha: 0.2),
                         enabled: !_isAdding,
                         leading: Icon(
                           widget.pluginType == KarbeatPluginType.generator
@@ -184,7 +198,7 @@ class _PluginBrowserDialogState extends ConsumerState<PluginBrowserDialog> {
                   child: CircularProgressIndicator(strokeWidth: 2),
                 )
               : const Icon(Icons.add),
-          label: Text(_isAdding ? 'Adding…' : 'Add Plugin'),
+          label: Text(_isAdding ? 'Adding…' : widget.actionLabel),
         ),
       ],
     );

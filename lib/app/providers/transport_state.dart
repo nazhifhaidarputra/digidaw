@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:karbeat/app/providers/notification_provider.dart';
 import 'package:freezed_annotation/freezed_annotation.dart';
 import 'package:karbeat/app/providers/project_provider.dart';
+import 'package:karbeat/app/providers/track_list_state.dart';
 import 'package:karbeat/core/utils/logger.dart';
 import 'package:karbeat/core/utils/result_type.dart';
 import 'package:karbeat/src/rust/api/audio.dart' as audio_api;
@@ -200,6 +201,10 @@ class TransportNotifier extends AsyncNotifier<TransportStateData> {
     if (result.hasError) {
       AppLogger.error("Failed to set bpm: ${result.error}");
       return ref.notifyErrorResult(Exception(result.error.toString()));
+    }
+    // Clips of tempo-following audio were rescaled with it.
+    if (result.requireValue) {
+      await ref.read(trackListStateProvider.notifier).syncTracks();
     }
     return Result.ok(null);
   }

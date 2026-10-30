@@ -327,7 +327,7 @@ impl Drop for WorkerThread {
         if let Some(thread) = self.thread.take() {
             thread.thread().unpark();
             if thread.join().is_err() {
-                log::error!("LV2 worker thread panicked");
+                tracing::error!("LV2 worker thread panicked");
             }
         }
     }

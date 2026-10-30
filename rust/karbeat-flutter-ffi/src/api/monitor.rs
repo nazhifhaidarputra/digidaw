@@ -39,7 +39,7 @@ pub fn start_performance_monitor(sink: StreamSink<PerformanceMetricsDTO>) {
 
             let metrics_dto = metrics.into();
             if sink.add(metrics_dto).is_err() {
-                log::info!("Performance monitor stream closed.");
+                tracing::info!("Performance monitor stream closed.");
                 break;
             }
 

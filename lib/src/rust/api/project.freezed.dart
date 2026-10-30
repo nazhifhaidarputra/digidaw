@@ -4117,7 +4117,7 @@ as String?,
 /// @nodoc
 mixin _$UiTrack {
 
- int get id; String get name; String get color; UiTrackType get trackType; List<UiClip> get clips; int? get generatorId; int get orderIdx;
+ int get id; String get name; String get color; UiTrackType get trackType; List<UiClip> get clips; int? get generatorId; int get orderIdx; UiTrackInput get input;
 /// Create a copy of UiTrack
 /// with the given fields replaced by the non-null parameter values.
 @JsonKey(includeFromJson: false, includeToJson: false)
@@ -4128,16 +4128,16 @@ $UiTrackCopyWith<UiTrack> get copyWith => _$UiTrackCopyWithImpl<UiTrack>(this as
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is UiTrack&&(identical(other.id, id) || other.id == id)&&(identical(other.name, name) || other.name == name)&&(identical(other.color, color) || other.color == color)&&(identical(other.trackType, trackType) || other.trackType == trackType)&&const DeepCollectionEquality().equals(other.clips, clips)&&(identical(other.generatorId, generatorId) || other.generatorId == generatorId)&&(identical(other.orderIdx, orderIdx) || other.orderIdx == orderIdx));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is UiTrack&&(identical(other.id, id) || other.id == id)&&(identical(other.name, name) || other.name == name)&&(identical(other.color, color) || other.color == color)&&(identical(other.trackType, trackType) || other.trackType == trackType)&&const DeepCollectionEquality().equals(other.clips, clips)&&(identical(other.generatorId, generatorId) || other.generatorId == generatorId)&&(identical(other.orderIdx, orderIdx) || other.orderIdx == orderIdx)&&(identical(other.input, input) || other.input == input));
 }
 
 
 @override
-int get hashCode => Object.hash(runtimeType,id,name,color,trackType,const DeepCollectionEquality().hash(clips),generatorId,orderIdx);
+int get hashCode => Object.hash(runtimeType,id,name,color,trackType,const DeepCollectionEquality().hash(clips),generatorId,orderIdx,input);
 
 @override
 String toString() {
-  return 'UiTrack(id: $id, name: $name, color: $color, trackType: $trackType, clips: $clips, generatorId: $generatorId, orderIdx: $orderIdx)';
+  return 'UiTrack(id: $id, name: $name, color: $color, trackType: $trackType, clips: $clips, generatorId: $generatorId, orderIdx: $orderIdx, input: $input)';
 }
 
 
@@ -4148,11 +4148,11 @@ abstract mixin class $UiTrackCopyWith<$Res>  {
   factory $UiTrackCopyWith(UiTrack value, $Res Function(UiTrack) _then) = _$UiTrackCopyWithImpl;
 @useResult
 $Res call({
- int id, String name, String color, UiTrackType trackType, List<UiClip> clips, int? generatorId, int orderIdx
+ int id, String name, String color, UiTrackType trackType, List<UiClip> clips, int? generatorId, int orderIdx, UiTrackInput input
 });
 
 
-
+$UiTrackInputCopyWith<$Res> get input;
 
 }
 /// @nodoc
@@ -4165,7 +4165,7 @@ class _$UiTrackCopyWithImpl<$Res>
 
 /// Create a copy of UiTrack
 /// with the given fields replaced by the non-null parameter values.
-@pragma('vm:prefer-inline') @override $Res call({Object? id = null,Object? name = null,Object? color = null,Object? trackType = null,Object? clips = null,Object? generatorId = freezed,Object? orderIdx = null,}) {
+@pragma('vm:prefer-inline') @override $Res call({Object? id = null,Object? name = null,Object? color = null,Object? trackType = null,Object? clips = null,Object? generatorId = freezed,Object? orderIdx = null,Object? input = null,}) {
   return _then(_self.copyWith(
 id: null == id ? _self.id : id // ignore: cast_nullable_to_non_nullable
 as int,name: null == name ? _self.name : name // ignore: cast_nullable_to_non_nullable
@@ -4174,10 +4174,20 @@ as String,trackType: null == trackType ? _self.trackType : trackType // ignore: 
 as UiTrackType,clips: null == clips ? _self.clips : clips // ignore: cast_nullable_to_non_nullable
 as List<UiClip>,generatorId: freezed == generatorId ? _self.generatorId : generatorId // ignore: cast_nullable_to_non_nullable
 as int?,orderIdx: null == orderIdx ? _self.orderIdx : orderIdx // ignore: cast_nullable_to_non_nullable
-as int,
+as int,input: null == input ? _self.input : input // ignore: cast_nullable_to_non_nullable
+as UiTrackInput,
   ));
 }
-
+/// Create a copy of UiTrack
+/// with the given fields replaced by the non-null parameter values.
+@override
+@pragma('vm:prefer-inline')
+$UiTrackInputCopyWith<$Res> get input {
+  
+  return $UiTrackInputCopyWith<$Res>(_self.input, (value) {
+    return _then(_self.copyWith(input: value));
+  });
+}
 }
 
 
@@ -4256,10 +4266,10 @@ return $default(_that);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( int id,  String name,  String color,  UiTrackType trackType,  List<UiClip> clips,  int? generatorId,  int orderIdx)?  $default,{required TResult orElse(),}) {final _that = this;
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( int id,  String name,  String color,  UiTrackType trackType,  List<UiClip> clips,  int? generatorId,  int orderIdx,  UiTrackInput input)?  $default,{required TResult orElse(),}) {final _that = this;
 switch (_that) {
 case _UiTrack() when $default != null:
-return $default(_that.id,_that.name,_that.color,_that.trackType,_that.clips,_that.generatorId,_that.orderIdx);case _:
+return $default(_that.id,_that.name,_that.color,_that.trackType,_that.clips,_that.generatorId,_that.orderIdx,_that.input);case _:
   return orElse();
 
 }
@@ -4277,10 +4287,10 @@ return $default(_that.id,_that.name,_that.color,_that.trackType,_that.clips,_tha
 /// }
 /// ```
 
-@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( int id,  String name,  String color,  UiTrackType trackType,  List<UiClip> clips,  int? generatorId,  int orderIdx)  $default,) {final _that = this;
+@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( int id,  String name,  String color,  UiTrackType trackType,  List<UiClip> clips,  int? generatorId,  int orderIdx,  UiTrackInput input)  $default,) {final _that = this;
 switch (_that) {
 case _UiTrack():
-return $default(_that.id,_that.name,_that.color,_that.trackType,_that.clips,_that.generatorId,_that.orderIdx);}
+return $default(_that.id,_that.name,_that.color,_that.trackType,_that.clips,_that.generatorId,_that.orderIdx,_that.input);}
 }
 /// A variant of `when` that fallback to returning `null`
 ///
@@ -4294,10 +4304,10 @@ return $default(_that.id,_that.name,_that.color,_that.trackType,_that.clips,_tha
 /// }
 /// ```
 
-@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( int id,  String name,  String color,  UiTrackType trackType,  List<UiClip> clips,  int? generatorId,  int orderIdx)?  $default,) {final _that = this;
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( int id,  String name,  String color,  UiTrackType trackType,  List<UiClip> clips,  int? generatorId,  int orderIdx,  UiTrackInput input)?  $default,) {final _that = this;
 switch (_that) {
 case _UiTrack() when $default != null:
-return $default(_that.id,_that.name,_that.color,_that.trackType,_that.clips,_that.generatorId,_that.orderIdx);case _:
+return $default(_that.id,_that.name,_that.color,_that.trackType,_that.clips,_that.generatorId,_that.orderIdx,_that.input);case _:
   return null;
 
 }
@@ -4309,7 +4319,7 @@ return $default(_that.id,_that.name,_that.color,_that.trackType,_that.clips,_tha
 
 
 class _UiTrack implements UiTrack {
-  const _UiTrack({required this.id, required this.name, required this.color, required this.trackType, required final  List<UiClip> clips, this.generatorId, required this.orderIdx}): _clips = clips;
+  const _UiTrack({required this.id, required this.name, required this.color, required this.trackType, required final  List<UiClip> clips, this.generatorId, required this.orderIdx, required this.input}): _clips = clips;
   
 
 @override final  int id;
@@ -4325,6 +4335,7 @@ class _UiTrack implements UiTrack {
 
 @override final  int? generatorId;
 @override final  int orderIdx;
+@override final  UiTrackInput input;
 
 /// Create a copy of UiTrack
 /// with the given fields replaced by the non-null parameter values.
@@ -4336,16 +4347,16 @@ _$UiTrackCopyWith<_UiTrack> get copyWith => __$UiTrackCopyWithImpl<_UiTrack>(thi
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is _UiTrack&&(identical(other.id, id) || other.id == id)&&(identical(other.name, name) || other.name == name)&&(identical(other.color, color) || other.color == color)&&(identical(other.trackType, trackType) || other.trackType == trackType)&&const DeepCollectionEquality().equals(other._clips, _clips)&&(identical(other.generatorId, generatorId) || other.generatorId == generatorId)&&(identical(other.orderIdx, orderIdx) || other.orderIdx == orderIdx));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is _UiTrack&&(identical(other.id, id) || other.id == id)&&(identical(other.name, name) || other.name == name)&&(identical(other.color, color) || other.color == color)&&(identical(other.trackType, trackType) || other.trackType == trackType)&&const DeepCollectionEquality().equals(other._clips, _clips)&&(identical(other.generatorId, generatorId) || other.generatorId == generatorId)&&(identical(other.orderIdx, orderIdx) || other.orderIdx == orderIdx)&&(identical(other.input, input) || other.input == input));
 }
 
 
 @override
-int get hashCode => Object.hash(runtimeType,id,name,color,trackType,const DeepCollectionEquality().hash(_clips),generatorId,orderIdx);
+int get hashCode => Object.hash(runtimeType,id,name,color,trackType,const DeepCollectionEquality().hash(_clips),generatorId,orderIdx,input);
 
 @override
 String toString() {
-  return 'UiTrack(id: $id, name: $name, color: $color, trackType: $trackType, clips: $clips, generatorId: $generatorId, orderIdx: $orderIdx)';
+  return 'UiTrack(id: $id, name: $name, color: $color, trackType: $trackType, clips: $clips, generatorId: $generatorId, orderIdx: $orderIdx, input: $input)';
 }
 
 
@@ -4356,11 +4367,11 @@ abstract mixin class _$UiTrackCopyWith<$Res> implements $UiTrackCopyWith<$Res> {
   factory _$UiTrackCopyWith(_UiTrack value, $Res Function(_UiTrack) _then) = __$UiTrackCopyWithImpl;
 @override @useResult
 $Res call({
- int id, String name, String color, UiTrackType trackType, List<UiClip> clips, int? generatorId, int orderIdx
+ int id, String name, String color, UiTrackType trackType, List<UiClip> clips, int? generatorId, int orderIdx, UiTrackInput input
 });
 
 
-
+@override $UiTrackInputCopyWith<$Res> get input;
 
 }
 /// @nodoc
@@ -4373,7 +4384,7 @@ class __$UiTrackCopyWithImpl<$Res>
 
 /// Create a copy of UiTrack
 /// with the given fields replaced by the non-null parameter values.
-@override @pragma('vm:prefer-inline') $Res call({Object? id = null,Object? name = null,Object? color = null,Object? trackType = null,Object? clips = null,Object? generatorId = freezed,Object? orderIdx = null,}) {
+@override @pragma('vm:prefer-inline') $Res call({Object? id = null,Object? name = null,Object? color = null,Object? trackType = null,Object? clips = null,Object? generatorId = freezed,Object? orderIdx = null,Object? input = null,}) {
   return _then(_UiTrack(
 id: null == id ? _self.id : id // ignore: cast_nullable_to_non_nullable
 as int,name: null == name ? _self.name : name // ignore: cast_nullable_to_non_nullable
@@ -4382,7 +4393,274 @@ as String,trackType: null == trackType ? _self.trackType : trackType // ignore: 
 as UiTrackType,clips: null == clips ? _self._clips : clips // ignore: cast_nullable_to_non_nullable
 as List<UiClip>,generatorId: freezed == generatorId ? _self.generatorId : generatorId // ignore: cast_nullable_to_non_nullable
 as int?,orderIdx: null == orderIdx ? _self.orderIdx : orderIdx // ignore: cast_nullable_to_non_nullable
-as int,
+as int,input: null == input ? _self.input : input // ignore: cast_nullable_to_non_nullable
+as UiTrackInput,
+  ));
+}
+
+/// Create a copy of UiTrack
+/// with the given fields replaced by the non-null parameter values.
+@override
+@pragma('vm:prefer-inline')
+$UiTrackInputCopyWith<$Res> get input {
+  
+  return $UiTrackInputCopyWith<$Res>(_self.input, (value) {
+    return _then(_self.copyWith(input: value));
+  });
+}
+}
+
+/// @nodoc
+mixin _$UiTrackInput {
+
+ int get firstChannel; int get channels; bool get monitor;
+/// Create a copy of UiTrackInput
+/// with the given fields replaced by the non-null parameter values.
+@JsonKey(includeFromJson: false, includeToJson: false)
+@pragma('vm:prefer-inline')
+$UiTrackInputCopyWith<UiTrackInput> get copyWith => _$UiTrackInputCopyWithImpl<UiTrackInput>(this as UiTrackInput, _$identity);
+
+
+
+@override
+bool operator ==(Object other) {
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is UiTrackInput&&(identical(other.firstChannel, firstChannel) || other.firstChannel == firstChannel)&&(identical(other.channels, channels) || other.channels == channels)&&(identical(other.monitor, monitor) || other.monitor == monitor));
+}
+
+
+@override
+int get hashCode => Object.hash(runtimeType,firstChannel,channels,monitor);
+
+@override
+String toString() {
+  return 'UiTrackInput(firstChannel: $firstChannel, channels: $channels, monitor: $monitor)';
+}
+
+
+}
+
+/// @nodoc
+abstract mixin class $UiTrackInputCopyWith<$Res>  {
+  factory $UiTrackInputCopyWith(UiTrackInput value, $Res Function(UiTrackInput) _then) = _$UiTrackInputCopyWithImpl;
+@useResult
+$Res call({
+ int firstChannel, int channels, bool monitor
+});
+
+
+
+
+}
+/// @nodoc
+class _$UiTrackInputCopyWithImpl<$Res>
+    implements $UiTrackInputCopyWith<$Res> {
+  _$UiTrackInputCopyWithImpl(this._self, this._then);
+
+  final UiTrackInput _self;
+  final $Res Function(UiTrackInput) _then;
+
+/// Create a copy of UiTrackInput
+/// with the given fields replaced by the non-null parameter values.
+@pragma('vm:prefer-inline') @override $Res call({Object? firstChannel = null,Object? channels = null,Object? monitor = null,}) {
+  return _then(_self.copyWith(
+firstChannel: null == firstChannel ? _self.firstChannel : firstChannel // ignore: cast_nullable_to_non_nullable
+as int,channels: null == channels ? _self.channels : channels // ignore: cast_nullable_to_non_nullable
+as int,monitor: null == monitor ? _self.monitor : monitor // ignore: cast_nullable_to_non_nullable
+as bool,
+  ));
+}
+
+}
+
+
+/// Adds pattern-matching-related methods to [UiTrackInput].
+extension UiTrackInputPatterns on UiTrackInput {
+/// A variant of `map` that fallback to returning `orElse`.
+///
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case final Subclass value:
+///     return ...;
+///   case _:
+///     return orElse();
+/// }
+/// ```
+
+@optionalTypeArgs TResult maybeMap<TResult extends Object?>(TResult Function( _UiTrackInput value)?  $default,{required TResult orElse(),}){
+final _that = this;
+switch (_that) {
+case _UiTrackInput() when $default != null:
+return $default(_that);case _:
+  return orElse();
+
+}
+}
+/// A `switch`-like method, using callbacks.
+///
+/// Callbacks receives the raw object, upcasted.
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case final Subclass value:
+///     return ...;
+///   case final Subclass2 value:
+///     return ...;
+/// }
+/// ```
+
+@optionalTypeArgs TResult map<TResult extends Object?>(TResult Function( _UiTrackInput value)  $default,){
+final _that = this;
+switch (_that) {
+case _UiTrackInput():
+return $default(_that);}
+}
+/// A variant of `map` that fallback to returning `null`.
+///
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case final Subclass value:
+///     return ...;
+///   case _:
+///     return null;
+/// }
+/// ```
+
+@optionalTypeArgs TResult? mapOrNull<TResult extends Object?>(TResult? Function( _UiTrackInput value)?  $default,){
+final _that = this;
+switch (_that) {
+case _UiTrackInput() when $default != null:
+return $default(_that);case _:
+  return null;
+
+}
+}
+/// A variant of `when` that fallback to an `orElse` callback.
+///
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case Subclass(:final field):
+///     return ...;
+///   case _:
+///     return orElse();
+/// }
+/// ```
+
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( int firstChannel,  int channels,  bool monitor)?  $default,{required TResult orElse(),}) {final _that = this;
+switch (_that) {
+case _UiTrackInput() when $default != null:
+return $default(_that.firstChannel,_that.channels,_that.monitor);case _:
+  return orElse();
+
+}
+}
+/// A `switch`-like method, using callbacks.
+///
+/// As opposed to `map`, this offers destructuring.
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case Subclass(:final field):
+///     return ...;
+///   case Subclass2(:final field2):
+///     return ...;
+/// }
+/// ```
+
+@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( int firstChannel,  int channels,  bool monitor)  $default,) {final _that = this;
+switch (_that) {
+case _UiTrackInput():
+return $default(_that.firstChannel,_that.channels,_that.monitor);}
+}
+/// A variant of `when` that fallback to returning `null`
+///
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case Subclass(:final field):
+///     return ...;
+///   case _:
+///     return null;
+/// }
+/// ```
+
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( int firstChannel,  int channels,  bool monitor)?  $default,) {final _that = this;
+switch (_that) {
+case _UiTrackInput() when $default != null:
+return $default(_that.firstChannel,_that.channels,_that.monitor);case _:
+  return null;
+
+}
+}
+
+}
+
+/// @nodoc
+
+
+class _UiTrackInput implements UiTrackInput {
+  const _UiTrackInput({required this.firstChannel, required this.channels, required this.monitor});
+  
+
+@override final  int firstChannel;
+@override final  int channels;
+@override final  bool monitor;
+
+/// Create a copy of UiTrackInput
+/// with the given fields replaced by the non-null parameter values.
+@override @JsonKey(includeFromJson: false, includeToJson: false)
+@pragma('vm:prefer-inline')
+_$UiTrackInputCopyWith<_UiTrackInput> get copyWith => __$UiTrackInputCopyWithImpl<_UiTrackInput>(this, _$identity);
+
+
+
+@override
+bool operator ==(Object other) {
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is _UiTrackInput&&(identical(other.firstChannel, firstChannel) || other.firstChannel == firstChannel)&&(identical(other.channels, channels) || other.channels == channels)&&(identical(other.monitor, monitor) || other.monitor == monitor));
+}
+
+
+@override
+int get hashCode => Object.hash(runtimeType,firstChannel,channels,monitor);
+
+@override
+String toString() {
+  return 'UiTrackInput(firstChannel: $firstChannel, channels: $channels, monitor: $monitor)';
+}
+
+
+}
+
+/// @nodoc
+abstract mixin class _$UiTrackInputCopyWith<$Res> implements $UiTrackInputCopyWith<$Res> {
+  factory _$UiTrackInputCopyWith(_UiTrackInput value, $Res Function(_UiTrackInput) _then) = __$UiTrackInputCopyWithImpl;
+@override @useResult
+$Res call({
+ int firstChannel, int channels, bool monitor
+});
+
+
+
+
+}
+/// @nodoc
+class __$UiTrackInputCopyWithImpl<$Res>
+    implements _$UiTrackInputCopyWith<$Res> {
+  __$UiTrackInputCopyWithImpl(this._self, this._then);
+
+  final _UiTrackInput _self;
+  final $Res Function(_UiTrackInput) _then;
+
+/// Create a copy of UiTrackInput
+/// with the given fields replaced by the non-null parameter values.
+@override @pragma('vm:prefer-inline') $Res call({Object? firstChannel = null,Object? channels = null,Object? monitor = null,}) {
+  return _then(_UiTrackInput(
+firstChannel: null == firstChannel ? _self.firstChannel : firstChannel // ignore: cast_nullable_to_non_nullable
+as int,channels: null == channels ? _self.channels : channels // ignore: cast_nullable_to_non_nullable
+as int,monitor: null == monitor ? _self.monitor : monitor // ignore: cast_nullable_to_non_nullable
+as bool,
   ));
 }
 

@@ -1,7 +1,6 @@
 import 'dart:async';
 
 import 'package:fast_immutable_collections/fast_immutable_collections.dart';
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -98,7 +97,7 @@ class _KeyBindingSettingsPageState
                 ..._buildGroups(visible, active, shortcutState.overrides),
               const SizedBox(height: 16),
               Text(
-                'Shortcuts require Ctrl, Alt, or Command plus a non-modifier key. Escape cancels capture.',
+                '$shortcutSupportHint Escape cancels capture.',
                 style: Theme.of(context).textTheme.bodySmall,
               ),
             ],
@@ -258,7 +257,7 @@ class _ShortcutCaptureDialogState extends State<_ShortcutCaptureDialog> {
     );
     if (!chord.isSupported) {
       setState(() {
-        _error = 'Use Ctrl, Alt, or Command with a non-modifier key.';
+        _error = shortcutSupportHint;
       });
       return KeyEventResult.handled;
     }
@@ -302,20 +301,4 @@ class _ShortcutCaptureDialogState extends State<_ShortcutCaptureDialog> {
       ],
     );
   }
-}
-
-String shortcutLabel(ShortcutChord chord) {
-  final macOS = defaultTargetPlatform == TargetPlatform.macOS;
-  final parts = <String>[];
-  if (chord.control) parts.add(macOS ? 'Control' : 'Ctrl');
-  if (chord.alt) parts.add(macOS ? 'Option' : 'Alt');
-  if (chord.shift) parts.add('Shift');
-  if (chord.meta) parts.add(macOS ? 'Command' : 'Meta');
-  final logicalKey = LogicalKeyboardKey(chord.logicalKeyId);
-  final key = switch (logicalKey) {
-    LogicalKeyboardKey.space => 'Space',
-    _ => logicalKey.keyLabel,
-  };
-  parts.add(key.isEmpty ? 'Key ${chord.logicalKeyId}' : key.toUpperCase());
-  return parts.join('+');
 }

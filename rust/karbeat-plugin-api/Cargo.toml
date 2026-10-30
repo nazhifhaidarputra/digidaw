@@ -8,7 +8,7 @@ description = "Plugin API for Karbeat"
 [dependencies]
 
 serde.workspace = true
-log.workspace = true
+tracing.workspace = true
 serde_json.workspace = true
 heck.workspace = true
 karbeat-plugin-types.workspace = true

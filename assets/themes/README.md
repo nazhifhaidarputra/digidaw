@@ -2,6 +2,8 @@
 
 A color theme is a JSON file that sets every color of the app. The themes in this folder are bundled with DigiDAW; any other theme file can be loaded from **Settings → Appearance → Color theme**. Loaded files stay in the theme menu until they are removed with the × button beside them; removing one leaves the file on disk.
 
+DigiDAW Dark is the default on a fresh install, with DigiDAW Light as its light counterpart. Both are built from the app's purple, periwinkle, pastel pink, pale cyan, amber, and blue palette; the dark surfaces are deepened shades of the palette's muted violet.
+
 ```json
 {
   "name": "Catppuccin Mocha",

@@ -4,11 +4,10 @@ use super::{
     automation::{AutomationChanged, AutomationRecorder},
     pools::{PoolBefore, PoolSwap},
 };
-use crate::commands::EffectTarget;
 use crate::core::{
     history::{EngineSync, HistoryAction, HistoryError, PluginSync},
     project::{
-        ApplicationState, AudioTrack, Clip, GeneratorInstance,
+        ApplicationState, AudioTrack, Clip, EffectTarget, GeneratorInstance,
         mixer::{
             BusMixerChannel, EffectChain, EffectInstance, RoutingConnection, RoutingNode,
             TrackMixerChannel,

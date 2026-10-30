@@ -653,7 +653,7 @@ pub fn add_new_automation_point(
     crate::api::context::project_ctx!(ctx);
     // we will warn if the value is not in normalized value
     if value > 1.0 || value < 0.0 {
-        log::warn!("Value are not in correct range. it will be clamped");
+        tracing::warn!("Value are not in correct range. it will be clamped");
     }
     let normalized_val = NormalizedF64::new(value);
     automation_api::add_new_automation_point(ctx, automation_id.into(), time_ticks, normalized_val)
@@ -690,7 +690,7 @@ pub fn update_automation_point(
     crate::api::context::project_ctx!(ctx);
     let some_value = value.map(|v| {
         if v > 1.0 || v < 0.0 {
-            log::warn!("Value are not in correct range. it will be clamped");
+            tracing::warn!("Value are not in correct range. it will be clamped");
         }
 
         NormalizedF64::new(v)
@@ -698,7 +698,7 @@ pub fn update_automation_point(
 
     let some_tension = tension.map(|t| {
         if t < -1.0 || t > 1.0 {
-            log::warn!("Tension are not in correct range. it will be clamped");
+            tracing::warn!("Tension are not in correct range. it will be clamped");
         }
 
         BipolarF64::new(t)

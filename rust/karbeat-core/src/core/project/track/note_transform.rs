@@ -205,6 +205,30 @@ pub fn transpose(notes: &[Note], semitones: i32) -> anyhow::Result<NoteEdit> {
     Ok(NoteEdit::updates(updates))
 }
 
+/// Scales the selection in time around its earliest note start.
+///
+/// Every start moves away from (or toward) that anchor and every duration grows
+/// (or shrinks) with `factor`, so notes further into the selection travel further
+/// and end up longer than notes near the anchor. Durations never drop below one tick.
+pub fn stretch(notes: &[Note], factor: f64) -> NoteEdit {
+    let Some(anchor) = notes.iter().map(|note| note.start_tick).min() else {
+        return NoteEdit::default();
+    };
+    NoteEdit::updates(
+        notes
+            .iter()
+            .map(|note| {
+                let offset = note.start_tick.saturating_sub(anchor) as f64;
+                Note {
+                    start_tick: anchor.saturating_add((offset * factor).round() as u64),
+                    duration: ((note.duration as f64) * factor).round().max(1.0) as u64,
+                    ..note.clone()
+                }
+            })
+            .collect(),
+    )
+}
+
 /// Moves every note by `delta_ticks`. The group stops at tick 0 rather than compressing.
 pub fn shift(notes: &[Note], delta_ticks: i64) -> NoteEdit {
     let earliest = notes.iter().map(|note| note.start_tick).min().unwrap_or(0);
@@ -218,6 +242,28 @@ pub fn shift(notes: &[Note], delta_ticks: i64) -> NoteEdit {
             })
             .collect(),
     )
+}
+
+/// Copies every note so the earliest copy starts at `start_tick`, keeping the group's
+/// timing and every other parameter. New IDs are assigned on insertion.
+pub fn duplicate(notes: &[Note], start_tick: u64) -> NoteEdit {
+    let Some(earliest) = notes.iter().map(|note| note.start_tick).min() else {
+        return NoteEdit::default();
+    };
+    let delta = i64::try_from(start_tick)
+        .unwrap_or(i64::MAX)
+        .saturating_sub(i64::try_from(earliest).unwrap_or(i64::MAX));
+    NoteEdit {
+        updates: Vec::new(),
+        additions: notes
+            .iter()
+            .map(|note| Note {
+                id: NoteId::default(),
+                start_tick: note.start_tick.saturating_add_signed(delta),
+                ..note.clone()
+            })
+            .collect(),
+    }
 }
 
 /// Per-note parameter change; `None` leaves a parameter unchanged.
@@ -338,9 +384,48 @@ mod tests {
     }
 
     #[test]
+    fn stretch_scales_starts_and_lengths_away_from_the_first_note() {
+        let notes = [
+            note(1, 960, 240, 60),
+            note(2, 1920, 480, 62),
+            note(3, 2880, 120, 64),
+        ];
+        let edit = stretch(&notes, 1.5);
+        assert_eq!(spans(&edit), [(960, 360), (2400, 720), (3840, 180)]);
+
+        let squashed = stretch(&notes, 0.5);
+        assert_eq!(spans(&squashed), [(960, 120), (1440, 240), (1920, 60)]);
+    }
+
+    #[test]
+    fn stretch_keeps_a_note_at_the_anchor_and_never_collapses_length() {
+        let edit = stretch(&[note(1, 100, 1, 60), note(2, 0, 40, 60)], 0.001);
+        assert_eq!(spans(&edit), [(0, 1), (0, 1)]);
+    }
+
+    #[test]
     fn shift_stops_the_group_at_zero() {
         let edit = shift(&[note(1, 100, 10, 60), note(2, 400, 10, 60)], -240);
         assert_eq!(spans(&edit), [(0, 10), (300, 10)]);
+    }
+
+    #[test]
+    fn duplicate_keeps_relative_timing_and_adds_copies() {
+        let notes = [note(1, 120, 240, 60), note(2, 480, 120, 64)];
+        let edit = duplicate(&notes, 960);
+
+        assert!(edit.updates.is_empty());
+        assert_eq!(spans(&edit), [(960, 240), (1320, 120)]);
+        assert!(
+            edit.additions
+                .iter()
+                .all(|note| note.id == NoteId::default())
+        );
+    }
+
+    #[test]
+    fn duplicate_of_no_notes_is_empty() {
+        assert_eq!(duplicate(&[], 960), NoteEdit::default());
     }
 
     #[test]

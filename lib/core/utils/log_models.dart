@@ -24,7 +24,7 @@ abstract class AppLogEntry with _$AppLogEntry {
     required String message,
     @Default(AppLogSource.flutter) AppLogSource source,
 
-    /// Rust `log` target (module path); `null` for Flutter entries.
+    /// Rust log target (module path); `null` for Flutter entries.
     String? target,
     String? errorSummary,
   }) = _AppLogEntry;

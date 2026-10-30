@@ -1,5 +1,6 @@
 import 'package:karbeat/core/utils/result_type.dart';
 import 'package:karbeat/features/setting/models/appearance_settings_state.dart';
+import 'package:karbeat/features/setting/services/appearance_asset_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 typedef AppearancePreferences = ({
@@ -28,6 +29,26 @@ class AppearancePreferencesService {
   static const customColorThemePathsKey =
       'settings.appearance.custom_color_theme_paths.v1';
 
+  /// Stored when the user explicitly picks the accent-palette fallback, so a
+  /// missing source can mean "never chosen" and use the bundled default.
+  static const explicitDefaultColorThemeSource =
+      'settings.appearance.default_color_theme';
+
+  /// Resolves a persisted theme source. A missing key means the user has not
+  /// chosen a theme yet, while [explicitDefaultColorThemeSource] means they
+  /// deliberately picked the accent-palette fallback.
+  static String? resolveColorThemeSource({
+    required bool hasStoredSource,
+    required String? storedSource,
+  }) {
+    if (!hasStoredSource) {
+      return AppearanceAssetService.defaultColorThemeSource;
+    }
+    return storedSource == explicitDefaultColorThemeSource
+        ? null
+        : storedSource;
+  }
+
   /// Held the single loaded theme file before several could be kept.
   static const legacyCustomColorThemePathKey =
       'settings.appearance.custom_color_theme_path.v1';
@@ -42,7 +63,12 @@ class AppearancePreferencesService {
       final storedOverlay = await preferences.getDouble(backgroundOverlayKey);
       final fontPath = await preferences.getString(fontPathKey);
       final fontFamily = await preferences.getString(fontFamilyKey);
-      final colorThemeSource = await preferences.getString(colorThemeSourceKey);
+      final hasColorThemeSource = await preferences.containsKey(
+        colorThemeSourceKey,
+      );
+      final storedColorThemeSource = hasColorThemeSource
+          ? await preferences.getString(colorThemeSourceKey)
+          : null;
       final customColorThemePaths =
           await preferences.getStringList(customColorThemePathsKey) ??
           [?await preferences.getString(legacyCustomColorThemePathKey)];
@@ -81,7 +107,10 @@ class AppearancePreferencesService {
         backgroundOverlayOpacity: overlay,
         customFontPath: fontPath,
         customFontFamily: fontFamily,
-        colorThemeSource: colorThemeSource,
+        colorThemeSource: resolveColorThemeSource(
+          hasStoredSource: hasColorThemeSource,
+          storedSource: storedColorThemeSource,
+        ),
         customColorThemePaths: customColorThemePaths,
       );
     });
@@ -112,10 +141,9 @@ class AppearancePreferencesService {
         fontFamilyKey,
         value.customFontFamily,
       );
-      await _writeOptionalString(
-        preferences,
+      await preferences.setString(
         colorThemeSourceKey,
-        value.colorThemeSource,
+        value.colorThemeSource ?? explicitDefaultColorThemeSource,
       );
       if (value.customColorThemePaths.isEmpty) {
         await preferences.remove(customColorThemePathsKey);

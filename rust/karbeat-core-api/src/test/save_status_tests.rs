@@ -9,8 +9,8 @@ mod tests {
         audio_api, automation_api, clipboard_api, mitigation_api, mixer_api, note_api, pattern_api,
         project_api, track_api, transport_api,
     };
-    use karbeat_core::commands::MixerChannelTarget;
-    use karbeat_core::context::DawContext;
+    use karbeat_audio::commands::MixerChannelTarget;
+    use karbeat_audio::context::DawContext;
     use karbeat_core::core::mitigation::AutoSaveSettings;
     use karbeat_core::core::project::{MixerChannelParams, ModulationSource};
 

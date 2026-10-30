@@ -14,6 +14,7 @@ pub mod pattern;
 pub mod plugin;
 pub mod plugins;
 pub mod project;
+pub mod recording;
 pub mod serialization;
 pub mod session;
 pub mod simple;

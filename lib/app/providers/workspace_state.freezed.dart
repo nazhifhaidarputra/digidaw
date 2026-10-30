@@ -209,7 +209,7 @@ return $default(_that.selectedGeneratorId,_that.baseKey,_that.keyRange,_that.sho
 
 
 class _FloatingMidiKeyboardFieldState extends FloatingMidiKeyboardFieldState {
-  const _FloatingMidiKeyboardFieldState({this.selectedGeneratorId, this.baseKey = 48, this.keyRange = 15, this.showed = false}): super._();
+  const _FloatingMidiKeyboardFieldState({this.selectedGeneratorId, this.baseKey = 48, this.keyRange = 24, this.showed = false}): super._();
   
 
 @override final  int? selectedGeneratorId;

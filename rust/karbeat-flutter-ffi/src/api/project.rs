@@ -2,12 +2,12 @@ use std::{collections::HashMap, sync::Arc};
 
 use flutter_rust_bridge::frb;
 use jiff::Timestamp;
-use karbeat_core::audio::exporter::{ExportRange, RenderOptions, RenderPurpose, TailHandling};
-use karbeat_core::audio::writer::{
+use karbeat_audio::context::DawContext as CoreDawContext;
+use karbeat_audio::exporter::{ExportRange, RenderOptions, RenderPurpose, TailHandling};
+use karbeat_audio::writer::{
     AudioExportConfig, BitDepth, flac::FlacAudioWriterConfig, ogg::OggOpusAudioWriterConfig,
     wav::WavAudioWriterConfig,
 };
-use karbeat_core::context::DawContext as CoreDawContext;
 use karbeat_core::core::file_manager::audio_loader::AudioLoader;
 use karbeat_core::core::project::{
     ApplicationState, CoverArt, CoverImage, EnvelopeCursor, EnvelopePoint, Fade, GainEnvelope,
@@ -17,7 +17,7 @@ use karbeat_core::core::project::{
     AudioHardwareConfig, DawSource, ProjectMetadata,
     clip::Clip,
     generator::{GeneratorInstance, GeneratorInstanceType},
-    track::{AudioTrack, TrackType, audio_waveform::AudioWaveform},
+    track::{AudioTrack, TrackInputSettings, TrackType, audio_waveform::AudioWaveform},
     transport::TransportState,
 };
 use karbeat_core_api::{
@@ -134,6 +134,39 @@ pub struct UiTrack {
     pub clips: Vec<UiClip>,
     pub generator_id: Option<u64>,
     pub order_idx: usize,
+    /// Device input the track records and monitors.
+    pub input: UiTrackInput,
+}
+
+/// Device channels a track records, and whether it is heard through the track.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[frb(dart_metadata=("freezed"))]
+pub struct UiTrackInput {
+    /// First device channel, from 0.
+    pub first_channel: u16,
+    /// 1 records the channel alone; 2 records it and the next.
+    pub channels: u16,
+    pub monitor: bool,
+}
+
+impl From<TrackInputSettings> for UiTrackInput {
+    fn from(value: TrackInputSettings) -> Self {
+        Self {
+            first_channel: value.first_channel,
+            channels: value.channels,
+            monitor: value.monitor,
+        }
+    }
+}
+
+impl From<UiTrackInput> for TrackInputSettings {
+    fn from(value: UiTrackInput) -> Self {
+        Self {
+            first_channel: value.first_channel,
+            channels: value.channels,
+            monitor: value.monitor,
+        }
+    }
 }
 
 #[derive(Clone, Default)]
@@ -259,6 +292,7 @@ impl UiTrack {
                 .collect(),
             generator_id,
             order_idx: value.order_idx,
+            input: value.input.into(),
         }
     }
 }
@@ -964,7 +998,7 @@ pub async fn add_audio_source(ctx: &DawContext, file_path: &str) -> Result<u64, 
 pub fn add_new_audio_track(ctx: &DawContext) -> UiTrack {
     let mut ctx = ctx.project_write();
     let track = track_api::add_new_audio_track(&mut ctx);
-    log::info!("[add_new_track] successfully added new track");
+    tracing::info!("[add_new_track] successfully added new track");
     UiTrack::from_track(&track, &ctx.app_state)
 }
 

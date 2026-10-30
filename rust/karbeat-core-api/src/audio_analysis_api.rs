@@ -15,8 +15,8 @@ use std::{
 
 use anyhow::Context;
 use karbeat_analysis::{AnalysisError, AudioInput, ModelPaths, analyze_tempo};
+use karbeat_audio::context::DawContext;
 use karbeat_core::{
-    context::DawContext,
     core::{
         file_manager::audio_loader::CachedSamplesWriter,
         history::{
@@ -154,7 +154,7 @@ pub fn cancel_stale_renders(ctx: &DawContext) -> usize {
         {
             render.stale.store(true, Ordering::Release);
             cancelled = cancelled.saturating_add(1);
-            log::info!(
+            tracing::info!(
                 "Cancelled a stale render of audio source {}",
                 render.basis.source_id.to_u64()
             );
@@ -414,6 +414,7 @@ pub fn set_sample_mode(
         return Ok(false);
     }
     let project_bpm = ctx.app_state.transport.bpm;
+    let duration = [(source_id, entry.duration_scale(project_bpm))];
     let waveform = Arc::make_mut(entry);
     let previous = tempo_state(waveform);
     waveform.sample_mode = mode;
@@ -448,12 +449,15 @@ pub fn set_sample_mode(
     {
         waveform.edited = None;
     }
-    ctx.push_history(SourceTempoChanged::new(
-        source_id,
-        previous,
-        "Change Sample Mode",
-    ));
+    let clips = ctx.app_state.follow_source_durations(&duration);
+    let rescaled = !clips.is_empty();
+    ctx.push_history(
+        SourceTempoChanged::new(source_id, previous, "Change Sample Mode").with_clips(clips),
+    );
     ctx.broadcast_audio_source(source_id);
+    if rescaled {
+        ctx.broadcast_track_graph();
+    }
     Ok(begin_refresh_render(ctx, source_id)?.is_some())
 }
 
@@ -960,7 +964,7 @@ pub fn execute_render(
 pub fn commit_render(ctx: &mut DawContext, completed: CompletedRender) -> bool {
     let source_id = completed.basis.source_id;
     if !completed.basis.is_current(ctx) {
-        log::info!(
+        tracing::info!(
             "Discarded a render of audio source {}: it changed while rendering",
             source_id.to_u64()
         );
@@ -970,6 +974,7 @@ pub fn commit_render(ctx: &mut DawContext, completed: CompletedRender) -> bool {
         return false;
     };
 
+    let duration = [(source_id, entry.duration_scale(ctx.app_state.transport.bpm))];
     let waveform = Arc::make_mut(entry);
     let previous = tempo_state(waveform);
     let recipe_changed = completed.basis.before.edits.as_ref() != Some(&completed.edits);
@@ -983,7 +988,13 @@ pub fn commit_render(ctx: &mut DawContext, completed: CompletedRender) -> bool {
         RenderPurpose::Fit { source_bpm } => {
             waveform.original_bpm = Some(source_bpm);
             waveform.sample_mode = AudioSampleMode::Stretch;
-            ctx.push_history(SourceTempoChanged::new(source_id, previous, "Fit to Tempo"));
+            let clips = ctx.app_state.follow_source_durations(&duration);
+            if !clips.is_empty() {
+                ctx.broadcast_track_graph();
+            }
+            ctx.push_history(
+                SourceTempoChanged::new(source_id, previous, "Fit to Tempo").with_clips(clips),
+            );
         }
         RenderPurpose::Refresh if recipe_changed => ctx.mark_project_modified(),
         RenderPurpose::Refresh => {}
@@ -998,12 +1009,20 @@ pub fn commit_beat_grid(ctx: &mut DawContext, source_id: AudioSourceId, grid: Be
     let Some(entry) = ctx.app_state.asset_library.source_map.get_mut(source_id) else {
         return false;
     };
+    let duration = [(source_id, entry.duration_scale(ctx.app_state.transport.bpm))];
     let waveform = Arc::make_mut(entry);
     let previous = tempo_state(waveform);
     waveform.original_bpm = Some(grid.bpm);
     waveform.beat_grid = Some(grid);
-    ctx.push_history(SourceTempoChanged::new(source_id, previous, "Detect Tempo"));
+    let clips = ctx.app_state.follow_source_durations(&duration);
+    let rescaled = !clips.is_empty();
+    ctx.push_history(
+        SourceTempoChanged::new(source_id, previous, "Detect Tempo").with_clips(clips),
+    );
     ctx.broadcast_audio_source(source_id);
+    if rescaled {
+        ctx.broadcast_track_graph();
+    }
     true
 }
 

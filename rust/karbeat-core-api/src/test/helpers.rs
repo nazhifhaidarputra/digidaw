@@ -7,8 +7,8 @@
 use karbeat_utils::hash::hash_str;
 
 use crate::{clip_api, note_api, track_api};
+use karbeat_audio::context::DawContext;
 use karbeat_core::{
-    context::DawContext,
     core::project::{
         DawSource,
         clip::{Clip, ClipSourceType, ClipTimeUnit},

@@ -1,7 +1,7 @@
-use karbeat_core::{
-    audio::backend::{
+use karbeat_audio::{
+    backend::{
         self, AudioDeviceInfo, AudioRuntimeSettings, OutputDeviceSelection, OutputHostSelection,
-        RequestedOutputConfig,
+        RequestedInputConfig, RequestedOutputConfig,
     },
     context::DawContext,
 };
@@ -14,6 +14,11 @@ pub fn available_output_hosts() -> Vec<String> {
 /// Enumerates output devices for a named host or the system-default host.
 pub fn available_output_devices(host_name: Option<&str>) -> anyhow::Result<Vec<AudioDeviceInfo>> {
     backend::get_output_devices(host_name)
+}
+
+/// Enumerates input devices for a named host or the system-default host.
+pub fn available_input_devices(host_name: Option<&str>) -> anyhow::Result<Vec<AudioDeviceInfo>> {
+    backend::get_input_devices(host_name)
 }
 
 /// Returns a consistent clone of the requested and active audio runtime settings.
@@ -152,15 +157,46 @@ pub fn select_output(
     Ok(runtime.clone())
 }
 
+/// Turns the device input on or off and selects its device, `None` following the system
+/// default, for the next stream restart. The input opens on the output's host.
+///
+/// A named device is validated before the selection changes. Selecting what is already
+/// requested leaves the stream running.
+pub fn select_input(
+    ctx: &mut DawContext,
+    enabled: bool,
+    device_id: Option<String>,
+) -> anyhow::Result<AudioRuntimeSettings> {
+    let device_name = match device_id.as_deref() {
+        None => String::new(),
+        Some(id) => {
+            let host_name = ctx.active_audio_config.read().host_name.clone();
+            available_input_devices(host_name.as_deref())?
+                .into_iter()
+                .find(|device| device.id == id)
+                .map(|device| device.name)
+                .ok_or_else(|| anyhow::anyhow!("Input device '{id}' is unavailable"))?
+        }
+    };
+    let requested = RequestedInputConfig { enabled, device_id };
+    ctx.app_state.audio_config.selected_input_device = device_name;
+    let mut runtime = ctx.audio_runtime_settings.write();
+    if runtime.requested_input != requested {
+        runtime.requested_input = requested;
+        runtime.stream_restarting();
+    }
+    Ok(runtime.clone())
+}
+
 #[cfg(test)]
 #[allow(
     clippy::expect_used,
     reason = "audio configuration tests fail immediately when a fixed fixture is invalid"
 )]
 mod tests {
-    use super::{select_output, set_dsp_config};
-    use karbeat_core::{
-        audio::backend::{OutputDeviceSelection, OutputHostSelection},
+    use super::{select_input, select_output, set_dsp_config};
+    use karbeat_audio::{
+        backend::{OutputDeviceSelection, OutputHostSelection},
         context::DawContext,
     };
 
@@ -188,6 +224,16 @@ mod tests {
             ctx.audio_runtime_settings.read().requested_output.host,
             OutputHostSelection::SystemDefault
         );
+    }
+
+    #[test]
+    fn input_selection_is_requested_once_and_unknown_devices_are_rejected() {
+        let mut ctx = DawContext::new();
+        let settings = select_input(&mut ctx, true, None).expect("default input selection");
+        assert!(settings.requested_input.enabled);
+        assert_eq!(settings.requested_input.device_id, None);
+        assert!(select_input(&mut ctx, true, Some("not-a-real-input".into())).is_err());
+        assert!(ctx.audio_runtime_settings.read().requested_input.enabled);
     }
 
     #[test]

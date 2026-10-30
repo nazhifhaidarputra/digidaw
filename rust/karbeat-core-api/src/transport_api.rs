@@ -1,6 +1,6 @@
-use karbeat_core::audio::engine::PlaybackMode;
-use karbeat_core::commands::AudioCommand;
-use karbeat_core::context::DawContext;
+use karbeat_audio::commands::AudioCommand;
+use karbeat_audio::context::DawContext;
+use karbeat_audio::engine::PlaybackMode;
 use karbeat_core::core::history::actions::TempoChanged;
 use karbeat_core::shared::{GeneratorId, PatternId};
 
@@ -26,13 +26,21 @@ pub fn set_looping(ctx: &mut DawContext, val: bool) {
 
 /// Updates tempo, rebuilds timing-dependent graph state, and queues the tempo change.
 ///
-/// Rejects NaN and infinity, which a project file cannot store.
-pub fn set_bpm(ctx: &mut DawContext, val: f32) -> anyhow::Result<()> {
+/// Clips of sources that follow the tempo are rescaled with their audio, so they keep ending
+/// where it ends. Returns whether any clip was rescaled. Rejects NaN and infinity, which a
+/// project file cannot store.
+pub fn set_bpm(ctx: &mut DawContext, val: f32) -> anyhow::Result<bool> {
     anyhow::ensure!(val.is_finite(), "Tempo must be a finite number");
+    let durations = ctx.app_state.source_duration_scales();
     let previous = std::mem::replace(&mut ctx.app_state.transport.bpm, val);
-    ctx.push_history(TempoChanged::new(previous));
+    let clips = ctx.app_state.follow_source_durations(&durations);
+    let rescaled = !clips.is_empty();
+    ctx.push_history(TempoChanged::new(previous).with_clips(clips));
     let _ = ctx.send_audio_command(AudioCommand::SetBPM(val));
-    Ok(())
+    if rescaled {
+        ctx.broadcast_track_graph();
+    }
+    Ok(rescaled)
 }
 
 /// Stops transport playback and resets the audio-thread playhead to zero.
@@ -80,4 +88,12 @@ pub fn set_pattern_loop(ctx: &mut DawContext, region: Option<(u64, u64)>) -> any
 /// Hot-swaps the generator used by active pattern preview playback.
 pub fn switch_pattern_generator(ctx: &mut DawContext, generator_id: GeneratorId) {
     let _ = ctx.send_audio_command(AudioCommand::SwitchPatternGenerator(generator_id));
+}
+
+/// Retargets pattern playback at another pattern, keeping its play state.
+///
+/// The new pattern starts from its beginning. Nothing happens outside pattern mode, so the song
+/// transport is never interrupted by opening a pattern for editing.
+pub fn switch_pattern(ctx: &mut DawContext, pattern_id: PatternId) {
+    let _ = ctx.send_audio_command(AudioCommand::SwitchPattern(pattern_id));
 }

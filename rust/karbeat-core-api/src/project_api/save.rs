@@ -13,14 +13,14 @@ use shuttle::thread::sleep;
 #[cfg(not(test))]
 use std::thread::sleep;
 
-use karbeat_core::{
-    audio::event::PluginTarget,
+use karbeat_audio::{
     commands::{AudioCommand, AudioFeedback, MixerChannelSnapshot, MixerChannelTarget},
     context::DawContext,
-    core::{
-        file_manager::project_loader::save_daw_project,
-        project::{ApplicationState, GeneratorInstanceType, plugin::PluginInstance},
-    },
+    event::PluginTarget,
+};
+use karbeat_core::core::{
+    file_manager::project_loader::save_daw_project,
+    project::{ApplicationState, GeneratorInstanceType, plugin::PluginInstance},
 };
 
 static NEXT_REQUEST: AtomicU32 = AtomicU32::new(1);
@@ -114,7 +114,7 @@ struct CapturedPlugin {
 }
 
 fn collect(
-    handles: &karbeat_core::context::ControlHandles,
+    handles: &karbeat_audio::context::ControlHandles,
     timeout: Duration,
     targets: Vec<PendingTarget>,
 ) -> anyhow::Result<(Vec<CapturedPlugin>, Vec<MixerChannelSnapshot>)> {
@@ -135,7 +135,7 @@ fn collect(
         pending.insert(id, target);
         commands.push(command);
     }
-    let inbox = karbeat_core::audio::project_state::ProjectStateFeedback::register(
+    let inbox = karbeat_audio::project_state::ProjectStateFeedback::register(
         &handles.project_state_feedback,
         pending.keys().copied(),
     )?;
@@ -448,7 +448,7 @@ mod tests {
 pub struct PendingProjectSave {
     path: PathBuf,
     saved: ApplicationState,
-    handles: karbeat_core::context::ControlHandles,
+    handles: karbeat_audio::context::ControlHandles,
     plugin_registry: PluginRegistry,
     external_plugin_failures: hashbrown::HashMap<PluginTarget, String>,
     host_state_capture: std::sync::Arc<dyn HostStateCapture>,
@@ -636,7 +636,7 @@ pub(crate) fn capture_live_state(
 }
 
 pub(crate) fn hosted_instance_with_handles(
-    handles: &karbeat_core::context::ControlHandles,
+    handles: &karbeat_audio::context::ControlHandles,
     target: PluginTarget,
 ) -> anyhow::Result<HostInstanceId> {
     let (plugins, _) = collect(

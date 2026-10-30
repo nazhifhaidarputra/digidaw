@@ -16,7 +16,7 @@ import 'waveform.dart';
 part 'project.freezed.dart';
 
 // These functions are ignored because they are not marked as `pub`: `envelope_position`, `export_project_blocking`
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `try_from`, `try_from`, `try_from`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `try_from`, `try_from`, `try_from`
 // These functions are ignored (category: IgnoreBecauseExplicitAttribute): `from_track`, `try_from_with_context`
 
 UiProjectMetadata projectMetadataNew() =>
@@ -544,7 +544,18 @@ sealed class UiTrack with _$UiTrack {
     required List<UiClip> clips,
     int? generatorId,
     required int orderIdx,
+    required UiTrackInput input,
   }) = _UiTrack;
+}
+
+/// Device channels a track records, and whether it is heard through the track.
+@freezed
+sealed class UiTrackInput with _$UiTrackInput {
+  const factory UiTrackInput({
+    required int firstChannel,
+    required int channels,
+    required bool monitor,
+  }) = _UiTrackInput;
 }
 
 enum UiTrackType { audio, midi, automation }

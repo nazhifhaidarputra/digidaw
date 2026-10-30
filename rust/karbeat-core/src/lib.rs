@@ -1,23 +1,10 @@
 //! # Overview
 //!
-//! Core Package of Karbeat. Handles the Audio Thread and Business Logic of the App.
+//! Core Package of Karbeat. Handles the persisted project model, file management, and
+//! application-independent business logic. The DSP audio engine lives in `karbeat-audio`.
+//!
 //! The UI-facing API layer lives in the `karbeat-core-api` crate.
 
-#[allow(
-    clippy::as_conversions,
-    clippy::let_underscore_must_use,
-    reason = "the real-time engine uses bounded sample-domain conversions and non-blocking best-effort channels"
-)]
-/// Real-time engine, device backend, rendering, telemetry, and export implementation.
-pub mod audio;
-/// Bounded UI-to-audio commands and audio-to-UI feedback payloads.
-pub mod commands;
-#[allow(
-    clippy::let_underscore_must_use,
-    reason = "context broadcasts use non-blocking channels whose disconnected receivers are intentionally ignored"
-)]
-/// Application-owned project state and communication endpoints.
-pub mod context;
 #[allow(
     clippy::as_conversions,
     clippy::let_underscore_must_use,
@@ -27,15 +14,6 @@ pub mod context;
 pub mod core;
 /// Returns heap memory freed by large project swaps to the operating system.
 pub mod heap;
-#[allow(
-    clippy::as_conversions,
-    clippy::let_underscore_must_use,
-    reason = "startup signal generation converts fixed bounded constants and sends an optional one-shot command"
-)]
-/// Audio-engine startup and built-in metronome initialization.
-pub mod init;
-/// Cross-thread response and telemetry registry types.
-pub mod message;
 /// Re-exported plugin parameter and plugin trait types used by core APIs.
 pub mod plugin_types;
 #[allow(
@@ -44,12 +22,5 @@ pub mod plugin_types;
 )]
 /// Shared typed identifiers, constants, enums, and bounded scalar types.
 pub mod shared;
-/// Audio-buffer utility functions shared by render paths.
+/// Audio-buffer utility functions shared by project loading and rendering.
 pub mod utils;
-
-/// Metronome audio file (both downbeat and offbeat)
-pub const DOWNBEAT_BYTES: &'static [u8] =
-    include_bytes!("../../../assets/audio/metronome_downbeat.wav");
-/// Embedded metronome offbeat WAV used to construct the built-in click waveform.
-pub const OFFBEAT_BYTES: &'static [u8] =
-    include_bytes!("../../../assets/audio/metronome_offbeat.wav");

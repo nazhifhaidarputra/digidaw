@@ -12,7 +12,7 @@ use karbeat_host::{
 };
 use parking_lot::Mutex;
 
-use karbeat_core::{audio::plugin_catalog::ExternalPluginEntry, context::DawContext};
+use karbeat_audio::{context::DawContext, plugin_catalog::ExternalPluginEntry};
 
 use crate::jobs::{self, JobClass, JobKind, JobSpec};
 

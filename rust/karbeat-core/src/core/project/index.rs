@@ -341,6 +341,21 @@ pub struct AssetLibrary {
     pub session_dir: Option<Arc<tempfile::TempDir>>,
 }
 
+impl AssetLibrary {
+    /// The directory holding this project's session audio files, created when the project has
+    /// none yet, such as a new project that was never saved or loaded.
+    pub fn ensure_session_dir(&mut self) -> anyhow::Result<std::path::PathBuf> {
+        if let Some(session) = &self.session_dir {
+            return Ok(session.path().to_path_buf());
+        }
+        let session =
+            Arc::new(crate::core::file_manager::project_loader::extraction_session_dir()?);
+        let path = session.path().to_path_buf();
+        self.session_dir = Some(session);
+        Ok(path)
+    }
+}
+
 #[derive(Clone, Debug, PartialEq)]
 /// Session-level audio endpoint and DSP configuration used by project operations.
 pub struct AudioHardwareConfig {
@@ -414,6 +429,51 @@ impl ApplicationState {
         }
 
         Ok(waveform)
+    }
+
+    /// Clips on any track that play `pattern_id`, each with the track that lists it.
+    pub fn pattern_clips(&self, pattern_id: PatternId) -> Vec<(TrackId, ClipId)> {
+        self.tracks
+            .iter()
+            .flat_map(|(track_id, track)| track.clips.iter().map(move |clip| (track_id, *clip)))
+            .filter(|(_, clip_id)| {
+                matches!(
+                    self.clips_pool
+                        .get(*clip_id)
+                        .and_then(|clip| clip.source.as_ref()),
+                    Some(DawSource::Midi(id)) if *id == pattern_id
+                )
+            })
+            .collect()
+    }
+
+    /// Deletes a MIDI pattern together with every clip that plays it, and returns the pattern.
+    ///
+    /// The pattern and its clips are detached from their pools rather than removed, so a recorded
+    /// history action can put them back under the same keys. Clips of the pattern waiting in the
+    /// clipboard are dropped: pasting them would create clips with nothing to play.
+    pub fn remove_pattern(&mut self, pattern_id: PatternId) -> anyhow::Result<Pattern> {
+        let clips = self.pattern_clips(pattern_id);
+        let pattern = self
+            .pattern_pool
+            .detach(pattern_id)
+            .ok_or_else(|| anyhow!("Pattern does not exist"))?;
+
+        for (track_id, clip_id) in clips {
+            if let Some(track) = self.tracks.get_mut(track_id) {
+                track.clips.retain(|id| *id != clip_id);
+            }
+            // The clip was just read from the pool, so there is always a value to detach.
+            drop(self.clips_pool.detach(clip_id));
+        }
+
+        if let ClipboardContent::Clips(copied) = &mut self.clipboard {
+            copied.retain(
+                |clip| !matches!(clip.source, Some(DawSource::Midi(id)) if id == pattern_id),
+            );
+        }
+
+        Ok(pattern)
     }
 
     /// Replaces an audio source's waveform envelope and returns the previous one.

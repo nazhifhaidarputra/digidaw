@@ -84,7 +84,7 @@ impl<T: Send> Drop for ControlRetirement<T> {
     fn drop(&mut self) {
         if let Some(receiver) = self.receiver.take() {
             if !receiver.is_abandoned() {
-                log::error!("Plugin control owner shut down before command retirement");
+                tracing::error!("Plugin control owner shut down before command retirement");
                 std::mem::forget(receiver);
             }
         }

@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/material.dart';
 import 'package:karbeat/app/providers/project_provider.dart';
 import 'package:karbeat/app/providers/mixer_state.dart';
+import 'package:karbeat/app/providers/recording_state.dart';
 import 'package:karbeat/app/providers/track_list_state.dart';
 import 'package:karbeat/core/utils/color.dart';
 import 'package:karbeat/core/widgets/color_picker_dialog.dart';
@@ -12,6 +13,8 @@ import 'package:karbeat/core/widgets/channel_toggle_button.dart';
 import 'package:karbeat/core/widgets/context_menu.dart';
 import 'package:karbeat/core/widgets/db_level_meter.dart';
 import 'package:karbeat/features/plugins/services/plugin_ui_launcher.dart';
+import 'package:karbeat/features/plugins/widgets/plugin_browser_dialog.dart';
+import 'package:karbeat/features/setting/services/host_devices_settings_provider.dart';
 import 'package:karbeat/features/track/view/plugin_automation_parameter_dialog.dart';
 import 'package:karbeat/src/rust/api/mixer.dart';
 import 'package:karbeat/src/rust/api/plugin.dart';
@@ -85,7 +88,19 @@ class TrackHeader extends ConsumerWidget {
         .read(trackListStateProvider.notifier)
         .toggleTrackCollapsed(trackId: trackId);
 
+    final take = ref.watch(
+      recordingProvider.select((state) => state.takes[trackId]),
+    );
+    final inputChannels =
+        ref.watch(
+          hostDevicesSettingsProvider.select(
+            (state) => state.runtimeSettings?.actualInput?.channels,
+          ),
+        ) ??
+        2;
+
     if (track == null) return const SizedBox();
+    final isAudioTrack = track.trackType == UiTrackType.audio;
 
     final trackColor = track.color.fromRGBorRGBAtoColor();
     final trackForeground = _getContrastColor(trackColor);
@@ -153,6 +168,22 @@ class TrackHeader extends ConsumerWidget {
               );
             },
           ),
+        if (track.trackType == UiTrackType.midi)
+          DawContextAction(
+            title: "Change instrument...",
+            icon: Icons.swap_horiz,
+            onTap: () => showPluginBrowserDialog(
+              context: context,
+              pluginType: KarbeatPluginType.generator,
+              actionLabel: 'Replace',
+              onAdd: (plugin) => ref
+                  .read(trackListStateProvider.notifier)
+                  .replaceTrackGenerator(
+                    trackId: trackId,
+                    registryId: plugin.registryId,
+                  ),
+            ),
+          ),
         if (track.generatorId != null)
           DawContextAction(
             title: "Add automation on...",
@@ -163,6 +194,35 @@ class TrackHeader extends ConsumerWidget {
               ownerName: track.name,
             ),
           ),
+        if (isAudioTrack) ...[
+          DawContextAction.submenu(
+            title: "Input channel",
+            icon: Icons.input,
+            subtitle: _inputLabel(track.input),
+            children: [
+              for (final input in _inputChoices(track.input, inputChannels))
+                DawContextAction(
+                  title: _inputLabel(input),
+                  icon: input == track.input ? Icons.check : null,
+                  onTap: () => ref
+                      .read(trackListStateProvider.notifier)
+                      .setTrackInput(trackId, input),
+                ),
+            ],
+          ),
+          DawContextAction(
+            title: track.input.monitor
+                ? "Stop monitoring input"
+                : "Monitor input",
+            icon: track.input.monitor ? Icons.hearing_disabled : Icons.hearing,
+            onTap: () => ref
+                .read(trackListStateProvider.notifier)
+                .setTrackInput(
+                  trackId,
+                  track.input.copyWith(monitor: !track.input.monitor),
+                ),
+          ),
+        ],
         DawContextAction(
           title: collapsed ? "Expand lane" : "Shrink lane",
           icon: collapsed ? Icons.unfold_more : Icons.unfold_less,
@@ -418,6 +478,35 @@ class TrackHeader extends ConsumerWidget {
                 ),
                 if (!collapsed) ...[
                   const SizedBox(width: 8),
+                  if (isAudioTrack) ...[
+                    SizedBox(
+                      height: 50,
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.start,
+                        children: [
+                          ChannelToggleButton(
+                            label: 'R',
+                            tooltip: switch (take) {
+                              null => 'Arm for recording',
+                              TrackTake(startSamples: null) =>
+                                'Armed: records when playback starts. Click to disarm.',
+                              _ =>
+                                'Recording. Click to stop and keep the take.',
+                            },
+                            isActive: take != null,
+                            // A take waiting for playback shows lighter than one recording.
+                            activeColor: take?.startSamples == null
+                                ? colors.error.withValues(alpha: 0.5)
+                                : colors.error,
+                            onTap: () => ref
+                                .read(recordingProvider.notifier)
+                                .toggleTrack(trackId),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 4),
+                  ],
                   SizedBox(
                     height: 50,
                     child: Column(
@@ -461,6 +550,26 @@ class TrackHeader extends ConsumerWidget {
 }
 
 /// Small shrink/expand button shared by track and automation lane headers.
+/// Display name of a track input, with channels counted from 1.
+String _inputLabel(UiTrackInput input) {
+  final first = input.firstChannel + 1;
+  return input.channels >= 2
+      ? 'Ch $first+${first + 1} (stereo)'
+      : 'Ch $first (mono)';
+}
+
+/// Inputs a track can take from a device with [deviceChannels] channels: each
+/// channel alone, then each odd/even pair. [current] keeps its monitor flag.
+List<UiTrackInput> _inputChoices(UiTrackInput current, int deviceChannels) {
+  final channels = deviceChannels.clamp(1, 64);
+  return [
+    for (var channel = 0; channel < channels; channel++)
+      current.copyWith(firstChannel: channel, channels: 1),
+    for (var channel = 0; channel + 1 < channels; channel += 2)
+      current.copyWith(firstChannel: channel, channels: 2),
+  ];
+}
+
 class LaneCollapseToggle extends StatelessWidget {
   const LaneCollapseToggle({
     super.key,

@@ -330,6 +330,30 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
     );
   }
 
+  /// An on/off toolbar button. The active state gets a tinted background as
+  /// well as the primary color, since some themes give inactive controls the
+  /// same color as primary.
+  Widget _buildToolbarToggle({
+    required IconData icon,
+    required String label,
+    required bool isActive,
+    required VoidCallback onPressed,
+  }) {
+    final colors = Theme.of(context).colorScheme;
+    final foreground = isActive ? colors.primary : colors.onSurfaceVariant;
+    return TextButton.icon(
+      onPressed: onPressed,
+      style: TextButton.styleFrom(
+        backgroundColor: isActive
+            ? colors.primary.withValues(alpha: 0.2)
+            : null,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
+      ),
+      icon: Icon(icon, size: 16, color: foreground),
+      label: Text(label, style: TextStyle(color: foreground, fontSize: 12)),
+    );
+  }
+
   Widget _buildToolbar() {
     final workspaceState = ref.watch(workspaceStateProvider);
     final colors = Theme.of(context).colorScheme;
@@ -365,49 +389,23 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
               },
             ),
             const SizedBox(width: 16),
-            TextButton.icon(
+            _buildToolbarToggle(
+              icon: Icons.vertical_split,
+              label: 'Right Panel',
+              isActive: workspaceState.isRightPanelExpanded,
               onPressed: () =>
                   ref.read(workspaceStateProvider.notifier).toggleRightPanel(),
-              icon: Icon(
-                Icons.vertical_split,
-                size: 16,
-                color: workspaceState.isRightPanelExpanded
-                    ? colors.primary
-                    : colors.onSurfaceVariant,
-              ),
-              label: Text(
-                'Right Panel',
-                style: TextStyle(
-                  color: workspaceState.isRightPanelExpanded
-                      ? colors.primary
-                      : colors.onSurfaceVariant,
-                  fontSize: 12,
-                ),
-              ),
             ),
             const SizedBox(width: 8),
             Tooltip(
               message: 'Resizing audio clips stretches their audio',
-              child: TextButton.icon(
+              child: _buildToolbarToggle(
+                icon: Icons.open_in_full,
+                label: 'Stretch',
+                isActive: workspaceState.resizeStretches,
                 onPressed: () => ref
                     .read(workspaceStateProvider.notifier)
                     .toggleResizeStretches(),
-                icon: Icon(
-                  Icons.open_in_full,
-                  size: 16,
-                  color: workspaceState.resizeStretches
-                      ? colors.primary
-                      : colors.onSurfaceVariant,
-                ),
-                label: Text(
-                  'Stretch',
-                  style: TextStyle(
-                    color: workspaceState.resizeStretches
-                        ? colors.primary
-                        : colors.onSurfaceVariant,
-                    fontSize: 12,
-                  ),
-                ),
               ),
             ),
             const SizedBox(width: 8),

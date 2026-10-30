@@ -3,7 +3,7 @@ use std::sync::Arc;
 use crate::core::{
     history::{EngineSync, HistoryAction, HistoryError},
     project::{
-        ApplicationState, GainEnvelope,
+        ApplicationState, ClipTiming, GainEnvelope,
         track::audio_waveform::{AudioSampleMode, BeatGrid, EditedWaveform},
     },
 };
@@ -55,6 +55,8 @@ pub struct SourceTempoChanged {
     source_id: AudioSourceId,
     tempo: SourceTempo,
     label: &'static str,
+    /// Clips rescaled to follow the source's new playback length.
+    clips: Vec<ClipTiming>,
 }
 
 impl SourceTempoChanged {
@@ -64,7 +66,15 @@ impl SourceTempoChanged {
             source_id,
             tempo: previous,
             label,
+            clips: Vec::new(),
         }
+    }
+
+    /// Also restores `clips`, rescaled by the edit to follow the source's playback length.
+    #[must_use]
+    pub fn with_clips(mut self, clips: Vec<ClipTiming>) -> Self {
+        self.clips = clips;
+        self
     }
 
     fn swap(&mut self, app: &mut ApplicationState) -> Result<EngineSync, HistoryError> {
@@ -78,7 +88,12 @@ impl SourceTempoChanged {
         std::mem::swap(&mut waveform.sample_mode, &mut self.tempo.sample_mode);
         std::mem::swap(&mut waveform.beat_grid, &mut self.tempo.beat_grid);
         std::mem::swap(&mut waveform.edited, &mut self.tempo.edited);
-        Ok(EngineSync::source(self.source_id))
+        let sync = EngineSync::source(self.source_id);
+        if self.clips.is_empty() {
+            return Ok(sync);
+        }
+        app.swap_clip_timings(&mut self.clips);
+        Ok(sync.and(EngineSync::track_graph()))
     }
 }
 

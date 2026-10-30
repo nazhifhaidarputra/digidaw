@@ -9,14 +9,12 @@ use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 
 use anyhow::Context;
-use karbeat_core::audio::exporter::{
+use karbeat_audio::context::DawContext;
+use karbeat_audio::exporter::{
     ExportRange, PendingAudioExport, RenderOptions, RenderPurpose, TailHandling, begin_export,
     execute_export,
 };
-use karbeat_core::audio::writer::{
-    AudioExportConfig, BitDepth, BitPerSample, wav::WavAudioWriterConfig,
-};
-use karbeat_core::context::DawContext;
+use karbeat_audio::writer::{AudioExportConfig, BitDepth, BitPerSample, wav::WavAudioWriterConfig};
 use karbeat_core::core::file_manager::{app_cache_dir, audio_loader::load_audio_file};
 use karbeat_core::core::project::{ApplicationState, LoopRegion};
 use karbeat_core::shared::id::AudioSourceId;
@@ -156,7 +154,7 @@ fn new_bounce_file() -> anyhow::Result<PathBuf> {
 
 fn discard(path: &Path) {
     if let Err(error) = std::fs::remove_file(path) {
-        log::warn!(
+        tracing::warn!(
             "Failed to remove the bounce file {}: {error}",
             path.display()
         );

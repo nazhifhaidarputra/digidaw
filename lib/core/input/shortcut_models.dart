@@ -1,4 +1,5 @@
 import 'package:fast_immutable_collections/fast_immutable_collections.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:freezed_annotation/freezed_annotation.dart';
@@ -58,8 +59,11 @@ abstract class ShortcutChord with _$ShortcutChord {
     );
   }
 
+  /// Editing keys that are useful on their own, such as the Delete key that
+  /// removes the current selection in a DAW.
   bool get isSupported =>
-      !_modifierKeyIds.contains(logicalKeyId) && (control || alt || meta);
+      !_modifierKeyIds.contains(logicalKeyId) &&
+      (control || alt || meta || _bareEditingKeyIds.contains(logicalKeyId));
 
   SingleActivator toActivator() => SingleActivator(
     LogicalKeyboardKey(logicalKeyId),
@@ -125,6 +129,11 @@ class ShortcutConflictException implements Exception {
   String toString() => 'Already assigned to $conflictingTitle.';
 }
 
+/// Explains which chords [ShortcutChord.isSupported] accepts.
+const shortcutSupportHint =
+    'Use Ctrl, Alt, or Command with a non-modifier key, or press Delete or '
+    'Backspace.';
+
 class ShortcutValidationException implements Exception {
   const ShortcutValidationException(this.message);
 
@@ -133,6 +142,28 @@ class ShortcutValidationException implements Exception {
   @override
   String toString() => message;
 }
+
+/// Human-readable label for [chord], using the platform's modifier names.
+String shortcutLabel(ShortcutChord chord) {
+  final macOS = defaultTargetPlatform == TargetPlatform.macOS;
+  final parts = <String>[];
+  if (chord.control) parts.add(macOS ? 'Control' : 'Ctrl');
+  if (chord.alt) parts.add(macOS ? 'Option' : 'Alt');
+  if (chord.shift) parts.add('Shift');
+  if (chord.meta) parts.add(macOS ? 'Command' : 'Meta');
+  final logicalKey = LogicalKeyboardKey(chord.logicalKeyId);
+  final key = switch (logicalKey) {
+    LogicalKeyboardKey.space => 'Space',
+    _ => logicalKey.keyLabel,
+  };
+  parts.add(key.isEmpty ? 'Key ${chord.logicalKeyId}' : key.toUpperCase());
+  return parts.join('+');
+}
+
+final _bareEditingKeyIds = <int>{
+  LogicalKeyboardKey.delete.keyId,
+  LogicalKeyboardKey.backspace.keyId,
+};
 
 final _modifierKeyIds = <int>{
   LogicalKeyboardKey.controlLeft.keyId,

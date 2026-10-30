@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 use std::sync::Arc;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use crate::api::context::DawContext;
 use crate::api::plugins::opaque::ZeroCopyHandle;
@@ -9,8 +9,9 @@ use crate::api::project::{
 };
 use crate::frb_generated::StreamSink;
 use flutter_rust_bridge::frb;
-use karbeat_core::audio::event::{PluginTarget, TransportFeedback};
-use karbeat_core::commands::{AudioFeedback, EffectTarget, MixerChannelTarget};
+use karbeat_audio::commands::{AudioFeedback, EffectTarget, MixerChannelTarget};
+use karbeat_audio::event::{PluginTarget, TransportFeedback};
+use karbeat_audio::playback_sync::PlayheadSync;
 use karbeat_core::core::project::{AudioSourceId, GeneratorId, TrackId};
 use karbeat_core_api::{audio_api, audio_waveform_api};
 
@@ -327,7 +328,7 @@ pub fn create_feedback_stream(
                 };
                 let ui_feedback = UiAudioFeedback::from(feedback);
                 if sink.add(ui_feedback).is_err() {
-                    log::info!("[Rust] AudioFeedback stream disconnected — stopping thread.");
+                    tracing::info!("[Rust] AudioFeedback stream disconnected — stopping thread.");
                     // Return the consumer so the stream can be re-opened later
                     *consumer_slot.lock() = Some(consumer);
                     return;
@@ -347,24 +348,31 @@ pub fn create_position_stream(
     sink: StreamSink<UiTransportFeedback>,
     ctx: &DawContext,
 ) -> Result<(), String> {
-    let consumer_slot = Arc::clone(&ctx.read().position_consumer);
+    let (consumer_slot, output_clock) = {
+        let ctx = ctx.read();
+        (
+            Arc::clone(&ctx.position_consumer),
+            Arc::clone(&ctx.output_clock),
+        )
+    };
 
     // Take the consumer out of the Mutex so we own it
-    let mut consumer = consumer_slot
+    let consumer = consumer_slot
         .lock()
         .take()
         .ok_or("Position consumer is already running in another stream!")?;
 
-    // Spawn a thread to poll the ring buffer
+    // Spawn a thread that forwards each position once the device plays it
     std::thread::spawn(move || {
+        let mut sync = PlayheadSync::new(consumer, output_clock);
         loop {
-            while let Ok(feedback) = consumer.pop() {
+            if let Some(feedback) = sync.poll(Instant::now()) {
                 let ui_feedback = UiTransportFeedback::from(feedback);
 
                 // Send to Flutter
                 if sink.add(ui_feedback).is_err() {
-                    log::info!("[Rust] PlaybackPosition Stream disconnected! Stopping thread.");
-                    *consumer_slot.lock() = Some(consumer);
+                    tracing::info!("[Rust] PlaybackPosition Stream disconnected! Stopping thread.");
+                    *consumer_slot.lock() = Some(sync.into_consumer());
                     return;
                 }
             }
@@ -431,9 +439,9 @@ pub fn play_source_preview(ctx: &DawContext, id: u64) {
     if let Err(e) =
         audio_api::play_source_preview(&mut ctx.runtime_write(), AudioSourceId::from_u64(id))
     {
-        log::warn!("Preview failed: {}", e);
+        tracing::warn!("Preview failed: {}", e);
     } else {
-        log::info!("Preview command sent for ID: {}", id);
+        tracing::info!("Preview command sent for ID: {}", id);
     }
 }
 
@@ -446,7 +454,7 @@ pub fn play_file_preview(ctx: &DawContext, file_path: &str) -> Result<(), String
 
 pub fn stop_all_previews(ctx: &DawContext) {
     audio_api::stop_all_previews(&mut ctx.runtime_write());
-    log::info!("Stopped all preview sounds");
+    tracing::info!("Stopped all preview sounds");
 }
 
 pub fn get_audio_config(ctx: &DawContext) -> Result<UiAudioHardwareConfig, String> {

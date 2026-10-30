@@ -111,7 +111,9 @@ impl ClapPluginHost {
             }
             match instance.restart_if_requested() {
                 Ok(()) | Err(HostError::Busy) => {}
-                Err(error) => log::error!("{}: CLAP restart: {error}", instance.descriptor.name),
+                Err(error) => {
+                    tracing::error!("{}: CLAP restart: {error}", instance.descriptor.name)
+                }
             }
         }
         Ok(())
@@ -208,6 +210,9 @@ impl PluginInstanceManager for ClapPluginHost {
         slot.endpoint_alive.store(true, Ordering::Release);
         let slot = slot.clone();
         instance.endpoint_taken = true;
+        let fallback_tail = instance.config().map_or(0, |config| {
+            karbeat_host_api::fallback_tail_samples(config.sample_rate)
+        });
         let mut endpoint = HostedProcessor::new(
             Box::new(ClapProcessor {
                 slot,
@@ -221,6 +226,7 @@ impl PluginInstanceManager for ClapPluginHost {
             }),
             id,
         );
+        endpoint.set_fallback_tail_samples(fallback_tail);
         endpoint.set_processing_status(instance.exchange.process_error.clone());
         Ok(Box::new(endpoint))
     }
@@ -432,7 +438,7 @@ impl Drop for ClapPluginHost {
                 .is_some_and(|slot| Arc::strong_count(slot) != 1)
             {
                 // Losing the UI owner before endpoint retirement cannot safely destroy the plugin.
-                log::error!(
+                tracing::error!(
                     "CLAP host dropped before audio endpoint retirement; retaining instance for process lifetime"
                 );
                 std::mem::forget(instance);

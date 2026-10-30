@@ -4,9 +4,13 @@
 // ignore_for_file: invalid_use_of_internal_member, unused_import, unnecessary_import
 
 import '../frb_generated.dart';
+import 'automation.dart';
+import 'mixer.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 import 'package:freezed_annotation/freezed_annotation.dart' hide protected;
+import 'plugin.dart';
 import 'project.dart';
+import 'timeline.dart';
 part 'pattern.freezed.dart';
 
 // These functions are ignored because they are not marked as `pub`: `note_ids`
@@ -31,6 +35,16 @@ Future<void> renamePattern({
   ctx: ctx,
   patternId: patternId,
   newName: newName,
+);
+
+/// Deletes a MIDI pattern and every clip that plays it as one undoable step, and returns the
+/// project as it is afterwards.
+Future<UiApplicationState> deletePattern({
+  required DawContext ctx,
+  required int patternId,
+}) => RustLib.instance.api.crateApiPatternDeletePattern(
+  ctx: ctx,
+  patternId: patternId,
 );
 
 Future<UiNote> addNote({
@@ -276,6 +290,20 @@ Future<UiPattern> transposeNotes({
   semitones: semitones,
 );
 
+/// Scales notes in time around their earliest start, growing both their
+/// positions and their durations by `factor`.
+Future<UiPattern> stretchNotes({
+  required DawContext ctx,
+  required int patternId,
+  required List<int> noteIds,
+  required double factor,
+}) => RustLib.instance.api.crateApiPatternStretchNotes(
+  ctx: ctx,
+  patternId: patternId,
+  noteIds: noteIds,
+  factor: factor,
+);
+
 /// Moves notes in time by `delta_ticks`.
 Future<UiPattern> shiftNotes({
   required DawContext ctx,
@@ -309,6 +337,20 @@ Future<UiPattern> addNoteCopies({
   ctx: ctx,
   patternId: patternId,
   notes: notes,
+);
+
+/// Duplicates notes after themselves so the earliest copy starts at `start_tick`,
+/// keeping their relative timing and parameters.
+Future<UiPattern> duplicatePatternNotes({
+  required DawContext ctx,
+  required int patternId,
+  required List<int> noteIds,
+  required int startTick,
+}) => RustLib.instance.api.crateApiPatternDuplicatePatternNotes(
+  ctx: ctx,
+  patternId: patternId,
+  noteIds: noteIds,
+  startTick: startTick,
 );
 
 @freezed

@@ -15,3 +15,13 @@ class ToggleLoopIntent extends Intent {
 class ToggleMetronomeIntent extends Intent {
   const ToggleMetronomeIntent();
 }
+
+/// Arms the selected audio track to record.
+class RecordSelectedTrackIntent extends Intent {
+  const RecordSelectedTrackIntent();
+}
+
+/// Ends every take and keeps what it recorded.
+class StopRecordingIntent extends Intent {
+  const StopRecordingIntent();
+}
