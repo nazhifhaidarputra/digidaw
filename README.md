@@ -66,7 +66,6 @@ Building a release bundle is handled by `./scripts/builder/build_linux.sh`. Wind
 - [x] Tempo detection and fit-to-tempo
 - [x] Auto-save
 - [x] Crash reporting and crash recovery
-- [x] Official logo and launcher icons
 - [x] Theme customization and configurable keyboard shortcuts
 
 ### Planned
@@ -81,6 +80,7 @@ Building a release bundle is handled by `./scripts/builder/build_linux.sh`. Wind
 - [ ] iOS version
 - [ ] UI refactor for better UX and responsiveness on mobile
 - [ ] Comprehensive user and developer documentation
+- [ ] Official logo and launcher icons; Currently it is still a placeholder
 
 ## Tech Stack
 
@@ -88,8 +88,6 @@ Building a release bundle is handled by `./scripts/builder/build_linux.sh`. Wind
 - **Audio Engine**: [Rust](https://www.rust-lang.org/)
 - **Audio Host**: [CPAL (Cross-Platform Audio Library)](https://github.com/RustAudio/cpal)
 - **Bridge**: [Flutter Rust Bridge](https://fzyzcjy.github.io/flutter_rust_bridge/)
-- **Time stretching and pitch shifting**: [Signalsmith Stretch](https://github.com/Signalsmith-Audio/signalsmith-stretch) for real-time use, [Rubber Band](https://breakfastquay.com/rubberband/) for offline renders
-- **Tempo and beat analysis**: [Beat This!](https://github.com/CPJKU/beat_this) via the `beat-this` crate on the `rten` runtime
 - **Plugin hosting**: VST3, CLAP, and LV2
 
 ## 👥 Contributors
