@@ -96,9 +96,9 @@ Building a release bundle is handled by `./scripts/builder/build_linux.sh`. Wind
 
 A huge thanks to the developers who made this project possible:
 
-| <a href="https://codeberg.org/haidarptrw"><img src="https://codeberg.org/avatars/52b87e29a45aa11b374f02b83c5d6d42" width="80px;" alt=""/></a><br /><sub><b>[haidarptrw](https://codeberg.org/haidarptrw)</b></sub> |
+| <a href="https://github.com/nazhifhaidarputra"><img src="https://github.com/nazhifhaidarputra.png?size=160" width="80px;" alt=""/></a><br /><sub><b>[nazhifhaidarputra](https://github.com/nazhifhaidarputra)</b></sub> |
 | :----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------: |
-|                                                                                    **Creator, Lead Developer & Audio Engineer**                                                                                    |
+|                                                                                    **Creator of Digidaw**                                                                                    |
 
 _(Want to contribute? Check out our developer notes below!)_
 
@@ -106,6 +106,7 @@ _(Want to contribute? Check out our developer notes below!)_
 
 - [INSTALLATION.md](INSTALLATION.md): installation, uninstallation, and building from source
 - [CONTRIBUTING.md](CONTRIBUTING.md): project structure, conventions, audio-thread rules, and validation commands
+- [GitHub Issues](https://github.com/nazhifhaidarputra/digidaw/issues): report bugs and request features
 - [Crash Error Code Guide](docs/CODE_ERROR_GUIDE.md): what each crash report code means
 - [Audio Plugin Manifest Info](assets/manifests/audio-plugins/PLUGIN_MANIFEST_INFO.md): how first-party plugin manifests are written
 
