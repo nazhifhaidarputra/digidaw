@@ -35,7 +35,7 @@ fn schedule_release_after(delay: Duration) -> bool {
         });
     if let Err(error) = spawned {
         RELEASE_PENDING.store(false, Ordering::Release);
-        log::warn!("Could not schedule heap release: {error}");
+        tracing::warn!("Could not schedule heap release: {error}");
         return false;
     }
     true
@@ -49,7 +49,7 @@ fn release_to_os() {
     // SAFETY: `malloc_trim` only returns unused pages of glibc's own arenas and takes each
     // arena's lock itself, so it is safe to call concurrently with other allocating threads.
     let released = unsafe { malloc_trim(0) };
-    log::debug!("Heap release returned memory to the OS: {}", released != 0);
+    tracing::debug!("Heap release returned memory to the OS: {}", released != 0);
 }
 
 #[cfg(not(all(target_os = "linux", target_env = "gnu")))]

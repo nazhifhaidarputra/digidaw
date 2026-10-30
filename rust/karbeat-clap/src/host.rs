@@ -143,13 +143,13 @@ impl HostLogImpl for ClapHostSharedHandler {
         }
         let label = &self.label;
         match severity {
-            LogSeverity::Debug => log::debug!("{label}: {message}"),
-            LogSeverity::Info => log::info!("{label}: {message}"),
-            LogSeverity::Warning => log::warn!("{label}: {message}"),
+            LogSeverity::Debug => tracing::debug!("{label}: {message}"),
+            LogSeverity::Info => tracing::info!("{label}: {message}"),
+            LogSeverity::Warning => tracing::warn!("{label}: {message}"),
             LogSeverity::Error
             | LogSeverity::Fatal
             | LogSeverity::HostMisbehaving
-            | LogSeverity::PluginMisbehaving => log::error!("{label}: {message}"),
+            | LogSeverity::PluginMisbehaving => tracing::error!("{label}: {message}"),
         }
     }
 }
@@ -247,7 +247,7 @@ impl HostParamsImplMainThread for ClapHostMainThreadHandler<'_> {
     fn rescan(&self, flags: ParamRescanFlags) {
         if flags.requires_restart() {
             // A changed parameter list is only read when the instance is created again.
-            log::warn!(
+            tracing::warn!(
                 "{}: the plugin changed its parameter list, which takes effect after reloading it",
                 self.shared.label
             );

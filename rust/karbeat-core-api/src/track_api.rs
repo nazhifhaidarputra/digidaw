@@ -77,7 +77,7 @@ pub fn replace_track_generator(
         );
         // Undo reinstalls the previous generator from project state, so keep its live settings.
         if let Err(error) = super::project_api::capture_live_state(ctx, &[previous], &[]) {
-            log::warn!("Replacing generator without its live plugin state: {error:#}");
+            tracing::warn!("Replacing generator without its live plugin state: {error:#}");
         }
     }
 
@@ -225,7 +225,7 @@ pub fn delete_track(ctx: &mut DawContext, track_id: TrackId) -> anyhow::Result<R
         &plugins,
         &[MixerChannelTarget::Track(track_id)],
     ) {
-        log::warn!("Deleting track without its live plugin state: {error:#}");
+        tracing::warn!("Deleting track without its live plugin state: {error:#}");
     }
     let structure_before = StructureRecorder::begin(&ctx.app_state, &[track_id], &[]);
     let effect_ids: Vec<_> = ctx

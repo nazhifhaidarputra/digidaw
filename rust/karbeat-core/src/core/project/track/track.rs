@@ -339,7 +339,7 @@ impl ApplicationState {
                 (generator_box, name)
             } else {
                 let message = format!("Generator with ID {} not found in registry", registry_id);
-                log::error!("{}", message);
+                tracing::error!("{}", message);
                 return Err(anyhow::anyhow!("{}", message));
             }
         };
@@ -386,7 +386,7 @@ impl ApplicationState {
         }
         let new_track = self.tracks[track_id].clone();
 
-        log::info!(
+        tracing::info!(
             "New MIDI track with generator {} (registry_id={}) is successfully created",
             generator_name,
             registry_id

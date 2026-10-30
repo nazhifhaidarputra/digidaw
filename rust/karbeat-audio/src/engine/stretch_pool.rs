@@ -254,7 +254,7 @@ impl StretchPool {
         self.owners = vec![None; self.slots.len()];
         self.used = vec![false; self.slots.len()];
         if self.slots.len() < STRETCH_SLOTS {
-            log::warn!(
+            tracing::warn!(
                 "Only {} of {STRETCH_SLOTS} realtime stretchers could be created",
                 self.slots.len()
             );

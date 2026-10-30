@@ -133,7 +133,7 @@ pub fn execute_export<F>(
 where
     F: FnMut(f32) -> bool + Send,
 {
-    log::info!("Starting offline render to: {}", output_path);
+    tracing::info!("Starting offline render to: {}", output_path);
 
     let (snapshot_tx, snapshot_rx) = std::sync::mpsc::channel();
 
@@ -459,7 +459,7 @@ where
     writer
         .finalize()
         .map_err(|e| AudioExportError::new("Writer", format!("Finalize error: {e}")))?;
-    log::info!("Offline render successfully completed");
+    tracing::info!("Offline render successfully completed");
     Ok(())
 }
 
@@ -542,7 +542,7 @@ fn validate_rendered_block(engine: &AudioEngine, samples: &[f32]) -> Result<(), 
 }
 
 fn finalize_cancelled(mut writer: Box<dyn AudioWriter>) -> Result<(), AudioExportError> {
-    log::warn!("Export cancelled by callback");
+    tracing::warn!("Export cancelled by callback");
     writer
         .finalize()
         .map_err(|e| AudioExportError::new("Writer", format!("Finalize error: {e}")))

@@ -202,7 +202,7 @@ impl CrashStore {
                 .and_then(|bytes| Ok(serde_json::from_slice::<CrashReport>(&bytes)?))
             {
                 Ok(report) => reports.push(StoredCrashReport { id, report }),
-                Err(error) => log::warn!(
+                Err(error) => tracing::warn!(
                     "Skipping unreadable crash report {}: {error}",
                     path.display()
                 ),

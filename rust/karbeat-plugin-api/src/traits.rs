@@ -186,7 +186,7 @@ pub trait AudioPlugin: Any + Send {
         }
 
         rmp_serde::to_vec(&current_params).unwrap_or_else(|err| {
-            log::error!("Failed to serialize Plugin state: {}", err);
+            tracing::error!("Failed to serialize Plugin state: {}", err);
             Vec::new()
         })
     }
@@ -207,7 +207,7 @@ pub trait AudioPlugin: Any + Send {
                 self.clear_parameter_overrides();
             }
             Err(err) => {
-                log::error!("Failed to deserialize Plugin state: {}", err);
+                tracing::error!("Failed to deserialize Plugin state: {}", err);
             }
         }
     }

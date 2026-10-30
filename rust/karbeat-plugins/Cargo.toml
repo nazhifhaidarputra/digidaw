@@ -12,7 +12,7 @@ karbeat-utils.workspace = true
 karbeat-plugin-types.workspace = true
 karbeat-macros.workspace = true
 
-log.workspace = true
+tracing.workspace = true
 serde.workspace = true
 fastrand.workspace = true
 hashbrown.workspace = true

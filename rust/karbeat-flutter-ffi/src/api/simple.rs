@@ -15,7 +15,7 @@ pub fn init_app() {
     init_logger();
     karbeat_core::core::mitigation::crash::install_panic_hook();
     karbeat_core_api::jobs::set_runtime_provider(crate::api::jobs::frb_runtime_handle);
-    log::info!("FRB Base Utilities Initialized");
+    tracing::info!("FRB Base Utilities Initialized");
 }
 
 #[flutter_rust_bridge::frb(sync)]
@@ -26,7 +26,7 @@ pub fn create_daw_context() -> DawContext {
         karbeat_lv2::Lv2Executor,
     )
     .unwrap_or_else(|error| {
-        log::error!("External plugin host failed to start: {error}");
+        tracing::error!("External plugin host failed to start: {error}");
         karbeat_host::HostClient::unavailable()
     });
     let mut context = CoreDawContext::with_external_plugins(external_plugins);
@@ -34,7 +34,7 @@ pub fn create_daw_context() -> DawContext {
     // Start the audio thread and connect the ring buffers
     init_engine(&mut context);
 
-    log::info!("DAW Engine System Started. Yielding Context to Flutter.");
+    tracing::info!("DAW Engine System Started. Yielding Context to Flutter.");
     DawContext::new(context)
 }
 
@@ -56,7 +56,7 @@ pub fn set_history_limit(ctx: &DawContext, limit: u32) -> Result<u32, String> {
 #[cfg(target_os = "android")]
 #[no_mangle]
 pub extern "C" fn JNI_OnLoad(vm: jni::JavaVM, _res: *mut std::ffi::c_void) -> jni::sys::jint {
-    log::info!("JNI_OnLoad Triggered in Rust");
+    tracing::info!("JNI_OnLoad Triggered in Rust");
 
     // Upgrade the JavaVM pointer to a safe JNIEnv using the closure API
     let _outcome = vm.with_top_local_frame(|env| -> Result<(), jni::errors::Error> {
@@ -84,7 +84,7 @@ pub unsafe extern "C" fn Java_app_digidaw_Digidaw_MainActivity_initRust(
     _class: jni::objects::JClass,
     context: jni::objects::JObject,
 ) {
-    log::info!("Initializing ndk-context from Kotlin...");
+    tracing::info!("Initializing ndk-context from Kotlin...");
 
     let _outcome = unowned_env.with_env(|env| -> Result<(), jni::errors::Error> {
         let vm = env.get_java_vm()?;
@@ -107,5 +107,5 @@ pub unsafe extern "C" fn Java_app_digidaw_Digidaw_MainActivity_initRust(
         Ok(())
     });
 
-    log::info!("ndk-context initialized successfully!");
+    tracing::info!("ndk-context initialized successfully!");
 }

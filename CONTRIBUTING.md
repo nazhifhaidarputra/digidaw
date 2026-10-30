@@ -126,7 +126,7 @@ Run only the command that matches the source you changed.
 
 * The workspace uses Rust edition 2024, with shared dependencies declared in `rust/Cargo.toml`.
 * **No `unwrap()` or `expect()` in production code.** The workspace denies them through Clippy. Tests and build scripts may use them where that is clearer and scoped.
-* Log with `log::{debug, info, warn, error}`. Library code never prints directly.
+* Log with `tracing::{debug, info, warn, error}`. Library code never prints directly.
 * Keep serialization changes compatible with project load and save. Add round-trip tests when you change persisted project structs or file manager code.
 * Prefer composing small traits and helper types over deep abstraction layers.
 

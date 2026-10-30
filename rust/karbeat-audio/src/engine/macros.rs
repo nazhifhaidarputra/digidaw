@@ -17,7 +17,7 @@ macro_rules! apply_mix_param {
                 EffectAutomationTarget::PluginParam { param_id } => {
                     if let Some(effects) = $effects {
                         if let Some(e) = effects.iter_mut().find(|e| e.id == *effect_id) {
-                            // log::debug!("Received final value for automation: {}", $final_value);
+                            // tracing::debug!("Received final value for automation: {}", $final_value);
                             e.plugin.apply_automation(*param_id, $final_value);
                         }
                     }

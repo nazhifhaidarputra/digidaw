@@ -154,7 +154,7 @@ fn new_bounce_file() -> anyhow::Result<PathBuf> {
 
 fn discard(path: &Path) {
     if let Err(error) = std::fs::remove_file(path) {
-        log::warn!(
+        tracing::warn!(
             "Failed to remove the bounce file {}: {error}",
             path.display()
         );

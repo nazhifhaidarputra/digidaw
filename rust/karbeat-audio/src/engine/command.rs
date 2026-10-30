@@ -121,7 +121,7 @@ impl AudioEngine {
                 self.stop_playback(FeedbackTiming::Immediate);
             }
             AudioCommand::SetPlayhead(samples) => {
-                log::debug!(
+                tracing::debug!(
                     "[AudioEngine Seek] Received SetPlayhead(samples: {})",
                     samples
                 );
@@ -153,7 +153,7 @@ impl AudioEngine {
                     .voices
                     .queue_generator_event(&self.plugin_state, generator_id, event)
                 {
-                    log::warn!("MIDI event target {:?} was not found", generator_id);
+                    tracing::warn!("MIDI event target {:?} was not found", generator_id);
                 }
             }
             AudioCommand::SetBPM(bpm) => {
@@ -251,7 +251,7 @@ impl AudioEngine {
                         consumer: telemetry.consumer,
                     });
 
-                log::info!(
+                tracing::info!(
                     "[AudioEngine] Added generator {:?} for track {:?}",
                     generator_id,
                     track_id
@@ -281,7 +281,7 @@ impl AudioEngine {
                     .telemetry_reg_sender
                     .try_send(TelemetryRegistration::Removed { target });
 
-                log::info!("[AudioEngine] Removed generator {:?}", generator_id);
+                tracing::info!("[AudioEngine] Removed generator {:?}", generator_id);
             }
             AudioCommand::SetParameter {
                 target,
@@ -410,12 +410,12 @@ impl AudioEngine {
                     EffectTarget::Track(track_id) => {
                         self.plugin_state
                             .add_track_effect(track_id.to_u32() as usize, instance);
-                        log::info!("[AudioEngine] Added effect to track {:?}", track_id);
+                        tracing::info!("[AudioEngine] Added effect to track {:?}", track_id);
                     }
                     EffectTarget::Bus(bus_id) => {
                         self.plugin_state
                             .add_bus_effect(bus_id.to_u32() as usize, instance);
-                        log::info!(
+                        tracing::info!(
                             "[AudioEngine] Added effect {:?} to bus {:?}",
                             effect_id,
                             bus_id
@@ -423,7 +423,7 @@ impl AudioEngine {
                     }
                     EffectTarget::Master => {
                         self.plugin_state.master_effects.push(instance);
-                        log::info!("[AudioEngine] Added effect {:?} to master", effect_id);
+                        tracing::info!("[AudioEngine] Added effect {:?} to master", effect_id);
                     }
                 }
 
@@ -564,7 +564,7 @@ impl AudioEngine {
                     }
                 }
 
-                log::debug!(
+                tracing::debug!(
                     "[AudioEngine] SetMixerChannelParameter: {:?} — {:?}",
                     target,
                     param
@@ -594,7 +594,7 @@ impl AudioEngine {
                     &self.current_state.graph.routing,
                 );
 
-                log::info!("[AudioEngine] Added bus {:?} ({})", bus_id, name);
+                tracing::info!("[AudioEngine] Added bus {:?} ({})", bus_id, name);
             }
             AudioCommand::RemoveBus { bus_id } => {
                 let id_index = bus_id.to_u32() as usize;
@@ -611,7 +611,7 @@ impl AudioEngine {
                     &self.current_state.graph.routing,
                 );
 
-                log::info!("[AudioEngine] Removed bus {:?}", bus_id);
+                tracing::info!("[AudioEngine] Removed bus {:?}", bus_id);
             }
             AudioCommand::UpdateRouting { routing } => {
                 // Routing is now directly owned by the audio thread — update and
@@ -623,7 +623,7 @@ impl AudioEngine {
                 let previous = std::mem::replace(&mut self.current_state.graph.routing, routing);
                 self.retire_graph_state(RetiredGraphState::Routing(previous));
                 self.sync_sidechain_buffers();
-                log::info!(
+                tracing::info!(
                     "[AudioEngine] UpdateRouting: {} connections",
                     self.current_state.graph.routing.len()
                 );
@@ -834,11 +834,11 @@ impl AudioEngine {
                             consumers: new_consumers,
                         });
 
-                log::info!("[AudioEngine] Prepared all plugins for the newly loaded project.");
+                tracing::info!("[AudioEngine] Prepared all plugins for the newly loaded project.");
             }
             AudioCommand::SetMetronomeActive(active) => {
                 self.metronome_state.set_active(active);
-                log::info!("[AudioEngine] Metronome Active: {}", active);
+                tracing::info!("[AudioEngine] Metronome Active: {}", active);
             }
             AudioCommand::SetMetronomeClick(click) => {
                 if let Some(previous) = self.metronome_state.set_custom_click(click) {
@@ -1049,11 +1049,11 @@ impl AudioEngine {
             }
             AudioCommand::AddModulationSource { id, source } => {
                 self.modulation.add_source(id, &source);
-                log::info!("[AudioEngine] Added Modulation Source {:?}", id);
+                tracing::info!("[AudioEngine] Added Modulation Source {:?}", id);
             }
             AudioCommand::RemoveModulationSource(modulation_id) => {
                 self.modulation.active_sources.remove(&modulation_id);
-                log::info!(
+                tracing::info!(
                     "[AudioEngine] Removed Modulation Source {:?}",
                     modulation_id
                 );
@@ -1070,7 +1070,7 @@ impl AudioEngine {
                 self.modulation
                     .active_links
                     .retain(|l| l.id != modulation_link_id);
-                log::info!(
+                tracing::info!(
                     "[AudioEngine] Removed Modulation Link {:?}",
                     modulation_link_id
                 );
@@ -1087,7 +1087,7 @@ impl AudioEngine {
                 {
                     std::mem::replace(slot, waveform)
                 } else {
-                    log::debug!("[AudioEngine] Ignored update for unknown audio source {id}");
+                    tracing::debug!("[AudioEngine] Ignored update for unknown audio source {id}");
                     waveform
                 };
                 self.retire_graph_state(RetiredGraphState::AudioSource(retired));
@@ -1153,7 +1153,7 @@ impl AudioEngine {
                 self.recalculate_max_sample_index();
             }
             AudioCommand::UpdateAutomationLane { id, lane } => {
-                log::info!("Receive update automation lane of Id {}", id);
+                tracing::info!("Receive update automation lane of Id {}", id);
                 if let Some(previous) = self.current_state.graph.automation_lanes.insert(id, lane) {
                     self.retire_graph_state(RetiredGraphState::Automation(previous));
                 }
@@ -1246,7 +1246,7 @@ impl AudioEngine {
                     self.reprepare_plugins_and_clear_delays(sr, buf_size);
                     self.recalculate_latencies();
 
-                    log::info!(
+                    tracing::info!(
                         "[AudioEngine] UpdateAudioConfig applied: {} Hz, buf {}. Playheads scaled and plugins re-prepared.",
                         sr,
                         buf_size
@@ -1281,7 +1281,7 @@ impl AudioEngine {
                     self.record.prepare(buf_size);
                     self.reprepare_plugins_and_clear_delays(sr, buf_size);
 
-                    log::info!(
+                    tracing::info!(
                         "[AudioEngine] ReplaceFullGraph sync: {} Hz, buf {}. Playheads scaled and plugins re-prepared.",
                         sr,
                         buf_size
@@ -1317,7 +1317,7 @@ impl AudioEngine {
                 self.modulation
                     .replace_from_graph(&self.current_state.graph);
 
-                log::debug!("[AudioEngine] ReplaceFullGraph applied");
+                tracing::debug!("[AudioEngine] ReplaceFullGraph applied");
                 self.recalculate_max_sample_index();
             }
             AudioCommand::BeginEdit { target } => {

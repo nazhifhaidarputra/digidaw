@@ -115,7 +115,7 @@ impl ClapEditor {
         // Embedded editors show with their parent; plugins that do not implement `show` still
         // appear, so a refusal is only logged.
         if self.gui.show(plugin).is_err() {
-            log::debug!("CLAP editor did not acknowledge show");
+            tracing::debug!("CLAP editor did not acknowledge show");
         }
         Ok(())
     }
@@ -151,7 +151,7 @@ impl ClapEditor {
     /// Hides and destroys the editor. The host window is destroyed afterwards by its owner.
     pub fn destroy(self, plugin: &PluginMainThreadHandle<'_>) {
         if self.attached && self.gui.hide(plugin).is_err() {
-            log::debug!("CLAP editor did not acknowledge hide");
+            tracing::debug!("CLAP editor did not acknowledge hide");
         }
         self.gui.destroy(plugin);
     }

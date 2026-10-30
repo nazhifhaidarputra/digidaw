@@ -774,7 +774,7 @@ fn scan_modules(
         {
             Ok(pool) => Some(pool),
             Err(error) => {
-                log::warn!("Plugin scan falling back to one thread: {error}");
+                tracing::warn!("Plugin scan falling back to one thread: {error}");
                 None
             }
         },

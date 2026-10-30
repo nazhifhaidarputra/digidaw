@@ -141,7 +141,7 @@ pub fn release_models_if_idle(idle: Duration) -> bool {
         .is_some_and(|loaded| loaded.last_used.elapsed() >= idle)
     {
         *models = None;
-        log::info!("Unloaded idle tempo analysis models");
+        tracing::info!("Unloaded idle tempo analysis models");
         return true;
     }
     false
@@ -161,7 +161,7 @@ fn load(paths: &ModelPaths) -> Result<LoadedModels, AnalysisError> {
         trackers: Vec::new(),
         last_used: Instant::now(),
     };
-    log::info!("Loaded tempo analysis models from {}", paths.beat.display());
+    tracing::info!("Loaded tempo analysis models from {}", paths.beat.display());
     Ok(models)
 }
 
@@ -402,7 +402,7 @@ pub fn analyze_tempo(
         empty @ None => empty.insert(load(&paths)?),
     };
     models.prepare(plan.workers, &cancel);
-    log::info!(
+    tracing::info!(
         "Analyzing tempo of {duration:.1} s of audio, {} segment(s) at a time",
         plan.workers
     );

@@ -69,7 +69,7 @@ fn main() -> ExitCode {
     match run() {
         Ok(()) => ExitCode::SUCCESS,
         Err(error) => {
-            log::error!("plugin scanner failed: {error}");
+            tracing::error!("plugin scanner failed: {error}");
             ExitCode::FAILURE
         }
     }

@@ -893,7 +893,7 @@ impl AudioEngine {
 
         // Verify the generator exists in plugin_state
         if self.plugin_state.get_generator(generator_id).is_none() {
-            log::warn!("Pattern preview: Generator {:?} not found", generator_id);
+            tracing::warn!("Pattern preview: Generator {:?} not found", generator_id);
             self.stop_playback(FeedbackTiming::Immediate);
             return;
         }
@@ -1078,7 +1078,7 @@ impl AudioEngine {
     }
 
     fn reset_playhead(&mut self) {
-        log::info!("[AudioEngine] Reset Playhead");
+        tracing::info!("[AudioEngine] Reset Playhead");
         self.transport.reset_song();
     }
 
@@ -1279,7 +1279,7 @@ impl AudioEngine {
             });
             gen_voice.active = true;
         } else {
-            log::warn!(
+            tracing::warn!(
                 "PlayPreviewNote: Generator ID {:?} not found in plugin_state or graph",
                 generator_id
             );
@@ -1686,7 +1686,7 @@ impl AudioEngine {
                 .store(max_system_latency, std::sync::atomic::Ordering::Relaxed);
         }
 
-        log::info!(
+        tracing::info!(
             "[PDC] Recalculated Latencies. Max System Latency: {} samples",
             max_system_latency
         );
@@ -2039,7 +2039,7 @@ impl AudioEngine {
         // This ensures looping and song-stop behaves perfectly in the UI.
         self.current_state.graph.max_sample_index = max_clip_end;
 
-        log::debug!(
+        tracing::debug!(
             "[AudioEngine] Max Sample Index recalculated (Clips only): {}",
             self.current_state.graph.max_sample_index
         );

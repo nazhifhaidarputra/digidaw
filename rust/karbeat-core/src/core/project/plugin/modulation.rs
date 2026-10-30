@@ -177,7 +177,7 @@ impl ApplicationState {
                         base_value,
                     },
                 });
-        log::info!(
+        tracing::info!(
             "Successfully linked source {:?} to target via link2 {:?}",
             source_id,
             link_id
@@ -189,7 +189,7 @@ impl ApplicationState {
     /// Change the depth/amount of a specific connection
     pub fn update_link_depth(&mut self, link_id: ModulationLinkId, new_depth: f32) {
         if !new_depth.is_finite() {
-            log::warn!("Ignoring non-finite modulation depth for link {link_id:?}");
+            tracing::warn!("Ignoring non-finite modulation depth for link {link_id:?}");
             return;
         }
         if let Some(link) = self.modulation_links.get_mut(link_id) {
@@ -252,7 +252,7 @@ impl ApplicationState {
         // Connect the Cable (Depth 1.0, Base Value 0.0 for standard 1:1 automation tracking)
         let link_id = self.link_modulation(source_id, target, 1.0, 0.0)?;
 
-        log::info!(
+        tracing::info!(
             "Added automation lane {:?} mapped via link {:?}",
             lane_id,
             link_id

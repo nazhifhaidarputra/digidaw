@@ -111,7 +111,9 @@ impl ClapPluginHost {
             }
             match instance.restart_if_requested() {
                 Ok(()) | Err(HostError::Busy) => {}
-                Err(error) => log::error!("{}: CLAP restart: {error}", instance.descriptor.name),
+                Err(error) => {
+                    tracing::error!("{}: CLAP restart: {error}", instance.descriptor.name)
+                }
             }
         }
         Ok(())
@@ -436,7 +438,7 @@ impl Drop for ClapPluginHost {
                 .is_some_and(|slot| Arc::strong_count(slot) != 1)
             {
                 // Losing the UI owner before endpoint retirement cannot safely destroy the plugin.
-                log::error!(
+                tracing::error!(
                     "CLAP host dropped before audio endpoint retirement; retaining instance for process lifetime"
                 );
                 std::mem::forget(instance);

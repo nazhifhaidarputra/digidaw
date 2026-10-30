@@ -185,7 +185,7 @@ impl ClapInstance {
             &info,
         )
         .map_err(|error| {
-            log::warn!("{label}: CLAP instantiation failed: {error}");
+            tracing::warn!("{label}: CLAP instantiation failed: {error}");
             unavailable(&error.to_string())
         })?;
         let shared = plugin.plugin_shared_handle();
@@ -349,11 +349,11 @@ impl ClapInstance {
                     RenderMode::Realtime
                 };
                 if render.set(&plugin.plugin_handle(), mode).is_err() {
-                    log::debug!("{}: CLAP render mode was not changed", self.descriptor.name);
+                    tracing::debug!("{}: CLAP render mode was not changed", self.descriptor.name);
                 }
             }
             let processor = plugin.activate(|_, _| (), configuration).map_err(|error| {
-                log::warn!("{}: CLAP activation failed: {error}", self.descriptor.name);
+                tracing::warn!("{}: CLAP activation failed: {error}", self.descriptor.name);
                 plugin_call("clap.activate")
             })?;
             let latency = self
@@ -432,7 +432,7 @@ impl ClapInstance {
         };
         drop(stopped);
         self.plugin()?.try_deactivate().map_err(|error| {
-            log::error!(
+            tracing::error!(
                 "{}: CLAP deactivation failed: {error}",
                 self.descriptor.name
             );
@@ -672,7 +672,7 @@ impl ClapInstance {
         };
         let Ok(mut plugin) = self.plugin.try_borrow_mut() else {
             // Only a re-entrant close gets here; the outer call still owns the plugin.
-            log::error!(
+            tracing::error!(
                 "{}: CLAP editor closed while the plugin was in use",
                 self.descriptor.name
             );
@@ -737,14 +737,14 @@ impl ClapInstance {
         drop(plugin);
         self.restart_pending |= restart;
         if values_changed && let Err(error) = self.read_values(true) {
-            log::debug!("{}: CLAP values not read: {error}", self.descriptor.name);
+            tracing::debug!("{}: CLAP values not read: {error}", self.descriptor.name);
         }
         // A running instance receives the plugin's output in its next block.
         if flush
             && !self.is_running()
             && let Err(error) = self.flush_parameters()
         {
-            log::debug!("{}: CLAP parameter flush: {error}", self.descriptor.name);
+            tracing::debug!("{}: CLAP parameter flush: {error}", self.descriptor.name);
         }
         if let (Some((width, height)), Some(handler)) = (resize, &self.resize_handler)
             && self.editor.is_some()
@@ -792,14 +792,14 @@ impl Drop for ClapInstance {
             .as_ref()
             .is_none_or(|slot| Arc::strong_count(slot) == 1 && slot.gate.suspend().is_ok());
         if !exclusive {
-            log::error!(
+            tracing::error!(
                 "{}: CLAP instance dropped while its processor is in use",
                 self.descriptor.name
             );
             return;
         }
         if let Err(error) = self.deactivate() {
-            log::error!("{}: CLAP teardown: {error}", self.descriptor.name);
+            tracing::error!("{}: CLAP teardown: {error}", self.descriptor.name);
         }
     }
 }

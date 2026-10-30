@@ -145,7 +145,7 @@ impl Lv2Instance {
         };
         let plugin = bundle.plugin(&descriptor.identity.native_id)?;
         if let Some(reason) = unhostable(&plugin, &bundle.uris) {
-            log::warn!("{}: LV2 plugin cannot be hosted: {reason}", descriptor.name);
+            tracing::warn!("{}: LV2 plugin cannot be hosted: {reason}", descriptor.name);
             return Err(HostError::Unsupported("LV2 plugin cannot be hosted"));
         }
         let model = PluginModel::read(&plugin, &bundle.world, &bundle.uris)?;
@@ -247,7 +247,7 @@ impl Lv2Instance {
             .plugin_record(&self.descriptor.identity.native_id)?;
         let instance =
             PluginInstance::instantiate(record, &self.model, config).inspect_err(|error| {
-                log::warn!(
+                tracing::warn!(
                     "{}: LV2 instantiation failed: {error}",
                     self.descriptor.name
                 )

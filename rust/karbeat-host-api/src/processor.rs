@@ -163,7 +163,7 @@ impl Drop for ProcessorRetirement {
             if !receiver.is_abandoned() {
                 // A premature control-owner shutdown must not make the audio thread the final
                 // owner of the return queue. Retain it until process exit rather than unload code.
-                log::error!("Hosted plugin owner shut down before endpoint retirement");
+                tracing::error!("Hosted plugin owner shut down before endpoint retirement");
                 std::mem::forget(receiver);
             }
         }

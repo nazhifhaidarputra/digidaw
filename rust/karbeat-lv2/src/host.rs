@@ -437,7 +437,7 @@ impl Drop for Lv2PluginHost {
                 .is_some_and(|slot| Arc::strong_count(slot) != 1)
             {
                 // Losing the UI owner before endpoint retirement cannot safely destroy the plugin.
-                log::error!(
+                tracing::error!(
                     "LV2 host dropped before audio endpoint retirement; retaining instance for process lifetime"
                 );
                 std::mem::forget(instance);

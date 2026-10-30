@@ -328,7 +328,7 @@ pub fn create_feedback_stream(
                 };
                 let ui_feedback = UiAudioFeedback::from(feedback);
                 if sink.add(ui_feedback).is_err() {
-                    log::info!("[Rust] AudioFeedback stream disconnected — stopping thread.");
+                    tracing::info!("[Rust] AudioFeedback stream disconnected — stopping thread.");
                     // Return the consumer so the stream can be re-opened later
                     *consumer_slot.lock() = Some(consumer);
                     return;
@@ -371,7 +371,7 @@ pub fn create_position_stream(
 
                 // Send to Flutter
                 if sink.add(ui_feedback).is_err() {
-                    log::info!("[Rust] PlaybackPosition Stream disconnected! Stopping thread.");
+                    tracing::info!("[Rust] PlaybackPosition Stream disconnected! Stopping thread.");
                     *consumer_slot.lock() = Some(sync.into_consumer());
                     return;
                 }
@@ -439,9 +439,9 @@ pub fn play_source_preview(ctx: &DawContext, id: u64) {
     if let Err(e) =
         audio_api::play_source_preview(&mut ctx.runtime_write(), AudioSourceId::from_u64(id))
     {
-        log::warn!("Preview failed: {}", e);
+        tracing::warn!("Preview failed: {}", e);
     } else {
-        log::info!("Preview command sent for ID: {}", id);
+        tracing::info!("Preview command sent for ID: {}", id);
     }
 }
 
@@ -454,7 +454,7 @@ pub fn play_file_preview(ctx: &DawContext, file_path: &str) -> Result<(), String
 
 pub fn stop_all_previews(ctx: &DawContext) {
     audio_api::stop_all_previews(&mut ctx.runtime_write());
-    log::info!("Stopped all preview sounds");
+    tracing::info!("Stopped all preview sounds");
 }
 
 pub fn get_audio_config(ctx: &DawContext) -> Result<UiAudioHardwareConfig, String> {

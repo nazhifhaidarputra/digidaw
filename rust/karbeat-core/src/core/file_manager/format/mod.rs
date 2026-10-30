@@ -107,7 +107,7 @@ impl ProjectMigrator {
         let mut state = match self.version {
             ProjectFormatVersion::V1 => {
                 let state = v1::V1Loader::read(archive)?;
-                log::info!(
+                tracing::info!(
                     "Upgrading project from format v1 to v{}",
                     ProjectFormatVersion::CURRENT.number()
                 );

@@ -39,7 +39,7 @@ pub fn add_clip(
         .app_state
         .create_new_clip(source_id, source_type, track_id, start_time)
         .map_err(|error| {
-            log::error!("Error creating clip: {error:?}");
+            tracing::error!("Error creating clip: {error:?}");
             error
         })?;
     let action = recorder.finish(&mut ctx.app_state);

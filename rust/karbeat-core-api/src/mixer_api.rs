@@ -312,7 +312,7 @@ pub fn add_effect_to_mixer_channel_by_id(
             telemetry: Some(telemetry),
         });
     } else {
-        log::warn!(
+        tracing::warn!(
             "[mixer_api] Could not instantiate effect plugin {:?} for audio thread",
             registry_id
         );
@@ -362,7 +362,7 @@ pub fn add_effect_to_master_bus(ctx: &mut DawContext, registry_id: u32) -> anyho
             telemetry: Some(telemetry),
         });
     } else {
-        log::warn!(
+        tracing::warn!(
             "[mixer_api] Could not instantiate master effect plugin {:?}",
             registry_id
         );
@@ -461,7 +461,7 @@ pub fn remove_effect_from_target_mixer_channel(
     }
 
     if let Err(error) = super::project_api::capture_live_state(ctx, &[plugin_target], &[]) {
-        log::warn!("Removing effect without its live state: {error:#}");
+        tracing::warn!("Removing effect without its live state: {error:#}");
     }
     let automation_before = AutomationRecorder::begin(&ctx.app_state);
     let (index, removed_effect) = ctx
@@ -557,7 +557,7 @@ pub fn delete_bus(ctx: &mut DawContext, bus_id: BusId) -> anyhow::Result<()> {
     if let Err(error) =
         super::project_api::capture_live_state(ctx, &plugins, &[MixerChannelTarget::Bus(bus_id)])
     {
-        log::warn!("Deleting bus without its live plugin state: {error:#}");
+        tracing::warn!("Deleting bus without its live plugin state: {error:#}");
     }
     let structure_before = StructureRecorder::begin(&ctx.app_state, &[], &[bus_id]);
     ctx.app_state.mixer.remove_bus(bus_id)?;
@@ -601,7 +601,7 @@ pub fn add_effect_to_bus(
             telemetry: Some(telemetry),
         });
     } else {
-        log::warn!(
+        tracing::warn!(
             "[mixer_api] Could not instantiate bus effect plugin {:?}",
             registry_id
         );

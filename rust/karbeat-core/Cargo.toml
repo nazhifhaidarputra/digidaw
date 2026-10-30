@@ -14,7 +14,7 @@ karbeat-plugin-types.workspace = true
 karbeat-host.workspace = true
 
 anyhow.workspace = true
-log.workspace = true
+tracing.workspace = true
 serde.workspace = true
 
 thiserror.workspace = true

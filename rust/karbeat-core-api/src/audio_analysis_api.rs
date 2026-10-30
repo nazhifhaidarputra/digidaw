@@ -154,7 +154,7 @@ pub fn cancel_stale_renders(ctx: &DawContext) -> usize {
         {
             render.stale.store(true, Ordering::Release);
             cancelled = cancelled.saturating_add(1);
-            log::info!(
+            tracing::info!(
                 "Cancelled a stale render of audio source {}",
                 render.basis.source_id.to_u64()
             );
@@ -964,7 +964,7 @@ pub fn execute_render(
 pub fn commit_render(ctx: &mut DawContext, completed: CompletedRender) -> bool {
     let source_id = completed.basis.source_id;
     if !completed.basis.is_current(ctx) {
-        log::info!(
+        tracing::info!(
             "Discarded a render of audio source {}: it changed while rendering",
             source_id.to_u64()
         );

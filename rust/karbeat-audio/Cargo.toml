@@ -16,7 +16,7 @@ karbeat-host.workspace = true
 
 anyhow.workspace = true
 cpal.workspace = true
-log.workspace = true
+tracing.workspace = true
 rtrb.workspace = true
 crossbeam-utils.workspace = true
 atomic-wait.workspace = true

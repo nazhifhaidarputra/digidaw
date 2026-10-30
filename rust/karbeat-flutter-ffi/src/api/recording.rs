@@ -175,7 +175,7 @@ pub fn create_recording_stream(
                     }
                     sent.insert(take.track_id, state);
                     if sink.add(take.into()).is_err() {
-                        log::info!("Recording stream disconnected; stopping its thread.");
+                        tracing::info!("Recording stream disconnected; stopping its thread.");
                         return;
                     }
                 }

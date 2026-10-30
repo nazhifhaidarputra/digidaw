@@ -258,7 +258,7 @@ fn resolve_cover<R: Read + Seek>(
     let cover_dir = session_dir.join(COVER_ARCHIVE_DIR);
     let local_path = cover_dir.join(file_name);
     if let Err(error) = std::fs::create_dir_all(&cover_dir) {
-        log::warn!("Project cover dropped, session folder unavailable: {error}");
+        tracing::warn!("Project cover dropped, session folder unavailable: {error}");
         return None;
     }
 
@@ -267,7 +267,7 @@ fn resolve_cover<R: Read + Seek>(
             Ok(()) => local_path,
             // Symlinks can need extra privileges (Windows); reading in place is equivalent
             Err(error) => {
-                log::debug!(
+                tracing::debug!(
                     "Cover symlink unavailable, using {}: {error}",
                     linked.display()
                 );
@@ -295,7 +295,7 @@ fn resolve_cover<R: Read + Seek>(
             linked_path: cover.linked_path.clone(),
         }),
         Err(error) => {
-            log::warn!("Project cover dropped, embedded image unavailable: {error}");
+            tracing::warn!("Project cover dropped, embedded image unavailable: {error}");
             None
         }
     }
@@ -326,7 +326,7 @@ pub(crate) fn extraction_session_dir() -> anyhow::Result<tempfile::TempDir> {
     if let Some(directory) = app_cache_dir().map(|cache| cache.join("sessions")) {
         match std::fs::create_dir_all(&directory).and_then(|()| builder.tempdir_in(&directory)) {
             Ok(session) => return Ok(session),
-            Err(error) => log::warn!(
+            Err(error) => tracing::warn!(
                 "Project session cache unavailable in {}, using the temporary directory: {error}",
                 directory.display()
             ),

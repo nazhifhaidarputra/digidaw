@@ -542,7 +542,7 @@ impl MixerChannel {
                     "Effect with ID {} not found in registry",
                     effect_registry_id
                 );
-                log::error!("{}", message);
+                tracing::error!("{}", message);
                 return Err(anyhow::anyhow!(message));
             }
         };
@@ -610,7 +610,7 @@ impl MixerState {
         let (effect_factory, effect_name, effect_id) =
             mixer_channel.channel.add_effect(registry, registry_id)?;
 
-        log::info!(
+        tracing::info!(
             "Effect {} (registry_id={}) added to track {:?}",
             effect_name,
             registry_id,
@@ -664,7 +664,7 @@ impl MixerState {
         let channel = &mut self.master_bus;
         let (effect_factory, effect_name, effect_id) = channel.add_effect(registry, registry_id)?;
 
-        log::info!(
+        tracing::info!(
             "Effect {} (registry_id={}) added to master bus",
             effect_name,
             registry_id
@@ -764,7 +764,7 @@ impl MixerState {
         let old_name = bus.name.clone();
         bus.name = new_name.to_string();
 
-        log::info!("Bus {:?} renamed from {} to {}", bus_id, old_name, new_name);
+        tracing::info!("Bus {:?} renamed from {} to {}", bus_id, old_name, new_name);
         Ok(())
     }
 
@@ -793,7 +793,7 @@ impl MixerState {
         let (effect_factory, effect_name, effect_id) =
             bus.channel.add_effect(registry, registry_id)?;
 
-        log::info!(
+        tracing::info!(
             "Effect {} (registry_id={}) added to bus {:?}",
             effect_name,
             registry_id,

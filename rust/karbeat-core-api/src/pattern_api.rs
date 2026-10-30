@@ -87,7 +87,7 @@ pub fn delete_pattern(ctx: &mut DawContext, pattern_id: PatternId) -> anyhow::Re
     ctx.push_history(PatternRemoved::new(clip_changes, pattern_id, pattern));
 
     ctx.broadcast_track_graph();
-    log::info!(
+    tracing::info!(
         "Removed pattern {} with {} clip(s)",
         pattern_id.to_u64(),
         clip_ids.len()

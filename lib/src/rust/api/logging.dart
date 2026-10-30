@@ -19,7 +19,7 @@ part 'logging.freezed.dart';
 Stream<List<RustLogEntryDto>> subscribeRustLogs() =>
     RustLib.instance.api.crateApiLoggingSubscribeRustLogs();
 
-/// One Rust `log` record forwarded to the Flutter log viewer.
+/// One Rust log event forwarded to the Flutter log viewer.
 @freezed
 sealed class RustLogEntryDto with _$RustLogEntryDto {
   const factory RustLogEntryDto({

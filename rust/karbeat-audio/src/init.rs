@@ -41,7 +41,7 @@ fn generate_startup_beep() -> Option<AudioWaveform> {
             m
         }
         Err(e) => {
-            log::warn!("Startup beep skipped: failed to allocate anonymous mmap: {e}");
+            tracing::warn!("Startup beep skipped: failed to allocate anonymous mmap: {e}");
             return None;
         }
     };
@@ -49,7 +49,7 @@ fn generate_startup_beep() -> Option<AudioWaveform> {
     let mmap = match mmap_mut.make_read_only() {
         Ok(m) => m,
         Err(e) => {
-            log::warn!("Startup beep skipped: failed to make mmap read-only: {e}");
+            tracing::warn!("Startup beep skipped: failed to make mmap read-only: {e}");
             return None;
         }
     };
@@ -76,19 +76,19 @@ pub fn init_engine(ctx: &mut DawContext) {
 
     match start_audio_stream(ctx, cmd_cons, device_conf) {
         Ok(_) => {
-            log::info!("Audio Engine Successfully initialized");
+            tracing::info!("Audio Engine Successfully initialized");
 
             // SEND STARTUP BEEP
             if let Some(beep_waveform) = generate_startup_beep() {
                 // Borrow the sender safely via as_mut() without locks
                 if let Some(producer) = ctx.command_sender.lock().as_mut() {
                     let _ = producer.push(AudioCommand::PlayOneShot(beep_waveform));
-                    log::info!("Startup beep command sent");
+                    tracing::info!("Startup beep command sent");
                 }
             }
         }
         Err(error) => {
-            log::error!("Failed to start audio engine: {error}");
+            tracing::error!("Failed to start audio engine: {error}");
         }
     }
 }

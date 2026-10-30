@@ -30,7 +30,7 @@ pub fn hosted_processing_config(kind: PluginKind, sample_rate: f64) -> Processin
 /// the transfer must leak the payload, including any rejected processor endpoint.
 pub fn retire_control_transfer<T: Send>(retirement: &mut ControlRetirement<T>, operation: &str) {
     if !retirement.collect_within(CONTROL_RETIREMENT_TIMEOUT) {
-        log::warn!("{operation} control transfer was not returned after acknowledgement");
+        tracing::warn!("{operation} control transfer was not returned after acknowledgement");
     }
 }
 

@@ -998,7 +998,7 @@ pub async fn add_audio_source(ctx: &DawContext, file_path: &str) -> Result<u64, 
 pub fn add_new_audio_track(ctx: &DawContext) -> UiTrack {
     let mut ctx = ctx.project_write();
     let track = track_api::add_new_audio_track(&mut ctx);
-    log::info!("[add_new_track] successfully added new track");
+    tracing::info!("[add_new_track] successfully added new track");
     UiTrack::from_track(&track, &ctx.app_state)
 }
 

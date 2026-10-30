@@ -82,7 +82,7 @@ impl Drop for WindowsStaGuard {
             // SAFETY: this balances the successful initialization on the same thread.
             unsafe { CoUninitialize() };
         } else {
-            log::error!("Windows STA guard reached Drop on a non-owner thread");
+            tracing::error!("Windows STA guard reached Drop on a non-owner thread");
         }
     }
 }

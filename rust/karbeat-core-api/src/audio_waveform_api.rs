@@ -185,7 +185,7 @@ pub fn execute_audio_import(pending: PendingAudioImport) -> anyhow::Result<Compl
     }
 
     let waveform = load_audio_file(&pending.file_path, None, pending.sample_rate).map_err(|e| {
-        log::error!("[error] failed to load the audio: {}", e);
+        tracing::error!("[error] failed to load the audio: {}", e);
         anyhow::anyhow!("Failed to load the audio source")
     })?;
     Ok(CompletedAudioImport::Decoded {
@@ -230,7 +230,7 @@ pub fn commit_audio_import(ctx: &mut DawContext, completed: CompletedAudioImport
             waveform.id = Some(id);
             Arc::new(waveform)
         });
-    log::info!("Successfully added audio source {}", source_id.to_u64());
+    tracing::info!("Successfully added audio source {}", source_id.to_u64());
     ctx.mark_project_modified();
     ctx.broadcast_full_graph();
     source_id
@@ -257,7 +257,7 @@ pub fn remove_audio_source(
 
     crate::audio_api::stop_all_previews(ctx);
     ctx.broadcast_full_graph();
-    log::info!(
+    tracing::info!(
         "Removed audio source {} with {} clip(s)",
         source_id.to_u64(),
         clip_ids.len()

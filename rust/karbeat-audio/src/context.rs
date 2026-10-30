@@ -334,7 +334,7 @@ impl DawContext {
             clips,
             patterns: patterns,
         });
-        log::debug!(
+        tracing::debug!(
             "number of tracks: {}, number of patterns: {}",
             tracks_len,
             patterns_len
@@ -551,7 +551,7 @@ impl DawContext {
         crate::commands::PreparedPluginTelemetry,
     )> {
         let Some(factory) = self.get_plugin_factory(instance.registry_id) else {
-            log::warn!(
+            tracing::warn!(
                 "Cannot restore plugin {}: registry id {} is not available",
                 instance.name,
                 instance.registry_id

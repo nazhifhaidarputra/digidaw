@@ -280,7 +280,7 @@ impl TakeWriter {
             (Ok(()), Ok(()), Some(start)) if self.frames > 0 => {
                 let dropped = self.shared.dropped_frames();
                 if dropped > 0 {
-                    log::warn!(
+                    tracing::warn!(
                         "Recording {} lost {dropped} frames because the disk fell behind",
                         self.request.name
                     );
@@ -384,12 +384,12 @@ fn latency_frames(clocks: &TakeClocks, start: TakeStart, sample_rate: u32) -> u6
     };
     let latency = start.render_frame.saturating_sub(heard);
     if latency > maximum {
-        log::warn!(
+        tracing::warn!(
             "Measured recording latency of {latency} frames is implausible; recording uncorrected"
         );
         return 0;
     }
-    log::info!(
+    tracing::info!(
         "Recording latency is {latency} frames ({:.1} ms)",
         latency as f64 * 1_000.0 / f64::from(sample_rate.max(1))
     );
@@ -400,7 +400,7 @@ fn remove_file(path: &std::path::Path) {
     if let Err(error) = std::fs::remove_file(path)
         && error.kind() != std::io::ErrorKind::NotFound
     {
-        log::warn!("Could not remove {}: {error}", path.display());
+        tracing::warn!("Could not remove {}: {error}", path.display());
     }
 }
 

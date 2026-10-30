@@ -260,7 +260,7 @@ fn start_input_stream(
     let capacity = (config.sample_rate as usize / 2).max(4_096) * device_channels;
     let (producer, consumer) = RingBuffer::<f32>::new(capacity);
     clock.reset(config.sample_rate);
-    let err_fn = |error: cpal::StreamError| log::warn!("Audio input stream error: {error}");
+    let err_fn = |error: cpal::StreamError| tracing::warn!("Audio input stream error: {error}");
     let stream = match sample_format {
         cpal::SampleFormat::I8 => run_input_stream!(device, config, producer, clock, i8, err_fn),
         cpal::SampleFormat::I16 => run_input_stream!(device, config, producer, clock, i16, err_fn),
@@ -311,7 +311,7 @@ fn start_input_stream(
 /// already playing. They remain available through an explicit `host_name`.
 fn automatic_host() -> cpal::Host {
     let host = cpal::default_host();
-    log::info!("Connected to automatic audio Host: {}", host.id().name());
+    tracing::info!("Connected to automatic audio Host: {}", host.id().name());
     host
 }
 
@@ -627,7 +627,7 @@ impl AudioRuntimeSettings {
         self.stream_status = match transition(current.into()) {
             Ok(next) => next.into(),
             Err((unchanged, invalid)) => {
-                log::warn!("Output stream status: {invalid}");
+                tracing::warn!("Output stream status: {invalid}");
                 unchanged.into()
             }
         };
@@ -712,11 +712,11 @@ fn resolve_host(preferred_host: Option<&str>) -> cpal::Host {
     if let Some(host_name) = preferred_host {
         if let Some(host_id) = find_host_id(host_name) {
             if let Ok(host) = cpal::host_from_id(host_id) {
-                log::info!("Connected to user-selected Host: {}", host_name);
+                tracing::info!("Connected to user-selected Host: {}", host_name);
                 return host;
             }
         }
-        log::warn!(
+        tracing::warn!(
             "Requested host '{}' not found or failed to load. Falling back...",
             host_name
         );
@@ -890,7 +890,7 @@ fn get_device_and_config(
             .context("device does not support output with at least 2 channels")?;
 
     if used_fallback_rate {
-        log::warn!("Requested sample rate unsupported by device, falling back");
+        tracing::warn!("Requested sample rate unsupported by device, falling back");
     }
 
     // Yield to the Server's globally locked buffer size if using JACK to prevent crash loop
@@ -978,12 +978,12 @@ pub fn start_audio_stream(
         active_cfg.device_id = config_pref.device_id;
     }
 
-    log::info!(
+    tracing::info!(
         "Initial Stream Config: {:?} Hz, {} Channels",
         device_sample_rate,
         channels
     );
-    log::info!("Initial Sample format: {:?}", sample_format);
+    tracing::info!("Initial Sample format: {:?}", sample_format);
 
     let initial_dsp_config = runtime_settings_arc.read().requested_dsp;
     ctx.app_state.audio_config.sample_rate = initial_dsp_config.sample_rate;
@@ -1064,7 +1064,7 @@ pub fn start_audio_stream(
                 ) {
                     Ok(capture) => engine.attach_input(capture),
                     Err(error) => {
-                        log::warn!("Audio input is unavailable: {error}");
+                        tracing::warn!("Audio input is unavailable: {error}");
                         engine.detach_input()
                     }
                 },
@@ -1165,7 +1165,7 @@ pub fn start_audio_stream(
             dsp_output_clock.detach();
             let input_drift_ppm = engine.input_drift_ppm();
             if let Some(input) = engine.detach_input() {
-                log::info!(
+                tracing::info!(
                     "Audio input detached; its clock ran {input_drift_ppm:.0} ppm from the output's"
                 );
                 drop(input);
@@ -1173,7 +1173,7 @@ pub fn start_audio_stream(
         }
 
         // `engine` is dropped here, on the same DSP thread where it was created.
-        log::info!("DSP thread shut down; AudioEngine dropped on DSP thread.");
+        tracing::info!("DSP thread shut down; AudioEngine dropped on DSP thread.");
     });
 
     // Spawn the device monitor thread. This thread never contains AudioEngine.
@@ -1181,7 +1181,7 @@ pub fn start_audio_stream(
         let mut retry_delay = INITIAL_RETRY_DELAY;
 
         loop {
-            log::info!("Monitor: Attempting to build and start audio stream...");
+            tracing::info!("Monitor: Attempting to build and start audio stream...");
 
             let mut current_config_pref = active_config_arc.read().clone();
             let current_dsp_config = runtime_settings_arc.read().requested_dsp;
@@ -1191,7 +1191,7 @@ pub fn start_audio_stream(
                 Ok(res) => res,
                 Err(e) => {
                     runtime_settings_arc.write().stream_retrying(e.to_string());
-                    log::error!(
+                    tracing::error!(
                         "Monitor: Failed to resolve audio device: {}. Retrying in {:?}...",
                         e,
                         retry_delay
@@ -1233,7 +1233,7 @@ pub fn start_audio_stream(
                 match start_input_stream(&current_host, &current_input, &input_clock) {
                     Ok((stream, attach)) => (Some(stream), Some(attach)),
                     Err(error) => {
-                        log::warn!("Monitor: Could not open the audio input: {error}");
+                        tracing::warn!("Monitor: Could not open the audio input: {error}");
                         (None, None)
                     }
                 }
@@ -1256,7 +1256,7 @@ pub fn start_audio_stream(
                 })
                 .is_err()
             {
-                log::error!("DSP thread exited; audio monitor cannot continue.");
+                tracing::error!("DSP thread exited; audio monitor cannot continue.");
                 return;
             }
 
@@ -1266,13 +1266,13 @@ pub fn start_audio_stream(
                     runtime_settings_arc
                         .write()
                         .stream_unavailable(error.clone());
-                    log::error!("Could not configure DSP output path: {error}");
+                    tracing::error!("Could not configure DSP output path: {error}");
                     std::thread::sleep(retry_delay);
                     retry_delay = next_retry_delay(retry_delay);
                     continue;
                 }
                 Err(error) => {
-                    log::error!("DSP thread exited while attaching output: {error}");
+                    tracing::error!("DSP thread exited while attaching output: {error}");
                     return;
                 }
             };
@@ -1283,17 +1283,17 @@ pub fn start_audio_stream(
 
             let err_fn = move |err: cpal::StreamError| match err {
                 cpal::StreamError::DeviceNotAvailable => {
-                    log::error!("Audio device disconnected: {}. Triggering restart...", err);
+                    tracing::error!("Audio device disconnected: {}. Triggering restart...", err);
                     let _ = tx_clone.try_send(());
                 }
                 cpal::StreamError::BackendSpecific { ref err } => {
                     let err_msg = err.to_string().to_lowercase();
                     if err_msg.contains("underrun") || err_msg.contains("overrun") {
-                        log::warn!(
+                        tracing::warn!(
                             "Audio glitch (buffer underrun) detected due to CPU lag. Recovering naturally..."
                         );
                     } else if err_msg.contains("buffer size changed to:") {
-                        log::warn!(
+                        tracing::warn!(
                             "Host forced a different buffer size. Adapting config to prevent crash loop..."
                         );
 
@@ -1307,11 +1307,14 @@ pub fn start_audio_stream(
                             if let Ok(new_size) = num_str.parse::<u32>() {
                                 let mut cfg = err_config_arc.write();
                                 if cfg.buffer_size != Some(new_size) {
-                                    log::info!("Dynamically updating buffer size to {}", new_size);
+                                    tracing::info!(
+                                        "Dynamically updating buffer size to {}",
+                                        new_size
+                                    );
                                     cfg.buffer_size = Some(new_size);
                                     let _ = tx_clone.try_send(());
                                 } else {
-                                    log::debug!(
+                                    tracing::debug!(
                                         "Buffer size is already synced to {}. Ignoring redundant error.",
                                         new_size
                                     );
@@ -1319,7 +1322,7 @@ pub fn start_audio_stream(
                             }
                         }
                     } else {
-                        log::error!(
+                        tracing::error!(
                             "Audio stream backend error: {}. Triggering restart...",
                             err_msg
                         );
@@ -1327,12 +1330,12 @@ pub fn start_audio_stream(
                     }
                 }
                 cpal::StreamError::BufferUnderrun => {
-                    log::warn!(
+                    tracing::warn!(
                         "Native buffer underrun detected due to CPU lag. Recovering naturally..."
                     );
                 }
                 cpal::StreamError::StreamInvalidated => {
-                    log::error!("Audio stream invalidated by the OS. Triggering restart...");
+                    tracing::error!("Audio stream invalidated by the OS. Triggering restart...");
                     let _ = tx_clone.try_send(());
                 }
             };
@@ -1381,7 +1384,7 @@ pub fn start_audio_stream(
                 Ok(stream) => stream,
                 Err(e) => {
                     let _ = dsp_control_tx.send(DspControl::Detach);
-                    log::error!(
+                    tracing::error!(
                         "Monitor: Failed to build stream: {}. Retrying in {:?}...",
                         e,
                         retry_delay
@@ -1397,7 +1400,7 @@ pub fn start_audio_stream(
                 let _ = dsp_control_tx.send(DspControl::Detach);
 
                 runtime_settings_arc.write().stream_retrying(e.to_string());
-                log::error!(
+                tracing::error!(
                     "Monitor: Failed to play stream: {}. Retrying in {:?}...",
                     e,
                     retry_delay
@@ -1414,12 +1417,12 @@ pub fn start_audio_stream(
                 runtime.stream_started();
             }
 
-            log::info!("Monitor: Audio stream is successfully running.");
+            tracing::info!("Monitor: Audio stream is successfully running.");
             let stream_started_at = Instant::now();
 
             let restart_reason = loop {
                 if restart_rx.try_recv().is_ok() {
-                    log::info!("Monitor: Restart signal received from CPAL callback.");
+                    tracing::info!("Monitor: Restart signal received from CPAL callback.");
                     break RestartReason::StreamError;
                 }
 
@@ -1433,7 +1436,7 @@ pub fn start_audio_stream(
                     || latest_dsp_config != current_dsp_config
                     || latest_input != current_input
                 {
-                    log::info!(
+                    tracing::info!(
                         "Monitor: Audio configuration changed by user. Restarting stream..."
                     );
                     break RestartReason::ConfigurationChanged;
@@ -1444,7 +1447,7 @@ pub fn start_audio_stream(
                         if let Ok(ref default_id) = default_dev.id() {
                             if let Some(ref playing_device_id_some) = playing_device_id {
                                 if default_id != playing_device_id_some {
-                                    log::info!(
+                                    tracing::info!(
                                         "Monitor: OS Default device changed from '{}' to '{}'. Restarting stream...",
                                         playing_device_id_some,
                                         default_id
@@ -1464,7 +1467,7 @@ pub fn start_audio_stream(
             drop(stream);
             drop(input_stream);
             if dsp_control_tx.send(DspControl::Detach).is_err() {
-                log::error!("DSP thread exited during stream cleanup.");
+                tracing::error!("DSP thread exited during stream cleanup.");
                 return;
             }
 
@@ -1472,7 +1475,7 @@ pub fn start_audio_stream(
                 RestartReason::StreamError
                     if stream_started_at.elapsed() < STABLE_STREAM_DURATION =>
                 {
-                    log::warn!(
+                    tracing::warn!(
                         "Audio stream failed shortly after startup. Retrying in {:?}...",
                         retry_delay
                     );
@@ -1487,7 +1490,7 @@ pub fn start_audio_stream(
         }
     });
 
-    log::info!("Successfully initialized Audio backend, DSP thread, and Monitor thread");
+    tracing::info!("Successfully initialized Audio backend, DSP thread, and Monitor thread");
     Ok(())
 }
 

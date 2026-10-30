@@ -175,7 +175,7 @@ fn decoded_cache_file() -> Result<File> {
     if let Some(directory) = app_cache_dir().map(|cache| cache.join("decoded-audio")) {
         match std::fs::create_dir_all(&directory).and_then(|()| tempfile_in(&directory)) {
             Ok(file) => return Ok(file),
-            Err(error) => log::warn!(
+            Err(error) => tracing::warn!(
                 "Decoded audio cache unavailable in {}, using the temporary directory: {error}",
                 directory.display()
             ),
@@ -236,7 +236,7 @@ impl AudioLoader for ApplicationState {
             Ok(waveform) => waveform,
             Err(e) => {
                 let error_msg = format!("Cannot decode audio file: {}", e);
-                log::error!("{}", error_msg);
+                tracing::error!("{}", error_msg);
                 anyhow::bail!("{}", error_msg);
             }
         };
@@ -247,7 +247,7 @@ impl AudioLoader for ApplicationState {
             Arc::new(waveform)
         });
 
-        log::info!("Successfully loaded audio: {} (ID: {})", path, source_id);
+        tracing::info!("Successfully loaded audio: {} (ID: {})", path, source_id);
 
         Ok(source_id)
     }

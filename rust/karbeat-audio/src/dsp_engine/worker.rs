@@ -51,7 +51,7 @@ pub fn promote_current_thread(
     match audio_thread_priority::promote_current_thread_to_real_time(frames, sample_rate) {
         Ok(handle) => Some(handle),
         Err(error) => {
-            log::warn!("DSP thread runs without real-time priority: {error}");
+            tracing::warn!("DSP thread runs without real-time priority: {error}");
             None
         }
     }
@@ -167,7 +167,9 @@ impl AudioWorkerPool {
             match spawned {
                 Ok(thread) => pool.threads.push(thread),
                 Err(error) => {
-                    log::warn!("DSP worker {index} could not start, rendering serially: {error}");
+                    tracing::warn!(
+                        "DSP worker {index} could not start, rendering serially: {error}"
+                    );
                     // Dropping the pool stops and joins the threads already started.
                     return None;
                 }

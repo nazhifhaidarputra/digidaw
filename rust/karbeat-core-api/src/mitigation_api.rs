@@ -49,7 +49,7 @@ pub fn configure(
         PreviousSession::Unclean => {
             reporter.record(CrashSource::Rust(RustCrashSource::UncleanShutdown))?;
         }
-        PreviousSession::Forced => log::info!("The previous session was forcibly shut down"),
+        PreviousSession::Forced => tracing::info!("The previous session was forcibly shut down"),
         PreviousSession::Clean => {}
     }
 

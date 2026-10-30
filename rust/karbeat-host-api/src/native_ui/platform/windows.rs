@@ -205,10 +205,10 @@ impl Drop for WindowsNativeWindow {
         if self.owner == std::thread::current().id() && !self.context.hwnd.is_null() {
             // SAFETY: normal lifecycle destroys the live window on its owner thread.
             if unsafe { DestroyWindow(self.context.hwnd) } == 0 {
-                log::error!("failed to destroy Win32 VST3 editor host window");
+                tracing::error!("failed to destroy Win32 VST3 editor host window");
             }
         } else if !self.context.hwnd.is_null() {
-            log::error!("Win32 VST3 editor window dropped outside its owner thread");
+            tracing::error!("Win32 VST3 editor window dropped outside its owner thread");
         }
     }
 }

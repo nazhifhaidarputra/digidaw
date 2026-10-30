@@ -196,7 +196,7 @@ impl PluginInstanceManager for Vst3PluginHost {
                 if code == kNotImplemented {
                     // Optional per the SDK (e.g. Dplug plugins); components still receive the
                     // context through IComponent::initialize.
-                    log::debug!(
+                    tracing::debug!(
                         "{}: factory.setHostContext is not implemented",
                         path.display()
                     );
@@ -543,7 +543,7 @@ impl Drop for Vst3PluginHost {
                 .is_some_and(|s| std::sync::Arc::strong_count(s) != 1)
             {
                 // Losing the UI owner before endpoint retirement cannot safely unload native code.
-                log::error!(
+                tracing::error!(
                     "VST3 host dropped before audio endpoint retirement; retaining module for process lifetime"
                 );
                 std::mem::forget(instance);

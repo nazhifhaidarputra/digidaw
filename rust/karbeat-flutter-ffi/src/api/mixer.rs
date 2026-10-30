@@ -599,7 +599,7 @@ fn add_effect_to_mixer_channel_by_id_blocking(
         )
         .map_err(|e| e.to_string())?;
     }
-    log::info!(
+    tracing::info!(
         "Added effect with registry ID {} to track {}",
         registry_id,
         track_id
@@ -630,7 +630,7 @@ fn remove_effect_from_mixer_channel_blocking(
         UiMixerChannelTarget::Track(track_id),
         effect_instance_id,
     )?;
-    log::info!(
+    tracing::info!(
         "Removed effect instance ID {} from track {}",
         effect_instance_id,
         track_id
@@ -779,7 +779,7 @@ fn add_effect_to_master_bus_blocking(ctx: &DawContext, registry_id: u32) -> Resu
         mixer_api::add_effect_to_master_bus(&mut operation.write_core(), registry_id)
             .map_err(|e| e.to_string())?;
     }
-    log::info!(
+    tracing::info!(
         "Added effect with registry ID {} to master bus",
         registry_id
     );
@@ -807,7 +807,7 @@ fn remove_effect_from_master_bus_blocking(
         UiMixerChannelTarget::Master,
         effect_instance_id,
     )?;
-    log::info!(
+    tracing::info!(
         "Removed effect instance ID {} from master bus",
         effect_instance_id
     );
@@ -915,7 +915,7 @@ fn add_effect_to_bus_blocking(
         mixer_api::add_effect_to_bus(&mut operation.write_core(), bus, registry_id)
             .map_err(|e| e.to_string())?;
     }
-    log::info!(
+    tracing::info!(
         "Added effect with registry ID {} to bus {}",
         registry_id,
         bus_id

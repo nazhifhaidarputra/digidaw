@@ -269,7 +269,7 @@ impl<B: NativeBackend> NativeHost<B> {
         if B::EDITOR_SIZED_ON_ATTACH
             && let Err(error) = self.apply_attached_bounds(id, &binding, size, constraints)
         {
-            log::warn!("{} editor bounds after attachment: {error}", B::LABEL);
+            tracing::warn!("{} editor bounds after attachment: {error}", B::LABEL);
         }
         let show_result = (|| {
             let mut binding = binding.borrow_mut();
@@ -410,19 +410,19 @@ impl<B: NativeBackend> NativeHost<B> {
                 }
                 Err(HostError::Busy) => {}
                 Err(error) => {
-                    log::error!("{} endpoint teardown: {error}", B::LABEL);
+                    tracing::error!("{} endpoint teardown: {error}", B::LABEL);
                 }
             }
         }
         if let Err(error) = self.host.pump() {
-            log::error!("{} native loop: {error}", B::LABEL);
+            tracing::error!("{} native loop: {error}", B::LABEL);
         }
         let mut native_events = Vec::new();
         if let Err(error) = self
             .native_ui
             .poll_events(|event| native_events.push(event))
         {
-            log::error!("native editor event loop: {error}");
+            tracing::error!("native editor event loop: {error}");
         }
         let mut closed = Vec::new();
         for event in native_events {
@@ -435,19 +435,22 @@ impl<B: NativeBackend> NativeHost<B> {
             let editor_event = match binding.borrow_mut().handle_event(event) {
                 Ok(event) => event,
                 Err(error) => {
-                    log::warn!("native editor event: {error}");
+                    tracing::warn!("native editor event: {error}");
                     continue;
                 }
             };
             match editor_event {
                 NativeEditorEvent::ExternalResize(size) => {
                     if let Err(error) = self.host.resize_editor(id, size.width, size.height) {
-                        log::debug!("{} editor size unchanged: {error}", B::LABEL);
+                        tracing::debug!("{} editor size unchanged: {error}", B::LABEL);
                         if let Ok(accepted) = self.host.editor_size(id)
                             && accepted != size
                             && let Err(resize_error) = binding.borrow_mut().resize_window(accepted)
                         {
-                            log::warn!("{} native window resize restore: {resize_error}", B::LABEL);
+                            tracing::warn!(
+                                "{} native window resize restore: {resize_error}",
+                                B::LABEL
+                            );
                         }
                     }
                 }
@@ -464,12 +467,12 @@ impl<B: NativeBackend> NativeHost<B> {
         }
         for id in closed {
             if let Err(error) = self.close_editor(id) {
-                log::warn!("{} editor close: {error}", B::LABEL);
+                tracing::warn!("{} editor close: {error}", B::LABEL);
             }
             self.push_event(HostEvent::EditorClosed { instance: id });
         }
         if let Err(error) = self.native_ui.pump() {
-            log::error!("native editor flush: {error}");
+            tracing::error!("native editor flush: {error}");
         }
         let now = std::time::Instant::now();
         for event in self.host.drain_events() {
@@ -481,7 +484,7 @@ impl<B: NativeBackend> NativeHost<B> {
                 // The plugin closed its own editor, so the host window has to follow.
                 HostEvent::EditorClosed { instance } => {
                     if let Err(error) = self.close_editor(*instance) {
-                        log::warn!("{} editor close: {error}", B::LABEL);
+                        tracing::warn!("{} editor close: {error}", B::LABEL);
                     }
                 }
                 HostEvent::BeginEdit { .. }
@@ -509,7 +512,7 @@ impl<B: NativeBackend> NativeHost<B> {
                     if let Err(error) =
                         run_state_operation::<B>(id, StateOperation::FlushParameters).await
                     {
-                        log::error!("{} idle parameter flush: {error}", B::LABEL);
+                        tracing::error!("{} idle parameter flush: {error}", B::LABEL);
                     }
                     drop(with_native_host::<B, _>(|owner| {
                         owner.parameter_flush_active.remove(&id);
@@ -517,7 +520,7 @@ impl<B: NativeBackend> NativeHost<B> {
                     }));
                 }) {
                     self.parameter_flush_active.remove(&id);
-                    log::error!("{} idle parameter scheduling: {error}", B::LABEL);
+                    tracing::error!("{} idle parameter scheduling: {error}", B::LABEL);
                 }
             }
         }
