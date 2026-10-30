@@ -172,6 +172,30 @@ impl ClipTimeUnit {
         TickScale::new(bpm, sample_rate).to_ticks(samples)
     }
 
+    /// Scales the content length and offset of an audio clip by `factor`, keeping its start.
+    /// Tick-based clips are left unchanged.
+    pub fn scale_content(&mut self, factor: f64) {
+        let scale = |value: &mut u64, min: f64| {
+            *value = (*value as f64 * factor).round().max(min) as u64;
+        };
+        match self {
+            ClipTimeUnit::Samples {
+                loop_length,
+                offset_start,
+                ..
+            }
+            | ClipTimeUnit::Audio {
+                loop_length,
+                offset_start,
+                ..
+            } => {
+                scale(loop_length, 1.0);
+                scale(offset_start, 0.0);
+            }
+            ClipTimeUnit::Ticks { .. } => {}
+        }
+    }
+
     fn tick_delta_to_samples(delta_ticks: i64, bpm: f32, sample_rate: u32) -> i64 {
         let magnitude = Self::ticks_to_samples(delta_ticks.unsigned_abs(), bpm, sample_rate);
         if delta_ticks.is_negative() {
@@ -240,6 +264,15 @@ pub struct Clip {
     pub time: ClipTimeUnit,
     /// Per-clip gain envelope for audio clips, stacked on top of the waveform envelope.
     /// `None` leaves the audio untouched. Shared behind an `Arc` so clip copies stay cheap.
+    pub envelope: Option<Arc<GainEnvelope>>,
+}
+
+/// A clip's timing and envelope, kept by history when a change of playback speed rescales the
+/// clip.
+#[derive(Debug, Clone, PartialEq)]
+pub struct ClipTiming {
+    pub clip_id: ClipId,
+    pub time: ClipTimeUnit,
     pub envelope: Option<Arc<GainEnvelope>>,
 }
 
@@ -321,6 +354,72 @@ impl Clip {
 }
 
 impl ApplicationState {
+    /// How long each audio source plays relative to its original audio at the current tempo;
+    /// see [`AudioWaveform::duration_scale`].
+    pub fn source_duration_scales(&self) -> Vec<(AudioSourceId, f64)> {
+        let bpm = self.transport.bpm;
+        self.asset_library
+            .source_map
+            .iter()
+            .map(|(id, waveform)| (id, waveform.duration_scale(bpm)))
+            .collect()
+    }
+
+    /// Makes the clips of each source follow a change of the source's playback length:
+    /// `before` holds each source's duration scale from before the change.
+    ///
+    /// A clip keeps its start, and its length, content offset, and envelope scale with the
+    /// audio, so it still ends where its audio ends, and space it was resized beyond the audio
+    /// scales by the same ratio. Returns the rescaled clips' previous timing, for history.
+    pub fn follow_source_durations(&mut self, before: &[(AudioSourceId, f64)]) -> Vec<ClipTiming> {
+        let bpm = self.transport.bpm;
+        let factors: HashMap<AudioSourceId, f64> = before
+            .iter()
+            .filter_map(|(id, before)| {
+                let after = self.asset_library.source_map.get(*id)?.duration_scale(bpm);
+                let factor = after / before;
+                (factor.is_finite() && factor > 0.0 && (factor - 1.0).abs() > 1e-9)
+                    .then_some((*id, factor))
+            })
+            .collect();
+        if factors.is_empty() {
+            return Vec::new();
+        }
+
+        let mut previous = Vec::new();
+        for (clip_id, clip) in self.clips_pool.iter_mut() {
+            let Some(DawSource::Audio(source)) = clip.source else {
+                continue;
+            };
+            let Some(factor) = factors.get(&source) else {
+                continue;
+            };
+            previous.push(ClipTiming {
+                clip_id,
+                time: clip.time.clone(),
+                envelope: clip.envelope.clone(),
+            });
+            clip.time.scale_content(*factor);
+            clip.envelope = clip
+                .envelope
+                .as_ref()
+                .map(|envelope| Arc::new(envelope.scaled(*factor)));
+        }
+        previous
+    }
+
+    /// Puts each clip's timing from `timings` back, leaving what it replaced in `timings`.
+    /// Clips no longer in the project are skipped.
+    pub fn swap_clip_timings(&mut self, timings: &mut [ClipTiming]) {
+        for timing in timings {
+            let Some(clip) = self.clips_pool.get_mut(timing.clip_id) else {
+                continue;
+            };
+            std::mem::swap(&mut clip.time, &mut timing.time);
+            std::mem::swap(&mut clip.envelope, &mut timing.envelope);
+        }
+    }
+
     /// Converts projects saved before audio clip placement used timeline ticks.
     pub fn migrate_legacy_audio_clip_placement(&mut self) -> usize {
         let bpm = self.transport.bpm;

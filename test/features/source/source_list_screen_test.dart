@@ -7,6 +7,7 @@ import 'package:karbeat/app/providers/project_provider.dart';
 import 'package:karbeat/app/providers/workspace_state.dart';
 import 'package:karbeat/core/utils/result_type.dart';
 import 'package:karbeat/features/source/services/audio_waveform_services.dart';
+import 'package:karbeat/features/source/services/source_actions.dart';
 import 'package:karbeat/features/source/view/source_list_screen.dart';
 import 'package:karbeat/shared/enums/global.dart';
 import 'package:karbeat/src/rust/api/automation.dart';
@@ -121,14 +122,14 @@ class _ProjectNotifier extends ProjectNotifier {
 
 void main() {
   test('only audio clips of the source are counted', () {
-    expect(SourceListScreen.audioSourceClipCount(_tracks.values, _sourceId), 2);
-    expect(SourceListScreen.audioSourceClipCount(_tracks.values, 99), 1);
-    expect(SourceListScreen.audioSourceClipCount(_tracks.values, 5), 0);
+    expect(audioSourceClipCount(_tracks.values, _sourceId), 2);
+    expect(audioSourceClipCount(_tracks.values, 99), 1);
+    expect(audioSourceClipCount(_tracks.values, 5), 0);
   });
 
   test('only clips of the pattern are counted', () {
-    expect(SourceListScreen.patternClipCount(_tracks.values, _sourceId), 1);
-    expect(SourceListScreen.patternClipCount(_tracks.values, 99), 0);
+    expect(patternClipCount(_tracks.values, _sourceId), 1);
+    expect(patternClipCount(_tracks.values, 99), 0);
   });
 
   testWidgets('Delete asks first, then removes the audio source', (

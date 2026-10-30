@@ -26,13 +26,21 @@ pub fn set_looping(ctx: &mut DawContext, val: bool) {
 
 /// Updates tempo, rebuilds timing-dependent graph state, and queues the tempo change.
 ///
-/// Rejects NaN and infinity, which a project file cannot store.
-pub fn set_bpm(ctx: &mut DawContext, val: f32) -> anyhow::Result<()> {
+/// Clips of sources that follow the tempo are rescaled with their audio, so they keep ending
+/// where it ends. Returns whether any clip was rescaled. Rejects NaN and infinity, which a
+/// project file cannot store.
+pub fn set_bpm(ctx: &mut DawContext, val: f32) -> anyhow::Result<bool> {
     anyhow::ensure!(val.is_finite(), "Tempo must be a finite number");
+    let durations = ctx.app_state.source_duration_scales();
     let previous = std::mem::replace(&mut ctx.app_state.transport.bpm, val);
-    ctx.push_history(TempoChanged::new(previous));
+    let clips = ctx.app_state.follow_source_durations(&durations);
+    let rescaled = !clips.is_empty();
+    ctx.push_history(TempoChanged::new(previous).with_clips(clips));
     let _ = ctx.send_audio_command(AudioCommand::SetBPM(val));
-    Ok(())
+    if rescaled {
+        ctx.broadcast_track_graph();
+    }
+    Ok(rescaled)
 }
 
 /// Stops transport playback and resets the audio-thread playhead to zero.

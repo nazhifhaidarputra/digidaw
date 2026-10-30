@@ -62,10 +62,13 @@ pub fn set_looping(ctx: &DawContext, val: bool) -> Result<(), String> {
 
 /// set the BPM of the transport.
 /// writes to both ApplicationState (for serialization) and AudioCommand (for audio thread)
-pub fn set_bpm(ctx: &DawContext, val: f32) -> Result<(), String> {
-    transport_api::set_bpm(&mut ctx.project_write(), val).map_err(|e| e.to_string())?;
+///
+/// Returns whether clips of tempo-following audio were rescaled, so the UI should refetch them.
+pub fn set_bpm(ctx: &DawContext, val: f32) -> Result<bool, String> {
+    let rescaled =
+        transport_api::set_bpm(&mut ctx.project_write(), val).map_err(|e| e.to_string())?;
     crate::api::audio_analysis::schedule_source_renders(ctx, true);
-    Ok(())
+    Ok(rescaled)
 }
 
 /// stop the song playback and reset the playhead to 0

@@ -11,6 +11,7 @@ import 'package:karbeat/app/providers/notification_provider.dart';
 import 'package:karbeat/app/providers/project_provider.dart';
 import 'package:karbeat/app/providers/transport_state.dart';
 import 'package:karbeat/core/widgets/context_menu.dart';
+import 'package:karbeat/core/widgets/overlap_shade.dart';
 import 'package:karbeat/features/piano_roll/view/scrollable_virtual_keyboard.dart';
 import 'package:karbeat/features/piano_roll/view/note_param_editor.dart';
 import 'package:karbeat/features/piano_roll/view/pattern_ruler.dart';
@@ -398,21 +399,50 @@ class PianoRollScreenState extends ConsumerState<PianoRollScreen> {
     int keyIndex = (localPos.dy / _keyHeight).floor();
     int midiKey = (127 - keyIndex).clamp(0, 127);
 
-    bool added = false;
+    // Only the topmost note under the pointer is erased, so stacked notes
+    // come off one layer at a time. Selected notes are painted above the rest,
+    // and later notes above earlier ones.
+    final selectedIds = ref.read(pianoRollProvider).selectedNoteIds;
+    UiNote? topNote;
+    var topIsSelected = false;
     for (final note in pattern.notes) {
-      if (note.key == midiKey &&
-          tick >= note.startTick &&
-          tick < note.startTick + note.duration) {
-        if (!_brushDeleteNoteIds.contains(note.id)) {
-          _brushDeleteNoteIds.add(note.id);
-          added = true;
-        }
+      if (note.key != midiKey ||
+          tick < note.startTick ||
+          tick >= note.startTick + note.duration) {
+        continue;
+      }
+      final isSelected = selectedIds.contains(note.id);
+      if (isSelected || !topIsSelected) {
+        topNote = note;
+        topIsSelected = isSelected;
       }
     }
 
-    if (added) {
+    if (topNote != null && _brushDeleteNoteIds.add(topNote.id)) {
       setState(() {});
     }
+  }
+
+  /// Shades every region where notes on the same key overlap.
+  List<Widget> _buildNoteOverlapShades(UiPattern pattern, double zoomX) {
+    final spansByKey = <int, List<LaneSpan>>{};
+    for (final note in pattern.notes) {
+      spansByKey
+          .putIfAbsent(note.key, () => [])
+          .add((start: note.startTick, end: note.startTick + note.duration));
+    }
+    return [
+      for (final MapEntry(key: key, value: spans) in spansByKey.entries)
+        if (spans.length > 1)
+          for (final overlap in overlapSpans(spans))
+            Positioned(
+              top: (127 - key) * _keyHeight + 1,
+              left: overlap.start * zoomX,
+              width: max(2.0, (overlap.end - overlap.start) * zoomX),
+              height: _keyHeight - 2,
+              child: const OverlapShade(),
+            ),
+    ];
   }
 
   void _submitBrushDelete(int patternId) {
@@ -1184,6 +1214,12 @@ class PianoRollScreenState extends ConsumerState<PianoRollScreen> {
                                                       _stopAutoScroll();
                                                     },
                                                   ),
+
+                                                // LAYER B3: Stacked note markers
+                                                ..._buildNoteOverlapShades(
+                                                  pattern,
+                                                  zoomX,
+                                                ),
 
                                                 // LAYER C: Preview Add Notes
                                                 ..._brushAddNotes.map((

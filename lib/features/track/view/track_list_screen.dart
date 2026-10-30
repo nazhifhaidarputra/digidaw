@@ -35,6 +35,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:karbeat/core/widgets/color_picker_dialog.dart';
 import 'package:karbeat/core/widgets/context_menu.dart';
+import 'package:karbeat/core/widgets/overlap_shade.dart';
 import 'package:karbeat/core/widgets/rename_dialog.dart';
 import 'package:karbeat/core/widgets/daw_input_detector.dart';
 import 'package:karbeat/features/track/view/midi_drawer.dart';

@@ -215,6 +215,96 @@ fn add_midi_track_with_generator_id_blocking(
     }
 }
 
+/// Swaps the generator of a MIDI track for another one by its registry ID, keeping the track's
+/// clips, mixer channel, and routing. Returns the updated track.
+///
+/// Automation of the replaced generator is removed. The swap is undoable only when both
+/// generators are built-in.
+pub async fn replace_track_generator(
+    ctx: &DawContext,
+    track_id: u64,
+    registry_id: u32,
+) -> Result<UiTrack, String> {
+    let ctx = ctx.clone();
+    run_job(
+        JobSpec::new(JobKind::PluginInstall, JobClass::Control),
+        move |_| replace_track_generator_blocking(&ctx, track_id, registry_id),
+    )
+    .await
+}
+
+fn replace_track_generator_blocking(
+    ctx: &DawContext,
+    track_id: u64,
+    registry_id: u32,
+) -> Result<UiTrack, String> {
+    let operation = ctx.begin_project_operation();
+    let track_id = TrackId::from_u64(track_id);
+    let (current_external, replacement_external) = {
+        let core = operation.read_core();
+        let current_external = core
+            .app_state
+            .tracks
+            .get(track_id)
+            .and_then(|track| track.generator.as_ref())
+            .is_some_and(|generator| {
+                karbeat_core_api::external_plugin_api::descriptor(
+                    &core,
+                    karbeat_audio::event::PluginTarget::Generator(generator.id),
+                )
+                .is_some()
+            });
+        (
+            current_external,
+            core.plugin_catalog.external(registry_id).is_some(),
+        )
+    };
+
+    // A hosted generator is retired on its own first; the replacement then goes on a track
+    // without a generator.
+    if current_external {
+        let pending = {
+            let core = operation.read_core();
+            karbeat_core_api::external_plugin_api::begin_remove_generator(&core, track_id)
+                .map_err(|error| error.to_string())?
+        };
+        let completed = karbeat_core_api::external_plugin_api::execute_removal(pending)
+            .map_err(|error| error.to_string())?;
+        karbeat_core_api::external_plugin_api::commit_removal(
+            &mut operation.write_core(),
+            completed,
+        );
+    }
+
+    if !replacement_external {
+        let mut core = operation.write_core();
+        let track = track_api::replace_track_generator(&mut core, track_id, registry_id)
+            .map_err(|error| error.to_string())?;
+        return Ok(UiTrack::from_track(&track, &core.app_state));
+    }
+
+    let pending = {
+        let core = operation.read_core();
+        karbeat_core_api::external_plugin_api::begin_replace_instrument(
+            &core,
+            track_id,
+            registry_id,
+        )
+        .map_err(|error| error.to_string())?
+    };
+    let completed = karbeat_core_api::external_plugin_api::execute_install(pending)
+        .map_err(|error| error.to_string())?;
+    let mut core = operation.write_core();
+    match karbeat_core_api::external_plugin_api::commit_install(&mut core, completed) {
+        karbeat_core_api::external_plugin_api::InstalledPlugin::Instrument(track) => {
+            Ok(UiTrack::from_track(&track, &core.app_state))
+        }
+        karbeat_core_api::external_plugin_api::InstalledPlugin::Effect(_) => {
+            Err("External instrument transaction returned an effect".into())
+        }
+    }
+}
+
 pub fn get_clip(ctx: &DawContext, track_id: u64, clip_id: u64) -> Result<UiClip, String> {
     crate::api::context::read_ctx!(ctx);
     clip_api::get_clip(

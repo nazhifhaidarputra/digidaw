@@ -297,8 +297,10 @@ class _OfflineEditControls extends ConsumerWidget {
       ref.read(notificationProvider.notifier).error(error, title: 'Audio edit');
     }
     ref.invalidate(audioPropertiesProvider(sourceId));
-    // Clips on the timeline draw with the source's playback rate.
+    // Clips on the timeline draw with the source's playback rate, and a sample
+    // mode change rescales the clips that play it.
     ref.invalidate(trackWaveformProvider);
+    await ref.read(trackListStateProvider.notifier).syncTracks();
   }
 
   Future<void> _setEdits(

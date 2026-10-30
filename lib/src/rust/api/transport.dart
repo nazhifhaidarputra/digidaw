@@ -25,7 +25,9 @@ Future<void> setLooping({required DawContext ctx, required bool val}) =>
 
 /// set the BPM of the transport.
 /// writes to both ApplicationState (for serialization) and AudioCommand (for audio thread)
-Future<void> setBpm({required DawContext ctx, required double val}) =>
+///
+/// Returns whether clips of tempo-following audio were rescaled, so the UI should refetch them.
+Future<bool> setBpm({required DawContext ctx, required double val}) =>
     RustLib.instance.api.crateApiTransportSetBpm(ctx: ctx, val: val);
 
 /// stop the song playback and reset the playhead to 0

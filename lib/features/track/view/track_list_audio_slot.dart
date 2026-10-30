@@ -667,6 +667,29 @@ class _AudioTrackSlotState extends ConsumerState<AudioTrackSlot> {
                 );
               }),
 
+              // Shading where clips are stacked on top of each other.
+              ...overlapSpans(
+                track.clips.map((clip) {
+                  final range = _clipRangeInTicks(
+                    clip,
+                    tempo ?? 120,
+                    safeSampleRate,
+                  );
+                  return (start: range.start, end: range.end);
+                }),
+              ).map(
+                (overlap) => Positioned(
+                  left: overlap.start / zoomLevel,
+                  top: 2,
+                  width: math.max(
+                    2.0,
+                    (overlap.end - overlap.start) / zoomLevel,
+                  ),
+                  height: widget.height - 4,
+                  child: const OverlapShade(),
+                ),
+              ),
+
               // Lightweight preview for copies produced by a draw swipe.
               ..._drawCopyStartTicks.expand((copyStart) {
                 if (_drawSourceClips.isEmpty) return const <Widget>[];

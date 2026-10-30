@@ -394,6 +394,101 @@ impl ApplicationState {
         Ok((new_track, gen_id, generator_plugin))
     }
 
+    /// Puts a new built-in generator, by its registry ID, on a MIDI track in place of the current
+    /// one.
+    ///
+    /// Returns the updated track, the replaced generator, the new generator, and the factory that
+    /// builds the new plugin for the audio thread.
+    pub fn replace_track_generator_with_id(
+        &mut self,
+        registry: &mut PluginRegistry,
+        track_id: TrackId,
+        registry_id: u32,
+    ) -> anyhow::Result<(AudioTrack, Option<GeneratorId>, GeneratorId, PluginFactory)> {
+        let Some((generator_plugin, generator_name)) = registry.create_plugin_by_id(registry_id)
+        else {
+            return Err(anyhow::anyhow!(
+                "Generator with ID {} not found in registry",
+                registry_id
+            ));
+        };
+        let plugin_instance = PluginInstance::new_with_id(registry_id, &generator_name);
+        let (previous, gen_id) =
+            self.replace_track_generator(track_id, GeneratorInstanceType::Plugin(plugin_instance))?;
+        let track = self
+            .tracks
+            .get(track_id)
+            .cloned()
+            .ok_or_else(|| anyhow::anyhow!("Track not found"))?;
+        Ok((track, previous, gen_id, generator_plugin))
+    }
+
+    /// Puts `instance_type` on a MIDI track in place of its current generator.
+    ///
+    /// The replaced generator leaves the pool together with the automation that targeted it,
+    /// since its parameters mean nothing to the new generator. A track still named after the
+    /// replaced generator takes the new generator's name. Returns the replaced and the new
+    /// generator.
+    pub fn replace_track_generator(
+        &mut self,
+        track_id: TrackId,
+        instance_type: GeneratorInstanceType,
+    ) -> anyhow::Result<(Option<GeneratorId>, GeneratorId)> {
+        let track = self
+            .tracks
+            .get(track_id)
+            .ok_or_else(|| anyhow::anyhow!("Track not found"))?;
+        anyhow::ensure!(
+            track.track_type == TrackType::Midi,
+            "Only MIDI tracks have a generator"
+        );
+        let previous_name =
+            track
+                .generator
+                .as_ref()
+                .and_then(|generator| match &generator.instance_type {
+                    GeneratorInstanceType::Plugin(plugin) => Some(plugin.name.clone()),
+                    _ => None,
+                });
+        let new_name = match &instance_type {
+            GeneratorInstanceType::Plugin(plugin) => Some(plugin.name.clone()),
+            _ => None,
+        };
+
+        let previous = self.detach_track_generator(track_id)?;
+        let gen_id = self.add_generator(instance_type);
+        let generator = self.generator_pool[gen_id].clone();
+        let track = self
+            .tracks
+            .get_mut(track_id)
+            .ok_or_else(|| anyhow::anyhow!("Track not found"))?;
+        track.generator = Some(generator);
+        if let Some(new_name) = new_name
+            && previous_name.is_some_and(|name| name == track.name)
+        {
+            track.name = new_name;
+        }
+        Ok((previous, gen_id))
+    }
+
+    /// Takes the generator off a track, removing it from the pool with the automation that
+    /// targeted it. Returns the removed generator, if the track had one.
+    pub fn detach_track_generator(
+        &mut self,
+        track_id: TrackId,
+    ) -> anyhow::Result<Option<GeneratorId>> {
+        let track = self
+            .tracks
+            .get_mut(track_id)
+            .ok_or_else(|| anyhow::anyhow!("Track not found"))?;
+        let Some(previous) = track.generator.take().map(|generator| generator.id) else {
+            return Ok(None);
+        };
+        self.remove_modulations_for_generator(previous);
+        self.generator_pool.detach(previous);
+        Ok(Some(previous))
+    }
+
     /// Remove a track and clean up its mixer channel, routing, generator, and automation lanes.
     pub fn remove_track(&mut self, track_id: TrackId) -> anyhow::Result<RemovedTrackType> {
         let mut deleted_track_type = RemovedTrackType::Audio;

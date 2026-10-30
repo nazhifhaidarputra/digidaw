@@ -13,6 +13,7 @@ import 'package:karbeat/core/widgets/channel_toggle_button.dart';
 import 'package:karbeat/core/widgets/context_menu.dart';
 import 'package:karbeat/core/widgets/db_level_meter.dart';
 import 'package:karbeat/features/plugins/services/plugin_ui_launcher.dart';
+import 'package:karbeat/features/plugins/widgets/plugin_browser_dialog.dart';
 import 'package:karbeat/features/setting/services/host_devices_settings_provider.dart';
 import 'package:karbeat/features/track/view/plugin_automation_parameter_dialog.dart';
 import 'package:karbeat/src/rust/api/mixer.dart';
@@ -166,6 +167,22 @@ class TrackHeader extends ConsumerWidget {
                 pluginName: generatorPlugin.name,
               );
             },
+          ),
+        if (track.trackType == UiTrackType.midi)
+          DawContextAction(
+            title: "Change instrument...",
+            icon: Icons.swap_horiz,
+            onTap: () => showPluginBrowserDialog(
+              context: context,
+              pluginType: KarbeatPluginType.generator,
+              actionLabel: 'Replace',
+              onAdd: (plugin) => ref
+                  .read(trackListStateProvider.notifier)
+                  .replaceTrackGenerator(
+                    trackId: trackId,
+                    registryId: plugin.registryId,
+                  ),
+            ),
           ),
         if (track.generatorId != null)
           DawContextAction(

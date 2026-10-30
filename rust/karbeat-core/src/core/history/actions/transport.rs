@@ -5,7 +5,7 @@ use slotmap::SlotMap;
 use crate::{
     core::{
         history::{EngineSync, HistoryAction, HistoryError},
-        project::{ApplicationState, CueMarker, LoopRegion, ProjectMetadata},
+        project::{ApplicationState, ClipTiming, CueMarker, LoopRegion, ProjectMetadata},
     },
     shared::id::CueMarkerId,
 };
@@ -17,17 +17,33 @@ use crate::{
 #[derive(Debug)]
 pub struct TempoChanged {
     bpm: f32,
+    /// Clips of tempo-following sources, rescaled to follow their new playback length.
+    clips: Vec<ClipTiming>,
 }
 
 impl TempoChanged {
     /// Records a change from the previous tempo.
     pub fn new(previous_bpm: f32) -> Self {
-        Self { bpm: previous_bpm }
+        Self {
+            bpm: previous_bpm,
+            clips: Vec::new(),
+        }
+    }
+
+    /// Also restores `clips`, rescaled by the change to follow their sources.
+    #[must_use]
+    pub fn with_clips(mut self, clips: Vec<ClipTiming>) -> Self {
+        self.clips = clips;
+        self
     }
 
     fn swap(&mut self, app: &mut ApplicationState) -> Result<EngineSync, HistoryError> {
         std::mem::swap(&mut app.transport.bpm, &mut self.bpm);
-        Ok(EngineSync::tempo())
+        if self.clips.is_empty() {
+            return Ok(EngineSync::tempo());
+        }
+        app.swap_clip_timings(&mut self.clips);
+        Ok(EngineSync::tempo().and(EngineSync::track_graph()))
     }
 }
 
@@ -45,8 +61,17 @@ impl HistoryAction for TempoChanged {
     }
 
     fn merge(&mut self, next: &mut dyn Any) -> bool {
-        // Keep this entry's original tempo; the project already holds the newest one.
-        next.downcast_mut::<Self>().is_some()
+        // Keep this entry's original tempo and clip timings; the project already holds the
+        // newest ones. Clips only the later step rescaled keep their timing from before it.
+        let Some(next) = next.downcast_mut::<Self>() else {
+            return false;
+        };
+        for timing in next.clips.drain(..) {
+            if !self.clips.iter().any(|kept| kept.clip_id == timing.clip_id) {
+                self.clips.push(timing);
+            }
+        }
+        true
     }
 }
 

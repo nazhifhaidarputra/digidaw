@@ -584,6 +584,93 @@ mod tests {
         }
     }
 
+    /// Clip length in project samples and content offset, which a tempo change rescales.
+    fn samples(ctx: &DawContext, clip: ClipId) -> (u64, u64) {
+        let time = &ctx.app_state.clips_pool[clip].time;
+        (time.loop_length_raw(), time.offset_start_raw())
+    }
+
+    #[test]
+    fn tempo_changes_rescale_clips_of_tempo_following_sources() {
+        let (mut ctx, source, track, clip) = clip_setup();
+        set_sample_mode(&mut ctx, source, AudioSampleMode::Stretch).unwrap();
+        // A plain resize leaves a second of space past the one-second audio.
+        let (_, length, _) = span(&ctx, clip);
+        batch_resize_clips(
+            &mut ctx,
+            track,
+            vec![clip],
+            ResizeEdge::Right,
+            length as i64,
+            false,
+        )
+        .unwrap();
+        let (start, ticks, _) = span(&ctx, clip);
+        let (before, _) = samples(&ctx, clip);
+        assert_eq!(before, 96_000);
+
+        // Twice the tempo: the audio plays in half the time, and so does the extra space.
+        crate::transport_api::set_bpm(&mut ctx, 240.0).unwrap();
+        assert_eq!(samples(&ctx, clip).0, 48_000);
+        let (new_start, new_ticks, _) = span(&ctx, clip);
+        assert_eq!(new_start, start);
+        assert!(new_ticks.abs_diff(ticks) <= 1, "{new_ticks} vs {ticks}");
+
+        crate::undo(&mut ctx).unwrap();
+        assert_eq!(ctx.app_state.transport.bpm, 120.0);
+        assert_eq!(samples(&ctx, clip).0, before);
+        crate::redo(&mut ctx).unwrap();
+        assert_eq!(samples(&ctx, clip).0, 48_000);
+    }
+
+    #[test]
+    fn a_tempo_drag_undoes_to_the_clips_from_before_it() {
+        let (mut ctx, source, _, clip) = clip_setup();
+        set_sample_mode(&mut ctx, source, AudioSampleMode::Resampled).unwrap();
+        let before = samples(&ctx, clip);
+
+        for bpm in [130.0, 150.0, 180.0] {
+            crate::transport_api::set_bpm(&mut ctx, bpm).unwrap();
+        }
+        assert!(samples(&ctx, clip).0.abs_diff(32_000) <= 1);
+
+        while ctx.app_state.transport.bpm != 120.0 {
+            crate::undo(&mut ctx).unwrap();
+        }
+        assert_eq!(samples(&ctx, clip), before);
+    }
+
+    #[test]
+    fn tempo_changes_leave_clips_of_other_sources_alone() {
+        let (mut ctx, _, _, clip) = clip_setup();
+        let before = samples(&ctx, clip);
+        crate::transport_api::set_bpm(&mut ctx, 240.0).unwrap();
+        assert_eq!(samples(&ctx, clip), before);
+    }
+
+    #[test]
+    fn detecting_the_source_tempo_rescales_stretched_clips() {
+        let (mut ctx, source, _, clip) = clip_setup();
+        set_sample_mode(&mut ctx, source, AudioSampleMode::Stretch).unwrap();
+        let before = samples(&ctx, clip);
+
+        // Detected at 240 BPM, the audio plays at half speed in the 120 BPM project.
+        assert!(commit_beat_grid(
+            &mut ctx,
+            source,
+            BeatGrid {
+                bpm: 240.0,
+                confidence: 1.0,
+                beats: vec![0.0, 0.25],
+                downbeats: vec![0.0],
+            },
+        ));
+        assert_eq!(samples(&ctx, clip).0, before.0 * 2);
+
+        crate::undo(&mut ctx).unwrap();
+        assert_eq!(samples(&ctx, clip), before);
+    }
+
     #[test]
     fn stretch_mode_resize_stretches_the_audio() {
         let (mut ctx, _, track, clip) = clip_setup();

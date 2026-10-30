@@ -6,6 +6,7 @@ import 'package:karbeat/app/providers/background_jobs_provider.dart';
 import 'package:karbeat/app/providers/telemetry_polling_suppression.dart';
 import 'package:karbeat/app/providers/mixer_state.dart';
 import 'package:karbeat/app/providers/notification_provider.dart';
+import 'package:karbeat/app/providers/piano_roll_state.dart';
 import 'package:karbeat/app/providers/project_provider.dart';
 import 'package:karbeat/app/providers/transport_state.dart';
 import 'package:karbeat/app/providers/workspace_state.dart';
@@ -19,6 +20,11 @@ import 'package:karbeat/features/track/models/mixer_channel_sidepanel.dart';
 import 'package:karbeat/shared/models/grid.dart';
 import 'package:karbeat/src/rust/api/mixer.dart' show UiMixerChannelTarget;
 import 'package:karbeat/src/rust/api/audio.dart' as audio_api;
+import 'package:karbeat/src/rust/api/automation.dart'
+    show
+        getAllLinkedModulationParams,
+        getAllModulationSources,
+        getAutomationsLanesAll;
 import 'package:karbeat/src/rust/api/pattern.dart';
 import 'package:karbeat/src/rust/api/project.dart';
 import 'package:karbeat/src/rust/api/session.dart' as session_api;
@@ -97,6 +103,12 @@ final mixerChannelPanelTargetProvider = Provider<UiMixerChannelTarget?>((ref) {
 class TrackListNotifier extends Notifier<TrackListState> {
   @override
   TrackListState build() {
+    // Fitting a source to the tempo or detecting its tempo rescales the clips
+    // that play it, so refetch them when such a job finishes.
+    ref.listen(
+      backgroundJobsProvider.select((s) => s.sourceRevisions),
+      (_, _) => syncTracks(),
+    );
     return const TrackListState();
   }
 
@@ -429,6 +441,69 @@ class TrackListNotifier extends Notifier<TrackListState> {
 
       if (result.hasError) {
         AppLogger.error("Error adding MIDI track: ${result.error}");
+        return Result.error(Exception(result.error.toString()));
+      }
+      return Result.ok(null);
+    }).suppressesTelemetryPolling(
+      ref.read(telemetryPollingSuppressionProvider.notifier),
+    )();
+  }
+
+  /// Swaps the generator of a MIDI track for the plugin [registryId], keeping
+  /// its clips, mixer channel, and routing.
+  Future<Result<void>> replaceTrackGenerator({
+    required int trackId,
+    required int registryId,
+  }) async {
+    return (() async {
+      final previousGeneratorId = ref
+          .read(projectProvider)
+          .value
+          ?.tracks[trackId]
+          ?.generatorId;
+      final result = await ref.guardApi(() async {
+        final updatedTrack = await track_api.replaceTrackGenerator(
+          ctx: _ctx,
+          trackId: trackId,
+          registryId: registryId,
+        );
+        final generatorId = updatedTrack.generatorId;
+        final generator = generatorId == null
+            ? null
+            : await plugin_api.getGenerator(
+                ctx: _ctx,
+                generatorId: generatorId,
+              );
+        // The replaced generator's automation was removed with it.
+        final lanes = await getAutomationsLanesAll(ctx: _ctx);
+        final links = await getAllLinkedModulationParams(ctx: _ctx);
+        final sources = await getAllModulationSources(ctx: _ctx);
+
+        if (previousGeneratorId != null) {
+          _projectNotifierRead.removeGenerator(previousGeneratorId);
+        }
+        if (generatorId != null && generator != null) {
+          _projectNotifierRead.upsertGenerator(generatorId, generator);
+        }
+        _projectNotifierRead.upsertTrack(trackId, updatedTrack);
+        _projectNotifierRead.updateAutomations(
+          pool: lanes.lock,
+          links: links.lock,
+          sources: sources.lock,
+        );
+
+        // A piano roll previewing through the replaced generator follows the
+        // track to its new one.
+        final pianoRoll = ref.read(pianoRollProvider.notifier);
+        if (previousGeneratorId != null &&
+            ref.read(pianoRollProvider).previewGeneratorId ==
+                previousGeneratorId) {
+          pianoRoll.setPreviewGenerator(generatorId: generatorId);
+        }
+      });
+
+      if (result.hasError) {
+        AppLogger.error("Error replacing track generator: ${result.error}");
         return Result.error(Exception(result.error.toString()));
       }
       return Result.ok(null);

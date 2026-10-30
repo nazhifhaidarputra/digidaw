@@ -1,6 +1,7 @@
 use karbeat_audio::commands::AudioCommand;
 use karbeat_audio::commands::MixerChannelTarget;
 use karbeat_audio::context::DawContext;
+use karbeat_audio::event::PluginTarget;
 use karbeat_core::core::history::actions::{
     StructureRecorder, TrackRecolored, TrackRenamed, TracksReordered,
 };
@@ -45,6 +46,62 @@ pub fn add_midi_track_with_generator_id(
     ctx.broadcast_track_graph();
     ctx.broadcast_routing();
     Ok(audio_track)
+}
+
+/// Swaps the generator of a MIDI track for a built-in generator, keeping the track's clips,
+/// mixer channel, and routing, and records the swap for undo.
+///
+/// A hosted (external) generator on the track must be removed first with
+/// [`super::external_plugin_api::begin_remove_generator`], because its native instance cannot be
+/// retired here. An external replacement goes through
+/// [`super::external_plugin_api::begin_replace_instrument`].
+pub fn replace_track_generator(
+    ctx: &mut DawContext,
+    track_id: TrackId,
+    registry_id: u32,
+) -> anyhow::Result<AudioTrack> {
+    anyhow::ensure!(
+        ctx.plugin_catalog.external(registry_id).is_none(),
+        "External generators are installed through the hosted plugin transaction"
+    );
+    let previous = ctx
+        .app_state
+        .tracks
+        .get(track_id)
+        .and_then(|track| track.generator.as_ref())
+        .map(|generator| PluginTarget::Generator(generator.id));
+    if let Some(previous) = previous {
+        anyhow::ensure!(
+            super::external_plugin_api::descriptor(ctx, previous).is_none(),
+            "Remove the external generator before replacing it"
+        );
+        // Undo reinstalls the previous generator from project state, so keep its live settings.
+        if let Err(error) = super::project_api::capture_live_state(ctx, &[previous], &[]) {
+            log::warn!("Replacing generator without its live plugin state: {error:#}");
+        }
+    }
+
+    let structure_before = StructureRecorder::begin(&ctx.app_state, &[], &[]);
+    let (track, previous_id, gen_id, generator_plugin_factory) = ctx
+        .app_state
+        .replace_track_generator_with_id(&mut ctx.plugin_registry, track_id, registry_id)?;
+
+    if let Some(generator_id) = previous_id {
+        let _ = ctx.send_audio_command(AudioCommand::RemoveGenerator { generator_id });
+    }
+    let (plugin, telemetry) = ctx.prepare_plugin_install(generator_plugin_factory);
+    let _ = ctx.send_audio_command(AudioCommand::InstallGenerator {
+        generator_id: gen_id,
+        track_id,
+        registry_id,
+        plugin,
+        telemetry: Some(telemetry),
+    });
+
+    let action = structure_before.finish(&ctx.app_state, "Change Instrument");
+    ctx.push_history(action);
+    ctx.broadcast_track_graph();
+    Ok(track)
 }
 
 /// Renames a track and records the previous name for undo.

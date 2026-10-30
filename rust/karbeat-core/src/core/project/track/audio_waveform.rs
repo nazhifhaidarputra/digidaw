@@ -335,6 +335,21 @@ impl AudioWaveform {
         }
     }
 
+    /// How long the source plays at `project_bpm` relative to its original audio: above 1.0 it
+    /// plays longer. Tempo-following sources scale by their tempo over the project tempo,
+    /// whether they stretch in real time or from a render, since a render fits the same
+    /// tempo; other sources play at their own length.
+    pub fn duration_scale(&self, project_bpm: f32) -> f64 {
+        match (self.sample_mode, self.original_bpm.filter(|bpm| *bpm > 0.0)) {
+            (AudioSampleMode::Stretch | AudioSampleMode::Resampled, Some(bpm))
+                if project_bpm > 0.0 =>
+            {
+                f64::from(bpm) / f64::from(project_bpm)
+            }
+            _ => 1.0,
+        }
+    }
+
     /// Read-speed multiplier for `project_bpm` under the waveform's sample mode. An unknown
     /// source tempo plays at its own speed.
     pub fn tempo_rate(&self, project_bpm: f32) -> f64 {

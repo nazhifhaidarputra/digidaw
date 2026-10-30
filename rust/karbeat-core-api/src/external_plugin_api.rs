@@ -199,6 +199,8 @@ pub enum InstalledPlugin {
 
 enum PendingInstallTarget {
     Instrument,
+    /// Replaces the built-in generator of an existing MIDI track, if it has one.
+    ReplaceInstrument(karbeat_core::shared::TrackId),
     Effect(EffectTarget),
 }
 
@@ -217,6 +219,8 @@ pub struct CompletedPluginInstall {
     telemetry: Option<triple_buffer::Output<karbeat_audio::engine::PluginTelemetrySnapshot>>,
     installed: InstalledPlugin,
     instance: ExternalPluginInstanceHandle,
+    /// Built-in generator the install replaced, retired from the audio thread on commit.
+    replaced_generator: Option<karbeat_core::shared::GeneratorId>,
 }
 
 pub(crate) use karbeat_audio::hosted_plugin::hosted_processing_config;
@@ -274,6 +278,35 @@ pub fn begin_add_instrument(
     )
 }
 
+/// Prepares an external instrument to replace the generator of an existing MIDI track.
+///
+/// A hosted generator already on the track must be removed first with
+/// [`begin_remove_generator`]; a built-in one is retired when the install commits.
+pub fn begin_replace_instrument(
+    ctx: &DawContext,
+    track: karbeat_core::shared::TrackId,
+    registry_id: u32,
+) -> anyhow::Result<PendingPluginInstall> {
+    let current = ctx
+        .app_state
+        .tracks
+        .get(track)
+        .context("Track not found")?
+        .generator
+        .as_ref()
+        .map(|generator| PluginTarget::Generator(generator.id));
+    anyhow::ensure!(
+        current.is_none_or(|target| descriptor(ctx, target).is_none()),
+        "Remove the external generator before replacing it"
+    );
+    begin_install(
+        ctx,
+        registry_id,
+        PluginKind::Instrument,
+        PendingInstallTarget::ReplaceInstrument(track),
+    )
+}
+
 pub fn begin_add_effect(
     ctx: &DawContext,
     target: EffectTarget,
@@ -318,7 +351,33 @@ pub fn execute_install(
         }),
     };
 
+    let mut replaced_generator = None;
     let (installed, install, receipt) = match pending.target {
+        PendingInstallTarget::ReplaceInstrument(track_id) => {
+            let (previous, generator_id) = pending
+                .staged
+                .replace_track_generator(track_id, GeneratorInstanceType::Plugin(plugin))?;
+            replaced_generator = previous;
+            let track = pending
+                .staged
+                .tracks
+                .get(track_id)
+                .cloned()
+                .context("Prepared track is unavailable")?;
+            let (install, receipt) = HostedPluginInstall::new(
+                PluginTarget::Generator(generator_id),
+                Some(track_id),
+                pending.registry_id,
+                pending.config,
+                prepared.processor,
+            );
+            let graph = HostedTrackGraph::from(&pending.staged);
+            (
+                InstalledPlugin::Instrument(track),
+                install.with_track_graph(graph),
+                receipt,
+            )
+        }
         PendingInstallTarget::Instrument => {
             let track_id = pending.staged.add_new_audio_track().id;
             let name = plugin.name.clone();
@@ -397,6 +456,7 @@ pub fn execute_install(
         telemetry,
         installed,
         instance,
+        replaced_generator,
     })
 }
 
@@ -414,6 +474,9 @@ pub fn commit_install(ctx: &mut DawContext, completed: CompletedPluginInstall) -
     // and earlier entries may no longer match the project.
     ctx.clear_history();
     ctx.activate_hosted_target(completed.target, completed.instance);
+    if let Some(generator_id) = completed.replaced_generator {
+        let _ = ctx.send_audio_command(AudioCommand::RemoveGenerator { generator_id });
+    }
     completed.installed
 }
 
@@ -453,6 +516,8 @@ pub enum RemovedProjectItem {
     /// Automation that was removed with the effect in the same staged project.
     Effect(karbeat_core::core::project::RemovedModulations),
     Track(karbeat_core::core::project::track::RemovedTrackType),
+    /// A generator taken off a track that stays in the project.
+    Generator,
     Bus,
 }
 
@@ -540,6 +605,26 @@ pub fn begin_delete_track(
         true,
         None,
         RemovedProjectItem::Track(removed),
+    ))
+}
+
+/// Stages taking a track's hosted generator off the track, leaving the track without one, so
+/// another generator can replace it.
+pub fn begin_remove_generator(
+    ctx: &DawContext,
+    track: karbeat_core::shared::TrackId,
+) -> anyhow::Result<PendingPluginRemoval> {
+    let mut staged = ctx.app_state.clone();
+    let generator = staged
+        .detach_track_generator(track)?
+        .context("Track has no generator")?;
+    Ok(begin_removal(
+        ctx,
+        staged,
+        vec![PluginTarget::Generator(generator)],
+        true,
+        None,
+        RemovedProjectItem::Generator,
     ))
 }
 
@@ -795,7 +880,7 @@ pub fn effect_removal_result(
 ) -> anyhow::Result<karbeat_core::core::project::RemovedModulations> {
     match removed {
         RemovedProjectItem::Effect(modulations) => Ok(modulations),
-        RemovedProjectItem::Track(_) | RemovedProjectItem::Bus => {
+        RemovedProjectItem::Track(_) | RemovedProjectItem::Generator | RemovedProjectItem::Bus => {
             anyhow::bail!("Effect removal transaction returned an incompatible result")
         }
     }
@@ -832,7 +917,7 @@ pub fn delete_track(
     let completed = execute_removal(pending)?;
     match commit_removal(ctx, completed) {
         RemovedProjectItem::Track(removed) => Ok(removed),
-        RemovedProjectItem::Effect(_) | RemovedProjectItem::Bus => {
+        RemovedProjectItem::Effect(_) | RemovedProjectItem::Generator | RemovedProjectItem::Bus => {
             anyhow::bail!("Track removal transaction returned an incompatible result")
         }
     }

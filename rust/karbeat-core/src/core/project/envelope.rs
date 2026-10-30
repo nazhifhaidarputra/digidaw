@@ -95,6 +95,34 @@ impl EnvelopeCursor {
 }
 
 impl GainEnvelope {
+    /// This envelope with every position and length scaled by `factor`, for clip content
+    /// that now plays `factor` times as long.
+    #[must_use]
+    pub fn scaled(&self, factor: f64) -> Self {
+        let samples = |value: u64| (value as f64 * factor).round() as u64;
+        let length =
+            |value: u32| (f64::from(value) * factor).round().min(f64::from(u32::MAX)) as u32;
+        Self {
+            fade_in: Fade {
+                length: length(self.fade_in.length),
+                ..self.fade_in
+            },
+            fade_out: Fade {
+                length: length(self.fade_out.length),
+                ..self.fade_out
+            },
+            crossfade: length(self.crossfade),
+            points: self
+                .points
+                .iter()
+                .map(|point| EnvelopePoint {
+                    position: samples(point.position),
+                    ..*point
+                })
+                .collect(),
+        }
+    }
+
     /// Whether the envelope leaves audio untouched.
     pub fn is_identity(&self) -> bool {
         self.fade_in.length == 0

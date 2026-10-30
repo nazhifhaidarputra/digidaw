@@ -5,8 +5,10 @@ import 'package:karbeat/app/providers/clip_placement_state.dart';
 import 'package:karbeat/app/providers/piano_roll_state.dart';
 import 'package:karbeat/app/providers/project_provider.dart';
 import 'package:karbeat/app/providers/workspace_state.dart';
+import 'package:karbeat/core/widgets/context_menu.dart';
 import 'package:karbeat/features/plugins/services/plugin_ui_launcher.dart';
 import 'package:karbeat/features/source/services/audio_waveform_services.dart';
+import 'package:karbeat/features/source/services/source_actions.dart';
 import 'package:karbeat/features/source/view/audio_properties_screen.dart';
 import 'package:karbeat/src/rust/api/plugin.dart';
 import 'package:karbeat/src/rust/api/project.dart';
@@ -140,6 +142,12 @@ class SourceListPanel extends ConsumerWidget {
                           id: entry.key,
                           type: UiSourceType.audio,
                         ),
+                        onDelete: () => deleteAudioSourceWithConfirm(
+                          context,
+                          ref,
+                          entry.key,
+                          entry.value.name,
+                        ),
                       ),
                   ],
                 );
@@ -172,6 +180,10 @@ class SourceListPanel extends ConsumerWidget {
                   onTap: () => _openPattern(ref, id),
                   onPlace: () =>
                       _placeSource(ref, id: id, type: UiSourceType.midi),
+                  onRename: () =>
+                      renamePatternWithDialog(context, ref, id, pattern.name),
+                  onDelete: () =>
+                      deletePatternWithConfirm(context, ref, id, pattern.name),
                 );
               }),
           ],
@@ -222,6 +234,8 @@ class _SourcePanelTile extends StatelessWidget {
     required this.subtitle,
     required this.onTap,
     this.onPlace,
+    this.onRename,
+    this.onDelete,
   });
 
   final IconData icon;
@@ -230,11 +244,13 @@ class _SourcePanelTile extends StatelessWidget {
   final String subtitle;
   final VoidCallback onTap;
   final VoidCallback? onPlace;
+  final VoidCallback? onRename;
+  final VoidCallback? onDelete;
 
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
-    return ListTile(
+    final tile = ListTile(
       dense: true,
       visualDensity: VisualDensity.compact,
       contentPadding: const EdgeInsets.only(left: 12, right: 4),
@@ -262,5 +278,26 @@ class _SourcePanelTile extends StatelessWidget {
             ),
       onTap: onTap,
     );
+
+    // Right-click or long-press opens the item's actions.
+    final actions = [
+      if (onPlace != null)
+        DawContextAction(
+          title: 'Put in timeline',
+          icon: Icons.input,
+          onTap: onPlace!,
+        ),
+      if (onRename != null)
+        DawContextAction(title: 'Rename', icon: Icons.edit, onTap: onRename!),
+      if (onDelete != null)
+        DawContextAction(
+          title: 'Delete',
+          icon: Icons.delete,
+          isDestructive: true,
+          onTap: onDelete!,
+        ),
+    ];
+    if (actions.isEmpty) return tile;
+    return ContextMenuWrapper(title: title, actions: actions, child: tile);
   }
 }
