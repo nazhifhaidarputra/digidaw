@@ -228,6 +228,8 @@ struct InputAttach {
     consumer: Consumer<f32>,
     device_rate: u32,
     device_channels: usize,
+    /// The opened stream, as reported in the runtime settings.
+    actual: ActualInputStreamConfig,
 }
 
 /// Builds and starts the input stream that feeds level −1 of the graph. Not real-time safe.
@@ -257,7 +259,7 @@ fn start_input_stream(
     // Half a second of input absorbs any scheduling hiccup of the DSP thread.
     let capacity = (config.sample_rate as usize / 2).max(4_096) * device_channels;
     let (producer, consumer) = RingBuffer::<f32>::new(capacity);
-    clock.reset();
+    clock.reset(config.sample_rate);
     let err_fn = |error: cpal::StreamError| log::warn!("Audio input stream error: {error}");
     let stream = match sample_format {
         cpal::SampleFormat::I8 => run_input_stream!(device, config, producer, clock, i8, err_fn),
@@ -279,12 +281,22 @@ fn start_input_stream(
         _ => Err(cpal::BuildStreamError::StreamConfigNotSupported),
     }?;
     stream.play()?;
+    let actual = ActualInputStreamConfig {
+        device_id: device.id().map(|id| id.to_string()).unwrap_or_default(),
+        device_name: device
+            .description()
+            .map(|description| description.to_string())
+            .unwrap_or_default(),
+        sample_rate: config.sample_rate,
+        channels: config.channels,
+    };
     Ok((
         stream,
         InputAttach {
             consumer,
             device_rate: config.sample_rate,
             device_channels,
+            actual,
         },
     ))
 }
@@ -485,6 +497,19 @@ pub struct ActualDeviceStreamConfig {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+/// Configuration of the open input stream.
+pub struct ActualInputStreamConfig {
+    /// Backend-specific identifier of the opened device.
+    pub device_id: String,
+    /// Display name of the opened device.
+    pub device_name: String,
+    /// Device stream sample rate in frames per second.
+    pub sample_rate: u32,
+    /// Number of interleaved input channels.
+    pub channels: u16,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 /// Shared requested and observed state for the engine's output runtime.
 pub struct AudioRuntimeSettings {
     /// User-selected host and device policy.
@@ -496,6 +521,9 @@ pub struct AudioRuntimeSettings {
     pub requested_input: RequestedInputConfig,
     /// Negotiated device configuration while a stream is active.
     pub actual_stream: Option<ActualDeviceStreamConfig>,
+    /// The open input stream, while one runs.
+    #[serde(default)]
+    pub actual_input: Option<ActualInputStreamConfig>,
     /// Current stream startup or recovery state.
     pub stream_status: DeviceStreamStatus,
 }
@@ -640,6 +668,7 @@ impl Default for AudioRuntimeSettings {
             },
             requested_input: RequestedInputConfig::default(),
             actual_stream: None,
+            actual_input: None,
             stream_status: DeviceStreamStatus::Starting,
         }
     }
@@ -655,6 +684,17 @@ impl Default for AudioDeviceConfig {
             buffer_size: None, // Falls back to 1024
         }
     }
+}
+// The monitor never owns AudioEngine. It only asks the persistent DSP thread
+// to attach/detach a device-output ring for each CPAL stream incarnation.
+enum DspControl {
+    Attach {
+        dsp_config: RequestedDspConfig,
+        device_sample_rate: u32,
+        ready_tx: std::sync::mpsc::SyncSender<Result<Consumer<OutputFrame>, String>>,
+        input: Option<InputAttach>,
+    },
+    Detach,
 }
 
 /// Finds an available CPAL host by name.
@@ -711,6 +751,36 @@ pub fn get_output_devices(host_name: Option<&str>) -> Result<Vec<AudioDeviceInfo
     let mut devices = vec![];
 
     for dev in host.output_devices()? {
+        if let (Ok(id), Ok(desc)) = (dev.id(), dev.description()) {
+            let id = id.to_string();
+            devices.push(AudioDeviceInfo {
+                is_default: default_id.as_deref() == Some(id.as_str()),
+                id,
+                name: desc.to_string(),
+            });
+        }
+    }
+
+    Ok(devices)
+}
+
+/// Lists the input devices of a named host, or of the system default host.
+pub fn get_input_devices(host_name: Option<&str>) -> Result<Vec<AudioDeviceInfo>, anyhow::Error> {
+    let host = match host_name {
+        None => cpal::default_host(),
+        Some(name) => {
+            let host_id =
+                find_host_id(name).ok_or_else(|| anyhow!("Audio host '{name}' is unavailable"))?;
+            cpal::host_from_id(host_id)?
+        }
+    };
+    let default_id = host
+        .default_input_device()
+        .and_then(|device| device.id().ok())
+        .map(|id| id.to_string());
+    let mut devices = vec![];
+
+    for dev in host.input_devices()? {
         if let (Ok(id), Ok(desc)) = (dev.id(), dev.description()) {
             let id = id.to_string();
             devices.push(AudioDeviceInfo {
@@ -943,18 +1013,6 @@ pub fn start_audio_stream(
     ctx.update_telemetry_reg(telemetry_registry);
     ctx.telemetry_reg_receiver = Some(Mutex::new(telemetry_reg_receiver));
 
-    // The monitor never owns AudioEngine. It only asks the persistent DSP thread
-    // to attach/detach a device-output ring for each CPAL stream incarnation.
-    enum DspControl {
-        Attach {
-            dsp_config: RequestedDspConfig,
-            device_sample_rate: u32,
-            ready_tx: std::sync::mpsc::SyncSender<Result<Consumer<OutputFrame>, String>>,
-            input: Option<InputAttach>,
-        },
-        Detach,
-    }
-
     let (dsp_control_tx, dsp_control_rx) = std::sync::mpsc::sync_channel::<DspControl>(1);
 
     // Persistent DSP thread. AudioEngine is constructed, used, and dropped only here.
@@ -1105,7 +1163,13 @@ pub fn start_audio_stream(
                 }
             }
             dsp_output_clock.detach();
-            drop(engine.detach_input());
+            let input_drift_ppm = engine.input_drift_ppm();
+            if let Some(input) = engine.detach_input() {
+                log::info!(
+                    "Audio input detached; its clock ran {input_drift_ppm:.0} ppm from the output's"
+                );
+                drop(input);
+            }
         }
 
         // `engine` is dropped here, on the same DSP thread where it was created.
@@ -1176,6 +1240,7 @@ pub fn start_audio_stream(
             } else {
                 (None, None)
             };
+            let actual_input = input_attach.as_ref().map(|attach| attach.actual.clone());
 
             // Ask the DSP thread to create the rate bridge + output ring. The returned
             // Consumer is the only DSP-owned data path that crosses into the monitor.
@@ -1345,6 +1410,7 @@ pub fn start_audio_stream(
             {
                 let mut runtime = runtime_settings_arc.write();
                 runtime.actual_stream = Some(actual_config);
+                runtime.actual_input = actual_input;
                 runtime.stream_started();
             }
 

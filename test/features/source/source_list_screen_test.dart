@@ -34,6 +34,7 @@ final _tracks = {
     trackType: UiTrackType.audio,
     clips: [_audioClip(10, _sourceId), _audioClip(11, 99)],
     orderIdx: 0,
+    input: const UiTrackInput(firstChannel: 0, channels: 2, monitor: false),
   ),
   2: UiTrack(
     id: 2,
@@ -53,6 +54,7 @@ final _tracks = {
       ),
     ],
     orderIdx: 1,
+    input: const UiTrackInput(firstChannel: 0, channels: 2, monitor: false),
   ),
 };
 

@@ -68,6 +68,8 @@ pub struct DawContext {
     pub output_clock: Arc<crate::playback_sync::OutputClock>,
     /// When device input was captured, for placing recordings on the timeline.
     pub input_clock: Arc<crate::playback_sync::InputClock>,
+    /// Takes being recorded and their file writers.
+    pub recordings: Arc<Mutex<crate::recording::RecordingRegistry>>,
 
     /// Plugin factory registry
     pub plugin_registry: PluginRegistry,
@@ -205,6 +207,7 @@ impl DawContext {
             position_consumer: Arc::new(Mutex::new(None)),
             output_clock: Arc::new(crate::playback_sync::OutputClock::new()),
             input_clock: Arc::new(crate::playback_sync::InputClock::new()),
+            recordings: Arc::default(),
             plugin_registry,
             plugin_catalog,
             host_state_capture: Arc::new(external_plugins.clone()),

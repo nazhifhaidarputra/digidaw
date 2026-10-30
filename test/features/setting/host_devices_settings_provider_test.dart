@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:karbeat/core/utils/result_type.dart';
 import 'package:karbeat/features/setting/services/audio_discovery_service.dart';
+import 'package:karbeat/features/setting/services/audio_input_preferences_service.dart';
 import 'package:karbeat/features/setting/services/audio_output_preferences_service.dart';
 import 'package:karbeat/features/setting/services/host_devices_settings_provider.dart';
 import 'package:karbeat/src/rust/api/audio_settings.dart';
@@ -26,6 +27,46 @@ class _FakeAudioDiscoveryService extends AudioDiscoveryService {
   String? appliedHost;
   String? appliedDevice;
   Exception? applyError;
+  IList<UiInputDeviceInfo> inputDevices = IList(const [
+    UiInputDeviceInfo(
+      deviceId: null,
+      displayName: 'System default input',
+      isCurrentSystemDefault: true,
+    ),
+    UiInputDeviceInfo(
+      deviceId: 'Microphone',
+      displayName: 'Microphone',
+      isCurrentSystemDefault: false,
+    ),
+  ]);
+  ({bool enabled, String? deviceId})? appliedInput;
+  Exception? inputApplyError;
+
+  @override
+  Future<Result<IList<UiInputDeviceInfo>>> listInputDevices(
+    String? hostName,
+  ) async {
+    return Result.ok(inputDevices);
+  }
+
+  @override
+  Future<Result<UiAudioRuntimeSettings>> applyInputSelection(
+    DawContext context,
+    bool enabled,
+    String? deviceId,
+  ) async {
+    final error = inputApplyError;
+    if (error != null) return Result.error(error);
+    appliedInput = (enabled: enabled, deviceId: deviceId);
+    return Result.ok(
+      _settings(null, null).copyWith(
+        requestedInput: UiRequestedInputConfig(
+          enabled: enabled,
+          deviceId: deviceId,
+        ),
+      ),
+    );
+  }
 
   @override
   Future<Result<IList<UiAudioHostInfo>>> listOutputHosts() async {
@@ -51,23 +92,40 @@ class _FakeAudioDiscoveryService extends AudioDiscoveryService {
     if (error != null) return Result.error(error);
     appliedHost = hostName;
     appliedDevice = deviceId;
-    return Result.ok(
-      UiAudioRuntimeSettings(
-        requestedOutput: UiRequestedOutputConfig(
-          host: hostName == null
-              ? const UiOutputHostSelection.systemDefault()
-              : UiOutputHostSelection.named(name: hostName),
-          device: deviceId == null
-              ? const UiOutputDeviceSelection.systemDefault()
-              : UiOutputDeviceSelection.specific(id: deviceId, name: deviceId),
-        ),
-        requestedDsp: const UiRequestedDspConfig(
-          sampleRate: 48000,
-          blockSize: 1024,
-        ),
-        streamStatus: const UiDeviceStreamStatus.starting(),
-      ),
-    );
+    return Result.ok(_settings(hostName, deviceId));
+  }
+}
+
+UiAudioRuntimeSettings _settings(String? hostName, String? deviceId) {
+  return UiAudioRuntimeSettings(
+    requestedOutput: UiRequestedOutputConfig(
+      host: hostName == null
+          ? const UiOutputHostSelection.systemDefault()
+          : UiOutputHostSelection.named(name: hostName),
+      device: deviceId == null
+          ? const UiOutputDeviceSelection.systemDefault()
+          : UiOutputDeviceSelection.specific(id: deviceId, name: deviceId),
+    ),
+    requestedDsp: const UiRequestedDspConfig(
+      sampleRate: 48000,
+      blockSize: 1024,
+    ),
+    requestedInput: const UiRequestedInputConfig(enabled: false),
+    streamStatus: const UiDeviceStreamStatus.starting(),
+  );
+}
+
+class _FakeInputPreferencesService extends AudioInputPreferencesService {
+  AudioInputPreferences loaded = (enabled: false, deviceId: null);
+  AudioInputPreferences? saved;
+
+  @override
+  Future<Result<AudioInputPreferences>> load() async => Result.ok(loaded);
+
+  @override
+  Future<Result<void>> save(AudioInputPreferences value) async {
+    saved = value;
+    return Result.ok(null);
   }
 }
 
@@ -152,6 +210,9 @@ void main() {
       overrides: [
         audioDiscoveryServiceProvider.overrideWithValue(service),
         audioOutputPreferencesServiceProvider.overrideWithValue(preferences),
+        audioInputPreferencesServiceProvider.overrideWithValue(
+          _FakeInputPreferencesService(),
+        ),
       ],
     );
     addTearDown(container.dispose);
@@ -179,6 +240,9 @@ void main() {
       overrides: [
         audioDiscoveryServiceProvider.overrideWithValue(service),
         audioOutputPreferencesServiceProvider.overrideWithValue(preferences),
+        audioInputPreferencesServiceProvider.overrideWithValue(
+          _FakeInputPreferencesService(),
+        ),
       ],
     );
     addTearDown(container.dispose);
@@ -206,6 +270,9 @@ void main() {
       overrides: [
         audioDiscoveryServiceProvider.overrideWithValue(service),
         audioOutputPreferencesServiceProvider.overrideWithValue(preferences),
+        audioInputPreferencesServiceProvider.overrideWithValue(
+          _FakeInputPreferencesService(),
+        ),
       ],
     );
     addTearDown(container.dispose);
@@ -224,5 +291,61 @@ void main() {
       container.read(hostDevicesSettingsProvider).selectedOutputDeviceId,
       isNull,
     );
+  });
+
+  test('restores, applies, and persists the input selection', () async {
+    final service = _FakeAudioDiscoveryService();
+    final input = _FakeInputPreferencesService()
+      ..loaded = (enabled: true, deviceId: 'Microphone');
+    final container = ProviderContainer(
+      overrides: [
+        audioDiscoveryServiceProvider.overrideWithValue(service),
+        audioOutputPreferencesServiceProvider.overrideWithValue(
+          _FakeOutputPreferencesService(),
+        ),
+        audioInputPreferencesServiceProvider.overrideWithValue(input),
+      ],
+    );
+    addTearDown(container.dispose);
+    final notifier = container.read(hostDevicesSettingsProvider.notifier);
+
+    final initialization = notifier.initialize(_MockDawContext());
+    await Future<void>.delayed(Duration.zero);
+    service.deviceRequests[null]!.complete(Result.ok(_devices('Speakers')));
+    expect((await initialization).isOk(), isTrue);
+
+    expect(service.appliedInput, (enabled: true, deviceId: 'Microphone'));
+    final state = container.read(hostDevicesSettingsProvider);
+    expect(state.inputEnabled, isTrue);
+    expect(state.availableInputDevices.last.displayName, 'Microphone');
+
+    expect((await notifier.setInputEnabled(false)).isOk(), isTrue);
+    expect(service.appliedInput, (enabled: false, deviceId: 'Microphone'));
+    expect(input.saved, (enabled: false, deviceId: 'Microphone'));
+  });
+
+  test('a missing saved input device falls back to the default', () async {
+    final service = _FakeAudioDiscoveryService();
+    final input = _FakeInputPreferencesService()
+      ..loaded = (enabled: true, deviceId: 'Unplugged');
+    final container = ProviderContainer(
+      overrides: [
+        audioDiscoveryServiceProvider.overrideWithValue(service),
+        audioOutputPreferencesServiceProvider.overrideWithValue(
+          _FakeOutputPreferencesService(),
+        ),
+        audioInputPreferencesServiceProvider.overrideWithValue(input),
+      ],
+    );
+    addTearDown(container.dispose);
+
+    final initialization = container
+        .read(hostDevicesSettingsProvider.notifier)
+        .initialize(_MockDawContext());
+    await Future<void>.delayed(Duration.zero);
+    service.deviceRequests[null]!.complete(Result.ok(_devices('Speakers')));
+    expect((await initialization).isOk(), isTrue);
+
+    expect(service.appliedInput, (enabled: true, deviceId: null));
   });
 }

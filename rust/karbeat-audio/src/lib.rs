@@ -56,6 +56,8 @@ pub mod plugin_catalog;
 pub mod project_state;
 /// FFT device-rate bridge between the DSP engine and the negotiated device rate.
 pub mod rate_bridge;
+/// Writers that turn recorded takes into WAV files off the audio thread.
+pub mod recording;
 /// Audio-thread-owned render state and plugin snapshots.
 pub mod render_state;
 /// WAV, FLAC, MP3, and Ogg/Opus export writers.

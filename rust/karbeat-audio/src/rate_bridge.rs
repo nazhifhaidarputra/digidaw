@@ -1,4 +1,10 @@
-use rubato::{Fft, FixedSync, Indexing, Resampler, audioadapter_buffers::direct::InterleavedSlice};
+use rubato::{
+    Async, Fft, FixedAsync, FixedSync, Indexing, Resampler, SincInterpolationParameters,
+    WindowFunction, audioadapter_buffers::direct::InterleavedSlice,
+};
+
+/// Furthest an adjustable bridge's ratio moves from its nominal value, as a factor.
+const MAX_RELATIVE_RATIO: f64 = 1.02;
 
 /// Bridges the DSP engine's sample rate to whatever rate the CPAL device
 /// actually negotiated. These two rates are independent by design (the engine
@@ -17,7 +23,9 @@ use rubato::{Fft, FixedSync, Indexing, Resampler, audioadapter_buffers::direct::
 /// even though the underlying float values never technically clip.
 pub struct DeviceRateBridge {
     /// Resampler of the bridge. `None` means the rates match exactly: passthrough, no resampler needed.
-    resampler: Option<Fft<f32>>,
+    resampler: Option<Box<dyn Resampler<f32> + Send>>,
+    /// Whether the resampler's ratio can be adjusted, see [`Self::set_relative_ratio`].
+    adjustable: bool,
     channels: usize,
     output: Vec<f32>,
     output_len: usize,
@@ -39,7 +47,7 @@ impl DeviceRateBridge {
             output_rate,
             channels,
             maximum_input_frames,
-            FixedSync::Input,
+            BridgeKind::Fixed(FixedSync::Input),
         )
     }
 
@@ -57,7 +65,25 @@ impl DeviceRateBridge {
             output_rate,
             channels,
             output_frames,
-            FixedSync::Output,
+            BridgeKind::Fixed(FixedSync::Output),
+        )
+    }
+
+    /// Like [`Self::with_fixed_output`], but the ratio can be nudged with
+    /// [`Self::set_relative_ratio`] to follow a device clock that drifts from the engine's. It
+    /// resamples even when the nominal rates match.
+    pub fn adjustable_fixed_output(
+        input_rate: u32,
+        output_rate: u32,
+        channels: usize,
+        output_frames: usize,
+    ) -> anyhow::Result<Self> {
+        Self::build(
+            input_rate,
+            output_rate,
+            channels,
+            output_frames,
+            BridgeKind::Adjustable,
         )
     }
 
@@ -66,17 +92,16 @@ impl DeviceRateBridge {
         output_rate: u32,
         channels: usize,
         chunk_frames: usize,
-        fixed: FixedSync,
+        kind: BridgeKind,
     ) -> anyhow::Result<Self> {
         anyhow::ensure!(input_rate > 0, "DSP sample rate must be positive");
         anyhow::ensure!(output_rate > 0, "Device sample rate must be positive");
         anyhow::ensure!(channels > 0, "Channel count must be positive");
         anyhow::ensure!(chunk_frames > 0, "DSP block size must be positive");
 
-        let resampler = if input_rate == output_rate {
-            None
-        } else {
-            Some(
+        let resampler: Option<Box<dyn Resampler<f32> + Send>> = match kind {
+            BridgeKind::Fixed(_) if input_rate == output_rate => None,
+            BridgeKind::Fixed(fixed) => Some(Box::new(
                 Fft::<f32>::new(
                     input_rate as usize,
                     output_rate as usize,
@@ -85,8 +110,20 @@ impl DeviceRateBridge {
                     fixed,
                 )
                 .map_err(|e| anyhow::anyhow!("failed to build device rate bridge: {e}"))?,
-            )
+            )),
+            BridgeKind::Adjustable => Some(Box::new(
+                Async::<f32>::new_sinc(
+                    f64::from(output_rate) / f64::from(input_rate),
+                    MAX_RELATIVE_RATIO,
+                    &SincInterpolationParameters::new(128, WindowFunction::BlackmanHarris2),
+                    chunk_frames,
+                    channels,
+                    FixedAsync::Output,
+                )
+                .map_err(|e| anyhow::anyhow!("failed to build device rate bridge: {e}"))?,
+            )),
         };
+        let passthrough = resampler.is_none();
 
         let max_output_frames = resampler
             .as_ref()
@@ -99,8 +136,9 @@ impl DeviceRateBridge {
         let maximum_output_samples = max_output_frames * channels;
         Ok(Self {
             resampler,
+            adjustable: matches!(kind, BridgeKind::Adjustable),
             channels,
-            output: if input_rate == output_rate {
+            output: if passthrough {
                 Vec::new()
             } else {
                 vec![0.0; maximum_output_samples]
@@ -136,6 +174,22 @@ impl DeviceRateBridge {
         self.resampler
             .as_ref()
             .map_or(0, |resampler| resampler.output_delay())
+    }
+
+    /// Scales the ratio of an adjustable bridge by `relative` (within ±2%), ramping over the
+    /// next call so the change is inaudible. Does nothing on other bridges. Real-time safe.
+    pub fn set_relative_ratio(&mut self, relative: f64) {
+        if !self.adjustable {
+            return;
+        }
+        let relative = relative.clamp(1.0 / MAX_RELATIVE_RATIO, MAX_RELATIVE_RATIO);
+        if let Some(adjustable) = self
+            .resampler
+            .as_mut()
+            .and_then(|resampler| resampler.as_adjustable())
+        {
+            let _ = adjustable.set_resample_ratio_relative(relative, true);
+        }
     }
 
     pub fn process<'a>(&'a mut self, input: &'a [f32]) -> &'a [f32] {
@@ -174,6 +228,14 @@ impl DeviceRateBridge {
         self.output_len = frames_written * self.channels;
         &self.output[..self.output_len]
     }
+}
+
+#[derive(Clone, Copy)]
+enum BridgeKind {
+    /// Fixed ratio; passthrough when the rates match.
+    Fixed(FixedSync),
+    /// Ratio adjustable at run time.
+    Adjustable,
 }
 
 #[cfg(test)]
@@ -240,6 +302,27 @@ mod tests {
         assert_eq!(produced, 20 * 256);
         let passthrough = DeviceRateBridge::with_fixed_output(48_000, 48_000, 2, 256).unwrap();
         assert_eq!(passthrough.input_frames_next(), 256);
+    }
+
+    #[test]
+    fn adjustable_bridges_take_more_input_when_the_ratio_is_lowered() {
+        let mut bridge = DeviceRateBridge::adjustable_fixed_output(48_000, 48_000, 2, 256).unwrap();
+        let consumed = |bridge: &mut DeviceRateBridge| {
+            (0..200)
+                .map(|_| {
+                    let frames = bridge.input_frames_next();
+                    assert_eq!(bridge.process(&vec![0.1; frames * 2]).len(), 256 * 2);
+                    frames
+                })
+                .sum::<usize>()
+        };
+        let nominal = consumed(&mut bridge);
+        bridge.set_relative_ratio(0.99);
+        let slowed = consumed(&mut bridge);
+        assert!(
+            slowed > nominal + 200 * 256 / 200,
+            "a 1% lower ratio must consume about 1% more input: {nominal} -> {slowed}"
+        );
     }
 
     #[test]

@@ -43,6 +43,7 @@ import 'package:karbeat/features/track/view/waveform_painter.dart';
 import 'package:karbeat/features/track/view/playhead.dart';
 import 'package:karbeat/app/providers/range_select_state.dart';
 import 'package:karbeat/features/track/view/track_ghost_clip.dart';
+import 'package:karbeat/features/track/view/track_recording_ghost.dart';
 import 'package:karbeat/features/track/view/track_range_select_overlay.dart';
 import 'package:karbeat/shared/models/interaction_target.dart';
 import 'package:karbeat/src/rust/api/mixer.dart' show UiMixerChannelTarget;

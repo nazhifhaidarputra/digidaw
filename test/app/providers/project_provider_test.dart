@@ -110,6 +110,7 @@ ApplicationDataStore _projectData() {
         clips: [],
         generatorId: 10,
         orderIdx: 0,
+        input: const UiTrackInput(firstChannel: 0, channels: 2, monitor: false),
       ),
       2: const UiTrack(
         id: 2,
@@ -119,6 +120,7 @@ ApplicationDataStore _projectData() {
         clips: [],
         generatorId: 20,
         orderIdx: 1,
+        input: const UiTrackInput(firstChannel: 0, channels: 2, monitor: false),
       ),
     }),
     generators: IMap({

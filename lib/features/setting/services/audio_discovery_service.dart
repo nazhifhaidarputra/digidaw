@@ -19,6 +19,30 @@ class AudioDiscoveryService {
     });
   }
 
+  Future<Result<IList<audio_settings_api.UiInputDeviceInfo>>> listInputDevices(
+    String? hostName,
+  ) {
+    return attemptAsync(() async {
+      return (await audio_settings_api.listInputDevices(
+        hostName: hostName,
+      )).lock;
+    });
+  }
+
+  Future<Result<audio_settings_api.UiAudioRuntimeSettings>> applyInputSelection(
+    DawContext context,
+    bool enabled,
+    String? deviceId,
+  ) {
+    return attemptAsync(
+      () => audio_settings_api.setInputSelection(
+        ctx: context,
+        enabled: enabled,
+        deviceId: deviceId,
+      ),
+    );
+  }
+
   Future<Result<audio_settings_api.UiAudioRuntimeSettings>>
   applyOutputSelection(DawContext context, String? hostName, String? deviceId) {
     return attemptAsync(

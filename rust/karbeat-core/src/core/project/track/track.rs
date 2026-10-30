@@ -34,6 +34,8 @@ pub struct AudioTrack {
     pub clips: Vec<ClipId>,
     /// Optional sound generator used by MIDI clips on this track.
     pub generator: Option<GeneratorInstance>,
+    /// Device input the track records and monitors.
+    pub input: TrackInputSettings,
     /// ======================================
     /// Track Sorting Order
     /// Represents the track index position to be displayed in the UI.
@@ -52,7 +54,30 @@ impl Default for AudioTrack {
             track_type: TrackType::Audio,
             clips: Vec::new(),
             generator: None,
+            input: TrackInputSettings::default(),
             order_idx: 0,
+        }
+    }
+}
+
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
+#[serde(default)]
+/// Channels of the input device a track records, and whether it is heard through the track.
+pub struct TrackInputSettings {
+    /// First device channel, from 0.
+    pub first_channel: u16,
+    /// 1 records the channel alone; 2 records it and the next as left and right.
+    pub channels: u16,
+    /// Whether the input is heard through the track.
+    pub monitor: bool,
+}
+
+impl Default for TrackInputSettings {
+    fn default() -> Self {
+        Self {
+            first_channel: 0,
+            channels: 2,
+            monitor: false,
         }
     }
 }
@@ -95,6 +120,7 @@ impl AudioTrack {
             track_type,
             clips: Vec::new(),
             generator: None,
+            input: TrackInputSettings::default(),
             order_idx: 0,
         }
     }

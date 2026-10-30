@@ -4,8 +4,8 @@ use karbeat_audio::context::DawContext;
 use karbeat_core::core::history::actions::{
     StructureRecorder, TrackRecolored, TrackRenamed, TracksReordered,
 };
-use karbeat_core::core::project::AudioTrack;
 use karbeat_core::core::project::track::RemovedTrackType;
+use karbeat_core::core::project::{AudioTrack, TrackInputSettings, TrackType};
 use karbeat_core::shared::id::*;
 use karbeat_utils::color::Color;
 
@@ -83,6 +83,36 @@ pub fn change_track_color(
     let previous = std::mem::replace(&mut track.color, color);
     ctx.push_history(TrackRecolored::new(track_id, previous));
     Ok(())
+}
+
+/// Sets the device input an audio track records and monitors, and publishes the track graph so
+/// the engine monitors the new channels.
+///
+/// Input routing is a setup choice like the audio device, so it is saved with the project but
+/// not recorded in undo history.
+pub fn set_track_input(
+    ctx: &mut DawContext,
+    track_id: TrackId,
+    input: TrackInputSettings,
+) -> anyhow::Result<AudioTrack> {
+    anyhow::ensure!(
+        matches!(input.channels, 1 | 2),
+        "A track records one or two input channels"
+    );
+    let track = ctx
+        .app_state
+        .tracks
+        .get_mut(track_id)
+        .ok_or_else(|| anyhow::anyhow!("Track not found"))?;
+    anyhow::ensure!(
+        track.track_type == TrackType::Audio,
+        "Only audio tracks take device input"
+    );
+    track.input = input;
+    let track = track.clone();
+    ctx.mark_project_modified();
+    ctx.broadcast_track_graph();
+    Ok(track)
 }
 
 /// Creates an audio track, records its insertion, and publishes the updated track graph.

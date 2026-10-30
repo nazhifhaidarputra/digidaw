@@ -194,6 +194,17 @@ Future<void> changeTrackColor({
   newColor: newColor,
 );
 
+/// Sets the device input an audio track records and monitors, returning the updated track.
+Future<UiTrack> setTrackInput({
+  required DawContext ctx,
+  required int trackId,
+  required UiTrackInput input,
+}) => RustLib.instance.api.crateApiTrackSetTrackInput(
+  ctx: ctx,
+  trackId: trackId,
+  input: input,
+);
+
 /// Delete a track from the timeline. This function returns a string which will be
 /// "audio", "midi", or "automation"
 Future<String> deleteTrack({required DawContext ctx, required int trackId}) =>

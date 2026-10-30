@@ -8,6 +8,7 @@ use crate::{
         input::{InputCapture, InputSource, InputState},
         metronome::MetronomeState,
         modulation::{LiveModulationSource, ModulationState},
+        record::{RecordBlock, RecordState, RecordTake},
         render_plan::{
             BlockCtx, GatherSources, PlanGraph, PlanNodeKind, RenderJob, RenderPlan, SendPtr,
             group_voices_by_track, voice_range,
@@ -82,6 +83,8 @@ pub struct AudioEngine {
     pub(super) workers: Option<AudioWorkerPool>,
     /// Device input feeding level −1 of the graph.
     pub(super) input: InputState,
+    /// Takes recorded from the device input.
+    pub(super) record: RecordState,
 }
 
 pub(super) enum RetiredGraphState {
@@ -98,6 +101,15 @@ pub(super) enum RetiredGraphState {
     TelemetryProducer(triple_buffer::Input<PluginTelemetrySnapshot>),
     TelemetrySubscription(HashSet<String>),
     RenderPlan(Box<RenderPlan>),
+    RecordTake(Box<RecordTake>),
+}
+
+/// Hands `retired` to the retirement thread; a full queue leaks it rather than freeing it on
+/// the audio thread.
+fn push_retired(queue: &mut Producer<RetiredGraphState>, retired: RetiredGraphState) {
+    if let Err(rtrb::PushError::Full(retired)) = queue.push(retired) {
+        std::mem::forget(retired);
+    }
 }
 
 fn graph_retirement_queue() -> Producer<RetiredGraphState> {
@@ -121,6 +133,7 @@ fn graph_retirement_queue() -> Producer<RetiredGraphState> {
                     RetiredGraphState::TelemetryProducer(producer) => drop(producer),
                     RetiredGraphState::TelemetrySubscription(subscription) => drop(subscription),
                     RetiredGraphState::RenderPlan(plan) => drop(plan),
+                    RetiredGraphState::RecordTake(take) => drop(take),
                 },
                 Err(rtrb::PopError::Empty) if abandoned => break,
                 Err(rtrb::PopError::Empty) => {
@@ -254,10 +267,14 @@ impl AudioExportSnapshot {
 }
 
 impl AudioEngine {
+    /// Ends `take` and hands it to the retirement thread, which drops its ring producer.
+    pub(super) fn retire_record_take(&mut self, mut take: Box<RecordTake>) {
+        take.end();
+        self.retire_graph_state(RetiredGraphState::RecordTake(take));
+    }
+
     pub(super) fn retire_graph_state(&mut self, retired: RetiredGraphState) {
-        if let Err(rtrb::PushError::Full(retired)) = self.graph_retirement.push(retired) {
-            std::mem::forget(retired);
-        }
+        push_retired(&mut self.graph_retirement, retired);
     }
 
     #[allow(
@@ -310,6 +327,7 @@ impl AudioEngine {
             render_plan: RenderPlan::default(),
             workers: None,
             input: InputState::default(),
+            record: RecordState::with_block(buffer_size),
         }
     }
 
@@ -454,6 +472,7 @@ impl AudioEngine {
             render_plan: RenderPlan::default(),
             workers: None,
             input: InputState::default(),
+            record: RecordState::with_block(buffer_size),
         };
         engine.recalculate_latencies();
         Ok(engine)
@@ -609,6 +628,7 @@ impl AudioEngine {
         let channels = 2;
         let frame_count = output_buffer.len() / channels;
         self.input.capture(frame_count);
+        self.record_block(frame_count);
 
         // Transport Logic
         let is_currently_playing = self.transport.is_playing();
@@ -648,6 +668,35 @@ impl AudioEngine {
         self.transport.render_frame = block_start_frame + frame_count as u64;
     }
 
+    /// Copies the captured input block into the armed takes while the song plays, and ends
+    /// the takes that started once it stops. Real-time safe.
+    fn record_block(&mut self, frames: usize) {
+        if !self.record.is_armed() {
+            return;
+        }
+        let queue = &mut self.graph_retirement;
+        let mut retire = |mut take: Box<RecordTake>| {
+            take.end();
+            push_retired(queue, RetiredGraphState::RecordTake(take));
+        };
+        let song_playing =
+            matches!(self.transport.mode, PlaybackMode::Song) && self.transport.song.is_playing;
+        if song_playing {
+            let block = RecordBlock {
+                device: self.input.block(frames),
+                device_channels: self.input.device_channels(),
+                frames,
+                playhead_samples: u64::from(self.transport.song.playhead_samples),
+                render_frame: self.transport.render_frame,
+                input_frame: self.input.block_input_frame(),
+            };
+            self.record.record(&block, &mut retire);
+        } else {
+            self.record.end_started(&mut retire);
+        }
+        self.transport.song.is_recording = self.record.is_armed();
+    }
+
     /// Installs the device input stream that feeds level −1, returning the previous one.
     /// Allocates; call when the input stream starts.
     pub fn attach_input(&mut self, capture: InputCapture) -> Option<InputCapture> {
@@ -664,6 +713,11 @@ impl AudioEngine {
     /// input stream.
     pub fn input_ready(&self, frames: usize) -> bool {
         self.input.ready(frames)
+    }
+
+    /// How much faster the input device's clock runs than the engine's, in parts per million.
+    pub fn input_drift_ppm(&self) -> f64 {
+        self.input.drift_ppm()
     }
 
     /// Blocks rendered with silent input because the device input fell behind.
@@ -704,8 +758,11 @@ impl AudioEngine {
         output_buffer: &mut [f32],
         channels: usize,
     ) {
-        // A playhead at or past the loop end plays on; only crossing the end wraps
+        // A playhead at or past the loop end plays on; only crossing the end wraps. A take
+        // being recorded runs straight on, so the loop waits until it ends.
+        let capturing = self.record.is_capturing();
         if self.transport.song.is_looping
+            && !capturing
             && let Some((loop_start, loop_end)) = self.song_loop_samples()
             && self.transport.song.playhead_samples < loop_end
         {
@@ -722,7 +779,7 @@ impl AudioEngine {
         let song_end = self.current_state.graph.max_sample_index;
 
         // Only enforce the auto-stop/loop boundary if the project actually has content (song_end > 0)
-        if song_end > 0 && self.transport.song.playhead_samples > song_end {
+        if song_end > 0 && self.transport.song.playhead_samples > song_end && !capturing {
             if self.transport.song.is_looping {
                 self.transport.song.playhead_samples = 0;
                 self.recalculate_beat_bar();
@@ -1405,10 +1462,8 @@ impl AudioEngine {
             .collect();
         let monitored: Vec<(TrackId, InputSource)> = tracks
             .iter()
-            .filter_map(|track| {
-                let input = self.input.tracks.get(&track.id)?;
-                input.monitor.then_some((track.id, input.source))
-            })
+            .filter(|track| track.input.monitor)
+            .map(|track| (track.id, InputSource::from(&track.input)))
             .collect();
         let plugin_state = &self.plugin_state;
         let plan = RenderPlan::build(

@@ -49,6 +49,8 @@ pub mod plugin_api;
 pub mod plugin_discovery_api;
 /// Project metadata, persistence, export, initialization, and hydration APIs.
 pub mod project_api;
+/// Recording device input to audio clips.
+pub mod recording_api;
 #[allow(
     clippy::expect_used,
     clippy::panic,

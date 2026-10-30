@@ -401,12 +401,14 @@ pub enum AudioCommand {
         id: AutomationId,
     },
 
-    /// Sets the device input a track listens to, or clears it with `None`.
-    SetTrackInput {
-        /// Track that listens.
+    /// Starts a take on a track. It records once the song plays; a take the engine cannot hold
+    /// ends at once, without frames.
+    StartRecordingTake(Box<crate::engine::RecordTake>),
+
+    /// Ends the take recording on a track.
+    EndRecordingTake {
+        /// Track whose take ends.
         track_id: TrackId,
-        /// Input channels and whether they are heard through the track.
-        input: Option<crate::engine::TrackInput>,
     },
 
     /// Update audio engine config (sample_rate, buffer_size).

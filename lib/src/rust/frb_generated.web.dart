@@ -21,6 +21,7 @@ import 'api/plugin.dart';
 import 'api/plugins/opaque.dart';
 import 'api/plugins/types.dart';
 import 'api/project.dart';
+import 'api/recording.dart';
 import 'api/serialization.dart';
 import 'api/session.dart';
 import 'api/simple.dart';
@@ -238,6 +239,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   dco_decode_StreamSink_ui_plugin_scan_event_Sse(dynamic raw);
 
   @protected
+  RustStreamSink<UiRecordingProgress>
+  dco_decode_StreamSink_ui_recording_progress_Sse(dynamic raw);
+
+  @protected
   RustStreamSink<UiTransportFeedback>
   dco_decode_StreamSink_ui_transport_feedback_Sse(dynamic raw);
 
@@ -382,6 +387,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   dco_decode_box_autoadd_ui_actual_device_stream_config(dynamic raw);
 
   @protected
+  UiActualInputStreamConfig
+  dco_decode_box_autoadd_ui_actual_input_stream_config(dynamic raw);
+
+  @protected
   UiAutoSaveSettings dco_decode_box_autoadd_ui_auto_save_settings(dynamic raw);
 
   @protected
@@ -441,6 +450,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   UiTrack dco_decode_box_autoadd_ui_track(dynamic raw);
+
+  @protected
+  UiTrackInput dco_decode_box_autoadd_ui_track_input(dynamic raw);
 
   @protected
   WavExportConfigDTO dco_decode_box_autoadd_wav_export_config_dto(dynamic raw);
@@ -640,6 +652,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  List<UiInputDeviceInfo> dco_decode_list_ui_input_device_info(dynamic raw);
+
+  @protected
   List<UiNote> dco_decode_list_ui_note(dynamic raw);
 
   @protected
@@ -665,6 +680,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   List<UiSidechainSource> dco_decode_list_ui_sidechain_source(dynamic raw);
+
+  @protected
+  List<UiTrack> dco_decode_list_ui_track(dynamic raw);
 
   @protected
   MasterAutomationTargetDto dco_decode_master_automation_target_dto(
@@ -771,6 +789,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   UiActualDeviceStreamConfig?
   dco_decode_opt_box_autoadd_ui_actual_device_stream_config(dynamic raw);
+
+  @protected
+  UiActualInputStreamConfig?
+  dco_decode_opt_box_autoadd_ui_actual_input_stream_config(dynamic raw);
 
   @protected
   UiBeatGrid? dco_decode_opt_box_autoadd_ui_beat_grid(dynamic raw);
@@ -946,6 +968,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  UiActualInputStreamConfig dco_decode_ui_actual_input_stream_config(
+    dynamic raw,
+  );
+
+  @protected
   UiApplicationState dco_decode_ui_application_state(dynamic raw);
 
   @protected
@@ -1029,6 +1056,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   UiGeneratorInstanceType dco_decode_ui_generator_instance_type(dynamic raw);
+
+  @protected
+  UiInputDeviceInfo dco_decode_ui_input_device_info(dynamic raw);
 
   @protected
   UiJobEvent dco_decode_ui_job_event(dynamic raw);
@@ -1115,10 +1145,16 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   UiProjectMetadata dco_decode_ui_project_metadata(dynamic raw);
 
   @protected
+  UiRecordingProgress dco_decode_ui_recording_progress(dynamic raw);
+
+  @protected
   UiRecoveryInfo dco_decode_ui_recovery_info(dynamic raw);
 
   @protected
   UiRequestedDspConfig dco_decode_ui_requested_dsp_config(dynamic raw);
+
+  @protected
+  UiRequestedInputConfig dco_decode_ui_requested_input_config(dynamic raw);
 
   @protected
   UiRequestedOutputConfig dco_decode_ui_requested_output_config(dynamic raw);
@@ -1142,6 +1178,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   UiSourceType dco_decode_ui_source_type(dynamic raw);
 
   @protected
+  UiStartedTake dco_decode_ui_started_take(dynamic raw);
+
+  @protected
   UiStartupRecovery dco_decode_ui_startup_recovery(dynamic raw);
 
   @protected
@@ -1149,6 +1188,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   UiTrack dco_decode_ui_track(dynamic raw);
+
+  @protected
+  UiTrackInput dco_decode_ui_track_input(dynamic raw);
 
   @protected
   UiTrackType dco_decode_ui_track_type(dynamic raw);
@@ -1370,6 +1412,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   sse_decode_StreamSink_ui_plugin_scan_event_Sse(SseDeserializer deserializer);
 
   @protected
+  RustStreamSink<UiRecordingProgress>
+  sse_decode_StreamSink_ui_recording_progress_Sse(SseDeserializer deserializer);
+
+  @protected
   RustStreamSink<UiTransportFeedback>
   sse_decode_StreamSink_ui_transport_feedback_Sse(SseDeserializer deserializer);
 
@@ -1552,6 +1598,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  UiActualInputStreamConfig
+  sse_decode_box_autoadd_ui_actual_input_stream_config(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   UiAutoSaveSettings sse_decode_box_autoadd_ui_auto_save_settings(
     SseDeserializer deserializer,
   );
@@ -1633,6 +1685,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   UiTrack sse_decode_box_autoadd_ui_track(SseDeserializer deserializer);
+
+  @protected
+  UiTrackInput sse_decode_box_autoadd_ui_track_input(
+    SseDeserializer deserializer,
+  );
 
   @protected
   WavExportConfigDTO sse_decode_box_autoadd_wav_export_config_dto(
@@ -1866,6 +1923,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  List<UiInputDeviceInfo> sse_decode_list_ui_input_device_info(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   List<UiNote> sse_decode_list_ui_note(SseDeserializer deserializer);
 
   @protected
@@ -1905,6 +1967,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<UiSidechainSource> sse_decode_list_ui_sidechain_source(
     SseDeserializer deserializer,
   );
+
+  @protected
+  List<UiTrack> sse_decode_list_ui_track(SseDeserializer deserializer);
 
   @protected
   MasterAutomationTargetDto sse_decode_master_automation_target_dto(
@@ -2023,6 +2088,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   UiActualDeviceStreamConfig?
   sse_decode_opt_box_autoadd_ui_actual_device_stream_config(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  UiActualInputStreamConfig?
+  sse_decode_opt_box_autoadd_ui_actual_input_stream_config(
     SseDeserializer deserializer,
   );
 
@@ -2244,6 +2315,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  UiActualInputStreamConfig sse_decode_ui_actual_input_stream_config(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   UiApplicationState sse_decode_ui_application_state(
     SseDeserializer deserializer,
   );
@@ -2351,6 +2427,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   UiGeneratorInstanceType sse_decode_ui_generator_instance_type(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  UiInputDeviceInfo sse_decode_ui_input_device_info(
     SseDeserializer deserializer,
   );
 
@@ -2463,10 +2544,20 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  UiRecordingProgress sse_decode_ui_recording_progress(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   UiRecoveryInfo sse_decode_ui_recovery_info(SseDeserializer deserializer);
 
   @protected
   UiRequestedDspConfig sse_decode_ui_requested_dsp_config(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  UiRequestedInputConfig sse_decode_ui_requested_input_config(
     SseDeserializer deserializer,
   );
 
@@ -2498,6 +2589,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   UiSourceType sse_decode_ui_source_type(SseDeserializer deserializer);
 
   @protected
+  UiStartedTake sse_decode_ui_started_take(SseDeserializer deserializer);
+
+  @protected
   UiStartupRecovery sse_decode_ui_startup_recovery(
     SseDeserializer deserializer,
   );
@@ -2507,6 +2601,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   UiTrack sse_decode_ui_track(SseDeserializer deserializer);
+
+  @protected
+  UiTrackInput sse_decode_ui_track_input(SseDeserializer deserializer);
 
   @protected
   UiTrackType sse_decode_ui_track_type(SseDeserializer deserializer);
@@ -2760,6 +2857,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_StreamSink_ui_recording_progress_Sse(
+    RustStreamSink<UiRecordingProgress> self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_StreamSink_ui_transport_feedback_Sse(
     RustStreamSink<UiTransportFeedback> self,
     SseSerializer serializer,
@@ -2973,6 +3076,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_box_autoadd_ui_actual_input_stream_config(
+    UiActualInputStreamConfig self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_box_autoadd_ui_auto_save_settings(
     UiAutoSaveSettings self,
     SseSerializer serializer,
@@ -3073,6 +3182,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_box_autoadd_ui_track(UiTrack self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_box_autoadd_ui_track_input(
+    UiTrackInput self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_box_autoadd_wav_export_config_dto(
@@ -3359,6 +3474,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_list_ui_input_device_info(
+    List<UiInputDeviceInfo> self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_list_ui_note(List<UiNote> self, SseSerializer serializer);
 
   @protected
@@ -3408,6 +3529,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
     List<UiSidechainSource> self,
     SseSerializer serializer,
   );
+
+  @protected
+  void sse_encode_list_ui_track(List<UiTrack> self, SseSerializer serializer);
 
   @protected
   void sse_encode_master_automation_target_dto(
@@ -3542,6 +3666,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_opt_box_autoadd_ui_actual_device_stream_config(
     UiActualDeviceStreamConfig? self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_opt_box_autoadd_ui_actual_input_stream_config(
+    UiActualInputStreamConfig? self,
     SseSerializer serializer,
   );
 
@@ -3803,6 +3933,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_ui_actual_input_stream_config(
+    UiActualInputStreamConfig self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_ui_application_state(
     UiApplicationState self,
     SseSerializer serializer,
@@ -3947,6 +4083,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_ui_input_device_info(
+    UiInputDeviceInfo self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_ui_job_event(UiJobEvent self, SseSerializer serializer);
 
   @protected
@@ -4079,6 +4221,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_ui_recording_progress(
+    UiRecordingProgress self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_ui_recovery_info(
     UiRecoveryInfo self,
     SseSerializer serializer,
@@ -4087,6 +4235,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_ui_requested_dsp_config(
     UiRequestedDspConfig self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_ui_requested_input_config(
+    UiRequestedInputConfig self,
     SseSerializer serializer,
   );
 
@@ -4121,6 +4275,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_ui_source_type(UiSourceType self, SseSerializer serializer);
 
   @protected
+  void sse_encode_ui_started_take(UiStartedTake self, SseSerializer serializer);
+
+  @protected
   void sse_encode_ui_startup_recovery(
     UiStartupRecovery self,
     SseSerializer serializer,
@@ -4134,6 +4291,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_ui_track(UiTrack self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_ui_track_input(UiTrackInput self, SseSerializer serializer);
 
   @protected
   void sse_encode_ui_track_type(UiTrackType self, SseSerializer serializer);

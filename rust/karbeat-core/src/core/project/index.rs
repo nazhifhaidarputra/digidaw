@@ -341,6 +341,21 @@ pub struct AssetLibrary {
     pub session_dir: Option<Arc<tempfile::TempDir>>,
 }
 
+impl AssetLibrary {
+    /// The directory holding this project's session audio files, created when the project has
+    /// none yet, such as a new project that was never saved or loaded.
+    pub fn ensure_session_dir(&mut self) -> anyhow::Result<std::path::PathBuf> {
+        if let Some(session) = &self.session_dir {
+            return Ok(session.path().to_path_buf());
+        }
+        let session =
+            Arc::new(crate::core::file_manager::project_loader::extraction_session_dir()?);
+        let path = session.path().to_path_buf();
+        self.session_dir = Some(session);
+        Ok(path)
+    }
+}
+
 #[derive(Clone, Debug, PartialEq)]
 /// Session-level audio endpoint and DSP configuration used by project operations.
 pub struct AudioHardwareConfig {

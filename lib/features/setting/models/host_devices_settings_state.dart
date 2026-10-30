@@ -11,8 +11,19 @@ abstract class HostDevicesSettingsState with _$HostDevicesSettingsState {
     IList<UiAudioHostInfo> availableHosts,
     @Default(IListConst<UiOutputDeviceInfo>([]))
     IList<UiOutputDeviceInfo> availableOutputDevices,
+    @Default(IListConst<UiInputDeviceInfo>([]))
+    IList<UiInputDeviceInfo> availableInputDevices,
     String? selectedHostName,
     String? selectedOutputDeviceId,
+
+    /// Whether the device input is open, so tracks can record and monitor it.
+    @Default(false) bool inputEnabled,
+
+    /// `null` follows the system default input.
+    String? selectedInputDeviceId,
+    @Default(false) bool isLoadingInputDevices,
+    @Default(false) bool isApplyingInput,
+    String? inputDiscoveryError,
     @Default(false) bool isLoadingHosts,
     @Default(false) bool isLoadingOutputDevices,
     @Default(false) bool isApplyingSelection,

@@ -731,6 +731,13 @@ class _AudioTrackSlotState extends ConsumerState<AudioTrackSlot> {
                 ),
               ),
 
+              // The take being recorded on this track
+              TrackRecordingGhost(
+                trackId: widget.trackId,
+                trackHeight: widget.height,
+                zoomLevel: zoomLevel,
+              ),
+
               // Range selection bounding box (per-track, in local coordinate space)
               TrackRangeSelectOverlay(
                 trackId: widget.trackId,

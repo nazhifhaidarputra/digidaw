@@ -10,7 +10,7 @@ use std::{
     collections::VecDeque,
     sync::{
         Arc,
-        atomic::{AtomicBool, AtomicU64, Ordering, fence},
+        atomic::{AtomicBool, AtomicU32, AtomicU64, Ordering, fence},
     },
     time::{Duration, Instant},
 };
@@ -175,6 +175,8 @@ pub struct InputClock {
     /// Frames captured in total.
     captured_frames: AtomicU64,
     started: AtomicBool,
+    /// Sample rate of the current input stream.
+    device_rate: AtomicU32,
 }
 
 impl Default for InputClock {
@@ -190,13 +192,21 @@ impl InputClock {
             latest: CallbackRecord::default(),
             captured_frames: AtomicU64::new(0),
             started: AtomicBool::new(false),
+            device_rate: AtomicU32::new(0),
         }
     }
 
-    /// Starts counting a new input stream. Call before the stream runs its first callback.
-    pub fn reset(&self) {
+    /// Starts counting a new input stream running at `device_rate`. Call before the stream
+    /// runs its first callback.
+    pub fn reset(&self, device_rate: u32) {
         self.started.store(false, Ordering::Release);
         self.captured_frames.store(0, Ordering::Relaxed);
+        self.device_rate.store(device_rate, Ordering::Relaxed);
+    }
+
+    /// Sample rate of the current input stream; 0 before one starts.
+    pub fn device_rate(&self) -> u32 {
+        self.device_rate.load(Ordering::Relaxed)
     }
 
     /// Records an input callback at `now` that delivered `frames` frames, the first of which
@@ -511,7 +521,7 @@ mod tests {
         clock.record_callback(after(origin, 40), 480, Duration::from_millis(10));
         assert_eq!(clock.captured_at(480, 48_000), Some(after(origin, 30)));
         assert_eq!(clock.captured_at(960, 48_000), Some(after(origin, 40)));
-        clock.reset();
+        clock.reset(48_000);
         assert_eq!(clock.captured_at(0, 48_000), None);
     }
 }

@@ -10,7 +10,7 @@ import 'project.dart';
 part 'audio_settings.freezed.dart';
 
 // These functions are ignored because they are not marked as `pub`: `cpal_default_host_name`, `set_dsp_config_blocking`
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`
 
 Future<List<UiAudioHostInfo>> listOutputHosts() =>
     RustLib.instance.api.crateApiAudioSettingsListOutputHosts();
@@ -19,6 +19,24 @@ Future<List<UiOutputDeviceInfo>> listOutputDevices({String? hostName}) =>
     RustLib.instance.api.crateApiAudioSettingsListOutputDevices(
       hostName: hostName,
     );
+
+/// Input devices of a named host, or of the system default one, led by the system default.
+Future<List<UiInputDeviceInfo>> listInputDevices({String? hostName}) => RustLib
+    .instance
+    .api
+    .crateApiAudioSettingsListInputDevices(hostName: hostName);
+
+/// Turns the device input on or off and picks its device, restarting the audio stream when
+/// the selection changed.
+Future<UiAudioRuntimeSettings> setInputSelection({
+  required DawContext ctx,
+  required bool enabled,
+  String? deviceId,
+}) => RustLib.instance.api.crateApiAudioSettingsSetInputSelection(
+  ctx: ctx,
+  enabled: enabled,
+  deviceId: deviceId,
+);
 
 Future<UiAudioRuntimeSettings> getAudioRuntimeSettings({
   required DawContext ctx,
@@ -67,6 +85,16 @@ sealed class UiActualDeviceStreamConfig with _$UiActualDeviceStreamConfig {
 }
 
 @freezed
+sealed class UiActualInputStreamConfig with _$UiActualInputStreamConfig {
+  const factory UiActualInputStreamConfig({
+    required String deviceId,
+    required String deviceName,
+    required int sampleRate,
+    required int channels,
+  }) = _UiActualInputStreamConfig;
+}
+
+@freezed
 sealed class UiAudioHostInfo with _$UiAudioHostInfo {
   const factory UiAudioHostInfo({
     String? hostName,
@@ -79,7 +107,9 @@ sealed class UiAudioRuntimeSettings with _$UiAudioRuntimeSettings {
   const factory UiAudioRuntimeSettings({
     required UiRequestedOutputConfig requestedOutput,
     required UiRequestedDspConfig requestedDsp,
+    required UiRequestedInputConfig requestedInput,
     UiActualDeviceStreamConfig? actualStream,
+    UiActualInputStreamConfig? actualInput,
     required UiDeviceStreamStatus streamStatus,
   }) = _UiAudioRuntimeSettings;
 }
@@ -94,6 +124,15 @@ sealed class UiDeviceStreamStatus with _$UiDeviceStreamStatus {
       UiDeviceStreamStatus_Retrying;
   const factory UiDeviceStreamStatus.unavailable({required String reason}) =
       UiDeviceStreamStatus_Unavailable;
+}
+
+@freezed
+sealed class UiInputDeviceInfo with _$UiInputDeviceInfo {
+  const factory UiInputDeviceInfo({
+    String? deviceId,
+    required String displayName,
+    required bool isCurrentSystemDefault,
+  }) = _UiInputDeviceInfo;
 }
 
 @freezed
@@ -133,6 +172,14 @@ sealed class UiRequestedDspConfig with _$UiRequestedDspConfig {
     required int sampleRate,
     required int blockSize,
   }) = _UiRequestedDspConfig;
+}
+
+@freezed
+sealed class UiRequestedInputConfig with _$UiRequestedInputConfig {
+  const factory UiRequestedInputConfig({
+    required bool enabled,
+    String? deviceId,
+  }) = _UiRequestedInputConfig;
 }
 
 @freezed

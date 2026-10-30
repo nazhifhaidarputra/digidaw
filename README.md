@@ -1,78 +1,96 @@
-<!-- <div align="center">
-  <h1>🎵 DigiDAW</h1>
-  <img src="./assets/images/Digidaw_logo.png"/>
-  <p><strong>A minimal, cross-platform Digital Audio Workstation (DAW) written in Flutter and Rust.</strong></p>
-</div> -->
+# DigiDAW
 
-# Digidaw
+DigiDAW (formerly "Karbeat") is a clean, simple, and minimal Digital Audio Workstation (DAW). It pairs a Flutter frontend with a Rust audio engine, so the interface stays flexible while the real-time audio path stays predictable.
 
-DigiDAW (formerly "Karbeat") is a clean, simple, and minimal Digital Audio Workstation (DAW) designed to be cross-platform. We prioritize delivering an effective mobile-first application
-
-By leveraging the performance of [Rust](https://www.rust-lang.org/) for audio processing and the versatile UI capabilities of [Flutter](https://flutter.dev/), DigiDAW aims to provide a reliable environment for your musical creativity.
+The project is desktop-first today: **Linux x64 is the only released platform**. Windows and Android can be built from source, but are not released yet. macOS and iOS are not supported yet. Mobile is the long-term target, and the UI will be reworked for touch before mobile releases.
 
 ## Features
 
-- **Cross-Platform**: Currently built for Windows and Linux. However, in the future it will be more mobile-focused. Currently Android support is available, but limited.
-- **High-Performance Audio**: Core audio engine built in Rust using [CPAL](https://github.com/RustAudio/cpal).
-- **Minimalist Interface**: A clean UI developed with Flutter for a distraction-free workflow.
-
-More features are currently in active development.
+- **Audio engine**: A real-time Rust engine built on [CPAL](https://github.com/RustAudio/cpal), with pre-allocated buffers, lock-free telemetry, and a dedicated DSP path.
+- **Arrangement and editing**: Audio and MIDI clips, patterns, ghost clips, and copy, cut, paste, slice, resize, move, and batch editing. Undo and redo are backed by the engine's action history.
+- **Piano roll**: MIDI note drawing and editing, note copy/paste, and an on-screen MIDI keyboard.
+- **Mixer**: Tracks, buses, master bus, routing, metering, sidechain routing, and automation lanes for mixer channels and plugin parameters.
+- **Built-in instruments and effects**: The Karbeatzer V2 and My Retro synthesizers, plus Parametric EQ, Delay, Pitch Shifter, and Sidechain Compressor effects.
+- **Plugin hosting**: VST3 and CLAP on Linux and Windows, and LV2 on Linux.
+- **Time stretching and pitch shifting**: Signalsmith Stretch for real-time playback and Rubber Band for offline renders.
+- **Tempo tools**: Tempo, beat, and downbeat detection with [Beat This!](https://github.com/CPJKU/beat_this), plus fit-to-tempo for audio sources.
+- **Recording and input**: Audio input recording and monitoring, with auxiliary input handling.
+- **Projects and export**: `.dgdaw` project files, and WAV, MP3, FLAC, and OGG export with metadata.
+- **Audio and device setup**: Host and device selection through CPAL, including ASIO, WASAPI, JACK, ALSA, and CoreAudio where available.
+- **Reliability**: Auto-save, crash recovery, local crash reports, diagnostic logging, and a startup recovery prompt.
+- **Customization**: Light, dark, and Catppuccin themes, plus configurable keyboard shortcuts.
+- **Sample browsing**: A browser panel for dragging and dropping audio samples into the arrangement.
 
 ## Installation
 
-For the setup and installation, you can read more at [INSTALLATION.md](INSTALLATION.md).
+Released builds are published on the [GitHub releases page](https://github.com/nazhifhaidarputra/digidaw/releases). The current release targets **Linux x64 only**.
+
+See [INSTALLATION.md](INSTALLATION.md) for installation, uninstallation, prerequisites, and building from source.
+
+For development on Linux, the short version is:
+
+```sh
+./scripts/fetch_beat_models.sh
+flutter pub get
+flutter run -d linux
+```
+
+Building a release bundle is handled by `./scripts/builder/build_linux.sh`. Windows and Android build scripts live in `scripts/builder/` as well.
 
 ## Roadmap
 
-These are features which have been or have not been implemented. All unimplemented features will be implemented in the future
+### Implemented
 
-- [x] Ser/De project file (.dgdaw format)
-- [x] Export Audio to MP3 and Wav
-- [x] Audio Waveform sequencing
+- [x] Ser/De project file (`.dgdaw` format)
+- [x] Export audio to WAV, MP3, FLAC, and OGG
+- [x] Audio waveform sequencing, patterns, and ghost clips
 - [x] Working real-time transport controller
-- [x] Automation for mixer channel and mixer channel plugin
-- [x] Clip level manipulation (Copy, Cut, Paste, Slice, resize, move, and its batch operation) for both audio waveform clip and MIDI clip
-- [x] Piano roll MIDI note drawing
-- [x] Simple Synthesizers
-- [x] Parametric EQ
-- [x] Mixer Routing
-- [x] Bus Automation lanes rack
-- [x] Real-time pitch shifting and time stretching (via a Signalsmith Stretch FFI binding), with offline renders via Rubber Band. There is a plan to rewrite the pitch shifting entirely in Rust to remove reliability to an C++ library via FFI boundary
-- [x] Finishing and optimizing Bus Mixer Routing
-- [x] Action history (Undo/Redo).
-- [x] Time-stretched audio waveform processing
-- [x] Audio host selector (ASIO, JACK, or AudioCore)
-- [x] Automation for generator
-- [ ] Automation for global BPM parameters
-- [ ] Wavetable Synthesizer
-- [ ] Sample-based Synthesizer (for Real instrument)
-- [ ] Common Audio FX (Reverb, Distortion, Compressor, Multiband Compressor, Dynamic Compressor, Flanger, Phaser, Chorus, etc.)
-- [x] Browser panel for easy drag-and-drop audio samples
-- [ ] Input channel for input recording
+- [x] Automation for mixer channels, buses, and plugin parameters
+- [x] Clip-level manipulation (copy, cut, paste, slice, resize, move, and batch operations) for both audio and MIDI clips
+- [x] Piano roll MIDI note drawing and editing
+- [x] Built-in synthesizers (Karbeatzer V2 and My Retro)
+- [x] Parametric EQ, delay, pitch shifter, and sidechain compressor
+- [x] Mixer routing and bus automation lanes
+- [x] Real-time pitch shifting and time stretching (Signalsmith Stretch), with offline renders via Rubber Band
+- [x] Action history (undo/redo)
+- [x] Audio host and device selector (ASIO, WASAPI, JACK, ALSA, and CoreAudio through CPAL)
+- [x] Automation for generator parameters
+- [x] Browser panel for drag-and-drop audio samples
+- [x] Input channel for recording and monitoring
 - [x] Auxiliary input handler
-- [ ] Refactor UI for better UX and responsiveness in mobile platform
-- [ ] Third-party supports for native audio plugin (In form of Asset Workshop)
-- [x] Settings/configuration for user
-- [x] Logging for end-user
-- [x] VST3 Host (Done for Linux and Windows)
-- [ ] AU Host support (For MacOS)
-- [x] CLAP Host support (For Linux and Windows)
-- [x] LV2 Host (Done for Linux)
-- [ ] MacOS version
-- [ ] iOS version
-- [x] Export audio to FLAC and OGG
-- [x] Tempo detector and Fit-to-tempo functionality
-- [ ] Comprehensive Documentation for both User and Developer
-- [ ] Official logo and icon
+- [x] Settings and configuration for users
+- [x] Logging for end users
+- [x] VST3 host (Linux and Windows)
+- [x] CLAP host (Linux and Windows)
+- [x] LV2 host (Linux)
+- [x] Tempo detection and fit-to-tempo
 - [x] Auto-save
-- [x] Crash reporting
+- [x] Crash reporting and crash recovery
+- [x] Official logo and launcher icons
+- [x] Theme customization and configurable keyboard shortcuts
+
+### Planned
+
+- [ ] Tempo (BPM) automation in the UI; the engine already supports the automation target
+- [ ] Wavetable synthesizer (early work in progress)
+- [ ] Sample-based synthesizer for real instruments
+- [ ] Audio sampler
+- [ ] More audio effects (reverb, distortion, compressor, multiband compressor, flanger, phaser, chorus)
+- [ ] AU host support (macOS)
+- [ ] macOS version
+- [ ] iOS version
+- [ ] UI refactor for better UX and responsiveness on mobile
+- [ ] Comprehensive user and developer documentation
 
 ## Tech Stack
 
-- **Frontend**: [Flutter](https://flutter.dev/) & Dart
+- **Frontend**: [Flutter](https://flutter.dev/) and Dart, with Riverpod and Freezed
 - **Audio Engine**: [Rust](https://www.rust-lang.org/)
 - **Audio Host**: [CPAL (Cross-Platform Audio Library)](https://github.com/RustAudio/cpal)
 - **Bridge**: [Flutter Rust Bridge](https://fzyzcjy.github.io/flutter_rust_bridge/)
+- **Time stretching and pitch shifting**: [Signalsmith Stretch](https://github.com/Signalsmith-Audio/signalsmith-stretch) for real-time use, [Rubber Band](https://breakfastquay.com/rubberband/) for offline renders
+- **Tempo and beat analysis**: [Beat This!](https://github.com/CPJKU/beat_this) via the `beat-this` crate on the `rten` runtime
+- **Plugin hosting**: VST3, CLAP, and LV2
 
 ## 👥 Contributors
 
@@ -86,16 +104,24 @@ _(Want to contribute? Check out our developer notes below!)_
 
 ## 📚 References & Documentation
 
-Currently, technical documentation and detailed info are still being drafted. Please be patient as we focus on building the core features of the app!
+- [INSTALLATION.md](INSTALLATION.md): installation, uninstallation, and building from source
+- [CONTRIBUTING.md](CONTRIBUTING.md): project structure, conventions, audio-thread rules, and validation commands
+- [Crash Error Code Guide](docs/CODE_ERROR_GUIDE.md): what each crash report code means
+- [Audio Plugin Manifest Info](assets/manifests/audio-plugins/PLUGIN_MANIFEST_INFO.md): how first-party plugin manifests are written
+
+Comprehensive user and developer documentation is still being drafted.
 
 ## 👨‍💻 Note for Developers
 
-Thank you for your interest in Digidaw! Here are a few things to keep in mind:
+Thank you for your interest in DigiDAW! Here are a few things to keep in mind:
 
-- **Current Focus**: The application is currently prioritizing **Windows** and **Linux** as the primary development environment for faster development. We will focus to complete features to an usable state for users. Eventually we will fully focus on mobile devices support as it is our main priority in the first place
-- **Future Platforms**: Once the core application is near completion, we'll implement and optimize features for **Android**.
-- **Plugin Host Support**: We will add plugin host and support for VST3, CLAP, and LV2 for Windows, Linux, and MacOS version. As for android, we are still exploring the best fit and possibility of creating our own plugin format.
-- **Plugin Development**: Currently our plugin registry is very few. You can help to create a plugin by using the Karbeat Plugin API by implementing the `AudioPlugin` trait.
+- **Current Focus**: **Linux** is the primary development and release platform. Windows and Android build from source, but need more testing before they are released.
+- **Future Platforms**: macOS and iOS support will follow after the desktop core and mobile UI are ready. The UI needs a dedicated touch-first pass before mobile releases.
+- **Plugin Host Support**: VST3 and CLAP are hosted on Windows and Linux, and LV2 on Linux. AU support is planned for macOS. Android plugin hosting is still being explored.
+- **Plugin Development**: First-party plugins live in `rust/karbeat-plugins` and implement the `AudioPlugin` trait from the Karbeat Plugin API. Their manifests live in `assets/manifests/audio-plugins/`, and the generated Flutter bindings come from those manifests.
+- **Internal naming**: The project is DigiDAW, but packages, crates, and imports still use the internal name `karbeat`.
+
+Read [CONTRIBUTING.md](CONTRIBUTING.md) before changing the Rust engine, the Flutter state layer, or the FFI boundary.
 
 ---
 
@@ -103,20 +129,18 @@ Thank you for your interest in Digidaw! Here are a few things to keep in mind:
 
 This project uses a split-licensing model to support both open-source collaboration and proprietary plugin development:
 
-- **Framework & API Crates (`karbeat-plugin-api`, `karbeat-plugin-types`, `karbeat-macros`, `karbeat-utils`, `karbeat-host`)**: Licensed under **Apache-2.0 OR MIT**. You can freely use these to build closed-source or proprietary audio plugins.
-- **DSP Library (`karbeat-dsp`)**: Licensed under **GPLv3**. If you decided to use this in your audio plugin implementation, you should also open-source your plugin
-- **Core Application (`karbeat-core`, `karbeat-audio`, `karbeat-flutter-ffi`, Flutter UI) & First-Party Plugins**: Licensed under **GPLv3 with a Linking Exception**. This allows you to dynamically link and run closed-source, proprietary plugins inside the Digidaw DAW engine.
+- **Framework & API Crates** (`karbeat-plugin-api`, `karbeat-plugin-types`, `karbeat-macros`, `karbeat-utils`, `karbeat-host`, `karbeat-host-api`): Licensed under **Apache-2.0 OR MIT**. You can freely use these to build closed-source or proprietary audio plugins.
+- **DSP and analysis crates** (`karbeat-dsp`, `karbeat-rb`, `karbeat-signalsmith`, `karbeat-analysis`): Licensed under **GPLv3**. If you use these in an audio plugin implementation, you should also open-source your plugin.
+- **Plugin format executors** (`karbeat-vst3`, `karbeat-clap`, `karbeat-lv2`): Licensed under **GPLv3**.
+- **Core Application** (`karbeat-core`, `karbeat-core-api`, `karbeat-audio`, `karbeat-flutter-ffi`, Flutter UI) and **First-Party Plugins** (`karbeat-plugins`): Licensed under **GPLv3 with a Linking Exception**. This allows you to dynamically link and run closed-source, proprietary plugins inside the DigiDAW audio engine. See [LICENSE-EXCEPTION.txt](LICENSE-EXCEPTION.txt).
+
+See [LICENSE.txt](LICENSE.txt) for the full license text.
 
 ## Regarding the Future of the Project
 
-We decided to rename the project from Karbeat to DigiDAW. Originally, DigiDAW was going to be the name of the desktop version of the DAW, which would support VST, CLAP, and AU plugins. However, we decided to focus only on the mobile application for now. We are also planning to add an audio plugin interface that supports third-party plugins built as dynamic libraries on both Android and iOS.
+The project was renamed from Karbeat to DigiDAW. The internal name `karbeat` remains in package names, crate names, and imports, so you will still see it throughout the codebase.
 
-Meanwhile, our desktop DAW, will utilize a distinct frontend
-implementation and a modified backend to accommodate new technologies.
-We intend to build the desktop version entirely in Rust, though we are still researching the best framework for the task.
-This shift is necessary because the desktop version will include features incompatible with mobile platforms, such as
-broad support for popular audio plugin formats like VST3, LV2, CLAP, and AU. Furthermore, Rust offers superior performance
-for desktop GUI applications compared to Flutter, whose garbage collector can impact real-time efficiency.
+Today the desktop application is built with Flutter and Rust, with Linux x64 as the released platform. Windows and Android support is buildable from source, and macOS/iOS support plus a touch-first mobile interface remain on the roadmap. The desktop app keeps broad plugin-format support as a priority, which is why VST3, CLAP, and LV2 hosting landed before mobile releases.
 
 ## Supporting this Project
 

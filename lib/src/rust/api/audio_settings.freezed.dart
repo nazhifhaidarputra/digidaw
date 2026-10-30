@@ -278,6 +278,266 @@ as int,
 }
 
 /// @nodoc
+mixin _$UiActualInputStreamConfig {
+
+ String get deviceId; String get deviceName; int get sampleRate; int get channels;
+/// Create a copy of UiActualInputStreamConfig
+/// with the given fields replaced by the non-null parameter values.
+@JsonKey(includeFromJson: false, includeToJson: false)
+@pragma('vm:prefer-inline')
+$UiActualInputStreamConfigCopyWith<UiActualInputStreamConfig> get copyWith => _$UiActualInputStreamConfigCopyWithImpl<UiActualInputStreamConfig>(this as UiActualInputStreamConfig, _$identity);
+
+
+
+@override
+bool operator ==(Object other) {
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is UiActualInputStreamConfig&&(identical(other.deviceId, deviceId) || other.deviceId == deviceId)&&(identical(other.deviceName, deviceName) || other.deviceName == deviceName)&&(identical(other.sampleRate, sampleRate) || other.sampleRate == sampleRate)&&(identical(other.channels, channels) || other.channels == channels));
+}
+
+
+@override
+int get hashCode => Object.hash(runtimeType,deviceId,deviceName,sampleRate,channels);
+
+@override
+String toString() {
+  return 'UiActualInputStreamConfig(deviceId: $deviceId, deviceName: $deviceName, sampleRate: $sampleRate, channels: $channels)';
+}
+
+
+}
+
+/// @nodoc
+abstract mixin class $UiActualInputStreamConfigCopyWith<$Res>  {
+  factory $UiActualInputStreamConfigCopyWith(UiActualInputStreamConfig value, $Res Function(UiActualInputStreamConfig) _then) = _$UiActualInputStreamConfigCopyWithImpl;
+@useResult
+$Res call({
+ String deviceId, String deviceName, int sampleRate, int channels
+});
+
+
+
+
+}
+/// @nodoc
+class _$UiActualInputStreamConfigCopyWithImpl<$Res>
+    implements $UiActualInputStreamConfigCopyWith<$Res> {
+  _$UiActualInputStreamConfigCopyWithImpl(this._self, this._then);
+
+  final UiActualInputStreamConfig _self;
+  final $Res Function(UiActualInputStreamConfig) _then;
+
+/// Create a copy of UiActualInputStreamConfig
+/// with the given fields replaced by the non-null parameter values.
+@pragma('vm:prefer-inline') @override $Res call({Object? deviceId = null,Object? deviceName = null,Object? sampleRate = null,Object? channels = null,}) {
+  return _then(_self.copyWith(
+deviceId: null == deviceId ? _self.deviceId : deviceId // ignore: cast_nullable_to_non_nullable
+as String,deviceName: null == deviceName ? _self.deviceName : deviceName // ignore: cast_nullable_to_non_nullable
+as String,sampleRate: null == sampleRate ? _self.sampleRate : sampleRate // ignore: cast_nullable_to_non_nullable
+as int,channels: null == channels ? _self.channels : channels // ignore: cast_nullable_to_non_nullable
+as int,
+  ));
+}
+
+}
+
+
+/// Adds pattern-matching-related methods to [UiActualInputStreamConfig].
+extension UiActualInputStreamConfigPatterns on UiActualInputStreamConfig {
+/// A variant of `map` that fallback to returning `orElse`.
+///
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case final Subclass value:
+///     return ...;
+///   case _:
+///     return orElse();
+/// }
+/// ```
+
+@optionalTypeArgs TResult maybeMap<TResult extends Object?>(TResult Function( _UiActualInputStreamConfig value)?  $default,{required TResult orElse(),}){
+final _that = this;
+switch (_that) {
+case _UiActualInputStreamConfig() when $default != null:
+return $default(_that);case _:
+  return orElse();
+
+}
+}
+/// A `switch`-like method, using callbacks.
+///
+/// Callbacks receives the raw object, upcasted.
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case final Subclass value:
+///     return ...;
+///   case final Subclass2 value:
+///     return ...;
+/// }
+/// ```
+
+@optionalTypeArgs TResult map<TResult extends Object?>(TResult Function( _UiActualInputStreamConfig value)  $default,){
+final _that = this;
+switch (_that) {
+case _UiActualInputStreamConfig():
+return $default(_that);}
+}
+/// A variant of `map` that fallback to returning `null`.
+///
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case final Subclass value:
+///     return ...;
+///   case _:
+///     return null;
+/// }
+/// ```
+
+@optionalTypeArgs TResult? mapOrNull<TResult extends Object?>(TResult? Function( _UiActualInputStreamConfig value)?  $default,){
+final _that = this;
+switch (_that) {
+case _UiActualInputStreamConfig() when $default != null:
+return $default(_that);case _:
+  return null;
+
+}
+}
+/// A variant of `when` that fallback to an `orElse` callback.
+///
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case Subclass(:final field):
+///     return ...;
+///   case _:
+///     return orElse();
+/// }
+/// ```
+
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( String deviceId,  String deviceName,  int sampleRate,  int channels)?  $default,{required TResult orElse(),}) {final _that = this;
+switch (_that) {
+case _UiActualInputStreamConfig() when $default != null:
+return $default(_that.deviceId,_that.deviceName,_that.sampleRate,_that.channels);case _:
+  return orElse();
+
+}
+}
+/// A `switch`-like method, using callbacks.
+///
+/// As opposed to `map`, this offers destructuring.
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case Subclass(:final field):
+///     return ...;
+///   case Subclass2(:final field2):
+///     return ...;
+/// }
+/// ```
+
+@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( String deviceId,  String deviceName,  int sampleRate,  int channels)  $default,) {final _that = this;
+switch (_that) {
+case _UiActualInputStreamConfig():
+return $default(_that.deviceId,_that.deviceName,_that.sampleRate,_that.channels);}
+}
+/// A variant of `when` that fallback to returning `null`
+///
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case Subclass(:final field):
+///     return ...;
+///   case _:
+///     return null;
+/// }
+/// ```
+
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( String deviceId,  String deviceName,  int sampleRate,  int channels)?  $default,) {final _that = this;
+switch (_that) {
+case _UiActualInputStreamConfig() when $default != null:
+return $default(_that.deviceId,_that.deviceName,_that.sampleRate,_that.channels);case _:
+  return null;
+
+}
+}
+
+}
+
+/// @nodoc
+
+
+class _UiActualInputStreamConfig implements UiActualInputStreamConfig {
+  const _UiActualInputStreamConfig({required this.deviceId, required this.deviceName, required this.sampleRate, required this.channels});
+  
+
+@override final  String deviceId;
+@override final  String deviceName;
+@override final  int sampleRate;
+@override final  int channels;
+
+/// Create a copy of UiActualInputStreamConfig
+/// with the given fields replaced by the non-null parameter values.
+@override @JsonKey(includeFromJson: false, includeToJson: false)
+@pragma('vm:prefer-inline')
+_$UiActualInputStreamConfigCopyWith<_UiActualInputStreamConfig> get copyWith => __$UiActualInputStreamConfigCopyWithImpl<_UiActualInputStreamConfig>(this, _$identity);
+
+
+
+@override
+bool operator ==(Object other) {
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is _UiActualInputStreamConfig&&(identical(other.deviceId, deviceId) || other.deviceId == deviceId)&&(identical(other.deviceName, deviceName) || other.deviceName == deviceName)&&(identical(other.sampleRate, sampleRate) || other.sampleRate == sampleRate)&&(identical(other.channels, channels) || other.channels == channels));
+}
+
+
+@override
+int get hashCode => Object.hash(runtimeType,deviceId,deviceName,sampleRate,channels);
+
+@override
+String toString() {
+  return 'UiActualInputStreamConfig(deviceId: $deviceId, deviceName: $deviceName, sampleRate: $sampleRate, channels: $channels)';
+}
+
+
+}
+
+/// @nodoc
+abstract mixin class _$UiActualInputStreamConfigCopyWith<$Res> implements $UiActualInputStreamConfigCopyWith<$Res> {
+  factory _$UiActualInputStreamConfigCopyWith(_UiActualInputStreamConfig value, $Res Function(_UiActualInputStreamConfig) _then) = __$UiActualInputStreamConfigCopyWithImpl;
+@override @useResult
+$Res call({
+ String deviceId, String deviceName, int sampleRate, int channels
+});
+
+
+
+
+}
+/// @nodoc
+class __$UiActualInputStreamConfigCopyWithImpl<$Res>
+    implements _$UiActualInputStreamConfigCopyWith<$Res> {
+  __$UiActualInputStreamConfigCopyWithImpl(this._self, this._then);
+
+  final _UiActualInputStreamConfig _self;
+  final $Res Function(_UiActualInputStreamConfig) _then;
+
+/// Create a copy of UiActualInputStreamConfig
+/// with the given fields replaced by the non-null parameter values.
+@override @pragma('vm:prefer-inline') $Res call({Object? deviceId = null,Object? deviceName = null,Object? sampleRate = null,Object? channels = null,}) {
+  return _then(_UiActualInputStreamConfig(
+deviceId: null == deviceId ? _self.deviceId : deviceId // ignore: cast_nullable_to_non_nullable
+as String,deviceName: null == deviceName ? _self.deviceName : deviceName // ignore: cast_nullable_to_non_nullable
+as String,sampleRate: null == sampleRate ? _self.sampleRate : sampleRate // ignore: cast_nullable_to_non_nullable
+as int,channels: null == channels ? _self.channels : channels // ignore: cast_nullable_to_non_nullable
+as int,
+  ));
+}
+
+
+}
+
+/// @nodoc
 mixin _$UiAudioHostInfo {
 
  String? get hostName; String get displayName;
@@ -534,7 +794,7 @@ as String,
 /// @nodoc
 mixin _$UiAudioRuntimeSettings {
 
- UiRequestedOutputConfig get requestedOutput; UiRequestedDspConfig get requestedDsp; UiActualDeviceStreamConfig? get actualStream; UiDeviceStreamStatus get streamStatus;
+ UiRequestedOutputConfig get requestedOutput; UiRequestedDspConfig get requestedDsp; UiRequestedInputConfig get requestedInput; UiActualDeviceStreamConfig? get actualStream; UiActualInputStreamConfig? get actualInput; UiDeviceStreamStatus get streamStatus;
 /// Create a copy of UiAudioRuntimeSettings
 /// with the given fields replaced by the non-null parameter values.
 @JsonKey(includeFromJson: false, includeToJson: false)
@@ -545,16 +805,16 @@ $UiAudioRuntimeSettingsCopyWith<UiAudioRuntimeSettings> get copyWith => _$UiAudi
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is UiAudioRuntimeSettings&&(identical(other.requestedOutput, requestedOutput) || other.requestedOutput == requestedOutput)&&(identical(other.requestedDsp, requestedDsp) || other.requestedDsp == requestedDsp)&&(identical(other.actualStream, actualStream) || other.actualStream == actualStream)&&(identical(other.streamStatus, streamStatus) || other.streamStatus == streamStatus));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is UiAudioRuntimeSettings&&(identical(other.requestedOutput, requestedOutput) || other.requestedOutput == requestedOutput)&&(identical(other.requestedDsp, requestedDsp) || other.requestedDsp == requestedDsp)&&(identical(other.requestedInput, requestedInput) || other.requestedInput == requestedInput)&&(identical(other.actualStream, actualStream) || other.actualStream == actualStream)&&(identical(other.actualInput, actualInput) || other.actualInput == actualInput)&&(identical(other.streamStatus, streamStatus) || other.streamStatus == streamStatus));
 }
 
 
 @override
-int get hashCode => Object.hash(runtimeType,requestedOutput,requestedDsp,actualStream,streamStatus);
+int get hashCode => Object.hash(runtimeType,requestedOutput,requestedDsp,requestedInput,actualStream,actualInput,streamStatus);
 
 @override
 String toString() {
-  return 'UiAudioRuntimeSettings(requestedOutput: $requestedOutput, requestedDsp: $requestedDsp, actualStream: $actualStream, streamStatus: $streamStatus)';
+  return 'UiAudioRuntimeSettings(requestedOutput: $requestedOutput, requestedDsp: $requestedDsp, requestedInput: $requestedInput, actualStream: $actualStream, actualInput: $actualInput, streamStatus: $streamStatus)';
 }
 
 
@@ -565,11 +825,11 @@ abstract mixin class $UiAudioRuntimeSettingsCopyWith<$Res>  {
   factory $UiAudioRuntimeSettingsCopyWith(UiAudioRuntimeSettings value, $Res Function(UiAudioRuntimeSettings) _then) = _$UiAudioRuntimeSettingsCopyWithImpl;
 @useResult
 $Res call({
- UiRequestedOutputConfig requestedOutput, UiRequestedDspConfig requestedDsp, UiActualDeviceStreamConfig? actualStream, UiDeviceStreamStatus streamStatus
+ UiRequestedOutputConfig requestedOutput, UiRequestedDspConfig requestedDsp, UiRequestedInputConfig requestedInput, UiActualDeviceStreamConfig? actualStream, UiActualInputStreamConfig? actualInput, UiDeviceStreamStatus streamStatus
 });
 
 
-$UiRequestedOutputConfigCopyWith<$Res> get requestedOutput;$UiRequestedDspConfigCopyWith<$Res> get requestedDsp;$UiActualDeviceStreamConfigCopyWith<$Res>? get actualStream;$UiDeviceStreamStatusCopyWith<$Res> get streamStatus;
+$UiRequestedOutputConfigCopyWith<$Res> get requestedOutput;$UiRequestedDspConfigCopyWith<$Res> get requestedDsp;$UiRequestedInputConfigCopyWith<$Res> get requestedInput;$UiActualDeviceStreamConfigCopyWith<$Res>? get actualStream;$UiActualInputStreamConfigCopyWith<$Res>? get actualInput;$UiDeviceStreamStatusCopyWith<$Res> get streamStatus;
 
 }
 /// @nodoc
@@ -582,12 +842,14 @@ class _$UiAudioRuntimeSettingsCopyWithImpl<$Res>
 
 /// Create a copy of UiAudioRuntimeSettings
 /// with the given fields replaced by the non-null parameter values.
-@pragma('vm:prefer-inline') @override $Res call({Object? requestedOutput = null,Object? requestedDsp = null,Object? actualStream = freezed,Object? streamStatus = null,}) {
+@pragma('vm:prefer-inline') @override $Res call({Object? requestedOutput = null,Object? requestedDsp = null,Object? requestedInput = null,Object? actualStream = freezed,Object? actualInput = freezed,Object? streamStatus = null,}) {
   return _then(_self.copyWith(
 requestedOutput: null == requestedOutput ? _self.requestedOutput : requestedOutput // ignore: cast_nullable_to_non_nullable
 as UiRequestedOutputConfig,requestedDsp: null == requestedDsp ? _self.requestedDsp : requestedDsp // ignore: cast_nullable_to_non_nullable
-as UiRequestedDspConfig,actualStream: freezed == actualStream ? _self.actualStream : actualStream // ignore: cast_nullable_to_non_nullable
-as UiActualDeviceStreamConfig?,streamStatus: null == streamStatus ? _self.streamStatus : streamStatus // ignore: cast_nullable_to_non_nullable
+as UiRequestedDspConfig,requestedInput: null == requestedInput ? _self.requestedInput : requestedInput // ignore: cast_nullable_to_non_nullable
+as UiRequestedInputConfig,actualStream: freezed == actualStream ? _self.actualStream : actualStream // ignore: cast_nullable_to_non_nullable
+as UiActualDeviceStreamConfig?,actualInput: freezed == actualInput ? _self.actualInput : actualInput // ignore: cast_nullable_to_non_nullable
+as UiActualInputStreamConfig?,streamStatus: null == streamStatus ? _self.streamStatus : streamStatus // ignore: cast_nullable_to_non_nullable
 as UiDeviceStreamStatus,
   ));
 }
@@ -613,6 +875,15 @@ $UiRequestedDspConfigCopyWith<$Res> get requestedDsp {
 /// with the given fields replaced by the non-null parameter values.
 @override
 @pragma('vm:prefer-inline')
+$UiRequestedInputConfigCopyWith<$Res> get requestedInput {
+  
+  return $UiRequestedInputConfigCopyWith<$Res>(_self.requestedInput, (value) {
+    return _then(_self.copyWith(requestedInput: value));
+  });
+}/// Create a copy of UiAudioRuntimeSettings
+/// with the given fields replaced by the non-null parameter values.
+@override
+@pragma('vm:prefer-inline')
 $UiActualDeviceStreamConfigCopyWith<$Res>? get actualStream {
     if (_self.actualStream == null) {
     return null;
@@ -620,6 +891,18 @@ $UiActualDeviceStreamConfigCopyWith<$Res>? get actualStream {
 
   return $UiActualDeviceStreamConfigCopyWith<$Res>(_self.actualStream!, (value) {
     return _then(_self.copyWith(actualStream: value));
+  });
+}/// Create a copy of UiAudioRuntimeSettings
+/// with the given fields replaced by the non-null parameter values.
+@override
+@pragma('vm:prefer-inline')
+$UiActualInputStreamConfigCopyWith<$Res>? get actualInput {
+    if (_self.actualInput == null) {
+    return null;
+  }
+
+  return $UiActualInputStreamConfigCopyWith<$Res>(_self.actualInput!, (value) {
+    return _then(_self.copyWith(actualInput: value));
   });
 }/// Create a copy of UiAudioRuntimeSettings
 /// with the given fields replaced by the non-null parameter values.
@@ -709,10 +992,10 @@ return $default(_that);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( UiRequestedOutputConfig requestedOutput,  UiRequestedDspConfig requestedDsp,  UiActualDeviceStreamConfig? actualStream,  UiDeviceStreamStatus streamStatus)?  $default,{required TResult orElse(),}) {final _that = this;
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( UiRequestedOutputConfig requestedOutput,  UiRequestedDspConfig requestedDsp,  UiRequestedInputConfig requestedInput,  UiActualDeviceStreamConfig? actualStream,  UiActualInputStreamConfig? actualInput,  UiDeviceStreamStatus streamStatus)?  $default,{required TResult orElse(),}) {final _that = this;
 switch (_that) {
 case _UiAudioRuntimeSettings() when $default != null:
-return $default(_that.requestedOutput,_that.requestedDsp,_that.actualStream,_that.streamStatus);case _:
+return $default(_that.requestedOutput,_that.requestedDsp,_that.requestedInput,_that.actualStream,_that.actualInput,_that.streamStatus);case _:
   return orElse();
 
 }
@@ -730,10 +1013,10 @@ return $default(_that.requestedOutput,_that.requestedDsp,_that.actualStream,_tha
 /// }
 /// ```
 
-@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( UiRequestedOutputConfig requestedOutput,  UiRequestedDspConfig requestedDsp,  UiActualDeviceStreamConfig? actualStream,  UiDeviceStreamStatus streamStatus)  $default,) {final _that = this;
+@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( UiRequestedOutputConfig requestedOutput,  UiRequestedDspConfig requestedDsp,  UiRequestedInputConfig requestedInput,  UiActualDeviceStreamConfig? actualStream,  UiActualInputStreamConfig? actualInput,  UiDeviceStreamStatus streamStatus)  $default,) {final _that = this;
 switch (_that) {
 case _UiAudioRuntimeSettings():
-return $default(_that.requestedOutput,_that.requestedDsp,_that.actualStream,_that.streamStatus);}
+return $default(_that.requestedOutput,_that.requestedDsp,_that.requestedInput,_that.actualStream,_that.actualInput,_that.streamStatus);}
 }
 /// A variant of `when` that fallback to returning `null`
 ///
@@ -747,10 +1030,10 @@ return $default(_that.requestedOutput,_that.requestedDsp,_that.actualStream,_tha
 /// }
 /// ```
 
-@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( UiRequestedOutputConfig requestedOutput,  UiRequestedDspConfig requestedDsp,  UiActualDeviceStreamConfig? actualStream,  UiDeviceStreamStatus streamStatus)?  $default,) {final _that = this;
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( UiRequestedOutputConfig requestedOutput,  UiRequestedDspConfig requestedDsp,  UiRequestedInputConfig requestedInput,  UiActualDeviceStreamConfig? actualStream,  UiActualInputStreamConfig? actualInput,  UiDeviceStreamStatus streamStatus)?  $default,) {final _that = this;
 switch (_that) {
 case _UiAudioRuntimeSettings() when $default != null:
-return $default(_that.requestedOutput,_that.requestedDsp,_that.actualStream,_that.streamStatus);case _:
+return $default(_that.requestedOutput,_that.requestedDsp,_that.requestedInput,_that.actualStream,_that.actualInput,_that.streamStatus);case _:
   return null;
 
 }
@@ -762,12 +1045,14 @@ return $default(_that.requestedOutput,_that.requestedDsp,_that.actualStream,_tha
 
 
 class _UiAudioRuntimeSettings implements UiAudioRuntimeSettings {
-  const _UiAudioRuntimeSettings({required this.requestedOutput, required this.requestedDsp, this.actualStream, required this.streamStatus});
+  const _UiAudioRuntimeSettings({required this.requestedOutput, required this.requestedDsp, required this.requestedInput, this.actualStream, this.actualInput, required this.streamStatus});
   
 
 @override final  UiRequestedOutputConfig requestedOutput;
 @override final  UiRequestedDspConfig requestedDsp;
+@override final  UiRequestedInputConfig requestedInput;
 @override final  UiActualDeviceStreamConfig? actualStream;
+@override final  UiActualInputStreamConfig? actualInput;
 @override final  UiDeviceStreamStatus streamStatus;
 
 /// Create a copy of UiAudioRuntimeSettings
@@ -780,16 +1065,16 @@ _$UiAudioRuntimeSettingsCopyWith<_UiAudioRuntimeSettings> get copyWith => __$UiA
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is _UiAudioRuntimeSettings&&(identical(other.requestedOutput, requestedOutput) || other.requestedOutput == requestedOutput)&&(identical(other.requestedDsp, requestedDsp) || other.requestedDsp == requestedDsp)&&(identical(other.actualStream, actualStream) || other.actualStream == actualStream)&&(identical(other.streamStatus, streamStatus) || other.streamStatus == streamStatus));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is _UiAudioRuntimeSettings&&(identical(other.requestedOutput, requestedOutput) || other.requestedOutput == requestedOutput)&&(identical(other.requestedDsp, requestedDsp) || other.requestedDsp == requestedDsp)&&(identical(other.requestedInput, requestedInput) || other.requestedInput == requestedInput)&&(identical(other.actualStream, actualStream) || other.actualStream == actualStream)&&(identical(other.actualInput, actualInput) || other.actualInput == actualInput)&&(identical(other.streamStatus, streamStatus) || other.streamStatus == streamStatus));
 }
 
 
 @override
-int get hashCode => Object.hash(runtimeType,requestedOutput,requestedDsp,actualStream,streamStatus);
+int get hashCode => Object.hash(runtimeType,requestedOutput,requestedDsp,requestedInput,actualStream,actualInput,streamStatus);
 
 @override
 String toString() {
-  return 'UiAudioRuntimeSettings(requestedOutput: $requestedOutput, requestedDsp: $requestedDsp, actualStream: $actualStream, streamStatus: $streamStatus)';
+  return 'UiAudioRuntimeSettings(requestedOutput: $requestedOutput, requestedDsp: $requestedDsp, requestedInput: $requestedInput, actualStream: $actualStream, actualInput: $actualInput, streamStatus: $streamStatus)';
 }
 
 
@@ -800,11 +1085,11 @@ abstract mixin class _$UiAudioRuntimeSettingsCopyWith<$Res> implements $UiAudioR
   factory _$UiAudioRuntimeSettingsCopyWith(_UiAudioRuntimeSettings value, $Res Function(_UiAudioRuntimeSettings) _then) = __$UiAudioRuntimeSettingsCopyWithImpl;
 @override @useResult
 $Res call({
- UiRequestedOutputConfig requestedOutput, UiRequestedDspConfig requestedDsp, UiActualDeviceStreamConfig? actualStream, UiDeviceStreamStatus streamStatus
+ UiRequestedOutputConfig requestedOutput, UiRequestedDspConfig requestedDsp, UiRequestedInputConfig requestedInput, UiActualDeviceStreamConfig? actualStream, UiActualInputStreamConfig? actualInput, UiDeviceStreamStatus streamStatus
 });
 
 
-@override $UiRequestedOutputConfigCopyWith<$Res> get requestedOutput;@override $UiRequestedDspConfigCopyWith<$Res> get requestedDsp;@override $UiActualDeviceStreamConfigCopyWith<$Res>? get actualStream;@override $UiDeviceStreamStatusCopyWith<$Res> get streamStatus;
+@override $UiRequestedOutputConfigCopyWith<$Res> get requestedOutput;@override $UiRequestedDspConfigCopyWith<$Res> get requestedDsp;@override $UiRequestedInputConfigCopyWith<$Res> get requestedInput;@override $UiActualDeviceStreamConfigCopyWith<$Res>? get actualStream;@override $UiActualInputStreamConfigCopyWith<$Res>? get actualInput;@override $UiDeviceStreamStatusCopyWith<$Res> get streamStatus;
 
 }
 /// @nodoc
@@ -817,12 +1102,14 @@ class __$UiAudioRuntimeSettingsCopyWithImpl<$Res>
 
 /// Create a copy of UiAudioRuntimeSettings
 /// with the given fields replaced by the non-null parameter values.
-@override @pragma('vm:prefer-inline') $Res call({Object? requestedOutput = null,Object? requestedDsp = null,Object? actualStream = freezed,Object? streamStatus = null,}) {
+@override @pragma('vm:prefer-inline') $Res call({Object? requestedOutput = null,Object? requestedDsp = null,Object? requestedInput = null,Object? actualStream = freezed,Object? actualInput = freezed,Object? streamStatus = null,}) {
   return _then(_UiAudioRuntimeSettings(
 requestedOutput: null == requestedOutput ? _self.requestedOutput : requestedOutput // ignore: cast_nullable_to_non_nullable
 as UiRequestedOutputConfig,requestedDsp: null == requestedDsp ? _self.requestedDsp : requestedDsp // ignore: cast_nullable_to_non_nullable
-as UiRequestedDspConfig,actualStream: freezed == actualStream ? _self.actualStream : actualStream // ignore: cast_nullable_to_non_nullable
-as UiActualDeviceStreamConfig?,streamStatus: null == streamStatus ? _self.streamStatus : streamStatus // ignore: cast_nullable_to_non_nullable
+as UiRequestedDspConfig,requestedInput: null == requestedInput ? _self.requestedInput : requestedInput // ignore: cast_nullable_to_non_nullable
+as UiRequestedInputConfig,actualStream: freezed == actualStream ? _self.actualStream : actualStream // ignore: cast_nullable_to_non_nullable
+as UiActualDeviceStreamConfig?,actualInput: freezed == actualInput ? _self.actualInput : actualInput // ignore: cast_nullable_to_non_nullable
+as UiActualInputStreamConfig?,streamStatus: null == streamStatus ? _self.streamStatus : streamStatus // ignore: cast_nullable_to_non_nullable
 as UiDeviceStreamStatus,
   ));
 }
@@ -849,6 +1136,15 @@ $UiRequestedDspConfigCopyWith<$Res> get requestedDsp {
 /// with the given fields replaced by the non-null parameter values.
 @override
 @pragma('vm:prefer-inline')
+$UiRequestedInputConfigCopyWith<$Res> get requestedInput {
+  
+  return $UiRequestedInputConfigCopyWith<$Res>(_self.requestedInput, (value) {
+    return _then(_self.copyWith(requestedInput: value));
+  });
+}/// Create a copy of UiAudioRuntimeSettings
+/// with the given fields replaced by the non-null parameter values.
+@override
+@pragma('vm:prefer-inline')
 $UiActualDeviceStreamConfigCopyWith<$Res>? get actualStream {
     if (_self.actualStream == null) {
     return null;
@@ -856,6 +1152,18 @@ $UiActualDeviceStreamConfigCopyWith<$Res>? get actualStream {
 
   return $UiActualDeviceStreamConfigCopyWith<$Res>(_self.actualStream!, (value) {
     return _then(_self.copyWith(actualStream: value));
+  });
+}/// Create a copy of UiAudioRuntimeSettings
+/// with the given fields replaced by the non-null parameter values.
+@override
+@pragma('vm:prefer-inline')
+$UiActualInputStreamConfigCopyWith<$Res>? get actualInput {
+    if (_self.actualInput == null) {
+    return null;
+  }
+
+  return $UiActualInputStreamConfigCopyWith<$Res>(_self.actualInput!, (value) {
+    return _then(_self.copyWith(actualInput: value));
   });
 }/// Create a copy of UiAudioRuntimeSettings
 /// with the given fields replaced by the non-null parameter values.
@@ -1231,6 +1539,263 @@ class _$UiDeviceStreamStatus_UnavailableCopyWithImpl<$Res>
   return _then(UiDeviceStreamStatus_Unavailable(
 reason: null == reason ? _self.reason : reason // ignore: cast_nullable_to_non_nullable
 as String,
+  ));
+}
+
+
+}
+
+/// @nodoc
+mixin _$UiInputDeviceInfo {
+
+ String? get deviceId; String get displayName; bool get isCurrentSystemDefault;
+/// Create a copy of UiInputDeviceInfo
+/// with the given fields replaced by the non-null parameter values.
+@JsonKey(includeFromJson: false, includeToJson: false)
+@pragma('vm:prefer-inline')
+$UiInputDeviceInfoCopyWith<UiInputDeviceInfo> get copyWith => _$UiInputDeviceInfoCopyWithImpl<UiInputDeviceInfo>(this as UiInputDeviceInfo, _$identity);
+
+
+
+@override
+bool operator ==(Object other) {
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is UiInputDeviceInfo&&(identical(other.deviceId, deviceId) || other.deviceId == deviceId)&&(identical(other.displayName, displayName) || other.displayName == displayName)&&(identical(other.isCurrentSystemDefault, isCurrentSystemDefault) || other.isCurrentSystemDefault == isCurrentSystemDefault));
+}
+
+
+@override
+int get hashCode => Object.hash(runtimeType,deviceId,displayName,isCurrentSystemDefault);
+
+@override
+String toString() {
+  return 'UiInputDeviceInfo(deviceId: $deviceId, displayName: $displayName, isCurrentSystemDefault: $isCurrentSystemDefault)';
+}
+
+
+}
+
+/// @nodoc
+abstract mixin class $UiInputDeviceInfoCopyWith<$Res>  {
+  factory $UiInputDeviceInfoCopyWith(UiInputDeviceInfo value, $Res Function(UiInputDeviceInfo) _then) = _$UiInputDeviceInfoCopyWithImpl;
+@useResult
+$Res call({
+ String? deviceId, String displayName, bool isCurrentSystemDefault
+});
+
+
+
+
+}
+/// @nodoc
+class _$UiInputDeviceInfoCopyWithImpl<$Res>
+    implements $UiInputDeviceInfoCopyWith<$Res> {
+  _$UiInputDeviceInfoCopyWithImpl(this._self, this._then);
+
+  final UiInputDeviceInfo _self;
+  final $Res Function(UiInputDeviceInfo) _then;
+
+/// Create a copy of UiInputDeviceInfo
+/// with the given fields replaced by the non-null parameter values.
+@pragma('vm:prefer-inline') @override $Res call({Object? deviceId = freezed,Object? displayName = null,Object? isCurrentSystemDefault = null,}) {
+  return _then(_self.copyWith(
+deviceId: freezed == deviceId ? _self.deviceId : deviceId // ignore: cast_nullable_to_non_nullable
+as String?,displayName: null == displayName ? _self.displayName : displayName // ignore: cast_nullable_to_non_nullable
+as String,isCurrentSystemDefault: null == isCurrentSystemDefault ? _self.isCurrentSystemDefault : isCurrentSystemDefault // ignore: cast_nullable_to_non_nullable
+as bool,
+  ));
+}
+
+}
+
+
+/// Adds pattern-matching-related methods to [UiInputDeviceInfo].
+extension UiInputDeviceInfoPatterns on UiInputDeviceInfo {
+/// A variant of `map` that fallback to returning `orElse`.
+///
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case final Subclass value:
+///     return ...;
+///   case _:
+///     return orElse();
+/// }
+/// ```
+
+@optionalTypeArgs TResult maybeMap<TResult extends Object?>(TResult Function( _UiInputDeviceInfo value)?  $default,{required TResult orElse(),}){
+final _that = this;
+switch (_that) {
+case _UiInputDeviceInfo() when $default != null:
+return $default(_that);case _:
+  return orElse();
+
+}
+}
+/// A `switch`-like method, using callbacks.
+///
+/// Callbacks receives the raw object, upcasted.
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case final Subclass value:
+///     return ...;
+///   case final Subclass2 value:
+///     return ...;
+/// }
+/// ```
+
+@optionalTypeArgs TResult map<TResult extends Object?>(TResult Function( _UiInputDeviceInfo value)  $default,){
+final _that = this;
+switch (_that) {
+case _UiInputDeviceInfo():
+return $default(_that);}
+}
+/// A variant of `map` that fallback to returning `null`.
+///
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case final Subclass value:
+///     return ...;
+///   case _:
+///     return null;
+/// }
+/// ```
+
+@optionalTypeArgs TResult? mapOrNull<TResult extends Object?>(TResult? Function( _UiInputDeviceInfo value)?  $default,){
+final _that = this;
+switch (_that) {
+case _UiInputDeviceInfo() when $default != null:
+return $default(_that);case _:
+  return null;
+
+}
+}
+/// A variant of `when` that fallback to an `orElse` callback.
+///
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case Subclass(:final field):
+///     return ...;
+///   case _:
+///     return orElse();
+/// }
+/// ```
+
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( String? deviceId,  String displayName,  bool isCurrentSystemDefault)?  $default,{required TResult orElse(),}) {final _that = this;
+switch (_that) {
+case _UiInputDeviceInfo() when $default != null:
+return $default(_that.deviceId,_that.displayName,_that.isCurrentSystemDefault);case _:
+  return orElse();
+
+}
+}
+/// A `switch`-like method, using callbacks.
+///
+/// As opposed to `map`, this offers destructuring.
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case Subclass(:final field):
+///     return ...;
+///   case Subclass2(:final field2):
+///     return ...;
+/// }
+/// ```
+
+@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( String? deviceId,  String displayName,  bool isCurrentSystemDefault)  $default,) {final _that = this;
+switch (_that) {
+case _UiInputDeviceInfo():
+return $default(_that.deviceId,_that.displayName,_that.isCurrentSystemDefault);}
+}
+/// A variant of `when` that fallback to returning `null`
+///
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case Subclass(:final field):
+///     return ...;
+///   case _:
+///     return null;
+/// }
+/// ```
+
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( String? deviceId,  String displayName,  bool isCurrentSystemDefault)?  $default,) {final _that = this;
+switch (_that) {
+case _UiInputDeviceInfo() when $default != null:
+return $default(_that.deviceId,_that.displayName,_that.isCurrentSystemDefault);case _:
+  return null;
+
+}
+}
+
+}
+
+/// @nodoc
+
+
+class _UiInputDeviceInfo implements UiInputDeviceInfo {
+  const _UiInputDeviceInfo({this.deviceId, required this.displayName, required this.isCurrentSystemDefault});
+  
+
+@override final  String? deviceId;
+@override final  String displayName;
+@override final  bool isCurrentSystemDefault;
+
+/// Create a copy of UiInputDeviceInfo
+/// with the given fields replaced by the non-null parameter values.
+@override @JsonKey(includeFromJson: false, includeToJson: false)
+@pragma('vm:prefer-inline')
+_$UiInputDeviceInfoCopyWith<_UiInputDeviceInfo> get copyWith => __$UiInputDeviceInfoCopyWithImpl<_UiInputDeviceInfo>(this, _$identity);
+
+
+
+@override
+bool operator ==(Object other) {
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is _UiInputDeviceInfo&&(identical(other.deviceId, deviceId) || other.deviceId == deviceId)&&(identical(other.displayName, displayName) || other.displayName == displayName)&&(identical(other.isCurrentSystemDefault, isCurrentSystemDefault) || other.isCurrentSystemDefault == isCurrentSystemDefault));
+}
+
+
+@override
+int get hashCode => Object.hash(runtimeType,deviceId,displayName,isCurrentSystemDefault);
+
+@override
+String toString() {
+  return 'UiInputDeviceInfo(deviceId: $deviceId, displayName: $displayName, isCurrentSystemDefault: $isCurrentSystemDefault)';
+}
+
+
+}
+
+/// @nodoc
+abstract mixin class _$UiInputDeviceInfoCopyWith<$Res> implements $UiInputDeviceInfoCopyWith<$Res> {
+  factory _$UiInputDeviceInfoCopyWith(_UiInputDeviceInfo value, $Res Function(_UiInputDeviceInfo) _then) = __$UiInputDeviceInfoCopyWithImpl;
+@override @useResult
+$Res call({
+ String? deviceId, String displayName, bool isCurrentSystemDefault
+});
+
+
+
+
+}
+/// @nodoc
+class __$UiInputDeviceInfoCopyWithImpl<$Res>
+    implements _$UiInputDeviceInfoCopyWith<$Res> {
+  __$UiInputDeviceInfoCopyWithImpl(this._self, this._then);
+
+  final _UiInputDeviceInfo _self;
+  final $Res Function(_UiInputDeviceInfo) _then;
+
+/// Create a copy of UiInputDeviceInfo
+/// with the given fields replaced by the non-null parameter values.
+@override @pragma('vm:prefer-inline') $Res call({Object? deviceId = freezed,Object? displayName = null,Object? isCurrentSystemDefault = null,}) {
+  return _then(_UiInputDeviceInfo(
+deviceId: freezed == deviceId ? _self.deviceId : deviceId // ignore: cast_nullable_to_non_nullable
+as String?,displayName: null == displayName ? _self.displayName : displayName // ignore: cast_nullable_to_non_nullable
+as String,isCurrentSystemDefault: null == isCurrentSystemDefault ? _self.isCurrentSystemDefault : isCurrentSystemDefault // ignore: cast_nullable_to_non_nullable
+as bool,
   ));
 }
 
@@ -2260,6 +2825,260 @@ class __$UiRequestedDspConfigCopyWithImpl<$Res>
 sampleRate: null == sampleRate ? _self.sampleRate : sampleRate // ignore: cast_nullable_to_non_nullable
 as int,blockSize: null == blockSize ? _self.blockSize : blockSize // ignore: cast_nullable_to_non_nullable
 as int,
+  ));
+}
+
+
+}
+
+/// @nodoc
+mixin _$UiRequestedInputConfig {
+
+ bool get enabled; String? get deviceId;
+/// Create a copy of UiRequestedInputConfig
+/// with the given fields replaced by the non-null parameter values.
+@JsonKey(includeFromJson: false, includeToJson: false)
+@pragma('vm:prefer-inline')
+$UiRequestedInputConfigCopyWith<UiRequestedInputConfig> get copyWith => _$UiRequestedInputConfigCopyWithImpl<UiRequestedInputConfig>(this as UiRequestedInputConfig, _$identity);
+
+
+
+@override
+bool operator ==(Object other) {
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is UiRequestedInputConfig&&(identical(other.enabled, enabled) || other.enabled == enabled)&&(identical(other.deviceId, deviceId) || other.deviceId == deviceId));
+}
+
+
+@override
+int get hashCode => Object.hash(runtimeType,enabled,deviceId);
+
+@override
+String toString() {
+  return 'UiRequestedInputConfig(enabled: $enabled, deviceId: $deviceId)';
+}
+
+
+}
+
+/// @nodoc
+abstract mixin class $UiRequestedInputConfigCopyWith<$Res>  {
+  factory $UiRequestedInputConfigCopyWith(UiRequestedInputConfig value, $Res Function(UiRequestedInputConfig) _then) = _$UiRequestedInputConfigCopyWithImpl;
+@useResult
+$Res call({
+ bool enabled, String? deviceId
+});
+
+
+
+
+}
+/// @nodoc
+class _$UiRequestedInputConfigCopyWithImpl<$Res>
+    implements $UiRequestedInputConfigCopyWith<$Res> {
+  _$UiRequestedInputConfigCopyWithImpl(this._self, this._then);
+
+  final UiRequestedInputConfig _self;
+  final $Res Function(UiRequestedInputConfig) _then;
+
+/// Create a copy of UiRequestedInputConfig
+/// with the given fields replaced by the non-null parameter values.
+@pragma('vm:prefer-inline') @override $Res call({Object? enabled = null,Object? deviceId = freezed,}) {
+  return _then(_self.copyWith(
+enabled: null == enabled ? _self.enabled : enabled // ignore: cast_nullable_to_non_nullable
+as bool,deviceId: freezed == deviceId ? _self.deviceId : deviceId // ignore: cast_nullable_to_non_nullable
+as String?,
+  ));
+}
+
+}
+
+
+/// Adds pattern-matching-related methods to [UiRequestedInputConfig].
+extension UiRequestedInputConfigPatterns on UiRequestedInputConfig {
+/// A variant of `map` that fallback to returning `orElse`.
+///
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case final Subclass value:
+///     return ...;
+///   case _:
+///     return orElse();
+/// }
+/// ```
+
+@optionalTypeArgs TResult maybeMap<TResult extends Object?>(TResult Function( _UiRequestedInputConfig value)?  $default,{required TResult orElse(),}){
+final _that = this;
+switch (_that) {
+case _UiRequestedInputConfig() when $default != null:
+return $default(_that);case _:
+  return orElse();
+
+}
+}
+/// A `switch`-like method, using callbacks.
+///
+/// Callbacks receives the raw object, upcasted.
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case final Subclass value:
+///     return ...;
+///   case final Subclass2 value:
+///     return ...;
+/// }
+/// ```
+
+@optionalTypeArgs TResult map<TResult extends Object?>(TResult Function( _UiRequestedInputConfig value)  $default,){
+final _that = this;
+switch (_that) {
+case _UiRequestedInputConfig():
+return $default(_that);}
+}
+/// A variant of `map` that fallback to returning `null`.
+///
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case final Subclass value:
+///     return ...;
+///   case _:
+///     return null;
+/// }
+/// ```
+
+@optionalTypeArgs TResult? mapOrNull<TResult extends Object?>(TResult? Function( _UiRequestedInputConfig value)?  $default,){
+final _that = this;
+switch (_that) {
+case _UiRequestedInputConfig() when $default != null:
+return $default(_that);case _:
+  return null;
+
+}
+}
+/// A variant of `when` that fallback to an `orElse` callback.
+///
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case Subclass(:final field):
+///     return ...;
+///   case _:
+///     return orElse();
+/// }
+/// ```
+
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( bool enabled,  String? deviceId)?  $default,{required TResult orElse(),}) {final _that = this;
+switch (_that) {
+case _UiRequestedInputConfig() when $default != null:
+return $default(_that.enabled,_that.deviceId);case _:
+  return orElse();
+
+}
+}
+/// A `switch`-like method, using callbacks.
+///
+/// As opposed to `map`, this offers destructuring.
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case Subclass(:final field):
+///     return ...;
+///   case Subclass2(:final field2):
+///     return ...;
+/// }
+/// ```
+
+@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( bool enabled,  String? deviceId)  $default,) {final _that = this;
+switch (_that) {
+case _UiRequestedInputConfig():
+return $default(_that.enabled,_that.deviceId);}
+}
+/// A variant of `when` that fallback to returning `null`
+///
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case Subclass(:final field):
+///     return ...;
+///   case _:
+///     return null;
+/// }
+/// ```
+
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( bool enabled,  String? deviceId)?  $default,) {final _that = this;
+switch (_that) {
+case _UiRequestedInputConfig() when $default != null:
+return $default(_that.enabled,_that.deviceId);case _:
+  return null;
+
+}
+}
+
+}
+
+/// @nodoc
+
+
+class _UiRequestedInputConfig implements UiRequestedInputConfig {
+  const _UiRequestedInputConfig({required this.enabled, this.deviceId});
+  
+
+@override final  bool enabled;
+@override final  String? deviceId;
+
+/// Create a copy of UiRequestedInputConfig
+/// with the given fields replaced by the non-null parameter values.
+@override @JsonKey(includeFromJson: false, includeToJson: false)
+@pragma('vm:prefer-inline')
+_$UiRequestedInputConfigCopyWith<_UiRequestedInputConfig> get copyWith => __$UiRequestedInputConfigCopyWithImpl<_UiRequestedInputConfig>(this, _$identity);
+
+
+
+@override
+bool operator ==(Object other) {
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is _UiRequestedInputConfig&&(identical(other.enabled, enabled) || other.enabled == enabled)&&(identical(other.deviceId, deviceId) || other.deviceId == deviceId));
+}
+
+
+@override
+int get hashCode => Object.hash(runtimeType,enabled,deviceId);
+
+@override
+String toString() {
+  return 'UiRequestedInputConfig(enabled: $enabled, deviceId: $deviceId)';
+}
+
+
+}
+
+/// @nodoc
+abstract mixin class _$UiRequestedInputConfigCopyWith<$Res> implements $UiRequestedInputConfigCopyWith<$Res> {
+  factory _$UiRequestedInputConfigCopyWith(_UiRequestedInputConfig value, $Res Function(_UiRequestedInputConfig) _then) = __$UiRequestedInputConfigCopyWithImpl;
+@override @useResult
+$Res call({
+ bool enabled, String? deviceId
+});
+
+
+
+
+}
+/// @nodoc
+class __$UiRequestedInputConfigCopyWithImpl<$Res>
+    implements _$UiRequestedInputConfigCopyWith<$Res> {
+  __$UiRequestedInputConfigCopyWithImpl(this._self, this._then);
+
+  final _UiRequestedInputConfig _self;
+  final $Res Function(_UiRequestedInputConfig) _then;
+
+/// Create a copy of UiRequestedInputConfig
+/// with the given fields replaced by the non-null parameter values.
+@override @pragma('vm:prefer-inline') $Res call({Object? enabled = null,Object? deviceId = freezed,}) {
+  return _then(_UiRequestedInputConfig(
+enabled: null == enabled ? _self.enabled : enabled // ignore: cast_nullable_to_non_nullable
+as bool,deviceId: freezed == deviceId ? _self.deviceId : deviceId // ignore: cast_nullable_to_non_nullable
+as String?,
   ));
 }
 

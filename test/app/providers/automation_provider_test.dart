@@ -48,6 +48,7 @@ final _project = ApplicationDataStore(
       clips: [],
       generatorId: 2,
       orderIdx: 0,
+      input: const UiTrackInput(firstChannel: 0, channels: 2, monitor: false),
     ),
   }),
   generators: IMap(const {

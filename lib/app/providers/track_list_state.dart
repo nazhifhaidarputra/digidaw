@@ -362,6 +362,26 @@ class TrackListNotifier extends Notifier<TrackListState> {
     return Result.ok(null);
   }
 
+  /// Sets the device channels [trackId] records and whether its input is
+  /// heard through it.
+  Future<Result<void>> setTrackInput(int trackId, UiTrackInput input) async {
+    try {
+      final track = await track_api.setTrackInput(
+        ctx: _ctx,
+        trackId: trackId,
+        input: input,
+      );
+      _projectNotifierRead.upsertTrack(track.id, track);
+      return Result.ok(null);
+    } catch (error, stackTrace) {
+      return ref.notifyErrorResult(
+        error,
+        title: 'Could not change the track input',
+        stackTrace: stackTrace,
+      );
+    }
+  }
+
   Future<AsyncValue<Null>> addAudioTrack() async {
     final createRes = await ref.guardApi(() async {
       final newTrack = await addNewAudioTrack(ctx: _ctx);

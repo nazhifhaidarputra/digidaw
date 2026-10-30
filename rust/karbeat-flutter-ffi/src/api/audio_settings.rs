@@ -2,8 +2,9 @@ use crate::api::context::DawContext;
 use crate::api::jobs::run_job;
 use flutter_rust_bridge::frb;
 use karbeat_audio::backend::{
-    ActualDeviceStreamConfig, AudioDeviceInfo, AudioRuntimeSettings, DeviceStreamStatus,
-    OutputDeviceSelection, OutputHostSelection, RequestedDspConfig, RequestedOutputConfig,
+    ActualDeviceStreamConfig, ActualInputStreamConfig, AudioDeviceInfo, AudioRuntimeSettings,
+    DeviceStreamStatus, OutputDeviceSelection, OutputHostSelection, RequestedDspConfig,
+    RequestedInputConfig, RequestedOutputConfig,
 };
 use karbeat_core_api::{
     audio_settings_api,
@@ -75,10 +76,37 @@ pub struct UiActualDeviceStreamConfig {
 
 #[derive(Clone, Debug)]
 #[frb(dart_metadata=("freezed"))]
+pub struct UiInputDeviceInfo {
+    /// `None` follows the system default input.
+    pub device_id: Option<String>,
+    pub display_name: String,
+    pub is_current_system_default: bool,
+}
+
+#[derive(Clone, Debug)]
+#[frb(dart_metadata=("freezed"))]
+pub struct UiRequestedInputConfig {
+    pub enabled: bool,
+    pub device_id: Option<String>,
+}
+
+#[derive(Clone, Debug)]
+#[frb(dart_metadata=("freezed"))]
+pub struct UiActualInputStreamConfig {
+    pub device_id: String,
+    pub device_name: String,
+    pub sample_rate: u32,
+    pub channels: u16,
+}
+
+#[derive(Clone, Debug)]
+#[frb(dart_metadata=("freezed"))]
 pub struct UiAudioRuntimeSettings {
     pub requested_output: UiRequestedOutputConfig,
     pub requested_dsp: UiRequestedDspConfig,
+    pub requested_input: UiRequestedInputConfig,
     pub actual_stream: Option<UiActualDeviceStreamConfig>,
+    pub actual_input: Option<UiActualInputStreamConfig>,
     pub stream_status: UiDeviceStreamStatus,
 }
 
@@ -108,6 +136,37 @@ pub fn list_output_devices(host_name: Option<String>) -> Result<Vec<UiOutputDevi
     });
     result.extend(devices.into_iter().map(UiOutputDeviceInfo::from));
     Ok(result)
+}
+
+/// Input devices of a named host, or of the system default one, led by the system default.
+pub fn list_input_devices(host_name: Option<String>) -> Result<Vec<UiInputDeviceInfo>, String> {
+    let devices = audio_settings_api::available_input_devices(host_name.as_deref())
+        .map_err(|error| error.to_string())?;
+    let mut result = Vec::with_capacity(devices.len() + 1);
+    result.push(UiInputDeviceInfo {
+        device_id: None,
+        display_name: "System default input".to_string(),
+        is_current_system_default: true,
+    });
+    result.extend(devices.into_iter().map(|device| UiInputDeviceInfo {
+        device_id: Some(device.id),
+        display_name: device.name,
+        is_current_system_default: device.is_default,
+    }));
+    Ok(result)
+}
+
+/// Turns the device input on or off and picks its device, restarting the audio stream when
+/// the selection changed.
+pub fn set_input_selection(
+    ctx: &DawContext,
+    enabled: bool,
+    device_id: Option<String>,
+) -> Result<UiAudioRuntimeSettings, String> {
+    crate::api::context::runtime_ctx!(ctx);
+    audio_settings_api::select_input(ctx, enabled, device_id)
+        .map(Into::into)
+        .map_err(|error| error.to_string())
 }
 
 pub fn get_audio_runtime_settings(ctx: &DawContext) -> UiAudioRuntimeSettings {
@@ -264,12 +323,34 @@ impl From<ActualDeviceStreamConfig> for UiActualDeviceStreamConfig {
     }
 }
 
+impl From<RequestedInputConfig> for UiRequestedInputConfig {
+    fn from(value: RequestedInputConfig) -> Self {
+        Self {
+            enabled: value.enabled,
+            device_id: value.device_id,
+        }
+    }
+}
+
+impl From<ActualInputStreamConfig> for UiActualInputStreamConfig {
+    fn from(value: ActualInputStreamConfig) -> Self {
+        Self {
+            device_id: value.device_id,
+            device_name: value.device_name,
+            sample_rate: value.sample_rate,
+            channels: value.channels,
+        }
+    }
+}
+
 impl From<AudioRuntimeSettings> for UiAudioRuntimeSettings {
     fn from(value: AudioRuntimeSettings) -> Self {
         Self {
             requested_output: value.requested_output.into(),
             requested_dsp: value.requested_dsp.into(),
+            requested_input: value.requested_input.into(),
             actual_stream: value.actual_stream.map(Into::into),
+            actual_input: value.actual_input.map(Into::into),
             stream_status: value.stream_status.into(),
         }
     }

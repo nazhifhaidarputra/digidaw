@@ -56,6 +56,28 @@ const workspaceShortcuts = IListConst<DawShortcut>([
     defaultKey: SingleActivator(LogicalKeyboardKey.keyM, control: true),
   ),
   DawShortcut(
+    id: 'transport.recordSelectedTrack',
+    title: 'Record Selected Track',
+    category: 'Transport',
+    intent: RecordSelectedTrackIntent(),
+    defaultKey: SingleActivator(
+      LogicalKeyboardKey.keyR,
+      control: true,
+      alt: true,
+    ),
+  ),
+  DawShortcut(
+    id: 'transport.stopRecording',
+    title: 'Stop Recording',
+    category: 'Transport',
+    intent: StopRecordingIntent(),
+    defaultKey: SingleActivator(
+      LogicalKeyboardKey.keyE,
+      control: true,
+      alt: true,
+    ),
+  ),
+  DawShortcut(
     id: "workspace.save",
     title: "Save Project",
     category: "Workspace",

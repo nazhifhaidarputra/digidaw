@@ -1,5 +1,7 @@
+import 'dart:math' as math;
 import 'dart:typed_data';
 import 'dart:ui';
+import 'package:fast_immutable_collections/fast_immutable_collections.dart';
 import 'package:flutter/material.dart';
 
 import 'dart:ffi' as ffi;
@@ -413,4 +415,60 @@ class StereoWaveformClipPainter extends CustomPainter {
         !identical(oldDelegate.samples, samples) ||
         oldDelegate.color != color;
   }
+}
+
+// =============================================================================
+// RecordingPreviewPainter  (Growing waveform of a take being recorded)
+// =============================================================================
+
+/// Draws a take being recorded from its peak pairs: the lowest and highest
+/// sample of every [framesPerPeak] frames.
+class RecordingPreviewPainter extends CustomPainter {
+  final IList<double> peaks;
+  final Color color;
+
+  /// Frames each horizontal pixel covers.
+  final double framesPerPixel;
+  final int framesPerPeak;
+
+  RecordingPreviewPainter({
+    required this.peaks,
+    required this.color,
+    required this.framesPerPixel,
+    this.framesPerPeak = 256,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final pairs = peaks.length ~/ 2;
+    if (pairs == 0 || size.width <= 0 || framesPerPixel <= 0) return;
+    final paint = Paint()
+      ..color = color
+      ..strokeWidth = 1.0;
+    final middle = size.height / 2;
+    final halfHeight = size.height / 2;
+    final peaksPerPixel = framesPerPixel / framesPerPeak;
+    for (var x = 0; x < size.width; x++) {
+      final first = (x * peaksPerPixel).floor();
+      if (first >= pairs) break;
+      final last = math.max(first + 1, ((x + 1) * peaksPerPixel).floor());
+      var low = 0.0;
+      var high = 0.0;
+      for (var pair = first; pair < math.min(last, pairs); pair++) {
+        low = math.min(low, peaks[pair * 2]);
+        high = math.max(high, peaks[pair * 2 + 1]);
+      }
+      canvas.drawLine(
+        Offset(x + 0.5, middle - high.clamp(-1.0, 1.0) * halfHeight),
+        Offset(x + 0.5, middle - low.clamp(-1.0, 1.0) * halfHeight),
+        paint,
+      );
+    }
+  }
+
+  @override
+  bool shouldRepaint(RecordingPreviewPainter oldDelegate) =>
+      oldDelegate.peaks != peaks ||
+      oldDelegate.color != color ||
+      oldDelegate.framesPerPixel != framesPerPixel;
 }

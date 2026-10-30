@@ -7,6 +7,7 @@ import 'package:karbeat/app/providers/floating_midi_keyboard_state.dart';
 import 'package:karbeat/app/providers/notification_provider.dart';
 import 'package:karbeat/app/providers/piano_roll_state.dart';
 import 'package:karbeat/app/providers/project_provider.dart';
+import 'package:karbeat/app/providers/recording_state.dart';
 import 'package:karbeat/app/providers/transport_state.dart';
 import 'package:karbeat/app/providers/workspace_state.dart';
 import 'package:karbeat/core/constants/toolbar.dart';
@@ -40,6 +41,8 @@ class MainScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    // Takes keep recording, and ended ones keep being saved, in every view.
+    ref.listen(recordingProvider, (_, _) {});
     final currentContext = ref.watch(
       workspaceStateProvider.select((s) => s.currentToolbarContext),
     );
@@ -138,6 +141,23 @@ class MainScreen extends ConsumerWidget {
               ToggleMetronomeIntent: CallbackAction<ToggleMetronomeIntent>(
                 onInvoke: (_) {
                   ref.read(transportProvider.notifier).toggleMetronomeActive();
+                  return null;
+                },
+              ),
+              RecordSelectedTrackIntent:
+                  CallbackAction<RecordSelectedTrackIntent>(
+                    onInvoke: (_) {
+                      unawaited(
+                        ref
+                            .read(recordingProvider.notifier)
+                            .recordSelectedTrack(),
+                      );
+                      return null;
+                    },
+                  ),
+              StopRecordingIntent: CallbackAction<StopRecordingIntent>(
+                onInvoke: (_) {
+                  unawaited(ref.read(recordingProvider.notifier).stopAll());
                   return null;
                 },
               ),

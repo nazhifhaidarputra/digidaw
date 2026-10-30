@@ -320,7 +320,7 @@ fn link_file(_target: &Path, _link: &Path) -> std::io::Result<()> {
 ///
 /// It lives in the on-disk user cache because the system temporary directory is often
 /// RAM-backed tmpfs on Linux.
-fn extraction_session_dir() -> anyhow::Result<tempfile::TempDir> {
+pub(crate) fn extraction_session_dir() -> anyhow::Result<tempfile::TempDir> {
     let mut builder = tempfile::Builder::new();
     builder.prefix("session_");
     if let Some(directory) = app_cache_dir().map(|cache| cache.join("sessions")) {

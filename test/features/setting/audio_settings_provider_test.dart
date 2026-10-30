@@ -55,6 +55,7 @@ class _FakeAudioSettingsService extends AudioSettingsService {
           sampleRate: sampleRate,
           blockSize: blockSize,
         ),
+        requestedInput: const UiRequestedInputConfig(enabled: false),
         streamStatus: const UiDeviceStreamStatus.starting(),
       ),
     );

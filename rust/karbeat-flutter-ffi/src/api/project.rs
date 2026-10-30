@@ -17,7 +17,7 @@ use karbeat_core::core::project::{
     AudioHardwareConfig, DawSource, ProjectMetadata,
     clip::Clip,
     generator::{GeneratorInstance, GeneratorInstanceType},
-    track::{AudioTrack, TrackType, audio_waveform::AudioWaveform},
+    track::{AudioTrack, TrackInputSettings, TrackType, audio_waveform::AudioWaveform},
     transport::TransportState,
 };
 use karbeat_core_api::{
@@ -134,6 +134,39 @@ pub struct UiTrack {
     pub clips: Vec<UiClip>,
     pub generator_id: Option<u64>,
     pub order_idx: usize,
+    /// Device input the track records and monitors.
+    pub input: UiTrackInput,
+}
+
+/// Device channels a track records, and whether it is heard through the track.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[frb(dart_metadata=("freezed"))]
+pub struct UiTrackInput {
+    /// First device channel, from 0.
+    pub first_channel: u16,
+    /// 1 records the channel alone; 2 records it and the next.
+    pub channels: u16,
+    pub monitor: bool,
+}
+
+impl From<TrackInputSettings> for UiTrackInput {
+    fn from(value: TrackInputSettings) -> Self {
+        Self {
+            first_channel: value.first_channel,
+            channels: value.channels,
+            monitor: value.monitor,
+        }
+    }
+}
+
+impl From<UiTrackInput> for TrackInputSettings {
+    fn from(value: UiTrackInput) -> Self {
+        Self {
+            first_channel: value.first_channel,
+            channels: value.channels,
+            monitor: value.monitor,
+        }
+    }
 }
 
 #[derive(Clone, Default)]
@@ -259,6 +292,7 @@ impl UiTrack {
                 .collect(),
             generator_id,
             order_idx: value.order_idx,
+            input: value.input.into(),
         }
     }
 }

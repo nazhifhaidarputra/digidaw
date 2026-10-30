@@ -5,7 +5,7 @@ use std::collections::HashMap;
 use crate::api::context::DawContext;
 use crate::api::jobs::run_job;
 use crate::api::pattern::UiPattern;
-use crate::api::project::{UiClip, UiGainEnvelope, UiTrack};
+use crate::api::project::{UiClip, UiGainEnvelope, UiTrack, UiTrackInput};
 use flutter_rust_bridge::frb;
 use karbeat_core::core::project::clip::ResizeEdge;
 use karbeat_core::shared::id::*;
@@ -337,6 +337,18 @@ pub fn change_track_color(ctx: &DawContext, track_id: u64, new_color: &str) -> R
     track_api::change_track_color(ctx, TrackId::from_u64(track_id), new_color)
         .map_err(|e| e.to_string())?;
     Ok(())
+}
+
+/// Sets the device input an audio track records and monitors, returning the updated track.
+pub fn set_track_input(
+    ctx: &DawContext,
+    track_id: u64,
+    input: UiTrackInput,
+) -> Result<UiTrack, String> {
+    crate::api::context::project_ctx!(ctx);
+    let track = track_api::set_track_input(ctx, TrackId::from_u64(track_id), input.into())
+        .map_err(|e| e.to_string())?;
+    Ok(UiTrack::from_track(&track, &ctx.app_state))
 }
 
 /// Delete a track from the timeline. This function returns a string which will be

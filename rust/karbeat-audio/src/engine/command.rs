@@ -43,9 +43,7 @@ impl AudioEngine {
         }
         if matches!(
             cmd,
-            AudioCommand::HydratePlugin { .. }
-                | AudioCommand::UpdateAudioConfig { .. }
-                | AudioCommand::SetTrackInput { .. }
+            AudioCommand::HydratePlugin { .. } | AudioCommand::UpdateAudioConfig { .. }
         ) {
             self.render_plan.mark_stale();
         }
@@ -1165,14 +1163,18 @@ impl AudioEngine {
                     self.retire_graph_state(RetiredGraphState::Automation(previous));
                 }
             }
-            AudioCommand::SetTrackInput { track_id, input } => match input {
-                Some(input) => {
-                    self.input.tracks.insert(track_id, input);
+            AudioCommand::StartRecordingTake(take) => {
+                if let Err(rejected) = self.record.start(take) {
+                    self.retire_record_take(rejected);
                 }
-                None => {
-                    self.input.tracks.remove(&track_id);
+                self.transport.song.is_recording = self.record.is_armed();
+            }
+            AudioCommand::EndRecordingTake { track_id } => {
+                if let Some(take) = self.record.end(track_id) {
+                    self.retire_record_take(take);
                 }
-            },
+                self.transport.song.is_recording = self.record.is_armed();
+            }
             AudioCommand::UpdateAudioConfig {
                 sample_rate,
                 buffer_size,
@@ -1239,6 +1241,7 @@ impl AudioEngine {
                     let buf_size = buffer_size.unwrap_or(self.current_state.graph.buffer_size);
                     self.current_state.graph.sample_rate = sr;
                     self.current_state.graph.buffer_size = buf_size;
+                    self.record.prepare(buf_size);
 
                     self.reprepare_plugins_and_clear_delays(sr, buf_size);
                     self.recalculate_latencies();
@@ -1275,6 +1278,7 @@ impl AudioEngine {
                         self.config.sample_rate = sr;
                     }
 
+                    self.record.prepare(buf_size);
                     self.reprepare_plugins_and_clear_delays(sr, buf_size);
 
                     log::info!(

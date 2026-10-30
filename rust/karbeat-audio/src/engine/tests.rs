@@ -2026,6 +2026,49 @@ fn song_loop_region_lets_a_playhead_past_its_end_play_on() {
 }
 
 #[test]
+fn a_take_waits_for_the_song_and_holds_the_loop_while_it_records() {
+    use crate::engine::{InputSource, RecordTake, TakeShared};
+    use karbeat_core::shared::TrackId;
+    use std::sync::Arc;
+
+    let mut engine = song_engine_with_ramp_clip();
+    let (producer, consumer) = RingBuffer::<f32>::new(48_000);
+    let shared = Arc::new(TakeShared::default());
+    engine.process_command(AudioCommand::StartRecordingTake(Box::new(RecordTake::new(
+        TrackId::from(1),
+        InputSource {
+            first_channel: 0,
+            channels: 2,
+        },
+        producer,
+        Arc::clone(&shared),
+    ))));
+    let mut block = vec![0.0_f32; 512 * 2];
+    engine.process(&mut block);
+    assert!(engine.transport.song.is_recording);
+    assert!(shared.start().is_none(), "nothing records while stopped");
+
+    engine.process_command(AudioCommand::SetLooping(true));
+    engine.process_command(AudioCommand::SetSongLoopRegion(Some((480, 960))));
+    play_song_from(&mut engine, 23_700, 700);
+    assert_eq!(
+        engine.transport.song.playhead_samples, 24_400,
+        "the loop does not wrap a take"
+    );
+    assert_eq!(
+        shared.start().map(|start| start.playhead_samples),
+        Some(23_700)
+    );
+    assert_eq!(shared.frames(), 700);
+
+    engine.process_command(AudioCommand::SetPlaying(false));
+    engine.process(&mut block);
+    assert!(shared.ended(), "stopping the song ends the take");
+    assert!(!engine.transport.song.is_recording);
+    assert_eq!(consumer.slots(), 700 * 2);
+}
+
+#[test]
 fn song_loop_without_region_still_wraps_at_the_song_end() {
     let mut engine = song_engine_with_ramp_clip();
     engine.process_command(AudioCommand::SetLooping(true));
