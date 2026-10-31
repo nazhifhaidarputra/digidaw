@@ -280,7 +280,15 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
   /// Helper method to build the cut helper line
   Widget _buildCutHelperLine(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
-    final state = ref.watch(workspaceStateProvider);
+    final state = ref.watch(
+      workspaceStateProvider.select(
+        (state) => (
+          selectedTool: state.selectedTool,
+          horizontalZoomLevel: state.horizontalZoomLevel,
+          horizontalClipShiftSizeDenom: state.horizontalClipShiftSizeDenom,
+        ),
+      ),
+    );
     if (_mousePos == null || state.selectedTool != ToolSelection.slice) {
       return const SizedBox();
     }
@@ -355,7 +363,16 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
   }
 
   Widget _buildToolbar() {
-    final workspaceState = ref.watch(workspaceStateProvider);
+    final workspaceState = ref.watch(
+      workspaceStateProvider.select(
+        (state) => (
+          gridSize: state.gridSize,
+          isRightPanelExpanded: state.isRightPanelExpanded,
+          resizeStretches: state.resizeStretches,
+          horizontalClipShiftSizeDenom: state.horizontalClipShiftSizeDenom,
+        ),
+      ),
+    );
     final colors = Theme.of(context).colorScheme;
     return Container(
       height: 36,
@@ -804,9 +821,12 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
     final isPlacing = ref.watch(
       clipPlacementProvider.select((s) => s.isPlacing),
     );
-    final workspaceState = ref.watch(workspaceStateProvider);
-    final selectedTool = workspaceState.selectedTool;
-    final horizontalZoom = workspaceState.horizontalZoomLevel;
+    final selectedTool = ref.watch(
+      workspaceStateProvider.select((state) => state.selectedTool),
+    );
+    final horizontalZoom = ref.watch(
+      workspaceStateProvider.select((state) => state.horizontalZoomLevel),
+    );
     final selectedClipIds = ref.watch(
       trackListStateProvider.select((s) => s.selectedClipIds),
     );
@@ -972,6 +992,9 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
                                           );
                                       double ticks = absoluteX * horizontalZoom;
 
+                                      final workspaceState = ref.read(
+                                        workspaceStateProvider,
+                                      );
                                       if (workspaceState.snapToGrid) {
                                         ticks = _snapTick(
                                           ticks.toInt(),
@@ -1046,7 +1069,8 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
               scrollController: _trackContentController,
               zoomLevel: horizontalZoom,
               sampleSelector: (pos) => pos.ticks,
-              snapPosition: (ticks) => _snapTick(ticks, workspaceState),
+              snapPosition: (ticks) =>
+                  _snapTick(ticks, ref.read(workspaceStateProvider)),
               onSeek: _seekToTicks,
             ),
           ),

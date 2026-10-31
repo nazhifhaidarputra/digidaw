@@ -143,116 +143,119 @@ class _PlayheadOverlayState extends ConsumerState<PlayheadOverlay> {
       _followPlayhead(previous?.value, position);
     });
 
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final viewportWidth = constraints.maxWidth;
+    // The playhead moves every frame during playback; keep that repaint off the content below.
+    return RepaintBoundary(
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final viewportWidth = constraints.maxWidth;
 
-        return Stack(
-          clipBehavior: Clip.none,
-          children: [
-            if (positionAsync.hasValue && positionAsync.value != null)
-              Builder(
-                builder: (context) {
-                  final pos = positionAsync.value!;
-                  _lastKnownSamples = widget.sampleSelector(pos);
+          return Stack(
+            clipBehavior: Clip.none,
+            children: [
+              if (positionAsync.hasValue && positionAsync.value != null)
+                Builder(
+                  builder: (context) {
+                    final pos = positionAsync.value!;
+                    _lastKnownSamples = widget.sampleSelector(pos);
 
-                  // If the user is actively dragging, use their finger position.
-                  // Otherwise, snap to the actual engine position.
-                  final currentSamples = _isDragging
-                      ? _dragTarget
-                      : _lastKnownSamples;
+                    // If the user is actively dragging, use their finger position.
+                    // Otherwise, snap to the actual engine position.
+                    final currentSamples = _isDragging
+                        ? _dragTarget
+                        : _lastKnownSamples;
 
-                  double playheadAbsoluteX = 0;
-                  if (widget.zoomLevel > 0) {
-                    playheadAbsoluteX = currentSamples / widget.zoomLevel;
-                  }
+                    double playheadAbsoluteX = 0;
+                    if (widget.zoomLevel > 0) {
+                      playheadAbsoluteX = currentSamples / widget.zoomLevel;
+                    }
 
-                  return AnimatedBuilder(
-                    animation: widget.scrollController,
-                    builder: (context, child) {
-                      double scrollOffset = 0;
-                      if (widget.scrollController.hasClients) {
-                        scrollOffset = widget.scrollController.offset;
-                      }
+                    return AnimatedBuilder(
+                      animation: widget.scrollController,
+                      builder: (context, child) {
+                        double scrollOffset = 0;
+                        if (widget.scrollController.hasClients) {
+                          scrollOffset = widget.scrollController.offset;
+                        }
 
-                      // Calculate Screen X
-                      final double left =
-                          widget.offsetAdjustment +
-                          playheadAbsoluteX -
-                          scrollOffset;
+                        // Calculate Screen X
+                        final double left =
+                            widget.offsetAdjustment +
+                            playheadAbsoluteX -
+                            scrollOffset;
 
-                      // Optimization: Don't render if completely off-screen
-                      if (left > viewportWidth + 50) return const SizedBox();
+                        // Optimization: Don't render if completely off-screen
+                        if (left > viewportWidth + 50) return const SizedBox();
 
-                      // Hide if it goes behind the header/offset (scrolled too far left)
-                      if (left < widget.offsetAdjustment) {
-                        return const SizedBox();
-                      }
+                        // Hide if it goes behind the header/offset (scrolled too far left)
+                        if (left < widget.offsetAdjustment) {
+                          return const SizedBox();
+                        }
 
-                      return Positioned(
-                        left: left - 10, // Center the 20px wide handle
-                        top: 0,
-                        bottom: 0,
-                        width: 20, // Hitbox
-                        child: Column(
-                          children: [
-                            GestureDetector(
-                              behavior: HitTestBehavior.opaque,
-                              onHorizontalDragStart: (details) {
-                                setState(() {
-                                  _isDragging = true;
-                                  _dragSamples = currentSamples;
-                                });
-                              },
-                              onHorizontalDragUpdate: (details) {
-                                // Update local state instantly for buttery smooth UI
-                                setState(() {
-                                  final deltaSamples =
-                                      (details.delta.dx * widget.zoomLevel)
-                                          .toInt();
-                                  _dragSamples += deltaSamples;
-                                  if (_dragSamples < 0) {
-                                    _dragSamples = 0; // Prevent negative time
-                                  }
-                                });
-                              },
-                              onHorizontalDragEnd: (details) {
-                                widget.onSeek(_dragTarget);
-                                setState(() {
-                                  _isDragging = false;
-                                });
-                              },
-                              onHorizontalDragCancel: () {
-                                setState(() {
-                                  _isDragging = false;
-                                });
-                              },
-                              child: SizedBox(
-                                height: 20,
-                                width: 20,
-                                child: CustomPaint(
-                                  painter: _PlayheadHandlePainter(color),
+                        return Positioned(
+                          left: left - 10, // Center the 20px wide handle
+                          top: 0,
+                          bottom: 0,
+                          width: 20, // Hitbox
+                          child: Column(
+                            children: [
+                              GestureDetector(
+                                behavior: HitTestBehavior.opaque,
+                                onHorizontalDragStart: (details) {
+                                  setState(() {
+                                    _isDragging = true;
+                                    _dragSamples = currentSamples;
+                                  });
+                                },
+                                onHorizontalDragUpdate: (details) {
+                                  // Update local state instantly for buttery smooth UI
+                                  setState(() {
+                                    final deltaSamples =
+                                        (details.delta.dx * widget.zoomLevel)
+                                            .toInt();
+                                    _dragSamples += deltaSamples;
+                                    if (_dragSamples < 0) {
+                                      _dragSamples = 0; // Prevent negative time
+                                    }
+                                  });
+                                },
+                                onHorizontalDragEnd: (details) {
+                                  widget.onSeek(_dragTarget);
+                                  setState(() {
+                                    _isDragging = false;
+                                  });
+                                },
+                                onHorizontalDragCancel: () {
+                                  setState(() {
+                                    _isDragging = false;
+                                  });
+                                },
+                                child: SizedBox(
+                                  height: 20,
+                                  width: 20,
+                                  child: CustomPaint(
+                                    painter: _PlayheadHandlePainter(color),
+                                  ),
                                 ),
                               ),
-                            ),
-                            Expanded(
-                              child: Container(
-                                width: 1.5,
-                                color: color.withValues(
-                                  alpha: widget.isInteracting ? 0.4 : 0.8,
+                              Expanded(
+                                child: Container(
+                                  width: 1.5,
+                                  color: color.withValues(
+                                    alpha: widget.isInteracting ? 0.4 : 0.8,
+                                  ),
                                 ),
                               ),
-                            ),
-                          ],
-                        ),
-                      );
-                    },
-                  );
-                },
-              ),
-          ],
-        );
-      },
+                            ],
+                          ),
+                        );
+                      },
+                    );
+                  },
+                ),
+            ],
+          );
+        },
+      ),
     );
   }
 }

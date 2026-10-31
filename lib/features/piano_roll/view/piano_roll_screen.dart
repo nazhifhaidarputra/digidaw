@@ -62,6 +62,9 @@ class PianoRollScreenState extends ConsumerState<PianoRollScreen> {
 
   _PianoRollBottomPanel _bottomPanel = _PianoRollBottomPanel.keyboard;
 
+  /// Whether a zoom or pan press is in progress, which dims the playhead.
+  bool _isInteracting = false;
+
   // Track active notes for Keyboard visualization
   final Set<int> _activeKeyboardNotes = {};
 
@@ -724,8 +727,13 @@ class PianoRollScreenState extends ConsumerState<PianoRollScreen> {
     final generatorId = pianoRollState.previewGeneratorId;
 
     final selectedNoteIds = pianoRollState.selectedNoteIds;
-    final transportPosition = ref.watch(transportPositionStreamProvider).value;
-    bool isInteracting = false;
+    // Only what the screen needs from the position stream: PlayheadOverlay watches the
+    // stream itself, so playback does not rebuild the whole piano roll.
+    final samplesPerTick = ref.watch(
+      transportPositionStreamProvider.select(
+        (position) => patternSamplesPerTick(position.value),
+      ),
+    );
 
     if (pattern == null) {
       return Center(
@@ -918,7 +926,7 @@ class PianoRollScreenState extends ConsumerState<PianoRollScreen> {
                                       return;
                                     }
                                     if (isZoom || isPan) {
-                                      setState(() => isInteracting = true);
+                                      setState(() => _isInteracting = true);
                                     }
 
                                     if (isDrawing) {
@@ -1002,8 +1010,8 @@ class PianoRollScreenState extends ConsumerState<PianoRollScreen> {
                                   },
                                   onPointerUp: (event) {
                                     _stopAutoScroll();
-                                    if (isInteracting) {
-                                      setState(() => isInteracting = false);
+                                    if (_isInteracting) {
+                                      setState(() => _isInteracting = false);
                                     }
                                     if (isDrawing) {
                                       _submitBrushAdd();
@@ -1011,6 +1019,11 @@ class PianoRollScreenState extends ConsumerState<PianoRollScreen> {
                                       _submitBrushDelete(pattern.id);
                                     } else if (isSelecting) {
                                       _commitRangeSelection(pattern);
+                                    }
+                                  },
+                                  onPointerCancel: (event) {
+                                    if (_isInteracting) {
+                                      setState(() => _isInteracting = false);
                                     }
                                   },
                                   child: DawInputDetector(
@@ -1361,22 +1374,16 @@ class PianoRollScreenState extends ConsumerState<PianoRollScreen> {
                             child: PlayheadOverlay(
                               offsetAdjustment: 0,
                               scrollController: _gridHorizontalController,
-                              zoomLevel:
-                                  patternSamplesPerTick(transportPosition) /
-                                  zoomX,
+                              zoomLevel: samplesPerTick / zoomX,
                               sampleSelector: (position) =>
                                   position.patternSamples,
-                              isInteracting: isInteracting,
-                              snapPosition: (samples) {
-                                final samplesPerTick = patternSamplesPerTick(
-                                  transportPosition,
-                                );
-                                return (_snapTick(
-                                          (samples / samplesPerTick).round(),
-                                        ) *
-                                        samplesPerTick)
-                                    .round();
-                              },
+                              isInteracting: _isInteracting,
+                              snapPosition: (samples) =>
+                                  (_snapTick(
+                                            (samples / samplesPerTick).round(),
+                                          ) *
+                                          samplesPerTick)
+                                      .round(),
                               onSeek: (samples) => ref
                                   .read(pianoRollProvider.notifier)
                                   .seekPattern(samples),
@@ -1554,10 +1561,14 @@ class _PianoRollToolbar extends ConsumerWidget {
           };
 
     // Watch the transport stream directly via Riverpod
-    final positionAsync = ref.watch(transportPositionStreamProvider);
-    final feedback = positionAsync.value;
-    final isPatternPlaying =
-        feedback != null && feedback.isPatternMode && feedback.isPatternPlaying;
+    final isPatternPlaying = ref.watch(
+      transportPositionStreamProvider.select((position) {
+        final feedback = position.value;
+        return feedback != null &&
+            feedback.isPatternMode &&
+            feedback.isPatternPlaying;
+      }),
+    );
     final notifier = ref.read(pianoRollProvider.notifier);
 
     return Container(

@@ -254,13 +254,27 @@ class DefaultControlPanel extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final colors = Theme.of(context).colorScheme;
     final transportState = ref.watch(transportProvider).value;
+    // Only the fields this panel shows, so other workspace changes do not rebuild it.
     final workspaceState = ref.watch(
-      workspaceStateProvider,
-    ); // For currentView, selectedTool, etc.
+      workspaceStateProvider.select(
+        (state) => (
+          currentView: state.currentView,
+          snapToGrid: state.snapToGrid,
+          followPlayhead: state.followPlayhead,
+          showMidiKeyboard: state.floatingMidiKeyboardState.showed,
+          selectedTool: state.selectedTool,
+        ),
+      ),
+    );
 
     // 2. Consume the FFI Stream natively via Riverpod (No StreamBuilder needed!)
-    final pos = ref.watch(transportPositionStreamProvider).value;
-    final isSongPlaying = pos != null && pos.isPlaying && !pos.isPatternMode;
+    // _TransportReadout shows the moving position; the panel only needs the play state.
+    final isSongPlaying = ref.watch(
+      transportPositionStreamProvider.select((position) {
+        final pos = position.value;
+        return pos != null && pos.isPlaying && !pos.isPatternMode;
+      }),
+    );
     final builder = ControlPanelBuilder();
 
     // 0. Pre-calculate layout constraints for the entire panel
@@ -391,7 +405,7 @@ class DefaultControlPanel extends ConsumerWidget {
             name: "MIDI KB",
             icon: Icons.piano,
             color: colors.primary,
-            isActive: workspaceState.floatingMidiKeyboardState.showed,
+            isActive: workspaceState.showMidiKeyboard,
             onTap: () => ref
                 .read(workspaceStateProvider.notifier)
                 .toggleFloatingMidiKeyboard(),
@@ -402,7 +416,7 @@ class DefaultControlPanel extends ConsumerWidget {
     builder.addDivider();
 
     // 3. Info Display
-    builder.addWidget(_buildInfoDisplay(context, ref));
+    builder.addWidget(_buildInfoDisplay(context));
 
     builder.addDivider();
 
@@ -561,7 +575,7 @@ class DefaultControlPanel extends ConsumerWidget {
     }
   }
 
-  Widget _buildInfoDisplay(BuildContext context, WidgetRef ref) {
+  Widget _buildInfoDisplay(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
     final isSmallScreen = MediaQuery.sizeOf(context).width < 600;
     final double dividerWidth = isSmallScreen ? 8.0 : 20.0;
@@ -569,12 +583,6 @@ class DefaultControlPanel extends ConsumerWidget {
     final infoFieldWidth = isSmallScreen ? 28.0 : 36.0;
     final timeFieldWidth = isSmallScreen ? 58.0 : 72.0;
     final bpmFieldWidth = isSmallScreen ? 40.0 : 48.0;
-
-    final pos = ref.watch(transportPositionStreamProvider).value;
-    final bar = pos?.bar ?? 0;
-    final beat = pos?.beat ?? 0;
-    final samples = pos?.samples ?? 0;
-    final sampleRate = pos?.sampleRate ?? 44100;
 
     return Container(
       padding: EdgeInsets.symmetric(horizontal: horizontalPadding, vertical: 4),
@@ -586,28 +594,11 @@ class DefaultControlPanel extends ConsumerWidget {
       child: IntrinsicHeight(
         child: Row(
           children: [
-            _buildInfoText(
-              context,
-              "BAR",
-              bar.toString(),
-              isSmallScreen,
-              width: infoFieldWidth,
-            ),
-            SizedBox(width: isSmallScreen ? 6 : 10),
-            _buildInfoText(
-              context,
-              "BEAT",
-              beat.toString(),
-              isSmallScreen,
-              width: infoFieldWidth,
-            ),
-            VerticalDivider(color: colors.outlineVariant, width: dividerWidth),
-            _buildInfoText(
-              context,
-              "TIME",
-              formatTimeFromSamples(samples, sampleRate),
-              isSmallScreen,
-              width: timeFieldWidth,
+            _TransportReadout(
+              isSmallScreen: isSmallScreen,
+              dividerWidth: dividerWidth,
+              infoFieldWidth: infoFieldWidth,
+              timeFieldWidth: timeFieldWidth,
             ),
             VerticalDivider(color: colors.outlineVariant, width: dividerWidth),
             SizedBox(width: bpmFieldWidth, child: const BpmControl()),
@@ -625,7 +616,7 @@ class DefaultControlPanel extends ConsumerWidget {
     );
   }
 
-  Widget _buildInfoText(
+  static Widget _buildInfoText(
     BuildContext context,
     String label,
     String value,
@@ -661,6 +652,61 @@ class DefaultControlPanel extends ConsumerWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+/// The bar, beat, and time fields, which change on every position update. Kept in their own
+/// widget so playback rebuilds only these and not the whole control panel.
+class _TransportReadout extends ConsumerWidget {
+  const _TransportReadout({
+    required this.isSmallScreen,
+    required this.dividerWidth,
+    required this.infoFieldWidth,
+    required this.timeFieldWidth,
+  });
+
+  final bool isSmallScreen;
+  final double dividerWidth;
+  final double infoFieldWidth;
+  final double timeFieldWidth;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final colors = Theme.of(context).colorScheme;
+    final pos = ref.watch(transportPositionStreamProvider).value;
+    final bar = pos?.bar ?? 0;
+    final beat = pos?.beat ?? 0;
+    final samples = pos?.samples ?? 0;
+    final sampleRate = pos?.sampleRate ?? 44100;
+
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        DefaultControlPanel._buildInfoText(
+          context,
+          "BAR",
+          bar.toString(),
+          isSmallScreen,
+          width: infoFieldWidth,
+        ),
+        SizedBox(width: isSmallScreen ? 6 : 10),
+        DefaultControlPanel._buildInfoText(
+          context,
+          "BEAT",
+          beat.toString(),
+          isSmallScreen,
+          width: infoFieldWidth,
+        ),
+        VerticalDivider(color: colors.outlineVariant, width: dividerWidth),
+        DefaultControlPanel._buildInfoText(
+          context,
+          "TIME",
+          formatTimeFromSamples(samples, sampleRate),
+          isSmallScreen,
+          width: timeFieldWidth,
+        ),
+      ],
     );
   }
 }
