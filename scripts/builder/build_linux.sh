@@ -88,6 +88,13 @@ export PKG_CONFIG_PATH="$RUBBERBAND_PREFIX/lib/pkgconfig${PKG_CONFIG_PATH:+:$PKG
 # Ask for the static archive explicitly: the system library folder also ends up on the link
 # line (for FFTW and libsamplerate), and a distro librubberband.so there would otherwise win.
 export RUBBERBAND_STATIC=1
+# Later CI steps (cargo test) must link this build too: the runner's package can be older than 4.0.
+if [ -n "${GITHUB_ENV:-}" ]; then
+    {
+        echo "PKG_CONFIG_PATH=$PKG_CONFIG_PATH"
+        echo "RUBBERBAND_STATIC=1"
+    } >> "$GITHUB_ENV"
+fi
 
 echo -e "\033[1;36m==> [Linux Build] Running Flutter Rust Bridge Codegen...\033[0m"
 flutter_rust_bridge_codegen generate

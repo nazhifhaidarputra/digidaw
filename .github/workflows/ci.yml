@@ -18,7 +18,8 @@ env:
 jobs:
   linux:
     name: Linux build and test
-    runs-on: ubuntu-26.04
+    # Same base as release.yml.
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
 

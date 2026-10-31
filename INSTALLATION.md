@@ -12,7 +12,7 @@ DigiDAW is currently released for **Linux x64 only**, as it is the only platform
 
 ### Requirements
 
-- A 64-bit (x86_64) Linux distribution as recent as Ubuntu 26.04. Releases are built on Ubuntu 26.04, so older distributions may not be able to run them.
+- A 64-bit (x86_64) Linux distribution with glibc 2.39 or newer, such as Ubuntu 24.04 or Debian 13. Releases are built on Ubuntu 24.04, so older distributions may not be able to run them.
 - `sudo` access, so the installer can install the libraries DigiDAW needs.
 - PipeWire (with its JACK compatibility layer) or JACK, recommended for low-latency audio. ALSA works without them.
 

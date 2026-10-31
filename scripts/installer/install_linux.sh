@@ -189,7 +189,7 @@ if have ldd; then
     # plugin library reports false positives for libraries the loader resolves
     # at runtime or that never load on Linux. LD_LIBRARY_PATH lets ldd resolve
     # the libraries shipped next to the executable.
-    MISSING_LIBRARIES="$(
+    LDD_OUTPUT="$(
         CHECK_FILES=("$APP_DIR/karbeat")
         for library in libapp.so libkarbeat_flutter_ffi.so libflutter_linux_gtk.so; do
             if [ -e "$APP_DIR/lib/$library" ]; then
@@ -197,7 +197,10 @@ if have ldd; then
             fi
         done
         LD_LIBRARY_PATH="$APP_DIR/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" \
-            ldd "${CHECK_FILES[@]}" 2>/dev/null |
+            ldd "${CHECK_FILES[@]}" 2>&1 || true
+    )"
+    MISSING_LIBRARIES="$(
+        printf '%s\n' "$LDD_OUTPUT" |
             awk '/=> not found/ { print $1 }' |
             sort -u || true
     )"
@@ -205,6 +208,20 @@ if have ldd; then
         error "Some libraries are missing:"
         printf '%s\n' "$MISSING_LIBRARIES" | sed 's/^/    /'
         echo "Install GTK 3, ALSA, FFTW 3 (double precision), libsamplerate, and lilv, then run this script again."
+        exit 1
+    fi
+    # The loader only reports these once every library is found, and installing packages
+    # cannot fix them: they mean the system's C or C++ runtime is older than the build's.
+    MISSING_VERSIONS="$(
+        printf '%s\n' "$LDD_OUTPUT" |
+            sed -n "s/.*version .\([^ ]*\). not found.*/\1/p" |
+            sort -Vu || true
+    )"
+    if [ -n "$MISSING_VERSIONS" ]; then
+        error "This release needs newer system libraries than this distribution provides:"
+        printf '%s\n' "$MISSING_VERSIONS" | sed 's/^/    /'
+        echo "Installed: $(ldd --version | head -n 1)"
+        echo "Upgrade your distribution, or try a newer DigiDAW release. DigiDAW was not installed."
         exit 1
     fi
 else
