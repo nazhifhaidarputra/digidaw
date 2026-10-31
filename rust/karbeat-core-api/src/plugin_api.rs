@@ -8,6 +8,7 @@ use karbeat_audio::{
     event::PluginTarget,
 };
 use karbeat_core::{
+    core::history::actions::GeneratorRenamed,
     core::project::{
         AutomationTarget, EffectAutomationTarget, GeneratorId, GeneratorInstance,
         MasterAutomationTarget, MixerChannelParamTarget, TrackAutomationTarget, TrackId,
@@ -86,6 +87,30 @@ where
         .into_iter()
         .map(|p| P::from(p))
         .collect()
+}
+
+/// Sets or clears the name a plugin generator is shown under, as one reversible operation. A
+/// blank name restores the plugin's own name. Returns the generator as it is after the edit.
+pub fn rename_generator(
+    ctx: &mut DawContext,
+    generator_id: GeneratorId,
+    display_name: Option<&str>,
+) -> anyhow::Result<GeneratorInstance> {
+    let previous = ctx.app_state.rename_generator(generator_id, display_name)?;
+    let generator = ctx
+        .app_state
+        .generator_pool
+        .get(generator_id)
+        .cloned()
+        .ok_or_else(|| anyhow::anyhow!("Generator {generator_id} not found"))?;
+    let changed = match &generator.instance_type {
+        GeneratorInstanceType::Plugin(plugin) => plugin.display_name != previous,
+        GeneratorInstanceType::Sampler { .. } => false,
+    };
+    if changed {
+        ctx.push_history(GeneratorRenamed::new(generator_id, previous));
+    }
+    Ok(generator)
 }
 
 /// Maps a generator instance when `generator_id` exists in the project pool.

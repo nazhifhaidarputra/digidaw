@@ -40,6 +40,20 @@ void main() {
     control: true,
   );
 
+  test('Escape cancels the selection in every view', () {
+    final shortcut = workspaceShortcuts.singleWhere(
+      (shortcut) => shortcut.id == 'workspace.cancelSelection',
+    );
+    expect(shortcut.intent, isA<CancelSelectionIntent>());
+    expect(shortcut.scope, ShortcutScope.global);
+    expect(
+      ShortcutChord.fromActivator(shortcut.defaultKey),
+      ShortcutChord.fromActivator(
+        const SingleActivator(LogicalKeyboardKey.escape),
+      ),
+    );
+  });
+
   test('chord storage schema round-trips supported keys', () {
     final decoded = ShortcutChord.tryFromStorageJson(
       customChord.toStorageJson(),

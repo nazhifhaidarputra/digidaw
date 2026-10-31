@@ -55,6 +55,21 @@ impl WaveformHandle {
         self.samples().map(|s| s.len()).unwrap_or(0)
     }
 
+    /// Returns the address of the first sample playback reads, inside the trim points.
+    /// Returns 0 if the waveform has no loaded buffer.
+    #[frb(sync)]
+    pub fn get_playable_pointer(&self) -> usize {
+        self.0
+            .get_playable_buffer()
+            .map_or(0, |samples| samples.as_ptr() as usize)
+    }
+
+    /// Returns the number of f32 samples playback reads, inside the trim points.
+    #[frb(sync)]
+    pub fn get_playable_len(&self) -> usize {
+        self.0.get_playable_buffer().map_or(0, <[f32]>::len)
+    }
+
     /// Returns the sample rate of the audio waveform (e.g. 44100, 48000).
     #[frb(sync)]
     pub fn get_sample_rate(&self) -> u32 {

@@ -74,15 +74,22 @@ class _ClipRenderer extends ConsumerWidget {
               padding: const EdgeInsets.symmetric(horizontal: 4),
               alignment: Alignment.centerLeft,
               color: headerColor,
-              child: Text(
-                clip.name,
-                style: TextStyle(
-                  color: headerForeground,
-                  fontSize: 10,
-                  fontWeight: FontWeight.w500,
-                ),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      clip.name,
+                      style: TextStyle(
+                        color: headerForeground,
+                        fontSize: 10,
+                        fontWeight: FontWeight.w500,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  if (_isLooping) _loopTag(headerForeground),
+                ],
               ),
             ),
 
@@ -106,18 +113,37 @@ class _ClipRenderer extends ConsumerWidget {
         borderRadius: BorderRadius.circular(3),
         border: isSelected ? Border.all(color: colors.primary, width: 2) : null,
       ),
-      child: Text(
-        clip.name,
-        style: TextStyle(
-          color: foreground,
-          fontSize: 10,
-          fontWeight: FontWeight.w600,
-        ),
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              clip.name,
+              style: TextStyle(
+                color: foreground,
+                fontSize: 10,
+                fontWeight: FontWeight.w600,
+              ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+          if (_isLooping) _loopTag(foreground),
+        ],
       ),
     );
   }
+
+  bool get _isLooping => clip.modulation?.looping.enabled ?? false;
+
+  /// Marks a clip that repeats, at the right end of its header.
+  Widget _loopTag(Color color) => Padding(
+    padding: const EdgeInsets.only(left: 4),
+    child: Text(
+      'loop',
+      maxLines: 1,
+      style: TextStyle(color: color, fontSize: 9, fontWeight: FontWeight.w700),
+    ),
+  );
 
   /// The clip's own envelope, in clip content samples at the project rate.
   Widget _buildClipEnvelope(
@@ -164,7 +190,7 @@ class _ClipRenderer extends ConsumerWidget {
     final envelope = ref.watch(
       projectProvider.select((s) => s.value?.sourceEnvelopes[sourceId]),
     );
-    final frames = handle.getLen() ~/ math.max(1, handle.getChannels());
+    final frames = handle.getPlayableLen() ~/ math.max(1, handle.getChannels());
     return GainEnvelopeEditor(
       envelope: envelope ?? identityEnvelope,
       axis: EnvelopeAxis(
@@ -219,7 +245,7 @@ class _ClipRenderer extends ConsumerWidget {
             size: Size.infinite,
             painter: StereoWaveformClipPainter(
               // Zero-copy: Float32List view directly into Rust-owned Mmap memory
-              samples: createZeroCopyWaveformView(handle),
+              samples: createPlayableWaveformView(handle),
               color: waveformColor,
               zoomLevel: zoomLevel,
               offsetTicks: effectiveOffsetTicks,

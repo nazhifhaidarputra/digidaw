@@ -40,6 +40,21 @@ class FakeCurveSampler extends CurveSampler {
   int tensionCount(double tension) => 4;
 
   @override
+  Float64List sampleClipModulation(
+    UiClipModulation modulation,
+    UiClipCurve curve,
+    List<double> positions,
+  ) => Float64List(positions.length);
+
+  @override
+  List<int> loopStarts(
+    UiClipModulation modulation, {
+    required int offsetStart,
+    required int loopLength,
+    required int limit,
+  }) => const [];
+
+  @override
   Float32List sampleEnvelope(
     UiGainEnvelope envelope, {
     required int contentStart,

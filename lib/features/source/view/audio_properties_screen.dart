@@ -86,18 +86,19 @@ class AudioPropertiesScreen extends ConsumerWidget {
                               ),
                             ),
                           ),
-                          if (handle != null)
-                            Positioned.fill(
-                              child: _WaveformEnvelopeEditor(
-                                sourceId: sourceId,
-                                envelope: envelope,
-                                frames:
-                                    handle.getLen() ~/
-                                    (handle.getChannels() == 0
-                                        ? 1
-                                        : handle.getChannels()),
-                              ),
+                          Positioned.fill(
+                            child: _TrimmedWaveformOverlay(
+                              sourceId: sourceId,
+                              props: props,
+                              envelope: envelope,
+                              frames: handle == null
+                                  ? 0
+                                  : handle.getLen() ~/
+                                        (handle.getChannels() == 0
+                                            ? 1
+                                            : handle.getChannels()),
                             ),
+                          ),
                         ],
                       ),
                     ),
@@ -109,6 +110,8 @@ class AudioPropertiesScreen extends ConsumerWidget {
                 envelope: envelope,
                 sampleRate: props.sampleRate,
               ),
+
+              _TrimControls(sourceId: sourceId, props: props),
 
               _OfflineEditControls(sourceId: sourceId, props: props),
 
@@ -201,8 +204,322 @@ class AudioPropertiesScreen extends ConsumerWidget {
   }
 }
 
+/// Stores new trim points, in frames of the original audio, and refreshes what
+/// shows the source. An end at the last frame plays to the end, like zero.
+Future<void> _commitTrim(
+  WidgetRef ref,
+  int sourceId,
+  int originalFrames,
+  int start,
+  int end,
+) async {
+  await ref
+      .read(projectProvider.notifier)
+      .setSourceTrim(sourceId, start, end >= originalFrames ? 0 : end);
+  if (!ref.context.mounted) return;
+  ref.invalidate(audioPropertiesProvider(sourceId));
+  ref.invalidate(audioWaveformHandleProvider(sourceId));
+  ref.invalidate(trackWaveformProvider);
+}
+
+/// Shades what the trim points cut off, and holds the grips that move them and
+/// the envelope editor over the part that plays.
+class _TrimmedWaveformOverlay extends ConsumerStatefulWidget {
+  const _TrimmedWaveformOverlay({
+    required this.sourceId,
+    required this.props,
+    required this.envelope,
+    required this.frames,
+  });
+
+  final int sourceId;
+  final AudioWaveformUiForAudioProperties props;
+  final UiGainEnvelope envelope;
+
+  /// Frames of the shown buffer; a render can differ from the original audio.
+  final int frames;
+
+  @override
+  ConsumerState<_TrimmedWaveformOverlay> createState() =>
+      _TrimmedWaveformOverlayState();
+}
+
+class _TrimmedWaveformOverlayState
+    extends ConsumerState<_TrimmedWaveformOverlay> {
+  static const double _gripWidth = 14;
+  static const double _gripHeight = 44;
+
+  /// Trim points being dragged, as shares of the audio's length.
+  (double, double)? _draft;
+
+  int get _total => widget.props.originalFrames;
+
+  (double, double) get _shares {
+    final draft = _draft;
+    if (draft != null) return draft;
+    if (_total <= 0) return (0, 1);
+    final end = widget.props.trimEnd == 0 ? _total : widget.props.trimEnd;
+    return (widget.props.trimStart / _total, end / _total);
+  }
+
+  void _moveGrip({
+    required bool start,
+    required double dx,
+    required double width,
+  }) {
+    final (from, to) = _shares;
+    final minShare = _total <= 0 ? 0.0 : 1 / _total;
+    setState(() {
+      _draft = start
+          ? ((from + dx / width).clamp(0.0, to - minShare), to)
+          : (from, (to + dx / width).clamp(from + minShare, 1.0));
+    });
+  }
+
+  Future<void> _commitDrag() async {
+    final (from, to) = _shares;
+    await _commitTrim(
+      ref,
+      widget.sourceId,
+      _total,
+      (from * _total).round(),
+      (to * _total).round(),
+    );
+    if (mounted) setState(() => _draft = null);
+  }
+
+  Widget _grip({
+    required bool start,
+    required double x,
+    required double width,
+    required double height,
+  }) {
+    final colors = Theme.of(context).colorScheme;
+    return Positioned(
+      left: start ? x : x - _gripWidth,
+      top: (height - _gripHeight) / 2,
+      width: _gripWidth,
+      height: _gripHeight,
+      child: Tooltip(
+        message: start ? 'Trim start' : 'Trim end',
+        child: MouseRegion(
+          cursor: SystemMouseCursors.resizeLeftRight,
+          child: GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onHorizontalDragUpdate: (details) =>
+                _moveGrip(start: start, dx: details.delta.dx, width: width),
+            onHorizontalDragEnd: (_) => _commitDrag(),
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                color: colors.secondary,
+                borderRadius: BorderRadius.horizontal(
+                  left: start ? Radius.zero : const Radius.circular(4),
+                  right: start ? const Radius.circular(4) : Radius.zero,
+                ),
+              ),
+              child: Icon(
+                Icons.drag_indicator,
+                size: 12,
+                color: colors.onSecondary,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    final (from, to) = _shares;
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final width = constraints.maxWidth;
+        final height = constraints.maxHeight;
+        final left = from * width;
+        final right = to * width;
+        final shade = colors.surfaceContainerLowest.withValues(alpha: 0.75);
+        final playedFrames = ((to - from) * widget.frames).round();
+        return Stack(
+          children: [
+            Positioned(
+              left: 0,
+              top: 0,
+              bottom: 0,
+              width: left,
+              child: ColoredBox(color: shade),
+            ),
+            Positioned(
+              left: right,
+              top: 0,
+              bottom: 0,
+              right: 0,
+              child: ColoredBox(color: shade),
+            ),
+            // The envelope belongs to the part that plays. Its layout waits
+            // for a drag to end, when the points have moved with the trim.
+            if (_draft == null)
+              Positioned(
+                left: left,
+                top: 0,
+                bottom: 0,
+                width: right - left,
+                child: _WaveformEnvelopeEditor(
+                  sourceId: widget.sourceId,
+                  envelope: widget.envelope,
+                  frames: playedFrames,
+                ),
+              ),
+            if (_total > 0) ...[
+              _grip(start: true, x: left, width: width, height: height),
+              _grip(start: false, x: right, width: width, height: height),
+            ],
+          ],
+        );
+      },
+    );
+  }
+}
+
+/// Trim points as exact times, for when dragging is not precise enough.
+class _TrimControls extends ConsumerWidget {
+  const _TrimControls({required this.sourceId, required this.props});
+
+  final int sourceId;
+  final AudioWaveformUiForAudioProperties props;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final colors = Theme.of(context).colorScheme;
+    final total = props.originalFrames;
+    final rate = props.sampleRate;
+    final end = props.trimEnd == 0 ? total : props.trimEnd;
+    final trimmed = props.trimStart > 0 || end < total;
+    if (total <= 0 || rate <= 0) return const SizedBox.shrink();
+
+    int? toFrames(String text) {
+      final seconds = double.tryParse(text.trim());
+      return seconds == null ? null : (seconds * rate).round();
+    }
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+      child: Wrap(
+        spacing: 12,
+        runSpacing: 8,
+        crossAxisAlignment: WrapCrossAlignment.center,
+        children: [
+          Icon(Icons.content_cut, size: 16, color: colors.onSurfaceVariant),
+          _TrimTimeField(
+            key: ValueKey(('trim-start', props.trimStart)),
+            label: 'Trim start (s)',
+            seconds: props.trimStart / rate,
+            onSubmitted: (text) {
+              final frames = toFrames(text);
+              if (frames == null) return;
+              _commitTrim(ref, sourceId, total, frames.clamp(0, end - 1), end);
+            },
+          ),
+          _TrimTimeField(
+            key: ValueKey(('trim-end', end)),
+            label: 'Trim end (s)',
+            seconds: end / rate,
+            onSubmitted: (text) {
+              final frames = toFrames(text);
+              if (frames == null) return;
+              _commitTrim(
+                ref,
+                sourceId,
+                total,
+                props.trimStart,
+                frames.clamp(props.trimStart + 1, total),
+              );
+            },
+          ),
+          Text(
+            'Plays ${((end - props.trimStart) / rate).toStringAsFixed(3)} s',
+            style: TextStyle(color: colors.onSurfaceVariant, fontSize: 12),
+          ),
+          if (trimmed)
+            TextButton.icon(
+              onPressed: () => _commitTrim(ref, sourceId, total, 0, total),
+              icon: const Icon(Icons.restart_alt, size: 16),
+              label: const Text('Reset trim'),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+/// A trim time in seconds that commits when submitted or when focus leaves it.
+class _TrimTimeField extends StatefulWidget {
+  const _TrimTimeField({
+    super.key,
+    required this.label,
+    required this.seconds,
+    required this.onSubmitted,
+  });
+
+  final String label;
+  final double seconds;
+  final ValueChanged<String> onSubmitted;
+
+  @override
+  State<_TrimTimeField> createState() => _TrimTimeFieldState();
+}
+
+class _TrimTimeFieldState extends State<_TrimTimeField> {
+  late final TextEditingController _controller = TextEditingController(
+    text: _shown,
+  );
+  final FocusNode _focusNode = FocusNode();
+
+  String get _shown => widget.seconds.toStringAsFixed(3);
+
+  @override
+  void initState() {
+    super.initState();
+    _focusNode.addListener(() {
+      if (!_focusNode.hasFocus && _controller.text != _shown) {
+        widget.onSubmitted(_controller.text);
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _focusNode.dispose();
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: 120,
+      child: TextField(
+        controller: _controller,
+        focusNode: _focusNode,
+        keyboardType: const TextInputType.numberWithOptions(decimal: true),
+        style: const TextStyle(fontSize: 12),
+        decoration: InputDecoration(
+          labelText: widget.label,
+          isDense: true,
+          border: const OutlineInputBorder(),
+        ),
+        onSubmitted: (text) {
+          if (text != _shown) widget.onSubmitted(text);
+        },
+      ),
+    );
+  }
+}
+
 /// Edits the waveform envelope shared by every clip of the source; the
-/// envelope's positions are source frames spread across the full width.
+/// envelope's positions are frames from the trim start, spread across the
+/// part of the waveform that plays.
 class _WaveformEnvelopeEditor extends ConsumerWidget {
   const _WaveformEnvelopeEditor({
     required this.sourceId,

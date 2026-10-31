@@ -61,8 +61,10 @@ double _yToGain(double y, double height) {
 /// and is [contentLength] samples long; points sit at absolute positions.
 /// Drag the top fade handles to change fade lengths, the fade midpoints to
 /// bend them, the bottom handle to change the crossfade, and the points to
-/// move them. Double-tap to add a point; right-click or long-press a point or
-/// fade handle for its curve options. Each gesture commits once, on release.
+/// move them. Drag the small ring between two points to bend that segment, and
+/// double-tap the ring to straighten it. Double-tap to add a point; right-click
+/// or long-press a point or fade handle for its curve options. Each gesture
+/// commits once, on release.
 class GainEnvelopeEditor extends ConsumerStatefulWidget {
   const GainEnvelopeEditor({
     super.key,
@@ -93,7 +95,18 @@ class GainEnvelopeEditor extends ConsumerStatefulWidget {
   ConsumerState<GainEnvelopeEditor> createState() => _GainEnvelopeEditorState();
 }
 
-enum _Grip { fadeIn, fadeOut, fadeInTension, fadeOutTension, crossfade, point }
+enum _Grip {
+  fadeIn,
+  fadeOut,
+  fadeInTension,
+  fadeOutTension,
+  crossfade,
+  point,
+  pointTension,
+}
+
+/// Minimum segment width in pixels before a tension handle is offered.
+const double _minTensionSegmentWidth = 16;
 
 class _GainEnvelopeEditorState extends ConsumerState<GainEnvelopeEditor> {
   /// Envelope being dragged; shown instead of [GainEnvelopeEditor.envelope]
@@ -134,6 +147,7 @@ class _GainEnvelopeEditorState extends ConsumerState<GainEnvelopeEditor> {
       _tensionAnchor = switch (grip) {
         _Grip.fadeInTension => _envelope.fadeIn.tension,
         _Grip.fadeOutTension => _envelope.fadeOut.tension,
+        _Grip.pointTension => _envelope.points[pointIndex].tension,
         _ => 0,
       };
     });
@@ -182,6 +196,7 @@ class _GainEnvelopeEditorState extends ConsumerState<GainEnvelopeEditor> {
         crossfade: (_contentEnd - position).clamp(0, widget.maxCrossfade),
       ),
       _Grip.point => _movePoint(envelope, position, local.dy, height),
+      _Grip.pointTension => _bendPoint(envelope, details.delta.dy, height),
     };
     setState(() => _draft = next);
   }
@@ -210,6 +225,38 @@ class _GainEnvelopeEditorState extends ConsumerState<GainEnvelopeEditor> {
       ],
     );
   }
+
+  /// Bends the segment after the dragged point. Dragging the full height sweeps
+  /// the whole -1..1 tension range, and dragging up always raises the curve.
+  UiGainEnvelope _bendPoint(UiGainEnvelope envelope, double dy, double height) {
+    final points = envelope.points;
+    if (_pointIndex < 0 || _pointIndex >= points.length - 1) return envelope;
+    final from = points[_pointIndex];
+    _dragDy += dy;
+    final direction = tensionDragDirection(
+      ref.read(curveSamplerProvider).traits(from.curveType),
+      from.curveType,
+      points[_pointIndex + 1].gain - from.gain,
+    );
+    final tension = (_tensionAnchor - _dragDy / height * 2.0 * direction).clamp(
+      -1.0,
+      1.0,
+    );
+    return _withPointTension(envelope, _pointIndex, tension);
+  }
+
+  UiGainEnvelope _withPointTension(
+    UiGainEnvelope envelope,
+    int index,
+    double tension,
+  ) => envelope.copyWith(
+    points: [
+      for (var i = 0; i < envelope.points.length; i++)
+        i == index
+            ? envelope.points[i].copyWith(tension: tension)
+            : envelope.points[i],
+    ],
+  );
 
   void _endDrag() {
     final envelope = _draft;
@@ -337,41 +384,108 @@ class _GainEnvelopeEditorState extends ConsumerState<GainEnvelopeEditor> {
     required BoxShape shape,
     int pointIndex = -1,
     VoidCallback? onMenu,
+    VoidCallback? onDoubleTap,
+    String? tooltip,
+    bool ring = false,
   }) {
     const size = 12.0;
     final active = _grip == grip && _pointIndex == pointIndex;
-    return Positioned(
-      left: center.dx - size / 2,
-      top: center.dy - size / 2,
-      width: size,
-      height: size,
-      child: MouseRegion(
-        cursor: cursor,
-        child: GestureDetector(
-          behavior: HitTestBehavior.opaque,
-          onPanStart: (_) => _startDrag(grip, pointIndex: pointIndex),
-          onPanUpdate: (details) => _updateDrag(details, height),
-          onPanEnd: (_) => _endDrag(),
-          onPanCancel: () => setState(() {
-            _grip = null;
-            _draft = null;
-          }),
-          onSecondaryTap: onMenu,
-          onLongPress: onMenu,
-          child: Center(
-            child: Container(
-              width: active ? 10 : 8,
-              height: active ? 10 : 8,
-              decoration: BoxDecoration(
-                shape: shape,
-                color: active ? widget.color : Colors.white,
-                border: Border.all(color: widget.color, width: 1.5),
+    final dotSize = ring && !active ? 7.0 : (active ? 10.0 : 8.0);
+    Widget handle = MouseRegion(
+      cursor: cursor,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onDoubleTap: onDoubleTap,
+        onPanStart: (_) => _startDrag(grip, pointIndex: pointIndex),
+        onPanUpdate: (details) => _updateDrag(details, height),
+        onPanEnd: (_) => _endDrag(),
+        onPanCancel: () => setState(() {
+          _grip = null;
+          _draft = null;
+        }),
+        onSecondaryTap: onMenu,
+        onLongPress: onMenu,
+        child: Center(
+          child: Container(
+            width: dotSize,
+            height: dotSize,
+            decoration: BoxDecoration(
+              shape: shape,
+              color: active
+                  ? widget.color
+                  : ring
+                  ? null
+                  : Colors.white,
+              border: Border.all(
+                color: widget.color,
+                width: ring && !active ? 1.25 : 1.5,
               ),
             ),
           ),
         ),
       ),
     );
+    if (tooltip != null) {
+      handle = Tooltip(
+        message: tooltip,
+        waitDuration: const Duration(milliseconds: 600),
+        child: handle,
+      );
+    }
+    return Positioned(
+      left: center.dx - size / 2,
+      top: center.dy - size / 2,
+      width: size,
+      height: size,
+      child: handle,
+    );
+  }
+
+  /// One ring per segment between two points whose curve responds to tension,
+  /// on the drawn curve at the segment's midpoint.
+  List<Widget> _pointTensionHandles(
+    CurveSampler sampler,
+    UiGainEnvelope envelope,
+    double width,
+    double height,
+  ) {
+    final axis = widget.axis;
+    final points = envelope.points;
+    final segments = [
+      for (var i = 0; i < points.length - 1; i++)
+        if (sampler.traits(points[i].curveType).supportsTension &&
+            axis.toX(points[i + 1].position) - axis.toX(points[i].position) >=
+                _minTensionSegmentWidth)
+          i,
+    ];
+    if (segments.isEmpty) return const [];
+    final midpoints = [
+      for (final i in segments)
+        (points[i].position + points[i + 1].position) / 2,
+    ];
+    final gains = sampler.sampleEnvelope(
+      envelope,
+      contentStart: widget.contentStart,
+      contentLength: widget.contentLength,
+      positions: midpoints,
+    );
+    return [
+      for (var n = 0; n < segments.length; n++)
+        if (axis.toX(midpoints[n]) >= -6 && axis.toX(midpoints[n]) <= width + 6)
+          _handle(
+            center: Offset(axis.toX(midpoints[n]), _gainToY(gains[n], height)),
+            grip: _Grip.pointTension,
+            pointIndex: segments[n],
+            height: height,
+            cursor: SystemMouseCursors.resizeUpDown,
+            shape: BoxShape.circle,
+            ring: true,
+            tooltip: tensionHandleTooltip,
+            onMenu: () => _openPointMenu(segments[n]),
+            onDoubleTap: () =>
+                _commit(_withPointTension(_envelope, segments[n], 0)),
+          ),
+    ];
   }
 
   @override
@@ -479,6 +593,8 @@ class _GainEnvelopeEditorState extends ConsumerState<GainEnvelopeEditor> {
           ),
           crossfadeX,
         );
+        // Under the points, which win where the two overlap.
+        handles.addAll(_pointTensionHandles(sampler, envelope, width, height));
         for (var i = 0; i < envelope.points.length; i++) {
           final point = envelope.points[i];
           final x = axis.toX(point.position);

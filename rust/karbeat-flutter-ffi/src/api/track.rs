@@ -5,7 +5,7 @@ use std::collections::HashMap;
 use crate::api::context::DawContext;
 use crate::api::jobs::run_job;
 use crate::api::pattern::UiPattern;
-use crate::api::project::{UiClip, UiGainEnvelope, UiTrack, UiTrackInput};
+use crate::api::project::{UiClip, UiClipModulation, UiGainEnvelope, UiTrack, UiTrackInput};
 use flutter_rust_bridge::frb;
 use karbeat_core::core::project::clip::ResizeEdge;
 use karbeat_core::shared::id::*;
@@ -555,6 +555,18 @@ pub fn set_clip_envelope(
 ) -> Result<UiClip, String> {
     crate::api::context::project_ctx!(ctx);
     let clip = clip_api::set_clip_envelope(ctx, ClipId::from_u64(clip_id), envelope.into())
+        .map_err(|error| error.to_string())?;
+    Ok(UiClip::from(&clip))
+}
+
+/// Replaces an audio clip's pan and pitch curves and loop.
+pub fn set_clip_modulation(
+    ctx: &DawContext,
+    clip_id: u64,
+    modulation: UiClipModulation,
+) -> Result<UiClip, String> {
+    crate::api::context::project_ctx!(ctx);
+    let clip = clip_api::set_clip_modulation(ctx, ClipId::from_u64(clip_id), modulation.into())
         .map_err(|error| error.to_string())?;
     Ok(UiClip::from(&clip))
 }

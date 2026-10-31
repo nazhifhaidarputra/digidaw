@@ -5,35 +5,40 @@ import 'package:karbeat/src/rust/api/audio.dart';
 import 'package:karbeat/src/rust/api/project.dart';
 import 'package:karbeat/src/rust/api/waveform.dart';
 
-final audioSourcesProvider = FutureProvider.autoDispose<Map<int, AudioWaveformUiForSourceList>>((ref) async {
-  // 1. Wait for DAW context to be ready
-  final ctx = ref.watch(projectProvider.notifier).dawContext;
+final audioSourcesProvider =
+    FutureProvider.autoDispose<Map<int, AudioWaveformUiForSourceList>>((
+      ref,
+    ) async {
+      // 1. Wait for DAW context to be ready
+      final ctx = ref.watch(projectProvider.notifier).dawContext;
 
-  // Refetch whenever the whole project is republished (undo, redo, deleting a
-  // source), since any of those can add or remove sources.
-  ref.watch(projectProvider.select((s) => s.value?.fullStateRevision));
+      // Refetch whenever the whole project is republished (undo, redo, deleting a
+      // source), since any of those can add or remove sources.
+      ref.watch(projectProvider.select((s) => s.value?.fullStateRevision));
 
-  // 2. Direct FFI call instead of routing through monolithic state
-  final result = await getAudioSourceList(ctx: ctx); 
-  
-  return result ?? {};
-});
+      // 2. Direct FFI call instead of routing through monolithic state
+      final result = await getAudioSourceList(ctx: ctx);
 
-  final audioPropertiesProvider = FutureProvider.autoDispose
-      .family<AudioWaveformUiForAudioProperties, int>((ref, sourceId) async {
-        // Refetch when a background job (tempo detection, render) changes it.
-        ref.watch(
-          backgroundJobsProvider.select((s) => s.sourceRevisions[sourceId]),
-        );
-        final ctx = ref.read(projectProvider.notifier).dawContext;
-        final result = await getAudioProperties(ctx: ctx, id: sourceId);
+      return result ?? {};
+    });
 
-        if (result == null) {
-          throw Exception("Failed to load audio properties");
-        }
+final audioPropertiesProvider = FutureProvider.autoDispose
+    .family<AudioWaveformUiForAudioProperties, int>((ref, sourceId) async {
+      // Refetch when undo or redo may have replaced it.
+      ref.watch(projectProvider.select((s) => s.value?.fullStateRevision));
+      // Refetch when a background job (tempo detection, render) changes it.
+      ref.watch(
+        backgroundJobsProvider.select((s) => s.sourceRevisions[sourceId]),
+      );
+      final ctx = ref.read(projectProvider.notifier).dawContext;
+      final result = await getAudioProperties(ctx: ctx, id: sourceId);
 
-        return result;
-      });
+      if (result == null) {
+        throw Exception("Failed to load audio properties");
+      }
+
+      return result;
+    });
 
 /// Handle to one source's decoded buffer for the audio properties waveform.
 ///

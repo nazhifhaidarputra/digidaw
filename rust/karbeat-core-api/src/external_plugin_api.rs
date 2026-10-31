@@ -349,6 +349,7 @@ pub fn execute_install(
             descriptor: pending.descriptor,
             state: Some(prepared.state.clone()),
         }),
+        display_name: None,
     };
 
     let mut replaced_generator = None;

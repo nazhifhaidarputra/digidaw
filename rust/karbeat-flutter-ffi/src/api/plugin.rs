@@ -219,6 +219,21 @@ pub fn get_available_plugins_with_ids(ctx: &DawContext) -> Vec<UiPluginInfo> {
 }
 
 /// Get a single generator state from the Generator Pool
+pub fn rename_generator(
+    ctx: &DawContext,
+    generator_id: u64,
+    display_name: Option<String>,
+) -> Result<UiGeneratorInstance, String> {
+    crate::api::context::project_ctx!(ctx);
+    let generator = plugin_api::rename_generator(
+        ctx,
+        GeneratorId::from_u64(generator_id),
+        display_name.as_deref(),
+    )
+    .map_err(|error| error.to_string())?;
+    Ok(UiGeneratorInstance::from(&generator))
+}
+
 pub fn get_generator(ctx: &DawContext, generator_id: u64) -> Result<UiGeneratorInstance, String> {
     crate::api::context::read_ctx!(ctx);
     let gen_id = GeneratorId::from_u64(generator_id);

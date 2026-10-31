@@ -395,6 +395,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   UiBeatGrid dco_decode_box_autoadd_ui_beat_grid(dynamic raw);
 
   @protected
+  UiClipModulation dco_decode_box_autoadd_ui_clip_modulation(dynamic raw);
+
+  @protected
   UiExternalPluginDescriptor
   dco_decode_box_autoadd_ui_external_plugin_descriptor(dynamic raw);
 
@@ -632,6 +635,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<UiCueMarker> dco_decode_list_ui_cue_marker(dynamic raw);
 
   @protected
+  List<UiCurvePoint> dco_decode_list_ui_curve_point(dynamic raw);
+
+  @protected
   List<UiEffectInstance> dco_decode_list_ui_effect_instance(dynamic raw);
 
   @protected
@@ -794,6 +800,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   UiBeatGrid? dco_decode_opt_box_autoadd_ui_beat_grid(dynamic raw);
+
+  @protected
+  UiClipModulation? dco_decode_opt_box_autoadd_ui_clip_modulation(dynamic raw);
 
   @protected
   UiExternalPluginDescriptor?
@@ -1001,6 +1010,15 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   UiClip dco_decode_ui_clip(dynamic raw);
 
   @protected
+  UiClipCurve dco_decode_ui_clip_curve(dynamic raw);
+
+  @protected
+  UiClipLoop dco_decode_ui_clip_loop(dynamic raw);
+
+  @protected
+  UiClipModulation dco_decode_ui_clip_modulation(dynamic raw);
+
+  @protected
   UiClipSource dco_decode_ui_clip_source(dynamic raw);
 
   @protected
@@ -1011,6 +1029,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   UiCueMarker dco_decode_ui_cue_marker(dynamic raw);
+
+  @protected
+  UiCurvePoint dco_decode_ui_curve_point(dynamic raw);
 
   @protected
   UiDeviceStreamStatus dco_decode_ui_device_stream_status(dynamic raw);
@@ -1610,6 +1631,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   UiBeatGrid sse_decode_box_autoadd_ui_beat_grid(SseDeserializer deserializer);
 
   @protected
+  UiClipModulation sse_decode_box_autoadd_ui_clip_modulation(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   UiExternalPluginDescriptor
   sse_decode_box_autoadd_ui_external_plugin_descriptor(
     SseDeserializer deserializer,
@@ -1897,6 +1923,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<UiCueMarker> sse_decode_list_ui_cue_marker(SseDeserializer deserializer);
 
   @protected
+  List<UiCurvePoint> sse_decode_list_ui_curve_point(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   List<UiEffectInstance> sse_decode_list_ui_effect_instance(
     SseDeserializer deserializer,
   );
@@ -2097,6 +2128,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   UiBeatGrid? sse_decode_opt_box_autoadd_ui_beat_grid(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  UiClipModulation? sse_decode_opt_box_autoadd_ui_clip_modulation(
     SseDeserializer deserializer,
   );
 
@@ -2358,6 +2394,15 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   UiClip sse_decode_ui_clip(SseDeserializer deserializer);
 
   @protected
+  UiClipCurve sse_decode_ui_clip_curve(SseDeserializer deserializer);
+
+  @protected
+  UiClipLoop sse_decode_ui_clip_loop(SseDeserializer deserializer);
+
+  @protected
+  UiClipModulation sse_decode_ui_clip_modulation(SseDeserializer deserializer);
+
+  @protected
   UiClipSource sse_decode_ui_clip_source(SseDeserializer deserializer);
 
   @protected
@@ -2372,6 +2417,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   UiCueMarker sse_decode_ui_cue_marker(SseDeserializer deserializer);
+
+  @protected
+  UiCurvePoint sse_decode_ui_curve_point(SseDeserializer deserializer);
 
   @protected
   UiDeviceStreamStatus sse_decode_ui_device_stream_status(
@@ -3092,6 +3140,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_box_autoadd_ui_clip_modulation(
+    UiClipModulation self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_box_autoadd_ui_external_plugin_descriptor(
     UiExternalPluginDescriptor self,
     SseSerializer serializer,
@@ -3442,6 +3496,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_list_ui_curve_point(
+    List<UiCurvePoint> self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_list_ui_effect_instance(
     List<UiEffectInstance> self,
     SseSerializer serializer,
@@ -3676,6 +3736,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_opt_box_autoadd_ui_beat_grid(
     UiBeatGrid? self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_opt_box_autoadd_ui_clip_modulation(
+    UiClipModulation? self,
     SseSerializer serializer,
   );
 
@@ -3988,6 +4054,18 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_ui_clip(UiClip self, SseSerializer serializer);
 
   @protected
+  void sse_encode_ui_clip_curve(UiClipCurve self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_ui_clip_loop(UiClipLoop self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_ui_clip_modulation(
+    UiClipModulation self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_ui_clip_source(UiClipSource self, SseSerializer serializer);
 
   @protected
@@ -4004,6 +4082,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_ui_cue_marker(UiCueMarker self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_ui_curve_point(UiCurvePoint self, SseSerializer serializer);
 
   @protected
   void sse_encode_ui_device_stream_status(

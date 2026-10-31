@@ -16,6 +16,7 @@ pub enum ResizeEdge {
     Right,
 }
 
+use crate::core::project::clip_modulation::ClipModulation;
 use crate::core::project::envelope::GainEnvelope;
 use crate::core::project::track::midi::Pattern;
 use crate::core::project::{ApplicationState, DawSource, track::TrackType};
@@ -265,15 +266,19 @@ pub struct Clip {
     /// Per-clip gain envelope for audio clips, stacked on top of the waveform envelope.
     /// `None` leaves the audio untouched. Shared behind an `Arc` so clip copies stay cheap.
     pub envelope: Option<Arc<GainEnvelope>>,
+    /// Pan and pitch curves and looping of an audio clip. `None` plays the clip straight through.
+    /// Shared behind an `Arc` so clip copies stay cheap.
+    pub modulation: Option<Arc<ClipModulation>>,
 }
 
-/// A clip's timing and envelope, kept by history when a change of playback speed rescales the
+/// A clip's timing, envelope, and modulation, kept by history when a change of playback speed rescales the
 /// clip.
 #[derive(Debug, Clone, PartialEq)]
 pub struct ClipTiming {
     pub clip_id: ClipId,
     pub time: ClipTimeUnit,
     pub envelope: Option<Arc<GainEnvelope>>,
+    pub modulation: Option<Arc<ClipModulation>>,
 }
 
 /// Result of [`ApplicationState::make_clips_unique`].
@@ -398,12 +403,17 @@ impl ApplicationState {
                 clip_id,
                 time: clip.time.clone(),
                 envelope: clip.envelope.clone(),
+                modulation: clip.modulation.clone(),
             });
             clip.time.scale_content(*factor);
             clip.envelope = clip
                 .envelope
                 .as_ref()
                 .map(|envelope| Arc::new(envelope.scaled(*factor)));
+            clip.modulation = clip
+                .modulation
+                .as_ref()
+                .map(|modulation| Arc::new(modulation.scaled(*factor)));
         }
         previous
     }
@@ -417,6 +427,7 @@ impl ApplicationState {
             };
             std::mem::swap(&mut clip.time, &mut timing.time);
             std::mem::swap(&mut clip.envelope, &mut timing.envelope);
+            std::mem::swap(&mut clip.modulation, &mut timing.modulation);
         }
     }
 
@@ -838,6 +849,14 @@ impl ApplicationState {
                     .unwrap_or(0);
                 let source_frames = (buffer_len as u64) / (audio_source.channels as u64);
 
+                // A trimmed source only plays the part between its trim points.
+                let source_frames = if audio_source.trim_end > 0 {
+                    source_frames.min(u64::from(audio_source.trim_end))
+                } else {
+                    source_frames
+                }
+                .saturating_sub(u64::from(audio_source.trim_start));
+
                 // clip length in samples (resampled to project sample rate)
                 let timeline_length_samples = if source_sample_rate > 0.0 {
                     ((source_frames as f64) * (project_sample_rate / source_sample_rate)) as u64
@@ -855,6 +874,7 @@ impl ApplicationState {
                         offset_start: 0,
                     },
                     envelope: None,
+                    modulation: None,
                 });
                 if let Err(error) = self
                     .tracks
@@ -910,6 +930,7 @@ impl ApplicationState {
                         offset_start: 0,
                     },
                     envelope: None,
+                    modulation: None,
                 });
                 if let Err(error) = self
                     .tracks
@@ -1455,6 +1476,25 @@ impl ApplicationState {
             "Only audio clips have gain envelopes"
         );
         clip.envelope = (!envelope.is_identity()).then(|| Arc::new(envelope.normalized()));
+        Ok(clip.clone())
+    }
+
+    /// Replaces an audio clip's pan and pitch curves and loop. An identity modulation removes it.
+    pub fn set_clip_modulation(
+        &mut self,
+        clip_id: ClipId,
+        modulation: ClipModulation,
+    ) -> anyhow::Result<Clip> {
+        let clip = self
+            .clips_pool
+            .get_mut(clip_id)
+            .context("Clip not found in global pool")?;
+        anyhow::ensure!(
+            matches!(clip.source, Some(DawSource::Audio(_))),
+            "Only audio clips have modulation"
+        );
+        let modulation = modulation.normalized();
+        clip.modulation = (!modulation.is_identity()).then(|| Arc::new(modulation));
         Ok(clip.clone())
     }
 }

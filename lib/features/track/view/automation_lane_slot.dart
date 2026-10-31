@@ -352,17 +352,12 @@ class _AutomationLaneSlotState extends ConsumerState<AutomationLaneSlot> {
     });
   }
 
-  /// Direction in which raising tension moves the handle, so dragging up
-  /// always raises the curve: `1` or `-1`. Count-driven curves simply get
-  /// more steps or cycles when dragged up. A Step handle moves toward the
-  /// other endpoint, since its tension picks which side of the segment holds.
-  double _tensionDirection(AutomationPointDto from, double toValue) {
-    final traits = _sampler.traits(from.curveType);
-    final rising = toValue - from.value;
-    if (traits.tensionIsCount || rising == 0) return 1;
-    if (from.curveType == AutomationCurveTypeDto.step) return -rising.sign;
-    return traits.tensionInverted ? -rising.sign : rising.sign;
-  }
+  double _tensionDirection(AutomationPointDto from, double toValue) =>
+      tensionDragDirection(
+        _sampler.traits(from.curveType),
+        from.curveType,
+        toValue - from.value,
+      );
 
   void _startBezierDrag(AutomationBezierHitbox handle) {
     final points = widget.lane.points;
@@ -643,7 +638,7 @@ class _AutomationLaneSlotState extends ConsumerState<AutomationLaneSlot> {
           setState(() => _hoveredTensionPointId = null);
         },
         child: Tooltip(
-          message: 'Drag to bend the curve, double-click to reset',
+          message: tensionHandleTooltip,
           waitDuration: const Duration(milliseconds: 600),
           child: GestureDetector(
             behavior: HitTestBehavior.opaque,

@@ -6,6 +6,25 @@ import 'package:karbeat/core/utils/result_type.dart';
 import 'package:karbeat/src/rust/api/automation.dart';
 import 'package:karbeat/src/rust/api/project.dart';
 
+/// Tooltip of the handle that bends a curve segment.
+const String tensionHandleTooltip =
+    'Drag to bend the curve, double-click to reset';
+
+/// Direction in which raising tension moves a segment's midpoint, so dragging
+/// up always raises the curve: `1` or `-1`. Count-driven curves simply get more
+/// steps or cycles when dragged up. A Step handle moves toward the other
+/// endpoint, since its tension picks which side of the segment holds. [rising]
+/// is the segment's value change.
+double tensionDragDirection(
+  AutomationCurveTraitsDto traits,
+  AutomationCurveTypeDto curveType,
+  double rising,
+) {
+  if (traits.tensionIsCount || rising == 0) return 1;
+  if (curveType == AutomationCurveTypeDto.step) return -rising.sign;
+  return traits.tensionInverted ? -rising.sign : rising.sign;
+}
+
 /// Curve shapes and parameter values computed by the Rust code the audio
 /// engine plays, so the editors draw exactly what is heard.
 ///
@@ -56,6 +75,30 @@ class CurveSampler {
     contentStart: contentStart,
     contentLength: contentLength,
     positions: positions,
+  );
+
+  /// Values of one curve of [modulation] at [positions], in clip content samples.
+  Float64List sampleClipModulation(
+    UiClipModulation modulation,
+    UiClipCurve curve,
+    List<double> positions,
+  ) => sampleClipCurve(
+    modulation: modulation,
+    curve: curve,
+    positions: positions,
+  );
+
+  /// Clip-relative samples where the repeats of a looping clip start.
+  List<int> loopStarts(
+    UiClipModulation modulation, {
+    required int offsetStart,
+    required int loopLength,
+    required int limit,
+  }) => clipLoopStarts(
+    modulation: modulation,
+    offsetStart: offsetStart,
+    loopLength: loopLength,
+    limit: limit,
   );
 
   /// Gain of [fade] at normalized position [t], rising from 0 to 1.

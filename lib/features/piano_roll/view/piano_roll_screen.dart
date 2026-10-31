@@ -123,8 +123,8 @@ class PianoRollScreenState extends ConsumerState<PianoRollScreen> {
     if (position.extentAfter >= 500) return;
 
     final laidOutWidth = position.maxScrollExtent + position.viewportDimension;
-    final nextWidth = max(_timelineWidth, laidOutWidth) +
-        _timelineExtensionWidth;
+    final nextWidth =
+        max(_timelineWidth, laidOutWidth) + _timelineExtensionWidth;
     if (nextWidth == _timelineWidth) return;
 
     setState(() => _timelineWidth = nextWidth);
@@ -138,7 +138,10 @@ class PianoRollScreenState extends ConsumerState<PianoRollScreen> {
 
     const endPaddingWidth = 1000.0;
     final contentWidth = contentEndTick * zoomX + endPaddingWidth;
-    final viewportWidth = max(0.0, MediaQuery.sizeOf(context).width - _keyWidth);
+    final viewportWidth = max(
+      0.0,
+      MediaQuery.sizeOf(context).width - _keyWidth,
+    );
     final scrollableViewportWidth = viewportWidth + _timelineExtensionWidth;
     return max(_timelineWidth, max(contentWidth, scrollableViewportWidth));
   }
@@ -370,9 +373,7 @@ class PianoRollScreenState extends ConsumerState<PianoRollScreen> {
 
   void _submitBrushAdd() {
     if (_brushAddNotes.isEmpty) return;
-    ref
-        .read(pianoRollProvider.notifier)
-        .stampNotes(List.of(_brushAddNotes));
+    ref.read(pianoRollProvider.notifier).stampNotes(List.of(_brushAddNotes));
     setState(_resetPaintState);
   }
 
@@ -430,9 +431,10 @@ class PianoRollScreenState extends ConsumerState<PianoRollScreen> {
   List<Widget> _buildNoteOverlapShades(UiPattern pattern, double zoomX) {
     final spansByKey = <int, List<LaneSpan>>{};
     for (final note in pattern.notes) {
-      spansByKey
-          .putIfAbsent(note.key, () => [])
-          .add((start: note.startTick, end: note.startTick + note.duration));
+      spansByKey.putIfAbsent(note.key, () => []).add((
+        start: note.startTick,
+        end: note.startTick + note.duration,
+      ));
     }
     return [
       for (final MapEntry(key: key, value: spans) in spansByKey.entries)
@@ -769,637 +771,712 @@ class PianoRollScreenState extends ConsumerState<PianoRollScreen> {
             focusNode: _focusNode,
             onKeyEvent: _handleKeyEvent,
             child: Column(
-            children: [
-              // ==== TOOLBAR ===
-              _PianoRollToolbar(
-                patternId: pattern.id,
-                name: pattern.name,
-                onZoomIn: () => _handleZoom(1.2),
-                onZoomOut: () => _handleZoom(1 / 1.2),
-                gridDenom: gridDenom,
-                onGridDenomChanged: (val) {
-                  if (val != null) {
-                    ref.read(pianoRollProvider.notifier).setGridSize(val);
-                  }
-                },
-              ),
-
-              SizedBox(
-                height: 30,
-                child: Row(
-                  children: [
-                    SizedBox(
-                      width: _keyWidth,
-                      child: ColoredBox(color: colors.surfaceContainer),
-                    ),
-                    Expanded(
-                      child: PatternRuler(
-                        scrollController: _gridHorizontalController,
-                        zoomX: zoomX,
-                      ),
-                    ),
-                  ],
+              children: [
+                // ==== TOOLBAR ===
+                _PianoRollToolbar(
+                  patternId: pattern.id,
+                  name: pattern.name,
+                  onZoomIn: () => _handleZoom(1.2),
+                  onZoomOut: () => _handleZoom(1 / 1.2),
+                  gridDenom: gridDenom,
+                  onGridDenomChanged: (val) {
+                    if (val != null) {
+                      ref.read(pianoRollProvider.notifier).setGridSize(val);
+                    }
+                  },
                 ),
-              ),
 
-              // === EDITOR AREA ===
-              Expanded(
-                child: MultiSplitViewTheme(
-                  data: MultiSplitViewThemeData(
-                    dividerPainter: DividerPainters.grooved1(
-                      color: colors.outlineVariant,
-                      highlightedColor: colors.primary,
-                      thickness: 1,
-                    ),
-                  ),
-                  child: MultiSplitView(
-                    axis: Axis.vertical,
-                    controller: _editorSplitController,
-                    builder: (context, area) {
-                      if (area.data == 'bottomPanel') {
-                        return _PianoRollBottomPanelView(
+                SizedBox(
+                  height: 30,
+                  child: Row(
+                    children: [
+                      SizedBox(
+                        width: _keyWidth,
+                        child: ColoredBox(color: colors.surfaceContainer),
+                      ),
+                      Expanded(
+                        child: PatternRuler(
                           scrollController: _gridHorizontalController,
                           zoomX: zoomX,
-                          gutterWidth: _keyWidth,
-                          selectedPanel: _bottomPanel,
-                          onPanelChanged: (panel) {
-                            setState(() => _bottomPanel = panel);
-                          },
-                          onNoteOn: _handleNoteOn,
-                          onNoteOff: _handleNoteOff,
-                          activeNotes: _activeKeyboardNotes,
-                        );
-                      }
-
-                      return Row(
-                  children: [
-                    // PIANO KEYS (Left)
-                    SizedBox(
-                      width: _keyWidth,
-                      child: Listener(
-                        onPointerDown: (_) => _focusNode.requestFocus(),
-                        onPointerSignal: _handleKeysPointerSignal,
-                        child: ScrollConfiguration(
-                          behavior: ScrollConfiguration.of(
-                            context,
-                          ).copyWith(scrollbars: false),
-                          child: ListView.builder(
-                            controller: _keysController,
-                            itemCount: 128,
-                            itemExtent: _keyHeight,
-                            physics: isPan
-                                ? const ClampingScrollPhysics()
-                                : const UnclampedNeverScrollableScrollPhysics(),
-                            itemBuilder: (context, index) {
-                              // MIDI 127 is top, 0 is bottom. List index 0 is top.
-                              final midiKey = 127 - index;
-                              return _PianoKey(
-                                midiKey: midiKey,
-                                height: _keyHeight,
-                                onPlayNote: (isOn) {
-                                  if (isOn) {
-                                    _handleNoteOn(midiKey);
-                                  } else {
-                                    _handleNoteOff(midiKey);
-                                  }
-                                },
-                              );
-                            },
-                          ),
                         ),
                       ),
-                    ),
+                    ],
+                  ),
+                ),
 
-                    // ========= GRID & NOTES & PLAYHEAD ===========
-                    Expanded(
-                      child: Stack(
-                        children: [
-                          Positioned.fill(
-                            child: IgnorePointer(
-                              child: RepaintBoundary(
-                                child: CustomPaint(
-                                  painter: _PianoGridPainter(
-                                    horizontalController:
-                                        _gridHorizontalController,
-                                    verticalController: _gridVerticalController,
-                                    zoomX: zoomX,
-                                    keyHeight: _keyHeight,
-                                    gridDenom: gridDenom,
-                                    lineColor: colors.onSurface,
+                // === EDITOR AREA ===
+                Expanded(
+                  child: MultiSplitViewTheme(
+                    data: MultiSplitViewThemeData(
+                      dividerPainter: DividerPainters.grooved1(
+                        color: colors.outlineVariant,
+                        highlightedColor: colors.primary,
+                        thickness: 1,
+                      ),
+                    ),
+                    child: MultiSplitView(
+                      axis: Axis.vertical,
+                      controller: _editorSplitController,
+                      builder: (context, area) {
+                        if (area.data == 'bottomPanel') {
+                          return _PianoRollBottomPanelView(
+                            scrollController: _gridHorizontalController,
+                            zoomX: zoomX,
+                            gutterWidth: _keyWidth,
+                            selectedPanel: _bottomPanel,
+                            onPanelChanged: (panel) {
+                              setState(() => _bottomPanel = panel);
+                            },
+                            onNoteOn: _handleNoteOn,
+                            onNoteOff: _handleNoteOff,
+                            activeNotes: _activeKeyboardNotes,
+                          );
+                        }
+
+                        return Row(
+                          children: [
+                            // PIANO KEYS (Left)
+                            SizedBox(
+                              width: _keyWidth,
+                              child: Listener(
+                                onPointerDown: (_) => _focusNode.requestFocus(),
+                                onPointerSignal: _handleKeysPointerSignal,
+                                child: ScrollConfiguration(
+                                  behavior: ScrollConfiguration.of(
+                                    context,
+                                  ).copyWith(scrollbars: false),
+                                  child: ListView.builder(
+                                    controller: _keysController,
+                                    itemCount: 128,
+                                    itemExtent: _keyHeight,
+                                    physics: isPan
+                                        ? const ClampingScrollPhysics()
+                                        : const UnclampedNeverScrollableScrollPhysics(),
+                                    itemBuilder: (context, index) {
+                                      // MIDI 127 is top, 0 is bottom. List index 0 is top.
+                                      final midiKey = 127 - index;
+                                      return _PianoKey(
+                                        midiKey: midiKey,
+                                        height: _keyHeight,
+                                        onPlayNote: (isOn) {
+                                          if (isOn) {
+                                            _handleNoteOn(midiKey);
+                                          } else {
+                                            _handleNoteOff(midiKey);
+                                          }
+                                        },
+                                      );
+                                    },
                                   ),
                                 ),
                               ),
                             ),
-                          ),
-                          Positioned.fill(
-                            child: IgnorePointer(
-                              child: PatternLoopShade(
-                                scrollController: _gridHorizontalController,
-                                zoomX: zoomX,
-                              ),
-                            ),
-                          ),
-                          ScrollConfiguration(
-                            behavior: ScrollConfiguration.of(context).copyWith(
-                              scrollbars: true,
-                              dragDevices: {
-                                PointerDeviceKind.touch,
-                                PointerDeviceKind.mouse,
-                              },
-                            ),
-                            child: SingleChildScrollView(
-                              controller: _gridHorizontalController,
-                              scrollDirection: Axis.horizontal,
-                              physics:
-                                  const UnclampedNeverScrollableScrollPhysics(),
-                              child: SingleChildScrollView(
-                                controller: _gridVerticalController,
-                                scrollDirection: Axis.vertical,
-                                physics:
-                                    const UnclampedNeverScrollableScrollPhysics(),
-                                child: Listener(
-                                  onPointerSignal: _handleEditorPointerSignal,
-                                  onPointerDown: (event) {
-                                    _focusNode.requestFocus();
-                                    _lastInteractionPos = event.localPosition;
-                                    if (event.buttons & kPrimaryButton == 0) {
-                                      return;
-                                    }
-                                    if (isZoom || isPan) {
-                                      setState(() => _isInteracting = true);
-                                    }
 
-                                    if (isDrawing) {
-                                      _resetPaintState();
-                                      _handleBrushAdd(
-                                        event.localPosition,
-                                        pattern,
-                                      );
-                                    } else if (isSlicing) {
-                                      _handleSlice(
-                                        event.localPosition,
-                                        pattern,
-                                      );
-                                    } else if (isDeleting) {
-                                      _resetPaintState();
-                                      _handleBrushDelete(
-                                        event.localPosition,
-                                        pattern,
-                                      );
-                                    } else if (isZoom) {
-                                      _lastZoomDragY = event.localPosition.dy;
-                                    } else if (isSelecting) {
-                                      setState(() {
-                                        _selectionStart = event.localPosition;
-                                        _selectionEnd = event.localPosition;
-                                      });
-                                    }
-                                  },
-                                  onPointerMove: (event) {
-                                    if (event.buttons & kPrimaryButton == 0) {
-                                      return;
-                                    }
-                                    if (isDrawing) {
-                                      _handleBrushAdd(
-                                        event.localPosition,
-                                        pattern,
-                                      );
-                                    } else if (isDeleting) {
-                                      _handleBrushDelete(
-                                        event.localPosition,
-                                        pattern,
-                                      );
-                                    } else if (isZoom) {
-                                      double deltaY =
-                                          event.localPosition.dy -
-                                          _lastZoomDragY;
-                                      _lastZoomDragY = event.localPosition.dy;
-                                      final focalX = _viewportX(
-                                        event.localPosition.dx,
-                                      );
-                                      if (deltaY < 0) {
-                                        _handleZoom(
-                                          1 / 1.05,
-                                          focalPointX: focalX,
-                                        );
-                                      } else if (deltaY > 0) {
-                                        _handleZoom(
-                                          1.05,
-                                          focalPointX: focalX,
-                                        );
-                                      }
-                                    } else if (isSelecting &&
-                                        _selectionStart != null) {
-                                      setState(() {
-                                        _selectionEnd = event.localPosition;
-                                      });
-
-                                      _handleHorizontalAutoScroll(
-                                        event.position.dx, // global X
-                                      );
-
-                                      // Also handle vertical auto-scroll for selection
-                                      final screenSize = MediaQuery.of(
-                                        context,
-                                      ).size;
-                                      _handleAutoScroll(
-                                        event.position, // global Offset
-                                        screenSize,
-                                      );
-                                    }
-                                  },
-                                  onPointerUp: (event) {
-                                    _stopAutoScroll();
-                                    if (_isInteracting) {
-                                      setState(() => _isInteracting = false);
-                                    }
-                                    if (isDrawing) {
-                                      _submitBrushAdd();
-                                    } else if (isDeleting) {
-                                      _submitBrushDelete(pattern.id);
-                                    } else if (isSelecting) {
-                                      _commitRangeSelection(pattern);
-                                    }
-                                  },
-                                  onPointerCancel: (event) {
-                                    if (_isInteracting) {
-                                      setState(() => _isInteracting = false);
-                                    }
-                                  },
-                                  child: DawInputDetector(
-                                    onCtrlScroll: (delta, localPosition) {
-                                      final double multiplier = delta > 0
-                                          ? 0.9
-                                          : 1.1;
-                                      _handleZoom(
-                                        multiplier,
-                                        focalPointX: _viewportX(
-                                          localPosition.dx,
+                            // ========= GRID & NOTES & PLAYHEAD ===========
+                            Expanded(
+                              child: Stack(
+                                children: [
+                                  Positioned.fill(
+                                    child: IgnorePointer(
+                                      child: RepaintBoundary(
+                                        child: CustomPaint(
+                                          painter: _PianoGridPainter(
+                                            horizontalController:
+                                                _gridHorizontalController,
+                                            verticalController:
+                                                _gridVerticalController,
+                                            zoomX: zoomX,
+                                            keyHeight: _keyHeight,
+                                            gridDenom: gridDenom,
+                                            lineColor: colors.onSurface,
+                                          ),
                                         ),
-                                      );
-                                    },
-                                    onAltScroll: (delta, localPosition) {
-                                      final double multiplier = delta > 0
-                                          ? 0.9
-                                          : 1.1;
-                                      // localPosition is in grid content
-                                      // coordinates; the focal point is
-                                      // relative to the visible viewport.
-                                      _handleKeyHeightZoom(
-                                        multiplier,
-                                        localPosition.dy -
-                                            (_gridVerticalController.hasClients
-                                                ? _gridVerticalController.offset
-                                                : 0.0),
-                                      );
-                                    },
-                                    onPinchZoom: (details) {
-                                      _handleZoom(
-                                        details.scale,
-                                        focalPointX: _viewportX(
-                                          details.localFocalPoint.dx,
+                                      ),
+                                    ),
+                                  ),
+                                  Positioned.fill(
+                                    child: IgnorePointer(
+                                      child: PatternLoopShade(
+                                        scrollController:
+                                            _gridHorizontalController,
+                                        zoomX: zoomX,
+                                      ),
+                                    ),
+                                  ),
+                                  ScrollConfiguration(
+                                    behavior: ScrollConfiguration.of(context)
+                                        .copyWith(
+                                          scrollbars: true,
+                                          dragDevices: {
+                                            PointerDeviceKind.touch,
+                                            PointerDeviceKind.mouse,
+                                          },
                                         ),
-                                      );
-                                    },
-                                    onOneFingerPan: isPan ? _panEditor : null,
-                                    child: GestureDetector(
-                                      behavior: HitTestBehavior.translucent,
-                                      child: MouseRegion(
-                                        cursor: isDrawing
-                                            ? SystemMouseCursors.copy
-                                            : isPan
-                                            ? SystemMouseCursors.move
-                                            : isZoom
-                                            ? SystemMouseCursors.resizeUpDown
-                                            : isStretching
-                                            ? SystemMouseCursors.resizeLeftRight
-                                            : SystemMouseCursors.basic,
-                                        child: SizedBox(
-                                          height: 128 * _keyHeight,
-                                          width: timelineWidth,
-                                          child: ContextMenuWrapper(
-                                            title: pianoRollNoteActionsTitle(
-                                              pianoRollState,
-                                            ),
-                                            actions: [
-                                              ...pianoRollNoteActions(
-                                                context: context,
-                                                ref: ref,
-                                              ),
-                                              DawContextAction(
-                                                title: "Paste",
-                                                icon: Icons.paste,
-                                                onTap: () {
-                                                  if (_lastInteractionPos ==
-                                                      null) {
-                                                    return;
-                                                  }
+                                    child: SingleChildScrollView(
+                                      controller: _gridHorizontalController,
+                                      scrollDirection: Axis.horizontal,
+                                      physics:
+                                          const UnclampedNeverScrollableScrollPhysics(),
+                                      child: SingleChildScrollView(
+                                        controller: _gridVerticalController,
+                                        scrollDirection: Axis.vertical,
+                                        physics:
+                                            const UnclampedNeverScrollableScrollPhysics(),
+                                        child: Listener(
+                                          onPointerSignal:
+                                              _handleEditorPointerSignal,
+                                          onPointerDown: (event) {
+                                            _focusNode.requestFocus();
+                                            _lastInteractionPos =
+                                                event.localPosition;
+                                            if (event.buttons &
+                                                    kPrimaryButton ==
+                                                0) {
+                                              return;
+                                            }
+                                            if (isZoom || isPan) {
+                                              setState(
+                                                () => _isInteracting = true,
+                                              );
+                                            }
 
-                                                  // Convert local pixel position to Ticks and MIDI Key
-                                                  int tick =
-                                                      (_lastInteractionPos!.dx /
-                                                              zoomX)
-                                                          .round();
-                                                  int keyIndex =
-                                                      (_lastInteractionPos!.dy /
-                                                              _keyHeight)
-                                                          .floor();
-                                                  int midiKey = (127 - keyIndex)
-                                                      .clamp(0, 127);
+                                            if (isDrawing) {
+                                              _resetPaintState();
+                                              _handleBrushAdd(
+                                                event.localPosition,
+                                                pattern,
+                                              );
+                                            } else if (isSlicing) {
+                                              _handleSlice(
+                                                event.localPosition,
+                                                pattern,
+                                              );
+                                            } else if (isDeleting) {
+                                              _resetPaintState();
+                                              _handleBrushDelete(
+                                                event.localPosition,
+                                                pattern,
+                                              );
+                                            } else if (isZoom) {
+                                              _lastZoomDragY =
+                                                  event.localPosition.dy;
+                                            } else if (isSelecting) {
+                                              setState(() {
+                                                _selectionStart =
+                                                    event.localPosition;
+                                                _selectionEnd =
+                                                    event.localPosition;
+                                              });
+                                            }
+                                          },
+                                          onPointerMove: (event) {
+                                            if (event.buttons &
+                                                    kPrimaryButton ==
+                                                0) {
+                                              return;
+                                            }
+                                            if (isDrawing) {
+                                              _handleBrushAdd(
+                                                event.localPosition,
+                                                pattern,
+                                              );
+                                            } else if (isDeleting) {
+                                              _handleBrushDelete(
+                                                event.localPosition,
+                                                pattern,
+                                              );
+                                            } else if (isZoom) {
+                                              double deltaY =
+                                                  event.localPosition.dy -
+                                                  _lastZoomDragY;
+                                              _lastZoomDragY =
+                                                  event.localPosition.dy;
+                                              final focalX = _viewportX(
+                                                event.localPosition.dx,
+                                              );
+                                              if (deltaY < 0) {
+                                                _handleZoom(
+                                                  1 / 1.05,
+                                                  focalPointX: focalX,
+                                                );
+                                              } else if (deltaY > 0) {
+                                                _handleZoom(
+                                                  1.05,
+                                                  focalPointX: focalX,
+                                                );
+                                              }
+                                            } else if (isSelecting &&
+                                                _selectionStart != null) {
+                                              setState(() {
+                                                _selectionEnd =
+                                                    event.localPosition;
+                                              });
 
-                                                  // Snap to the draw step for clean pasting
-                                                  final snappedTick = _snapTick(
-                                                    tick,
+                                              _handleHorizontalAutoScroll(
+                                                event.position.dx, // global X
+                                              );
+
+                                              // Also handle vertical auto-scroll for selection
+                                              final screenSize = MediaQuery.of(
+                                                context,
+                                              ).size;
+                                              _handleAutoScroll(
+                                                event.position, // global Offset
+                                                screenSize,
+                                              );
+                                            }
+                                          },
+                                          onPointerUp: (event) {
+                                            _stopAutoScroll();
+                                            if (_isInteracting) {
+                                              setState(
+                                                () => _isInteracting = false,
+                                              );
+                                            }
+                                            if (isDrawing) {
+                                              _submitBrushAdd();
+                                            } else if (isDeleting) {
+                                              _submitBrushDelete(pattern.id);
+                                            } else if (isSelecting) {
+                                              _commitRangeSelection(pattern);
+                                            }
+                                          },
+                                          onPointerCancel: (event) {
+                                            if (_isInteracting) {
+                                              setState(
+                                                () => _isInteracting = false,
+                                              );
+                                            }
+                                          },
+                                          child: DawInputDetector(
+                                            onCtrlScroll:
+                                                (delta, localPosition) {
+                                                  final double multiplier =
+                                                      delta > 0 ? 0.9 : 1.1;
+                                                  _handleZoom(
+                                                    multiplier,
+                                                    focalPointX: _viewportX(
+                                                      localPosition.dx,
+                                                    ),
                                                   );
-
-                                                  ref
-                                                      .read(
-                                                        pianoRollProvider
-                                                            .notifier,
-                                                      )
-                                                      .pasteNotesFromClipboardToPattern(
-                                                        pattern.id,
-                                                        snappedTick,
-                                                        newKey: midiKey,
-                                                      );
                                                 },
-                                              ),
-                                            ],
-                                            child: Stack(
-                                              children: [
-                                                // LAYER B1: Unselected Interactive Notes
-                                                ...unselectedNotes.map((note) {
-                                                  final isPendingDelete =
-                                                      _brushDeleteNoteIds
-                                                          .contains(note.id);
-                                                  return _InteractiveNote(
-                                                    key: ValueKey(note.id),
-                                                    note: note,
-                                                    noteId: note.id,
-                                                    patternId: pattern.id,
-                                                    generatorId: generatorId,
-                                                    zoomX: zoomX,
-                                                    keyHeight: _keyHeight,
-                                                    selectedTool: selectedTool,
-                                                    snapTicks: max(
-                                                      1,
-                                                      _stepTicks,
-                                                    ),
-                                                    opacity: isPendingDelete
-                                                        ? 0.3
-                                                        : 0.8,
-                                                    borderColor:
-                                                        colors.outlineVariant,
-                                                    onDragUpdate: (globalPos) {
-                                                      if (selectedTool ==
-                                                          PianoRollToolSelection
-                                                              .grab) {
-                                                        final screenSize =
-                                                            MediaQuery.of(
-                                                              context,
-                                                            ).size;
-                                                        _handleAutoScroll(
-                                                          globalPos,
-                                                          screenSize,
-                                                        );
-                                                        _handleHorizontalAutoScroll(
-                                                          globalPos.dx,
-                                                        );
-                                                      }
-                                                    },
-                                                    onDragEnd: () {
-                                                      _stopAutoScroll();
-                                                    },
-                                                    onTapOverride: () {
-                                                      if (selectedTool ==
-                                                              PianoRollToolSelection
-                                                                  .select ||
-                                                          selectedTool ==
-                                                              PianoRollToolSelection
-                                                                  .grab) {
-                                                        // Selecting an unselected note clears previous selection and selects only this one
-                                                        ref
-                                                            .read(
-                                                              pianoRollProvider
-                                                                  .notifier,
-                                                            )
-                                                            .selectNotes({
-                                                              note.id,
-                                                            });
-                                                      }
-                                                    },
-                                                  );
-                                                }),
-
-                                                // LAYER B2: Selected Batch Notes
-                                                if (selectedNotes.isNotEmpty)
-                                                  _InteractiveNoteGroup(
-                                                    notes: selectedNotes,
-                                                    patternId: pattern.id,
-                                                    generatorId: generatorId,
-                                                    zoomX: zoomX,
-                                                    keyHeight: _keyHeight,
-                                                    selectedTool: selectedTool,
-                                                    snapTicks: max(
-                                                      1,
-                                                      _stepTicks,
-                                                    ),
-                                                    pendingDeleteIds:
-                                                        _brushDeleteNoteIds,
-                                                    onDragUpdate: (globalPos) {
-                                                      if (selectedTool ==
-                                                          PianoRollToolSelection
-                                                              .grab) {
-                                                        final screenSize =
-                                                            MediaQuery.of(
-                                                              context,
-                                                            ).size;
-                                                        _handleAutoScroll(
-                                                          globalPos,
-                                                          screenSize,
-                                                        );
-                                                        _handleHorizontalAutoScroll(
-                                                          globalPos.dx,
-                                                        );
-                                                      }
-                                                    },
-                                                    onDragEnd: () {
-                                                      _stopAutoScroll();
-                                                    },
-                                                  ),
-
-                                                // LAYER B3: Stacked note markers
-                                                ..._buildNoteOverlapShades(
-                                                  pattern,
-                                                  zoomX,
+                                            onAltScroll: (delta, localPosition) {
+                                              final double multiplier =
+                                                  delta > 0 ? 0.9 : 1.1;
+                                              // localPosition is in grid content
+                                              // coordinates; the focal point is
+                                              // relative to the visible viewport.
+                                              _handleKeyHeightZoom(
+                                                multiplier,
+                                                localPosition.dy -
+                                                    (_gridVerticalController
+                                                            .hasClients
+                                                        ? _gridVerticalController
+                                                              .offset
+                                                        : 0.0),
+                                              );
+                                            },
+                                            onPinchZoom: (details) {
+                                              _handleZoom(
+                                                details.scale,
+                                                focalPointX: _viewportX(
+                                                  details.localFocalPoint.dx,
                                                 ),
-
-                                                // LAYER C: Preview Add Notes
-                                                ..._brushAddNotes.map((
-                                                  draft,
-                                                ) {
-                                                  final key = draft.key;
-                                                  final startTick =
-                                                      draft.startTick;
-                                                  final duration =
-                                                      draft.duration;
-                                                  return Positioned(
-                                                    top:
-                                                        (127 - key) *
-                                                            _keyHeight +
-                                                        1,
-                                                    left: startTick * zoomX,
-                                                    width: duration * zoomX < 5
-                                                        ? 5
-                                                        : duration * zoomX,
-                                                    height: _keyHeight - 2,
-                                                    child: IgnorePointer(
-                                                      child: Container(
-                                                        decoration: BoxDecoration(
-                                                          color: colors.primary
-                                                              .withValues(
-                                                                alpha: 0.5,
-                                                              ),
-                                                          borderRadius:
-                                                              BorderRadius.circular(
-                                                                2,
-                                                              ),
-                                                          border: Border.all(
-                                                            color:
-                                                                colors.primary,
-                                                          ),
+                                              );
+                                            },
+                                            onOneFingerPan: isPan
+                                                ? _panEditor
+                                                : null,
+                                            child: GestureDetector(
+                                              behavior:
+                                                  HitTestBehavior.translucent,
+                                              child: MouseRegion(
+                                                cursor: isDrawing
+                                                    ? SystemMouseCursors.copy
+                                                    : isPan
+                                                    ? SystemMouseCursors.move
+                                                    : isZoom
+                                                    ? SystemMouseCursors
+                                                          .resizeUpDown
+                                                    : isStretching
+                                                    ? SystemMouseCursors
+                                                          .resizeLeftRight
+                                                    : SystemMouseCursors.basic,
+                                                child: SizedBox(
+                                                  height: 128 * _keyHeight,
+                                                  width: timelineWidth,
+                                                  child: ContextMenuWrapper(
+                                                    title:
+                                                        pianoRollNoteActionsTitle(
+                                                          pianoRollState,
                                                         ),
+                                                    actions: [
+                                                      ...pianoRollNoteActions(
+                                                        context: context,
+                                                        ref: ref,
                                                       ),
-                                                    ),
-                                                  );
-                                                }),
+                                                      DawContextAction(
+                                                        title: "Paste",
+                                                        icon: Icons.paste,
+                                                        onTap: () {
+                                                          if (_lastInteractionPos ==
+                                                              null) {
+                                                            return;
+                                                          }
 
-                                                // LAYER D: Range Selection Box
-                                                if (_selectionStart != null &&
-                                                    _selectionEnd != null)
-                                                  Positioned.fromRect(
-                                                    rect: Rect.fromPoints(
-                                                      _selectionStart!,
-                                                      _selectionEnd!,
-                                                    ),
-                                                    child: Container(
-                                                      decoration: BoxDecoration(
-                                                        color: colors.primary
-                                                            .withValues(
-                                                              alpha: 0.32,
+                                                          // Convert local pixel position to Ticks and MIDI Key
+                                                          int tick =
+                                                              (_lastInteractionPos!
+                                                                          .dx /
+                                                                      zoomX)
+                                                                  .round();
+                                                          int keyIndex =
+                                                              (_lastInteractionPos!
+                                                                          .dy /
+                                                                      _keyHeight)
+                                                                  .floor();
+                                                          int midiKey =
+                                                              (127 - keyIndex)
+                                                                  .clamp(
+                                                                    0,
+                                                                    127,
+                                                                  );
+
+                                                          // Snap to the draw step for clean pasting
+                                                          final snappedTick =
+                                                              _snapTick(tick);
+
+                                                          ref
+                                                              .read(
+                                                                pianoRollProvider
+                                                                    .notifier,
+                                                              )
+                                                              .pasteNotesFromClipboardToPattern(
+                                                                pattern.id,
+                                                                snappedTick,
+                                                                newKey: midiKey,
+                                                              );
+                                                        },
+                                                      ),
+                                                    ],
+                                                    child: Stack(
+                                                      children: [
+                                                        // LAYER B1: Unselected Interactive Notes
+                                                        ...unselectedNotes.map((
+                                                          note,
+                                                        ) {
+                                                          final isPendingDelete =
+                                                              _brushDeleteNoteIds
+                                                                  .contains(
+                                                                    note.id,
+                                                                  );
+                                                          return _InteractiveNote(
+                                                            key: ValueKey(
+                                                              note.id,
                                                             ),
-                                                        border: Border.all(
-                                                          color: colors.primary,
-                                                          width: 1.0,
+                                                            note: note,
+                                                            noteId: note.id,
+                                                            patternId:
+                                                                pattern.id,
+                                                            generatorId:
+                                                                generatorId,
+                                                            zoomX: zoomX,
+                                                            keyHeight:
+                                                                _keyHeight,
+                                                            selectedTool:
+                                                                selectedTool,
+                                                            snapTicks: max(
+                                                              1,
+                                                              _stepTicks,
+                                                            ),
+                                                            opacity:
+                                                                isPendingDelete
+                                                                ? 0.3
+                                                                : 0.8,
+                                                            borderColor: colors
+                                                                .outlineVariant,
+                                                            onDragUpdate: (globalPos) {
+                                                              if (selectedTool ==
+                                                                  PianoRollToolSelection
+                                                                      .grab) {
+                                                                final screenSize =
+                                                                    MediaQuery.of(
+                                                                      context,
+                                                                    ).size;
+                                                                _handleAutoScroll(
+                                                                  globalPos,
+                                                                  screenSize,
+                                                                );
+                                                                _handleHorizontalAutoScroll(
+                                                                  globalPos.dx,
+                                                                );
+                                                              }
+                                                            },
+                                                            onDragEnd: () {
+                                                              _stopAutoScroll();
+                                                            },
+                                                            onTapOverride: () {
+                                                              if (selectedTool ==
+                                                                      PianoRollToolSelection
+                                                                          .select ||
+                                                                  selectedTool ==
+                                                                      PianoRollToolSelection
+                                                                          .grab) {
+                                                                // Selecting an unselected note clears previous selection and selects only this one
+                                                                ref
+                                                                    .read(
+                                                                      pianoRollProvider
+                                                                          .notifier,
+                                                                    )
+                                                                    .selectNotes(
+                                                                      {note.id},
+                                                                    );
+                                                              }
+                                                            },
+                                                          );
+                                                        }),
+
+                                                        // LAYER B2: Selected Batch Notes
+                                                        if (selectedNotes
+                                                            .isNotEmpty)
+                                                          _InteractiveNoteGroup(
+                                                            notes:
+                                                                selectedNotes,
+                                                            patternId:
+                                                                pattern.id,
+                                                            generatorId:
+                                                                generatorId,
+                                                            zoomX: zoomX,
+                                                            keyHeight:
+                                                                _keyHeight,
+                                                            selectedTool:
+                                                                selectedTool,
+                                                            snapTicks: max(
+                                                              1,
+                                                              _stepTicks,
+                                                            ),
+                                                            pendingDeleteIds:
+                                                                _brushDeleteNoteIds,
+                                                            onDragUpdate: (globalPos) {
+                                                              if (selectedTool ==
+                                                                  PianoRollToolSelection
+                                                                      .grab) {
+                                                                final screenSize =
+                                                                    MediaQuery.of(
+                                                                      context,
+                                                                    ).size;
+                                                                _handleAutoScroll(
+                                                                  globalPos,
+                                                                  screenSize,
+                                                                );
+                                                                _handleHorizontalAutoScroll(
+                                                                  globalPos.dx,
+                                                                );
+                                                              }
+                                                            },
+                                                            onDragEnd: () {
+                                                              _stopAutoScroll();
+                                                            },
+                                                          ),
+
+                                                        // LAYER B3: Stacked note markers
+                                                        ..._buildNoteOverlapShades(
+                                                          pattern,
+                                                          zoomX,
                                                         ),
-                                                      ),
+
+                                                        // LAYER C: Preview Add Notes
+                                                        ..._brushAddNotes.map((
+                                                          draft,
+                                                        ) {
+                                                          final key = draft.key;
+                                                          final startTick =
+                                                              draft.startTick;
+                                                          final duration =
+                                                              draft.duration;
+                                                          return Positioned(
+                                                            top:
+                                                                (127 - key) *
+                                                                    _keyHeight +
+                                                                1,
+                                                            left:
+                                                                startTick *
+                                                                zoomX,
+                                                            width:
+                                                                duration *
+                                                                        zoomX <
+                                                                    5
+                                                                ? 5
+                                                                : duration *
+                                                                      zoomX,
+                                                            height:
+                                                                _keyHeight - 2,
+                                                            child: IgnorePointer(
+                                                              child: Container(
+                                                                decoration: BoxDecoration(
+                                                                  color: colors
+                                                                      .primary
+                                                                      .withValues(
+                                                                        alpha:
+                                                                            0.5,
+                                                                      ),
+                                                                  borderRadius:
+                                                                      BorderRadius.circular(
+                                                                        2,
+                                                                      ),
+                                                                  border: Border.all(
+                                                                    color: colors
+                                                                        .primary,
+                                                                  ),
+                                                                ),
+                                                              ),
+                                                            ),
+                                                          );
+                                                        }),
+
+                                                        // LAYER D: Range Selection Box
+                                                        if (_selectionStart !=
+                                                                null &&
+                                                            _selectionEnd !=
+                                                                null)
+                                                          Positioned.fromRect(
+                                                            rect: Rect.fromPoints(
+                                                              _selectionStart!,
+                                                              _selectionEnd!,
+                                                            ),
+                                                            child: Container(
+                                                              decoration: BoxDecoration(
+                                                                color: colors
+                                                                    .primary
+                                                                    .withValues(
+                                                                      alpha:
+                                                                          0.32,
+                                                                    ),
+                                                                border: Border.all(
+                                                                  color: colors
+                                                                      .primary,
+                                                                  width: 1.0,
+                                                                ),
+                                                              ),
+                                                            ),
+                                                          ),
+                                                      ],
                                                     ),
                                                   ),
-                                              ],
+                                                ),
+                                              ),
                                             ),
                                           ),
                                         ),
                                       ),
                                     ),
                                   ),
-                                ),
-                              ),
-                            ),
-                          ),
-                          if (selectedNoteIds.isNotEmpty)
-                            FloatingContextPanel(
-                              actions: [
-                                DawContextAction(
-                                  title: "More…",
-                                  icon: Icons.more_horiz,
-                                  onTap: () => showDawContextMenu(
-                                    context: context,
-                                    title: pianoRollNoteActionsTitle(
-                                      ref.read(pianoRollProvider),
+                                  if (selectedNoteIds.isNotEmpty)
+                                    FloatingContextPanel(
+                                      actions: [
+                                        DawContextAction(
+                                          title: "More…",
+                                          icon: Icons.more_horiz,
+                                          onTap: () => showDawContextMenu(
+                                            context: context,
+                                            title: pianoRollNoteActionsTitle(
+                                              ref.read(pianoRollProvider),
+                                            ),
+                                            actions: pianoRollNoteActions(
+                                              context: context,
+                                              ref: ref,
+                                            ),
+                                          ),
+                                        ),
+                                        DawContextAction(
+                                          title: "Delete",
+                                          onTap: () {
+                                            ref
+                                                .read(
+                                                  pianoRollProvider.notifier,
+                                                )
+                                                .deletePatternNoteBatch(
+                                                  patternId: pattern.id,
+                                                  noteIds: selectedNoteIds
+                                                      .toList(),
+                                                );
+                                            ref
+                                                .read(
+                                                  pianoRollProvider.notifier,
+                                                )
+                                                .clearNoteSelection();
+                                          },
+                                        ),
+                                        DawContextAction(
+                                          title: "Copy",
+                                          onTap: () async {
+                                            await ref
+                                                .read(
+                                                  pianoRollProvider.notifier,
+                                                )
+                                                .copyNotesFromPattern(
+                                                  pattern.id,
+                                                  selectedNoteIds.toList(),
+                                                );
+                                            // we do not clear because every DAW do this
+                                          },
+                                        ),
+                                        DawContextAction(
+                                          title: "Cut",
+                                          onTap: () async {
+                                            await ref
+                                                .read(
+                                                  pianoRollProvider.notifier,
+                                                )
+                                                .cutNotesFromPattern(
+                                                  pattern.id,
+                                                  selectedNoteIds.toList(),
+                                                );
+                                          },
+                                        ),
+                                      ],
+                                      onClose: () {
+                                        ref
+                                            .read(pianoRollProvider.notifier)
+                                            .clearNoteSelection();
+                                      },
+                                      title:
+                                          "${selectedNoteIds.length} Note(s)",
                                     ),
-                                    actions: pianoRollNoteActions(
-                                      context: context,
-                                      ref: ref,
+                                  // Same draggable playhead as the song timeline,
+                                  // reading and seeking the pattern position.
+                                  Positioned.fill(
+                                    child: PlayheadOverlay(
+                                      offsetAdjustment: 0,
+                                      scrollController:
+                                          _gridHorizontalController,
+                                      zoomLevel: samplesPerTick / zoomX,
+                                      sampleSelector: (position) =>
+                                          position.patternSamples,
+                                      isInteracting: _isInteracting,
+                                      snapPosition: (samples) =>
+                                          (_snapTick(
+                                                    (samples / samplesPerTick)
+                                                        .round(),
+                                                  ) *
+                                                  samplesPerTick)
+                                              .round(),
+                                      onSeek: (samples) => ref
+                                          .read(pianoRollProvider.notifier)
+                                          .seekPattern(samples),
                                     ),
                                   ),
-                                ),
-                                DawContextAction(
-                                  title: "Delete",
-                                  onTap: () {
-                                    ref
-                                        .read(pianoRollProvider.notifier)
-                                        .deletePatternNoteBatch(
-                                          patternId: pattern.id,
-                                          noteIds: selectedNoteIds.toList(),
-                                        );
-                                    ref
-                                        .read(pianoRollProvider.notifier)
-                                        .clearNoteSelection();
-                                  },
-                                ),
-                                DawContextAction(
-                                  title: "Copy",
-                                  onTap: () async {
-                                    await ref
-                                        .read(pianoRollProvider.notifier)
-                                        .copyNotesFromPattern(
-                                          pattern.id,
-                                          selectedNoteIds.toList(),
-                                        );
-                                    // we do not clear because every DAW do this
-                                  },
-                                ),
-                                DawContextAction(
-                                  title: "Cut",
-                                  onTap: () async {
-                                    await ref
-                                        .read(pianoRollProvider.notifier)
-                                        .cutNotesFromPattern(
-                                          pattern.id,
-                                          selectedNoteIds.toList(),
-                                        );
-                                  },
-                                ),
-                              ],
-                              onClose: () {
-                                ref
-                                    .read(pianoRollProvider.notifier)
-                                    .clearNoteSelection();
-                              },
-                              title: "${selectedNoteIds.length} Note(s)",
+                                ],
+                              ),
                             ),
-                          // Same draggable playhead as the song timeline,
-                          // reading and seeking the pattern position.
-                          Positioned.fill(
-                            child: PlayheadOverlay(
-                              offsetAdjustment: 0,
-                              scrollController: _gridHorizontalController,
-                              zoomLevel: samplesPerTick / zoomX,
-                              sampleSelector: (position) =>
-                                  position.patternSamples,
-                              isInteracting: _isInteracting,
-                              snapPosition: (samples) =>
-                                  (_snapTick(
-                                            (samples / samplesPerTick).round(),
-                                          ) *
-                                          samplesPerTick)
-                                      .round(),
-                              onSeek: (samples) => ref
-                                  .read(pianoRollProvider.notifier)
-                                  .seekPattern(samples),
-                            ),
-                          ),
-                        ],
-                      ),
+                          ],
+                        );
+                      },
                     ),
-                  ],
-                      );
-                    },
                   ),
                 ),
-              ),
-            ],
-          ),
+              ],
+            ),
           ),
         ),
       ],
@@ -1707,9 +1784,8 @@ class _PianoRollToolbar extends ConsumerWidget {
               icon: Icons.swap_horiz,
               label: 'Stretch selected notes (Alt+9)',
               isActive: selectedTool == PianoRollToolSelection.stretch,
-              onTap: () => notifier.selectPianoRollTool(
-                PianoRollToolSelection.stretch,
-              ),
+              onTap: () =>
+                  notifier.selectPianoRollTool(PianoRollToolSelection.stretch),
             ),
             _ToolButton(
               icon: Icons.pan_tool,
@@ -1839,7 +1915,7 @@ class _PianoRollToolbar extends ConsumerWidget {
                       final instanceType = entry.value.instanceType;
                       final name = switch (instanceType) {
                         UiGeneratorInstanceType_Plugin(:final field0) =>
-                          field0.name,
+                          field0.label,
                         _ => "Sampler",
                       };
                       return name;
@@ -1874,7 +1950,7 @@ class _PianoRollToolbar extends ConsumerWidget {
                       target: UiPluginTarget.generator(previewGeneratorId),
                       registryId: previewPlugin.registryId,
                       instanceId: previewGeneratorId,
-                      pluginName: previewPlugin.name,
+                      pluginName: previewPlugin.label,
                     )
                   : null,
               tooltip: previewPlugin == null
@@ -2033,7 +2109,9 @@ double _noteResizeEdge(double width) {
 /// What a pointer at [localX] inside a [width]-wide note starts.
 _NoteDragMode _noteHitMode(double localX, double width) {
   final edge = _noteResizeEdge(width);
-  return localX >= width - edge ? _NoteDragMode.resizeRight : _NoteDragMode.move;
+  return localX >= width - edge
+      ? _NoteDragMode.resizeRight
+      : _NoteDragMode.move;
 }
 
 class _InteractiveNote extends ConsumerStatefulWidget {
@@ -2136,8 +2214,7 @@ class _InteractiveNoteState extends ConsumerState<_InteractiveNote> {
     final previewWidth = _mode == _NoteDragMode.stretch
         ? renderedWidth * _stretchFactor
         : renderedWidth;
-    final allowsStretch =
-        widget.selectedTool == PianoRollToolSelection.stretch;
+    final allowsStretch = widget.selectedTool == PianoRollToolSelection.stretch;
 
     // Determine cursor based on tool and the explicit note hit zones.
     MouseCursor cursor;
@@ -2183,257 +2260,275 @@ class _InteractiveNoteState extends ConsumerState<_InteractiveNote> {
             // Right-clicking an unselected note selects it, so the grid's
             // context menu acts on the note under the pointer.
             child: Listener(
-            onPointerDown: (event) {
-              if (event.buttons & kSecondaryButton == 0) return;
-              final selection = ref.read(pianoRollProvider).selectedNoteIds;
-              if (!selection.contains(widget.noteId)) {
-                ref.read(pianoRollProvider.notifier).selectNotes({widget.noteId});
-              }
-            },
-            child: GestureDetector(
-            behavior: HitTestBehavior.opaque,
-            onTap: () {
-              if (widget.onTapOverride != null) {
-                widget.onTapOverride!();
-                return;
-              }
-
-              if (widget.selectedTool == PianoRollToolSelection.delete) {
-                final selectedIds = ref.read(pianoRollProvider).selectedNoteIds;
-                if (selectedIds.length > 1 &&
-                    selectedIds.contains(widget.noteId)) {
-                  ref
-                      .read(pianoRollProvider.notifier)
-                      .deletePatternNoteBatch(
-                        patternId: widget.patternId,
-                        noteIds: selectedIds.toList(),
-                      );
-                } else {
-                  ref
-                      .read(pianoRollProvider.notifier)
-                      .deletePatternNote(
-                        patternId: widget.patternId,
-                        noteId: widget.noteId,
-                      );
+              onPointerDown: (event) {
+                if (event.buttons & kSecondaryButton == 0) return;
+                final selection = ref.read(pianoRollProvider).selectedNoteIds;
+                if (!selection.contains(widget.noteId)) {
+                  ref.read(pianoRollProvider.notifier).selectNotes({
+                    widget.noteId,
+                  });
                 }
-              }
-            },
-            onPanStart: (details) {
-              if (widget.selectedTool == PianoRollToolSelection.stretch) {
-                ref
-                    .read(pianoRollProvider.notifier)
-                    .rememberSingleNote(widget.noteId);
-                setState(() {
-                  _mode = _NoteDragMode.stretch;
-                  _stretchDragDeltaX = 0;
-                  _stretchFactor = 1;
-                });
-                _currentPreviewKey = widget.note.key;
-                _playNote(_currentPreviewKey!, true);
-                return;
-              }
-              if (widget.selectedTool != PianoRollToolSelection.grab) {
-                return;
-              }
+              },
+              child: GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: () {
+                  if (widget.onTapOverride != null) {
+                    widget.onTapOverride!();
+                    return;
+                  }
 
-              ref
-                  .read(pianoRollProvider.notifier)
-                  .rememberSingleNote(widget.noteId);
-
-              // `details.localPosition` is relative to this note's own box, so
-              // the hit zone never depends on the group or other notes.
-              setState(() {
-                _mode = _noteHitMode(
-                  details.localPosition.dx,
-                  max(5.0, _localWidth),
-                );
-              });
-
-              // Play sound on touch
-              _currentPreviewKey = widget.note.key;
-              _playNote(_currentPreviewKey!, true);
-            },
-
-            onPanUpdate: (details) {
-              if (_mode == _NoteDragMode.none) return;
-              setState(() {
-                if (_mode == _NoteDragMode.move) {
-                  _localLeft += details.delta.dx;
-                  _localTop += details.delta.dy;
-
-                  int keyIndex = (_localTop / widget.keyHeight).round();
-                  int newKey = (127 - keyIndex).clamp(0, 127);
-
-                  if (newKey != _currentPreviewKey) {
-                    if (_currentPreviewKey != null) {
-                      _playNote(_currentPreviewKey!, false);
+                  if (widget.selectedTool == PianoRollToolSelection.delete) {
+                    final selectedIds = ref
+                        .read(pianoRollProvider)
+                        .selectedNoteIds;
+                    if (selectedIds.length > 1 &&
+                        selectedIds.contains(widget.noteId)) {
+                      ref
+                          .read(pianoRollProvider.notifier)
+                          .deletePatternNoteBatch(
+                            patternId: widget.patternId,
+                            noteIds: selectedIds.toList(),
+                          );
+                    } else {
+                      ref
+                          .read(pianoRollProvider.notifier)
+                          .deletePatternNote(
+                            patternId: widget.patternId,
+                            noteId: widget.noteId,
+                          );
                     }
-                    _currentPreviewKey = newKey;
+                  }
+                },
+                onPanStart: (details) {
+                  if (widget.selectedTool == PianoRollToolSelection.stretch) {
+                    ref
+                        .read(pianoRollProvider.notifier)
+                        .rememberSingleNote(widget.noteId);
+                    setState(() {
+                      _mode = _NoteDragMode.stretch;
+                      _stretchDragDeltaX = 0;
+                      _stretchFactor = 1;
+                    });
+                    _currentPreviewKey = widget.note.key;
                     _playNote(_currentPreviewKey!, true);
+                    return;
                   }
-                } else if (_mode == _NoteDragMode.resizeRight) {
-                  _localWidth += details.delta.dx;
-                  if (_localWidth < 5) _localWidth = 5;
-                } else if (_mode == _NoteDragMode.stretch) {
-                  _stretchDragDeltaX += details.delta.dx;
-                  final baseWidth = max(5.0, _localWidth);
-                  _stretchFactor = ((baseWidth + _stretchDragDeltaX) / baseWidth)
-                      .clamp(0.05, 20.0);
-                }
-              });
-              widget.onDragUpdate?.call(details.globalPosition);
-            },
-            onPanEnd: (details) {
-              if (_currentPreviewKey != null) {
-                _playNote(_currentPreviewKey!, false);
-                _currentPreviewKey = null;
-              }
+                  if (widget.selectedTool != PianoRollToolSelection.grab) {
+                    return;
+                  }
 
-              // final state = ref.read(globalStateProvider);
-
-              if (widget.generatorId != null) {
-                try {
-                  playPreviewNoteGenerator(
-                    ctx: ref.read(projectProvider.notifier).dawContext,
-                    generatorId: widget.generatorId!,
-                    noteKey: widget.note.key,
-                    velocity: 100,
-                    isOn: false,
-                  );
-                } catch (e) {
-                  AppLogger.error(e.toString());
-                  ref.read(notificationProvider.notifier).error(e);
-                }
-              }
-
-              int snap = widget.snapTicks;
-
-              if (_mode == _NoteDragMode.stretch) {
-                if ((_stretchFactor - 1).abs() > 0.001) {
                   ref
                       .read(pianoRollProvider.notifier)
-                      .stretchNotes(_stretchFactor, noteIds: [widget.noteId]);
-                }
-              } else if (_mode == _NoteDragMode.move) {
-                int keyIndex = (_localTop / widget.keyHeight).round();
-                int newKey = (127 - keyIndex).clamp(0, 127);
+                      .rememberSingleNote(widget.noteId);
 
-                // snap time
-                int rawTick = (_localLeft / widget.zoomX).round();
+                  // `details.localPosition` is relative to this note's own box, so
+                  // the hit zone never depends on the group or other notes.
+                  setState(() {
+                    _mode = _noteHitMode(
+                      details.localPosition.dx,
+                      max(5.0, _localWidth),
+                    );
+                  });
 
-                int newStartTick = (rawTick / snap).round() * snap;
-                if (newStartTick < 0) newStartTick = 0;
+                  // Play sound on touch
+                  _currentPreviewKey = widget.note.key;
+                  _playNote(_currentPreviewKey!, true);
+                },
 
-                final selectedIds = ref.read(pianoRollProvider).selectedNoteIds;
-                if (selectedIds.length > 1 &&
-                    selectedIds.contains(widget.noteId)) {
-                  final tickDelta = newStartTick - widget.note.startTick;
-                  final keyDelta = newKey - widget.note.key;
+                onPanUpdate: (details) {
+                  if (_mode == _NoteDragMode.none) return;
+                  setState(() {
+                    if (_mode == _NoteDragMode.move) {
+                      _localLeft += details.delta.dx;
+                      _localTop += details.delta.dy;
 
-                  final pattern = ref
-                      .read(projectProvider)
-                      .value
-                      ?.patterns[widget.patternId];
-                  if (pattern != null) {
-                    final updates = <(int, int, int)>[];
-                    for (final n in pattern.notes) {
-                      if (selectedIds.contains(n.id)) {
-                        int targetStartTick = n.startTick + tickDelta;
-                        if (targetStartTick < 0) targetStartTick = 0;
-                        int targetKey = (n.key + keyDelta).clamp(0, 127);
-                        updates.add((n.id, targetStartTick, targetKey));
+                      int keyIndex = (_localTop / widget.keyHeight).round();
+                      int newKey = (127 - keyIndex).clamp(0, 127);
+
+                      if (newKey != _currentPreviewKey) {
+                        if (_currentPreviewKey != null) {
+                          _playNote(_currentPreviewKey!, false);
+                        }
+                        _currentPreviewKey = newKey;
+                        _playNote(_currentPreviewKey!, true);
                       }
+                    } else if (_mode == _NoteDragMode.resizeRight) {
+                      _localWidth += details.delta.dx;
+                      if (_localWidth < 5) _localWidth = 5;
+                    } else if (_mode == _NoteDragMode.stretch) {
+                      _stretchDragDeltaX += details.delta.dx;
+                      final baseWidth = max(5.0, _localWidth);
+                      _stretchFactor =
+                          ((baseWidth + _stretchDragDeltaX) / baseWidth).clamp(
+                            0.05,
+                            20.0,
+                          );
                     }
-                    ref
-                        .read(pianoRollProvider.notifier)
-                        .movePatternNoteBatch(
-                          patternId: widget.patternId,
-                          updates: updates,
-                        );
+                  });
+                  widget.onDragUpdate?.call(details.globalPosition);
+                },
+                onPanEnd: (details) {
+                  if (_currentPreviewKey != null) {
+                    _playNote(_currentPreviewKey!, false);
+                    _currentPreviewKey = null;
                   }
-                } else {
-                  ref
-                      .read(pianoRollProvider.notifier)
-                      .movePatternNote(
-                        patternId: widget.patternId,
-                        noteId: widget.noteId,
-                        newStartTick: newStartTick,
-                        newKey: newKey,
+
+                  // final state = ref.read(globalStateProvider);
+
+                  if (widget.generatorId != null) {
+                    try {
+                      playPreviewNoteGenerator(
+                        ctx: ref.read(projectProvider.notifier).dawContext,
+                        generatorId: widget.generatorId!,
+                        noteKey: widget.note.key,
+                        velocity: 100,
+                        isOn: false,
                       );
-                }
-              } else if (_mode == _NoteDragMode.resizeRight) {
-                int rawDuration = (_localWidth / widget.zoomX).round();
-                int newDuration = (rawDuration / snap).round() * snap;
-                if (newDuration < 10) newDuration = snap;
+                    } catch (e) {
+                      AppLogger.error(e.toString());
+                      ref.read(notificationProvider.notifier).error(e);
+                    }
+                  }
 
-                final selectedIds = ref.read(pianoRollProvider).selectedNoteIds;
-                if (selectedIds.length > 1 &&
-                    selectedIds.contains(widget.noteId)) {
-                  final durationDelta = newDuration - widget.note.duration;
+                  int snap = widget.snapTicks;
 
-                  final pattern = ref
-                      .read(projectProvider)
-                      .value
-                      ?.patterns[widget.patternId];
-                  if (pattern != null) {
-                    final updates = <(int, int)>[];
-                    for (final n in pattern.notes) {
-                      if (selectedIds.contains(n.id)) {
-                        int targetDuration = n.duration + durationDelta;
-                        if (targetDuration < 10) targetDuration = 10;
-                        updates.add((n.id, targetDuration));
+                  if (_mode == _NoteDragMode.stretch) {
+                    if ((_stretchFactor - 1).abs() > 0.001) {
+                      ref
+                          .read(pianoRollProvider.notifier)
+                          .stretchNotes(
+                            _stretchFactor,
+                            noteIds: [widget.noteId],
+                          );
+                    }
+                  } else if (_mode == _NoteDragMode.move) {
+                    int keyIndex = (_localTop / widget.keyHeight).round();
+                    int newKey = (127 - keyIndex).clamp(0, 127);
+
+                    // snap time
+                    int rawTick = (_localLeft / widget.zoomX).round();
+
+                    int newStartTick = (rawTick / snap).round() * snap;
+                    if (newStartTick < 0) newStartTick = 0;
+
+                    final selectedIds = ref
+                        .read(pianoRollProvider)
+                        .selectedNoteIds;
+                    if (selectedIds.length > 1 &&
+                        selectedIds.contains(widget.noteId)) {
+                      final tickDelta = newStartTick - widget.note.startTick;
+                      final keyDelta = newKey - widget.note.key;
+
+                      final pattern = ref
+                          .read(projectProvider)
+                          .value
+                          ?.patterns[widget.patternId];
+                      if (pattern != null) {
+                        final updates = <(int, int, int)>[];
+                        for (final n in pattern.notes) {
+                          if (selectedIds.contains(n.id)) {
+                            int targetStartTick = n.startTick + tickDelta;
+                            if (targetStartTick < 0) targetStartTick = 0;
+                            int targetKey = (n.key + keyDelta).clamp(0, 127);
+                            updates.add((n.id, targetStartTick, targetKey));
+                          }
+                        }
+                        ref
+                            .read(pianoRollProvider.notifier)
+                            .movePatternNoteBatch(
+                              patternId: widget.patternId,
+                              updates: updates,
+                            );
                       }
+                    } else {
+                      ref
+                          .read(pianoRollProvider.notifier)
+                          .movePatternNote(
+                            patternId: widget.patternId,
+                            noteId: widget.noteId,
+                            newStartTick: newStartTick,
+                            newKey: newKey,
+                          );
                     }
-                    ref
-                        .read(pianoRollProvider.notifier)
-                        .resizePatternNoteBatch(
-                          patternId: widget.patternId,
-                          updates: updates,
-                        );
+                  } else if (_mode == _NoteDragMode.resizeRight) {
+                    int rawDuration = (_localWidth / widget.zoomX).round();
+                    int newDuration = (rawDuration / snap).round() * snap;
+                    if (newDuration < 10) newDuration = snap;
+
+                    final selectedIds = ref
+                        .read(pianoRollProvider)
+                        .selectedNoteIds;
+                    if (selectedIds.length > 1 &&
+                        selectedIds.contains(widget.noteId)) {
+                      final durationDelta = newDuration - widget.note.duration;
+
+                      final pattern = ref
+                          .read(projectProvider)
+                          .value
+                          ?.patterns[widget.patternId];
+                      if (pattern != null) {
+                        final updates = <(int, int)>[];
+                        for (final n in pattern.notes) {
+                          if (selectedIds.contains(n.id)) {
+                            int targetDuration = n.duration + durationDelta;
+                            if (targetDuration < 10) targetDuration = 10;
+                            updates.add((n.id, targetDuration));
+                          }
+                        }
+                        ref
+                            .read(pianoRollProvider.notifier)
+                            .resizePatternNoteBatch(
+                              patternId: widget.patternId,
+                              updates: updates,
+                            );
+                      }
+                    } else {
+                      ref
+                          .read(pianoRollProvider.notifier)
+                          .resizePatternNote(
+                            patternId: widget.patternId,
+                            noteId: widget.noteId,
+                            newDuration: newDuration,
+                          );
+                    }
                   }
-                } else {
-                  ref
-                      .read(pianoRollProvider.notifier)
-                      .resizePatternNote(
-                        patternId: widget.patternId,
-                        noteId: widget.noteId,
-                        newDuration: newDuration,
-                      );
-                }
-              }
-              setState(() {
-                _mode = _NoteDragMode.none;
-                _stretchDragDeltaX = 0;
-                _stretchFactor = 1;
-                // Snap visual state immediately to grid so it looks clean
-                // _localTop =
-                //     (_localTop / widget.keyHeight).round() * widget.keyHeight;
-              });
-              widget.onDragEnd?.call();
-            },
-            child: Container(
-              decoration: BoxDecoration(
-                color: _mode != _NoteDragMode.none
-                    ? colors.primary
-                    : colors.primaryContainer,
-                borderRadius: BorderRadius.circular(2),
-                border: Border.all(color: widget.borderColor ?? colors.primary),
+                  setState(() {
+                    _mode = _NoteDragMode.none;
+                    _stretchDragDeltaX = 0;
+                    _stretchFactor = 1;
+                    // Snap visual state immediately to grid so it looks clean
+                    // _localTop =
+                    //     (_localTop / widget.keyHeight).round() * widget.keyHeight;
+                  });
+                  widget.onDragEnd?.call();
+                },
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: _mode != _NoteDragMode.none
+                        ? colors.primary
+                        : colors.primaryContainer,
+                    borderRadius: BorderRadius.circular(2),
+                    border: Border.all(
+                      color: widget.borderColor ?? colors.primary,
+                    ),
+                  ),
+                  child: _localWidth > 30
+                      ? Center(
+                          child: Icon(
+                            Icons.drag_handle,
+                            size: 12,
+                            color: colors.onPrimaryContainer.withValues(
+                              alpha: 0.5,
+                            ),
+                          ),
+                        )
+                      : null,
+                ),
               ),
-              child: _localWidth > 30
-                  ? Center(
-                      child: Icon(
-                        Icons.drag_handle,
-                        size: 12,
-                        color: colors.onPrimaryContainer.withValues(alpha: 0.5),
-                      ),
-                    )
-                  : null,
             ),
-          ),
           ),
         ),
       ),
-    ),
     );
   }
 }
@@ -2454,10 +2549,7 @@ class _PianoGridPainter extends CustomPainter {
     required this.gridDenom,
     required this.lineColor,
   }) : super(
-         repaint: Listenable.merge([
-           horizontalController,
-           verticalController,
-         ]),
+         repaint: Listenable.merge([horizontalController, verticalController]),
        );
 
   @override
@@ -2622,8 +2714,7 @@ class _InteractiveNoteGroupState extends ConsumerState<_InteractiveNoteGroup> {
     double baseWidth = (maxTick - minTick) * widget.zoomX;
     double baseHeight = (maxKey - minKey + 1) * widget.keyHeight;
     final stretchScale = _mode == _NoteDragMode.stretch ? _stretchFactor : 1.0;
-    final allowsStretch =
-        widget.selectedTool == PianoRollToolSelection.stretch;
+    final allowsStretch = widget.selectedTool == PianoRollToolSelection.stretch;
 
     MouseCursor cursor;
     if (widget.selectedTool == PianoRollToolSelection.delete) {
@@ -2655,213 +2746,220 @@ class _InteractiveNoteGroupState extends ConsumerState<_InteractiveNoteGroup> {
           child: Stack(
             clipBehavior: Clip.none,
             children: widget.notes.map((note) {
-            double noteLeft =
-                (note.startTick - minTick) * widget.zoomX * stretchScale;
-            double noteTop = (maxKey - note.key) * widget.keyHeight;
-            double noteWidth = note.duration * widget.zoomX * stretchScale;
+              double noteLeft =
+                  (note.startTick - minTick) * widget.zoomX * stretchScale;
+              double noteTop = (maxKey - note.key) * widget.keyHeight;
+              double noteWidth = note.duration * widget.zoomX * stretchScale;
 
-            if (_mode == _NoteDragMode.resizeRight) {
-              noteWidth += _dragWidthDelta;
-            }
-            if (noteWidth < 5) noteWidth = 5;
+              if (_mode == _NoteDragMode.resizeRight) {
+                noteWidth += _dragWidthDelta;
+              }
+              if (noteWidth < 5) noteWidth = 5;
 
-            final isPendingDelete = widget.pendingDeleteIds.contains(note.id);
+              final isPendingDelete = widget.pendingDeleteIds.contains(note.id);
 
-            return Positioned(
-              left: noteLeft,
-              top: noteTop - 1,
-              width: noteWidth,
-              height: widget.keyHeight - 2,
-              child: Opacity(
-                opacity: isPendingDelete ? 0.3 : 1.0,
-                child: MouseRegion(
-                  cursor: cursor,
-                  onHover: (event) {
-                    if (widget.selectedTool != PianoRollToolSelection.grab) {
-                      return;
-                    }
-                    final overEdge =
-                        _noteHitMode(event.localPosition.dx, noteWidth) ==
-                        _NoteDragMode.resizeRight;
-                    if (overEdge != _hoveringResizeEdge) {
-                      setState(() => _hoveringResizeEdge = overEdge);
-                    }
-                  },
-                  onExit: (_) {
-                    if (_hoveringResizeEdge) {
-                      setState(() => _hoveringResizeEdge = false);
-                    }
-                  },
-                  child: GestureDetector(
-                  behavior: HitTestBehavior.opaque,
-                  onTap: () {
-                    if (widget.selectedTool == PianoRollToolSelection.delete) {
-                      ref
-                          .read(pianoRollProvider.notifier)
-                          .deletePatternNoteBatch(
-                            patternId: widget.patternId,
-                            noteIds: widget.notes.map((e) => e.id).toList(),
+              return Positioned(
+                left: noteLeft,
+                top: noteTop - 1,
+                width: noteWidth,
+                height: widget.keyHeight - 2,
+                child: Opacity(
+                  opacity: isPendingDelete ? 0.3 : 1.0,
+                  child: MouseRegion(
+                    cursor: cursor,
+                    onHover: (event) {
+                      if (widget.selectedTool != PianoRollToolSelection.grab) {
+                        return;
+                      }
+                      final overEdge =
+                          _noteHitMode(event.localPosition.dx, noteWidth) ==
+                          _NoteDragMode.resizeRight;
+                      if (overEdge != _hoveringResizeEdge) {
+                        setState(() => _hoveringResizeEdge = overEdge);
+                      }
+                    },
+                    onExit: (_) {
+                      if (_hoveringResizeEdge) {
+                        setState(() => _hoveringResizeEdge = false);
+                      }
+                    },
+                    child: GestureDetector(
+                      behavior: HitTestBehavior.opaque,
+                      onTap: () {
+                        if (widget.selectedTool ==
+                            PianoRollToolSelection.delete) {
+                          ref
+                              .read(pianoRollProvider.notifier)
+                              .deletePatternNoteBatch(
+                                patternId: widget.patternId,
+                                noteIds: widget.notes.map((e) => e.id).toList(),
+                              );
+                          ref
+                              .read(pianoRollProvider.notifier)
+                              .clearNoteSelection();
+                        } else {
+                          ref
+                              .read(pianoRollProvider.notifier)
+                              .rememberSingleNote(note.id);
+                        }
+                      },
+                      onPanStart: (details) {
+                        if (widget.selectedTool ==
+                            PianoRollToolSelection.stretch) {
+                          ref
+                              .read(pianoRollProvider.notifier)
+                              .rememberSingleNote(note.id);
+                          setState(() {
+                            _mode = _NoteDragMode.stretch;
+                            _stretchDragDeltaX = 0;
+                            _stretchFactor = 1;
+                          });
+                          _currentPreviewKey = note.key;
+                          _playNote(_currentPreviewKey!, true);
+                          return;
+                        }
+                        if (widget.selectedTool !=
+                            PianoRollToolSelection.grab) {
+                          return;
+                        }
+
+                        ref
+                            .read(pianoRollProvider.notifier)
+                            .rememberSingleNote(note.id);
+
+                        // `localPosition` is relative to the grabbed note, so the
+                        // resize band is hit-tested against that note alone
+                        // instead of the whole selection's bounding box.
+                        setState(() {
+                          _mode = _noteHitMode(
+                            details.localPosition.dx,
+                            max(5.0, noteWidth),
                           );
-                      ref.read(pianoRollProvider.notifier).clearNoteSelection();
-                    } else {
-                      ref
-                          .read(pianoRollProvider.notifier)
-                          .rememberSingleNote(note.id);
-                    }
-                  },
-                  onPanStart: (details) {
-                    if (widget.selectedTool ==
-                        PianoRollToolSelection.stretch) {
-                      ref
-                          .read(pianoRollProvider.notifier)
-                          .rememberSingleNote(note.id);
-                      setState(() {
-                        _mode = _NoteDragMode.stretch;
-                        _stretchDragDeltaX = 0;
-                        _stretchFactor = 1;
-                      });
-                      _currentPreviewKey = note.key;
-                      _playNote(_currentPreviewKey!, true);
-                      return;
-                    }
-                    if (widget.selectedTool != PianoRollToolSelection.grab) {
-                      return;
-                    }
+                        });
 
-                    ref
-                        .read(pianoRollProvider.notifier)
-                        .rememberSingleNote(note.id);
+                        _currentPreviewKey = note.key;
+                        _playNote(_currentPreviewKey!, true);
+                      },
+                      onPanUpdate: (details) {
+                        if (_mode == _NoteDragMode.none) return;
+                        setState(() {
+                          if (_mode == _NoteDragMode.move) {
+                            _dragOffsetX += details.delta.dx;
+                            _dragOffsetY += details.delta.dy;
+                          } else if (_mode == _NoteDragMode.resizeRight) {
+                            _dragWidthDelta += details.delta.dx;
+                          } else if (_mode == _NoteDragMode.stretch) {
+                            _stretchDragDeltaX += details.delta.dx;
+                            final span = max(1.0, baseWidth);
+                            _stretchFactor =
+                                ((span + _stretchDragDeltaX) / span).clamp(
+                                  0.05,
+                                  20.0,
+                                );
+                          }
+                        });
+                        widget.onDragUpdate?.call(details.globalPosition);
+                      },
 
-                    // `localPosition` is relative to the grabbed note, so the
-                    // resize band is hit-tested against that note alone
-                    // instead of the whole selection's bounding box.
-                    setState(() {
-                      _mode = _noteHitMode(
-                        details.localPosition.dx,
-                        max(5.0, noteWidth),
-                      );
-                    });
+                      onPanEnd: (details) {
+                        if (_currentPreviewKey != null) {
+                          _playNote(_currentPreviewKey!, false);
+                          _currentPreviewKey = null;
+                        }
 
-                    _currentPreviewKey = note.key;
-                    _playNote(_currentPreviewKey!, true);
-                  },
-                  onPanUpdate: (details) {
-                    if (_mode == _NoteDragMode.none) return;
-                    setState(() {
-                      if (_mode == _NoteDragMode.move) {
-                        _dragOffsetX += details.delta.dx;
-                        _dragOffsetY += details.delta.dy;
-                      } else if (_mode == _NoteDragMode.resizeRight) {
-                        _dragWidthDelta += details.delta.dx;
-                      } else if (_mode == _NoteDragMode.stretch) {
-                        _stretchDragDeltaX += details.delta.dx;
-                        final span = max(1.0, baseWidth);
-                        _stretchFactor =
-                            ((span + _stretchDragDeltaX) / span).clamp(
-                              0.05,
-                              20.0,
+                        final state = ref.read(pianoRollProvider.notifier);
+                        int snap = widget.snapTicks;
+
+                        if (_mode == _NoteDragMode.stretch) {
+                          if ((_stretchFactor - 1).abs() > 0.001) {
+                            state.stretchNotes(_stretchFactor);
+                          }
+                        } else if (_mode == _NoteDragMode.move) {
+                          int rawTickDelta = (_dragOffsetX / widget.zoomX)
+                              .round();
+                          int snappedTickDelta =
+                              (rawTickDelta / snap).round() * snap;
+
+                          // Negative Y means moving UP to a higher pitch
+                          int keyDelta = -(_dragOffsetY / widget.keyHeight)
+                              .round();
+
+                          if (snappedTickDelta != 0 || keyDelta != 0) {
+                            final updates = <(int, int, int)>[];
+                            for (final n in widget.notes) {
+                              int targetStartTick =
+                                  n.startTick + snappedTickDelta;
+                              if (targetStartTick < 0) targetStartTick = 0;
+                              int targetKey = (n.key + keyDelta).clamp(0, 127);
+                              updates.add((n.id, targetStartTick, targetKey));
+                            }
+                            state.movePatternNoteBatch(
+                              patternId: widget.patternId,
+                              updates: updates,
                             );
-                      }
-                    });
-                    widget.onDragUpdate?.call(details.globalPosition);
-                  },
+                          }
+                        } else if (_mode == _NoteDragMode.resizeRight) {
+                          int rawDurationDelta =
+                              (_dragWidthDelta / widget.zoomX).round();
+                          int snappedDurationDelta =
+                              (rawDurationDelta / snap).round() * snap;
 
-                  onPanEnd: (details) {
-                    if (_currentPreviewKey != null) {
-                      _playNote(_currentPreviewKey!, false);
-                      _currentPreviewKey = null;
-                    }
-
-                    final state = ref.read(pianoRollProvider.notifier);
-                    int snap = widget.snapTicks;
-
-                    if (_mode == _NoteDragMode.stretch) {
-                      if ((_stretchFactor - 1).abs() > 0.001) {
-                        state.stretchNotes(_stretchFactor);
-                      }
-                    } else if (_mode == _NoteDragMode.move) {
-                      int rawTickDelta = (_dragOffsetX / widget.zoomX).round();
-                      int snappedTickDelta =
-                          (rawTickDelta / snap).round() * snap;
-
-                      // Negative Y means moving UP to a higher pitch
-                      int keyDelta = -(_dragOffsetY / widget.keyHeight).round();
-
-                      if (snappedTickDelta != 0 || keyDelta != 0) {
-                        final updates = <(int, int, int)>[];
-                        for (final n in widget.notes) {
-                          int targetStartTick = n.startTick + snappedTickDelta;
-                          if (targetStartTick < 0) targetStartTick = 0;
-                          int targetKey = (n.key + keyDelta).clamp(0, 127);
-                          updates.add((n.id, targetStartTick, targetKey));
+                          if (snappedDurationDelta != 0) {
+                            final updates = <(int, int)>[];
+                            for (final n in widget.notes) {
+                              int targetDuration =
+                                  n.duration + snappedDurationDelta;
+                              if (targetDuration < 10) targetDuration = 10;
+                              updates.add((n.id, targetDuration));
+                            }
+                            state.resizePatternNoteBatch(
+                              patternId: widget.patternId,
+                              updates: updates,
+                            );
+                          }
                         }
-                        state.movePatternNoteBatch(
-                          patternId: widget.patternId,
-                          updates: updates,
-                        );
-                      }
-                    } else if (_mode == _NoteDragMode.resizeRight) {
-                      int rawDurationDelta = (_dragWidthDelta / widget.zoomX)
-                          .round();
-                      int snappedDurationDelta =
-                          (rawDurationDelta / snap).round() * snap;
 
-                      if (snappedDurationDelta != 0) {
-                        final updates = <(int, int)>[];
-                        for (final n in widget.notes) {
-                          int targetDuration =
-                              n.duration + snappedDurationDelta;
-                          if (targetDuration < 10) targetDuration = 10;
-                          updates.add((n.id, targetDuration));
-                        }
-                        state.resizePatternNoteBatch(
-                          patternId: widget.patternId,
-                          updates: updates,
-                        );
-                      }
-                    }
-
-                    setState(() {
-                      _mode = _NoteDragMode.none;
-                      _dragOffsetX = 0;
-                      _dragOffsetY = 0;
-                      _dragWidthDelta = 0;
-                      _stretchDragDeltaX = 0;
-                      _stretchFactor = 1;
-                    });
-                    widget.onDragEnd?.call();
-                  },
-                  child: Container(
-                    decoration: BoxDecoration(
-                      color: _mode != _NoteDragMode.none
-                          ? colors.primary
-                          : colors.primaryContainer,
-                      borderRadius: BorderRadius.circular(2),
-                      border: Border.all(
-                        color: colors.primary,
-                        width: 1.5,
-                      ), // Thick white border for selection
+                        setState(() {
+                          _mode = _NoteDragMode.none;
+                          _dragOffsetX = 0;
+                          _dragOffsetY = 0;
+                          _dragWidthDelta = 0;
+                          _stretchDragDeltaX = 0;
+                          _stretchFactor = 1;
+                        });
+                        widget.onDragEnd?.call();
+                      },
+                      child: Container(
+                        decoration: BoxDecoration(
+                          color: _mode != _NoteDragMode.none
+                              ? colors.primary
+                              : colors.primaryContainer,
+                          borderRadius: BorderRadius.circular(2),
+                          border: Border.all(
+                            color: colors.primary,
+                            width: 1.5,
+                          ), // Thick white border for selection
+                        ),
+                        child: noteWidth > 30
+                            ? Center(
+                                child: Icon(
+                                  Icons.drag_handle,
+                                  size: 12,
+                                  color: colors.onPrimaryContainer.withValues(
+                                    alpha: 0.5,
+                                  ),
+                                ),
+                              )
+                            : null,
+                      ),
                     ),
-                    child: noteWidth > 30
-                        ? Center(
-                            child: Icon(
-                              Icons.drag_handle,
-                              size: 12,
-                              color: colors.onPrimaryContainer.withValues(
-                                alpha: 0.5,
-                              ),
-                            ),
-                          )
-                        : null,
                   ),
                 ),
-                ),
-              ),
-            );
-          }).toList(),
+              );
+            }).toList(),
+          ),
         ),
       ),
-    ),
     );
   }
 }

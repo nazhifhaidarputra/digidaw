@@ -991,6 +991,28 @@ class TrackListNotifier extends Notifier<TrackListState> {
     }
   }
 
+  /// Replaces a clip's pan and pitch curves and loop.
+  Future<Result<void>> setClipModulation({
+    required int trackId,
+    required int clipId,
+    required UiClipModulation modulation,
+  }) async {
+    try {
+      final clip = await track_api.setClipModulation(
+        ctx: _ctx,
+        clipId: clipId,
+        modulation: modulation,
+      );
+      _replaceClips(trackId, [clip]);
+      return Result.ok(null);
+    } catch (error) {
+      AppLogger.error(
+        'TrackListNotifier: error editing clip modulation: $error',
+      );
+      return ref.notifyErrorResult(Exception(error.toString()));
+    }
+  }
+
   /// Delete multiple clips at once, with an optimistic local removal.
   Future<Result<void>> deleteClipBatch(int trackId, List<int> clipIds) async {
     _optimisticDeleteClips(trackId, clipIds.toSet());

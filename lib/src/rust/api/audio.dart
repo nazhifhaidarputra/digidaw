@@ -69,6 +69,20 @@ Future<UiGainEnvelope> setAudioSourceEnvelope({
   envelope: envelope,
 );
 
+/// Sets the part of an audio source that plays, in frames of the original audio. A `trim_end` of
+/// zero plays to the end.
+Future<void> setAudioSourceTrim({
+  required DawContext ctx,
+  required int sourceId,
+  required int trimStart,
+  required int trimEnd,
+}) => RustLib.instance.api.crateApiAudioSetAudioSourceTrim(
+  ctx: ctx,
+  sourceId: sourceId,
+  trimStart: trimStart,
+  trimEnd: trimEnd,
+);
+
 /// ACTION: Play the sound via the Engine
 Future<void> playSourcePreview({required DawContext ctx, required int id}) =>
     RustLib.instance.api.crateApiAudioPlaySourcePreview(ctx: ctx, id: id);

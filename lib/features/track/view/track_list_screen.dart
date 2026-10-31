@@ -16,6 +16,7 @@ import 'package:karbeat/features/source/services/audio_source_import.dart';
 import 'package:karbeat/features/source/services/audio_waveform_services.dart';
 import 'package:karbeat/features/source/view/audio_properties_screen.dart';
 import 'package:karbeat/features/source/view/source_list_panel.dart';
+import 'package:karbeat/features/track/view/clip_properties_dialog.dart';
 import 'package:karbeat/features/track/view/automation_lane_context_menu.dart';
 import 'package:karbeat/features/track/view/automation_lane_header.dart';
 import 'package:karbeat/features/track/view/automation_lane_slot.dart';

@@ -268,6 +268,14 @@ impl Default for AudioWaveform {
     }
 }
 
+/// Trim points of an audio source, with the envelope that shifts along with them.
+#[derive(Debug, Clone, PartialEq)]
+pub struct SourceTrim {
+    pub trim_start: u32,
+    pub trim_end: u32,
+    pub envelope: GainEnvelope,
+}
+
 /// A context struct providing the audio engine with everything it needs
 /// to render the waveform correctly based on the current sample mode.
 pub struct WaveformPlaybackContext<'a> {
@@ -374,6 +382,16 @@ impl AudioWaveform {
             return 1.0;
         }
         rendered.len() as f64 / original.len() as f64
+    }
+
+    /// Frames of the original audio, the unit of the trim points.
+    pub fn original_frames(&self) -> u32 {
+        let channels = usize::from(self.channels).max(1);
+        let samples = self
+            .buffer
+            .as_ref()
+            .map_or(0, |buffer| buffer.len() / std::mem::size_of::<f32>());
+        u32::try_from(samples / channels).unwrap_or(u32::MAX)
     }
 
     /// Returns a strictly valid slice of the audio buffer, cropped exactly to

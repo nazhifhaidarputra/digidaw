@@ -43,7 +43,7 @@ class SourceListPanel extends ConsumerWidget {
       target: UiPluginTarget.generator(id),
       registryId: registryId,
       instanceId: id,
-      pluginName: instance?.name ?? 'Sampler',
+      pluginName: instance?.label ?? 'Sampler',
     );
   }
 
@@ -104,16 +104,21 @@ class SourceListPanel extends ConsumerWidget {
               ...generators.entries.map((entry) {
                 final id = entry.key;
                 final generator = entry.value;
-                final name = switch (generator.instanceType) {
-                  UiGeneratorInstanceType_Plugin(:final field0) => field0.name,
-                  _ => 'Sampler',
+                final plugin = switch (generator.instanceType) {
+                  UiGeneratorInstanceType_Plugin(:final field0) => field0,
+                  _ => null,
                 };
                 return _SourcePanelTile(
                   icon: Icons.piano,
                   color: colors.tertiary,
-                  title: name,
+                  title: plugin?.label ?? 'Sampler',
                   subtitle: 'ID: $id',
                   onTap: () => _openGenerator(context, ref, id, generator),
+                  renameIcon: plugin != null,
+                  onRename: plugin == null
+                      ? null
+                      : () =>
+                            renameGeneratorWithDialog(context, ref, id, plugin),
                 );
               }),
             _divider(context),
@@ -236,6 +241,7 @@ class _SourcePanelTile extends StatelessWidget {
     this.onPlace,
     this.onRename,
     this.onDelete,
+    this.renameIcon = false,
   });
 
   final IconData icon;
@@ -246,6 +252,9 @@ class _SourcePanelTile extends StatelessWidget {
   final VoidCallback? onPlace;
   final VoidCallback? onRename;
   final VoidCallback? onDelete;
+
+  /// Shows [onRename] as a pencil beside the title, not only in the menu.
+  final bool renameIcon;
 
   @override
   Widget build(BuildContext context) {
@@ -267,7 +276,15 @@ class _SourcePanelTile extends StatelessWidget {
         overflow: TextOverflow.ellipsis,
         style: TextStyle(color: colors.onSurfaceVariant, fontSize: 10),
       ),
-      trailing: onPlace == null
+      trailing: renameIcon
+          ? IconButton(
+              tooltip: 'Rename',
+              padding: EdgeInsets.zero,
+              visualDensity: VisualDensity.compact,
+              onPressed: onRename,
+              icon: Icon(Icons.edit, size: 16, color: colors.onSurfaceVariant),
+            )
+          : onPlace == null
           ? null
           : IconButton(
               tooltip: 'Put in timeline',

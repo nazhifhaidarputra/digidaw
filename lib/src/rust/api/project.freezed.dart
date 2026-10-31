@@ -1553,7 +1553,7 @@ as double,
 /// @nodoc
 mixin _$UiClip {
 
- String get name; int get id; int get startTime; UiClipSource get source; int get offsetStart; int get loopLength; bool get isSampleBased; UiGainEnvelope? get envelope;
+ String get name; int get id; int get startTime; UiClipSource get source; int get offsetStart; int get loopLength; bool get isSampleBased; UiGainEnvelope? get envelope; UiClipModulation? get modulation;
 /// Create a copy of UiClip
 /// with the given fields replaced by the non-null parameter values.
 @JsonKey(includeFromJson: false, includeToJson: false)
@@ -1564,16 +1564,16 @@ $UiClipCopyWith<UiClip> get copyWith => _$UiClipCopyWithImpl<UiClip>(this as UiC
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is UiClip&&(identical(other.name, name) || other.name == name)&&(identical(other.id, id) || other.id == id)&&(identical(other.startTime, startTime) || other.startTime == startTime)&&(identical(other.source, source) || other.source == source)&&(identical(other.offsetStart, offsetStart) || other.offsetStart == offsetStart)&&(identical(other.loopLength, loopLength) || other.loopLength == loopLength)&&(identical(other.isSampleBased, isSampleBased) || other.isSampleBased == isSampleBased)&&(identical(other.envelope, envelope) || other.envelope == envelope));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is UiClip&&(identical(other.name, name) || other.name == name)&&(identical(other.id, id) || other.id == id)&&(identical(other.startTime, startTime) || other.startTime == startTime)&&(identical(other.source, source) || other.source == source)&&(identical(other.offsetStart, offsetStart) || other.offsetStart == offsetStart)&&(identical(other.loopLength, loopLength) || other.loopLength == loopLength)&&(identical(other.isSampleBased, isSampleBased) || other.isSampleBased == isSampleBased)&&(identical(other.envelope, envelope) || other.envelope == envelope)&&(identical(other.modulation, modulation) || other.modulation == modulation));
 }
 
 
 @override
-int get hashCode => Object.hash(runtimeType,name,id,startTime,source,offsetStart,loopLength,isSampleBased,envelope);
+int get hashCode => Object.hash(runtimeType,name,id,startTime,source,offsetStart,loopLength,isSampleBased,envelope,modulation);
 
 @override
 String toString() {
-  return 'UiClip(name: $name, id: $id, startTime: $startTime, source: $source, offsetStart: $offsetStart, loopLength: $loopLength, isSampleBased: $isSampleBased, envelope: $envelope)';
+  return 'UiClip(name: $name, id: $id, startTime: $startTime, source: $source, offsetStart: $offsetStart, loopLength: $loopLength, isSampleBased: $isSampleBased, envelope: $envelope, modulation: $modulation)';
 }
 
 
@@ -1584,11 +1584,11 @@ abstract mixin class $UiClipCopyWith<$Res>  {
   factory $UiClipCopyWith(UiClip value, $Res Function(UiClip) _then) = _$UiClipCopyWithImpl;
 @useResult
 $Res call({
- String name, int id, int startTime, UiClipSource source, int offsetStart, int loopLength, bool isSampleBased, UiGainEnvelope? envelope
+ String name, int id, int startTime, UiClipSource source, int offsetStart, int loopLength, bool isSampleBased, UiGainEnvelope? envelope, UiClipModulation? modulation
 });
 
 
-$UiClipSourceCopyWith<$Res> get source;$UiGainEnvelopeCopyWith<$Res>? get envelope;
+$UiClipSourceCopyWith<$Res> get source;$UiGainEnvelopeCopyWith<$Res>? get envelope;$UiClipModulationCopyWith<$Res>? get modulation;
 
 }
 /// @nodoc
@@ -1601,7 +1601,7 @@ class _$UiClipCopyWithImpl<$Res>
 
 /// Create a copy of UiClip
 /// with the given fields replaced by the non-null parameter values.
-@pragma('vm:prefer-inline') @override $Res call({Object? name = null,Object? id = null,Object? startTime = null,Object? source = null,Object? offsetStart = null,Object? loopLength = null,Object? isSampleBased = null,Object? envelope = freezed,}) {
+@pragma('vm:prefer-inline') @override $Res call({Object? name = null,Object? id = null,Object? startTime = null,Object? source = null,Object? offsetStart = null,Object? loopLength = null,Object? isSampleBased = null,Object? envelope = freezed,Object? modulation = freezed,}) {
   return _then(_self.copyWith(
 name: null == name ? _self.name : name // ignore: cast_nullable_to_non_nullable
 as String,id: null == id ? _self.id : id // ignore: cast_nullable_to_non_nullable
@@ -1611,7 +1611,8 @@ as UiClipSource,offsetStart: null == offsetStart ? _self.offsetStart : offsetSta
 as int,loopLength: null == loopLength ? _self.loopLength : loopLength // ignore: cast_nullable_to_non_nullable
 as int,isSampleBased: null == isSampleBased ? _self.isSampleBased : isSampleBased // ignore: cast_nullable_to_non_nullable
 as bool,envelope: freezed == envelope ? _self.envelope : envelope // ignore: cast_nullable_to_non_nullable
-as UiGainEnvelope?,
+as UiGainEnvelope?,modulation: freezed == modulation ? _self.modulation : modulation // ignore: cast_nullable_to_non_nullable
+as UiClipModulation?,
   ));
 }
 /// Create a copy of UiClip
@@ -1634,6 +1635,18 @@ $UiGainEnvelopeCopyWith<$Res>? get envelope {
 
   return $UiGainEnvelopeCopyWith<$Res>(_self.envelope!, (value) {
     return _then(_self.copyWith(envelope: value));
+  });
+}/// Create a copy of UiClip
+/// with the given fields replaced by the non-null parameter values.
+@override
+@pragma('vm:prefer-inline')
+$UiClipModulationCopyWith<$Res>? get modulation {
+    if (_self.modulation == null) {
+    return null;
+  }
+
+  return $UiClipModulationCopyWith<$Res>(_self.modulation!, (value) {
+    return _then(_self.copyWith(modulation: value));
   });
 }
 }
@@ -1714,10 +1727,10 @@ return $default(_that);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( String name,  int id,  int startTime,  UiClipSource source,  int offsetStart,  int loopLength,  bool isSampleBased,  UiGainEnvelope? envelope)?  $default,{required TResult orElse(),}) {final _that = this;
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( String name,  int id,  int startTime,  UiClipSource source,  int offsetStart,  int loopLength,  bool isSampleBased,  UiGainEnvelope? envelope,  UiClipModulation? modulation)?  $default,{required TResult orElse(),}) {final _that = this;
 switch (_that) {
 case _UiClip() when $default != null:
-return $default(_that.name,_that.id,_that.startTime,_that.source,_that.offsetStart,_that.loopLength,_that.isSampleBased,_that.envelope);case _:
+return $default(_that.name,_that.id,_that.startTime,_that.source,_that.offsetStart,_that.loopLength,_that.isSampleBased,_that.envelope,_that.modulation);case _:
   return orElse();
 
 }
@@ -1735,10 +1748,10 @@ return $default(_that.name,_that.id,_that.startTime,_that.source,_that.offsetSta
 /// }
 /// ```
 
-@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( String name,  int id,  int startTime,  UiClipSource source,  int offsetStart,  int loopLength,  bool isSampleBased,  UiGainEnvelope? envelope)  $default,) {final _that = this;
+@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( String name,  int id,  int startTime,  UiClipSource source,  int offsetStart,  int loopLength,  bool isSampleBased,  UiGainEnvelope? envelope,  UiClipModulation? modulation)  $default,) {final _that = this;
 switch (_that) {
 case _UiClip():
-return $default(_that.name,_that.id,_that.startTime,_that.source,_that.offsetStart,_that.loopLength,_that.isSampleBased,_that.envelope);}
+return $default(_that.name,_that.id,_that.startTime,_that.source,_that.offsetStart,_that.loopLength,_that.isSampleBased,_that.envelope,_that.modulation);}
 }
 /// A variant of `when` that fallback to returning `null`
 ///
@@ -1752,10 +1765,10 @@ return $default(_that.name,_that.id,_that.startTime,_that.source,_that.offsetSta
 /// }
 /// ```
 
-@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( String name,  int id,  int startTime,  UiClipSource source,  int offsetStart,  int loopLength,  bool isSampleBased,  UiGainEnvelope? envelope)?  $default,) {final _that = this;
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( String name,  int id,  int startTime,  UiClipSource source,  int offsetStart,  int loopLength,  bool isSampleBased,  UiGainEnvelope? envelope,  UiClipModulation? modulation)?  $default,) {final _that = this;
 switch (_that) {
 case _UiClip() when $default != null:
-return $default(_that.name,_that.id,_that.startTime,_that.source,_that.offsetStart,_that.loopLength,_that.isSampleBased,_that.envelope);case _:
+return $default(_that.name,_that.id,_that.startTime,_that.source,_that.offsetStart,_that.loopLength,_that.isSampleBased,_that.envelope,_that.modulation);case _:
   return null;
 
 }
@@ -1767,7 +1780,7 @@ return $default(_that.name,_that.id,_that.startTime,_that.source,_that.offsetSta
 
 
 class _UiClip implements UiClip {
-  const _UiClip({required this.name, required this.id, required this.startTime, required this.source, required this.offsetStart, required this.loopLength, required this.isSampleBased, this.envelope});
+  const _UiClip({required this.name, required this.id, required this.startTime, required this.source, required this.offsetStart, required this.loopLength, required this.isSampleBased, this.envelope, this.modulation});
   
 
 @override final  String name;
@@ -1778,6 +1791,7 @@ class _UiClip implements UiClip {
 @override final  int loopLength;
 @override final  bool isSampleBased;
 @override final  UiGainEnvelope? envelope;
+@override final  UiClipModulation? modulation;
 
 /// Create a copy of UiClip
 /// with the given fields replaced by the non-null parameter values.
@@ -1789,16 +1803,16 @@ _$UiClipCopyWith<_UiClip> get copyWith => __$UiClipCopyWithImpl<_UiClip>(this, _
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is _UiClip&&(identical(other.name, name) || other.name == name)&&(identical(other.id, id) || other.id == id)&&(identical(other.startTime, startTime) || other.startTime == startTime)&&(identical(other.source, source) || other.source == source)&&(identical(other.offsetStart, offsetStart) || other.offsetStart == offsetStart)&&(identical(other.loopLength, loopLength) || other.loopLength == loopLength)&&(identical(other.isSampleBased, isSampleBased) || other.isSampleBased == isSampleBased)&&(identical(other.envelope, envelope) || other.envelope == envelope));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is _UiClip&&(identical(other.name, name) || other.name == name)&&(identical(other.id, id) || other.id == id)&&(identical(other.startTime, startTime) || other.startTime == startTime)&&(identical(other.source, source) || other.source == source)&&(identical(other.offsetStart, offsetStart) || other.offsetStart == offsetStart)&&(identical(other.loopLength, loopLength) || other.loopLength == loopLength)&&(identical(other.isSampleBased, isSampleBased) || other.isSampleBased == isSampleBased)&&(identical(other.envelope, envelope) || other.envelope == envelope)&&(identical(other.modulation, modulation) || other.modulation == modulation));
 }
 
 
 @override
-int get hashCode => Object.hash(runtimeType,name,id,startTime,source,offsetStart,loopLength,isSampleBased,envelope);
+int get hashCode => Object.hash(runtimeType,name,id,startTime,source,offsetStart,loopLength,isSampleBased,envelope,modulation);
 
 @override
 String toString() {
-  return 'UiClip(name: $name, id: $id, startTime: $startTime, source: $source, offsetStart: $offsetStart, loopLength: $loopLength, isSampleBased: $isSampleBased, envelope: $envelope)';
+  return 'UiClip(name: $name, id: $id, startTime: $startTime, source: $source, offsetStart: $offsetStart, loopLength: $loopLength, isSampleBased: $isSampleBased, envelope: $envelope, modulation: $modulation)';
 }
 
 
@@ -1809,11 +1823,11 @@ abstract mixin class _$UiClipCopyWith<$Res> implements $UiClipCopyWith<$Res> {
   factory _$UiClipCopyWith(_UiClip value, $Res Function(_UiClip) _then) = __$UiClipCopyWithImpl;
 @override @useResult
 $Res call({
- String name, int id, int startTime, UiClipSource source, int offsetStart, int loopLength, bool isSampleBased, UiGainEnvelope? envelope
+ String name, int id, int startTime, UiClipSource source, int offsetStart, int loopLength, bool isSampleBased, UiGainEnvelope? envelope, UiClipModulation? modulation
 });
 
 
-@override $UiClipSourceCopyWith<$Res> get source;@override $UiGainEnvelopeCopyWith<$Res>? get envelope;
+@override $UiClipSourceCopyWith<$Res> get source;@override $UiGainEnvelopeCopyWith<$Res>? get envelope;@override $UiClipModulationCopyWith<$Res>? get modulation;
 
 }
 /// @nodoc
@@ -1826,7 +1840,7 @@ class __$UiClipCopyWithImpl<$Res>
 
 /// Create a copy of UiClip
 /// with the given fields replaced by the non-null parameter values.
-@override @pragma('vm:prefer-inline') $Res call({Object? name = null,Object? id = null,Object? startTime = null,Object? source = null,Object? offsetStart = null,Object? loopLength = null,Object? isSampleBased = null,Object? envelope = freezed,}) {
+@override @pragma('vm:prefer-inline') $Res call({Object? name = null,Object? id = null,Object? startTime = null,Object? source = null,Object? offsetStart = null,Object? loopLength = null,Object? isSampleBased = null,Object? envelope = freezed,Object? modulation = freezed,}) {
   return _then(_UiClip(
 name: null == name ? _self.name : name // ignore: cast_nullable_to_non_nullable
 as String,id: null == id ? _self.id : id // ignore: cast_nullable_to_non_nullable
@@ -1836,7 +1850,8 @@ as UiClipSource,offsetStart: null == offsetStart ? _self.offsetStart : offsetSta
 as int,loopLength: null == loopLength ? _self.loopLength : loopLength // ignore: cast_nullable_to_non_nullable
 as int,isSampleBased: null == isSampleBased ? _self.isSampleBased : isSampleBased // ignore: cast_nullable_to_non_nullable
 as bool,envelope: freezed == envelope ? _self.envelope : envelope // ignore: cast_nullable_to_non_nullable
-as UiGainEnvelope?,
+as UiGainEnvelope?,modulation: freezed == modulation ? _self.modulation : modulation // ignore: cast_nullable_to_non_nullable
+as UiClipModulation?,
   ));
 }
 
@@ -1860,6 +1875,568 @@ $UiGainEnvelopeCopyWith<$Res>? get envelope {
 
   return $UiGainEnvelopeCopyWith<$Res>(_self.envelope!, (value) {
     return _then(_self.copyWith(envelope: value));
+  });
+}/// Create a copy of UiClip
+/// with the given fields replaced by the non-null parameter values.
+@override
+@pragma('vm:prefer-inline')
+$UiClipModulationCopyWith<$Res>? get modulation {
+    if (_self.modulation == null) {
+    return null;
+  }
+
+  return $UiClipModulationCopyWith<$Res>(_self.modulation!, (value) {
+    return _then(_self.copyWith(modulation: value));
+  });
+}
+}
+
+/// @nodoc
+mixin _$UiClipLoop {
+
+ bool get enabled; int get time; List<UiCurvePoint> get curve;
+/// Create a copy of UiClipLoop
+/// with the given fields replaced by the non-null parameter values.
+@JsonKey(includeFromJson: false, includeToJson: false)
+@pragma('vm:prefer-inline')
+$UiClipLoopCopyWith<UiClipLoop> get copyWith => _$UiClipLoopCopyWithImpl<UiClipLoop>(this as UiClipLoop, _$identity);
+
+
+
+@override
+bool operator ==(Object other) {
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is UiClipLoop&&(identical(other.enabled, enabled) || other.enabled == enabled)&&(identical(other.time, time) || other.time == time)&&const DeepCollectionEquality().equals(other.curve, curve));
+}
+
+
+@override
+int get hashCode => Object.hash(runtimeType,enabled,time,const DeepCollectionEquality().hash(curve));
+
+@override
+String toString() {
+  return 'UiClipLoop(enabled: $enabled, time: $time, curve: $curve)';
+}
+
+
+}
+
+/// @nodoc
+abstract mixin class $UiClipLoopCopyWith<$Res>  {
+  factory $UiClipLoopCopyWith(UiClipLoop value, $Res Function(UiClipLoop) _then) = _$UiClipLoopCopyWithImpl;
+@useResult
+$Res call({
+ bool enabled, int time, List<UiCurvePoint> curve
+});
+
+
+
+
+}
+/// @nodoc
+class _$UiClipLoopCopyWithImpl<$Res>
+    implements $UiClipLoopCopyWith<$Res> {
+  _$UiClipLoopCopyWithImpl(this._self, this._then);
+
+  final UiClipLoop _self;
+  final $Res Function(UiClipLoop) _then;
+
+/// Create a copy of UiClipLoop
+/// with the given fields replaced by the non-null parameter values.
+@pragma('vm:prefer-inline') @override $Res call({Object? enabled = null,Object? time = null,Object? curve = null,}) {
+  return _then(_self.copyWith(
+enabled: null == enabled ? _self.enabled : enabled // ignore: cast_nullable_to_non_nullable
+as bool,time: null == time ? _self.time : time // ignore: cast_nullable_to_non_nullable
+as int,curve: null == curve ? _self.curve : curve // ignore: cast_nullable_to_non_nullable
+as List<UiCurvePoint>,
+  ));
+}
+
+}
+
+
+/// Adds pattern-matching-related methods to [UiClipLoop].
+extension UiClipLoopPatterns on UiClipLoop {
+/// A variant of `map` that fallback to returning `orElse`.
+///
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case final Subclass value:
+///     return ...;
+///   case _:
+///     return orElse();
+/// }
+/// ```
+
+@optionalTypeArgs TResult maybeMap<TResult extends Object?>(TResult Function( _UiClipLoop value)?  $default,{required TResult orElse(),}){
+final _that = this;
+switch (_that) {
+case _UiClipLoop() when $default != null:
+return $default(_that);case _:
+  return orElse();
+
+}
+}
+/// A `switch`-like method, using callbacks.
+///
+/// Callbacks receives the raw object, upcasted.
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case final Subclass value:
+///     return ...;
+///   case final Subclass2 value:
+///     return ...;
+/// }
+/// ```
+
+@optionalTypeArgs TResult map<TResult extends Object?>(TResult Function( _UiClipLoop value)  $default,){
+final _that = this;
+switch (_that) {
+case _UiClipLoop():
+return $default(_that);}
+}
+/// A variant of `map` that fallback to returning `null`.
+///
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case final Subclass value:
+///     return ...;
+///   case _:
+///     return null;
+/// }
+/// ```
+
+@optionalTypeArgs TResult? mapOrNull<TResult extends Object?>(TResult? Function( _UiClipLoop value)?  $default,){
+final _that = this;
+switch (_that) {
+case _UiClipLoop() when $default != null:
+return $default(_that);case _:
+  return null;
+
+}
+}
+/// A variant of `when` that fallback to an `orElse` callback.
+///
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case Subclass(:final field):
+///     return ...;
+///   case _:
+///     return orElse();
+/// }
+/// ```
+
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( bool enabled,  int time,  List<UiCurvePoint> curve)?  $default,{required TResult orElse(),}) {final _that = this;
+switch (_that) {
+case _UiClipLoop() when $default != null:
+return $default(_that.enabled,_that.time,_that.curve);case _:
+  return orElse();
+
+}
+}
+/// A `switch`-like method, using callbacks.
+///
+/// As opposed to `map`, this offers destructuring.
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case Subclass(:final field):
+///     return ...;
+///   case Subclass2(:final field2):
+///     return ...;
+/// }
+/// ```
+
+@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( bool enabled,  int time,  List<UiCurvePoint> curve)  $default,) {final _that = this;
+switch (_that) {
+case _UiClipLoop():
+return $default(_that.enabled,_that.time,_that.curve);}
+}
+/// A variant of `when` that fallback to returning `null`
+///
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case Subclass(:final field):
+///     return ...;
+///   case _:
+///     return null;
+/// }
+/// ```
+
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( bool enabled,  int time,  List<UiCurvePoint> curve)?  $default,) {final _that = this;
+switch (_that) {
+case _UiClipLoop() when $default != null:
+return $default(_that.enabled,_that.time,_that.curve);case _:
+  return null;
+
+}
+}
+
+}
+
+/// @nodoc
+
+
+class _UiClipLoop implements UiClipLoop {
+  const _UiClipLoop({required this.enabled, required this.time, required final  List<UiCurvePoint> curve}): _curve = curve;
+  
+
+@override final  bool enabled;
+@override final  int time;
+ final  List<UiCurvePoint> _curve;
+@override List<UiCurvePoint> get curve {
+  if (_curve is EqualUnmodifiableListView) return _curve;
+  // ignore: implicit_dynamic_type
+  return EqualUnmodifiableListView(_curve);
+}
+
+
+/// Create a copy of UiClipLoop
+/// with the given fields replaced by the non-null parameter values.
+@override @JsonKey(includeFromJson: false, includeToJson: false)
+@pragma('vm:prefer-inline')
+_$UiClipLoopCopyWith<_UiClipLoop> get copyWith => __$UiClipLoopCopyWithImpl<_UiClipLoop>(this, _$identity);
+
+
+
+@override
+bool operator ==(Object other) {
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is _UiClipLoop&&(identical(other.enabled, enabled) || other.enabled == enabled)&&(identical(other.time, time) || other.time == time)&&const DeepCollectionEquality().equals(other._curve, _curve));
+}
+
+
+@override
+int get hashCode => Object.hash(runtimeType,enabled,time,const DeepCollectionEquality().hash(_curve));
+
+@override
+String toString() {
+  return 'UiClipLoop(enabled: $enabled, time: $time, curve: $curve)';
+}
+
+
+}
+
+/// @nodoc
+abstract mixin class _$UiClipLoopCopyWith<$Res> implements $UiClipLoopCopyWith<$Res> {
+  factory _$UiClipLoopCopyWith(_UiClipLoop value, $Res Function(_UiClipLoop) _then) = __$UiClipLoopCopyWithImpl;
+@override @useResult
+$Res call({
+ bool enabled, int time, List<UiCurvePoint> curve
+});
+
+
+
+
+}
+/// @nodoc
+class __$UiClipLoopCopyWithImpl<$Res>
+    implements _$UiClipLoopCopyWith<$Res> {
+  __$UiClipLoopCopyWithImpl(this._self, this._then);
+
+  final _UiClipLoop _self;
+  final $Res Function(_UiClipLoop) _then;
+
+/// Create a copy of UiClipLoop
+/// with the given fields replaced by the non-null parameter values.
+@override @pragma('vm:prefer-inline') $Res call({Object? enabled = null,Object? time = null,Object? curve = null,}) {
+  return _then(_UiClipLoop(
+enabled: null == enabled ? _self.enabled : enabled // ignore: cast_nullable_to_non_nullable
+as bool,time: null == time ? _self.time : time // ignore: cast_nullable_to_non_nullable
+as int,curve: null == curve ? _self._curve : curve // ignore: cast_nullable_to_non_nullable
+as List<UiCurvePoint>,
+  ));
+}
+
+
+}
+
+/// @nodoc
+mixin _$UiClipModulation {
+
+ List<UiCurvePoint> get pan; List<UiCurvePoint> get pitch; UiClipLoop get looping;
+/// Create a copy of UiClipModulation
+/// with the given fields replaced by the non-null parameter values.
+@JsonKey(includeFromJson: false, includeToJson: false)
+@pragma('vm:prefer-inline')
+$UiClipModulationCopyWith<UiClipModulation> get copyWith => _$UiClipModulationCopyWithImpl<UiClipModulation>(this as UiClipModulation, _$identity);
+
+
+
+@override
+bool operator ==(Object other) {
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is UiClipModulation&&const DeepCollectionEquality().equals(other.pan, pan)&&const DeepCollectionEquality().equals(other.pitch, pitch)&&(identical(other.looping, looping) || other.looping == looping));
+}
+
+
+@override
+int get hashCode => Object.hash(runtimeType,const DeepCollectionEquality().hash(pan),const DeepCollectionEquality().hash(pitch),looping);
+
+@override
+String toString() {
+  return 'UiClipModulation(pan: $pan, pitch: $pitch, looping: $looping)';
+}
+
+
+}
+
+/// @nodoc
+abstract mixin class $UiClipModulationCopyWith<$Res>  {
+  factory $UiClipModulationCopyWith(UiClipModulation value, $Res Function(UiClipModulation) _then) = _$UiClipModulationCopyWithImpl;
+@useResult
+$Res call({
+ List<UiCurvePoint> pan, List<UiCurvePoint> pitch, UiClipLoop looping
+});
+
+
+$UiClipLoopCopyWith<$Res> get looping;
+
+}
+/// @nodoc
+class _$UiClipModulationCopyWithImpl<$Res>
+    implements $UiClipModulationCopyWith<$Res> {
+  _$UiClipModulationCopyWithImpl(this._self, this._then);
+
+  final UiClipModulation _self;
+  final $Res Function(UiClipModulation) _then;
+
+/// Create a copy of UiClipModulation
+/// with the given fields replaced by the non-null parameter values.
+@pragma('vm:prefer-inline') @override $Res call({Object? pan = null,Object? pitch = null,Object? looping = null,}) {
+  return _then(_self.copyWith(
+pan: null == pan ? _self.pan : pan // ignore: cast_nullable_to_non_nullable
+as List<UiCurvePoint>,pitch: null == pitch ? _self.pitch : pitch // ignore: cast_nullable_to_non_nullable
+as List<UiCurvePoint>,looping: null == looping ? _self.looping : looping // ignore: cast_nullable_to_non_nullable
+as UiClipLoop,
+  ));
+}
+/// Create a copy of UiClipModulation
+/// with the given fields replaced by the non-null parameter values.
+@override
+@pragma('vm:prefer-inline')
+$UiClipLoopCopyWith<$Res> get looping {
+  
+  return $UiClipLoopCopyWith<$Res>(_self.looping, (value) {
+    return _then(_self.copyWith(looping: value));
+  });
+}
+}
+
+
+/// Adds pattern-matching-related methods to [UiClipModulation].
+extension UiClipModulationPatterns on UiClipModulation {
+/// A variant of `map` that fallback to returning `orElse`.
+///
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case final Subclass value:
+///     return ...;
+///   case _:
+///     return orElse();
+/// }
+/// ```
+
+@optionalTypeArgs TResult maybeMap<TResult extends Object?>(TResult Function( _UiClipModulation value)?  $default,{required TResult orElse(),}){
+final _that = this;
+switch (_that) {
+case _UiClipModulation() when $default != null:
+return $default(_that);case _:
+  return orElse();
+
+}
+}
+/// A `switch`-like method, using callbacks.
+///
+/// Callbacks receives the raw object, upcasted.
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case final Subclass value:
+///     return ...;
+///   case final Subclass2 value:
+///     return ...;
+/// }
+/// ```
+
+@optionalTypeArgs TResult map<TResult extends Object?>(TResult Function( _UiClipModulation value)  $default,){
+final _that = this;
+switch (_that) {
+case _UiClipModulation():
+return $default(_that);}
+}
+/// A variant of `map` that fallback to returning `null`.
+///
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case final Subclass value:
+///     return ...;
+///   case _:
+///     return null;
+/// }
+/// ```
+
+@optionalTypeArgs TResult? mapOrNull<TResult extends Object?>(TResult? Function( _UiClipModulation value)?  $default,){
+final _that = this;
+switch (_that) {
+case _UiClipModulation() when $default != null:
+return $default(_that);case _:
+  return null;
+
+}
+}
+/// A variant of `when` that fallback to an `orElse` callback.
+///
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case Subclass(:final field):
+///     return ...;
+///   case _:
+///     return orElse();
+/// }
+/// ```
+
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( List<UiCurvePoint> pan,  List<UiCurvePoint> pitch,  UiClipLoop looping)?  $default,{required TResult orElse(),}) {final _that = this;
+switch (_that) {
+case _UiClipModulation() when $default != null:
+return $default(_that.pan,_that.pitch,_that.looping);case _:
+  return orElse();
+
+}
+}
+/// A `switch`-like method, using callbacks.
+///
+/// As opposed to `map`, this offers destructuring.
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case Subclass(:final field):
+///     return ...;
+///   case Subclass2(:final field2):
+///     return ...;
+/// }
+/// ```
+
+@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( List<UiCurvePoint> pan,  List<UiCurvePoint> pitch,  UiClipLoop looping)  $default,) {final _that = this;
+switch (_that) {
+case _UiClipModulation():
+return $default(_that.pan,_that.pitch,_that.looping);}
+}
+/// A variant of `when` that fallback to returning `null`
+///
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case Subclass(:final field):
+///     return ...;
+///   case _:
+///     return null;
+/// }
+/// ```
+
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( List<UiCurvePoint> pan,  List<UiCurvePoint> pitch,  UiClipLoop looping)?  $default,) {final _that = this;
+switch (_that) {
+case _UiClipModulation() when $default != null:
+return $default(_that.pan,_that.pitch,_that.looping);case _:
+  return null;
+
+}
+}
+
+}
+
+/// @nodoc
+
+
+class _UiClipModulation implements UiClipModulation {
+  const _UiClipModulation({required final  List<UiCurvePoint> pan, required final  List<UiCurvePoint> pitch, required this.looping}): _pan = pan,_pitch = pitch;
+  
+
+ final  List<UiCurvePoint> _pan;
+@override List<UiCurvePoint> get pan {
+  if (_pan is EqualUnmodifiableListView) return _pan;
+  // ignore: implicit_dynamic_type
+  return EqualUnmodifiableListView(_pan);
+}
+
+ final  List<UiCurvePoint> _pitch;
+@override List<UiCurvePoint> get pitch {
+  if (_pitch is EqualUnmodifiableListView) return _pitch;
+  // ignore: implicit_dynamic_type
+  return EqualUnmodifiableListView(_pitch);
+}
+
+@override final  UiClipLoop looping;
+
+/// Create a copy of UiClipModulation
+/// with the given fields replaced by the non-null parameter values.
+@override @JsonKey(includeFromJson: false, includeToJson: false)
+@pragma('vm:prefer-inline')
+_$UiClipModulationCopyWith<_UiClipModulation> get copyWith => __$UiClipModulationCopyWithImpl<_UiClipModulation>(this, _$identity);
+
+
+
+@override
+bool operator ==(Object other) {
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is _UiClipModulation&&const DeepCollectionEquality().equals(other._pan, _pan)&&const DeepCollectionEquality().equals(other._pitch, _pitch)&&(identical(other.looping, looping) || other.looping == looping));
+}
+
+
+@override
+int get hashCode => Object.hash(runtimeType,const DeepCollectionEquality().hash(_pan),const DeepCollectionEquality().hash(_pitch),looping);
+
+@override
+String toString() {
+  return 'UiClipModulation(pan: $pan, pitch: $pitch, looping: $looping)';
+}
+
+
+}
+
+/// @nodoc
+abstract mixin class _$UiClipModulationCopyWith<$Res> implements $UiClipModulationCopyWith<$Res> {
+  factory _$UiClipModulationCopyWith(_UiClipModulation value, $Res Function(_UiClipModulation) _then) = __$UiClipModulationCopyWithImpl;
+@override @useResult
+$Res call({
+ List<UiCurvePoint> pan, List<UiCurvePoint> pitch, UiClipLoop looping
+});
+
+
+@override $UiClipLoopCopyWith<$Res> get looping;
+
+}
+/// @nodoc
+class __$UiClipModulationCopyWithImpl<$Res>
+    implements _$UiClipModulationCopyWith<$Res> {
+  __$UiClipModulationCopyWithImpl(this._self, this._then);
+
+  final _UiClipModulation _self;
+  final $Res Function(_UiClipModulation) _then;
+
+/// Create a copy of UiClipModulation
+/// with the given fields replaced by the non-null parameter values.
+@override @pragma('vm:prefer-inline') $Res call({Object? pan = null,Object? pitch = null,Object? looping = null,}) {
+  return _then(_UiClipModulation(
+pan: null == pan ? _self._pan : pan // ignore: cast_nullable_to_non_nullable
+as List<UiCurvePoint>,pitch: null == pitch ? _self._pitch : pitch // ignore: cast_nullable_to_non_nullable
+as List<UiCurvePoint>,looping: null == looping ? _self.looping : looping // ignore: cast_nullable_to_non_nullable
+as UiClipLoop,
+  ));
+}
+
+/// Create a copy of UiClipModulation
+/// with the given fields replaced by the non-null parameter values.
+@override
+@pragma('vm:prefer-inline')
+$UiClipLoopCopyWith<$Res> get looping {
+  
+  return $UiClipLoopCopyWith<$Res>(_self.looping, (value) {
+    return _then(_self.copyWith(looping: value));
   });
 }
 }
@@ -2193,6 +2770,266 @@ String toString() {
 
 
 
+
+/// @nodoc
+mixin _$UiCurvePoint {
+
+ int get position; double get value; AutomationCurveTypeDto get curveType; double get tension;
+/// Create a copy of UiCurvePoint
+/// with the given fields replaced by the non-null parameter values.
+@JsonKey(includeFromJson: false, includeToJson: false)
+@pragma('vm:prefer-inline')
+$UiCurvePointCopyWith<UiCurvePoint> get copyWith => _$UiCurvePointCopyWithImpl<UiCurvePoint>(this as UiCurvePoint, _$identity);
+
+
+
+@override
+bool operator ==(Object other) {
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is UiCurvePoint&&(identical(other.position, position) || other.position == position)&&(identical(other.value, value) || other.value == value)&&(identical(other.curveType, curveType) || other.curveType == curveType)&&(identical(other.tension, tension) || other.tension == tension));
+}
+
+
+@override
+int get hashCode => Object.hash(runtimeType,position,value,curveType,tension);
+
+@override
+String toString() {
+  return 'UiCurvePoint(position: $position, value: $value, curveType: $curveType, tension: $tension)';
+}
+
+
+}
+
+/// @nodoc
+abstract mixin class $UiCurvePointCopyWith<$Res>  {
+  factory $UiCurvePointCopyWith(UiCurvePoint value, $Res Function(UiCurvePoint) _then) = _$UiCurvePointCopyWithImpl;
+@useResult
+$Res call({
+ int position, double value, AutomationCurveTypeDto curveType, double tension
+});
+
+
+
+
+}
+/// @nodoc
+class _$UiCurvePointCopyWithImpl<$Res>
+    implements $UiCurvePointCopyWith<$Res> {
+  _$UiCurvePointCopyWithImpl(this._self, this._then);
+
+  final UiCurvePoint _self;
+  final $Res Function(UiCurvePoint) _then;
+
+/// Create a copy of UiCurvePoint
+/// with the given fields replaced by the non-null parameter values.
+@pragma('vm:prefer-inline') @override $Res call({Object? position = null,Object? value = null,Object? curveType = null,Object? tension = null,}) {
+  return _then(_self.copyWith(
+position: null == position ? _self.position : position // ignore: cast_nullable_to_non_nullable
+as int,value: null == value ? _self.value : value // ignore: cast_nullable_to_non_nullable
+as double,curveType: null == curveType ? _self.curveType : curveType // ignore: cast_nullable_to_non_nullable
+as AutomationCurveTypeDto,tension: null == tension ? _self.tension : tension // ignore: cast_nullable_to_non_nullable
+as double,
+  ));
+}
+
+}
+
+
+/// Adds pattern-matching-related methods to [UiCurvePoint].
+extension UiCurvePointPatterns on UiCurvePoint {
+/// A variant of `map` that fallback to returning `orElse`.
+///
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case final Subclass value:
+///     return ...;
+///   case _:
+///     return orElse();
+/// }
+/// ```
+
+@optionalTypeArgs TResult maybeMap<TResult extends Object?>(TResult Function( _UiCurvePoint value)?  $default,{required TResult orElse(),}){
+final _that = this;
+switch (_that) {
+case _UiCurvePoint() when $default != null:
+return $default(_that);case _:
+  return orElse();
+
+}
+}
+/// A `switch`-like method, using callbacks.
+///
+/// Callbacks receives the raw object, upcasted.
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case final Subclass value:
+///     return ...;
+///   case final Subclass2 value:
+///     return ...;
+/// }
+/// ```
+
+@optionalTypeArgs TResult map<TResult extends Object?>(TResult Function( _UiCurvePoint value)  $default,){
+final _that = this;
+switch (_that) {
+case _UiCurvePoint():
+return $default(_that);}
+}
+/// A variant of `map` that fallback to returning `null`.
+///
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case final Subclass value:
+///     return ...;
+///   case _:
+///     return null;
+/// }
+/// ```
+
+@optionalTypeArgs TResult? mapOrNull<TResult extends Object?>(TResult? Function( _UiCurvePoint value)?  $default,){
+final _that = this;
+switch (_that) {
+case _UiCurvePoint() when $default != null:
+return $default(_that);case _:
+  return null;
+
+}
+}
+/// A variant of `when` that fallback to an `orElse` callback.
+///
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case Subclass(:final field):
+///     return ...;
+///   case _:
+///     return orElse();
+/// }
+/// ```
+
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( int position,  double value,  AutomationCurveTypeDto curveType,  double tension)?  $default,{required TResult orElse(),}) {final _that = this;
+switch (_that) {
+case _UiCurvePoint() when $default != null:
+return $default(_that.position,_that.value,_that.curveType,_that.tension);case _:
+  return orElse();
+
+}
+}
+/// A `switch`-like method, using callbacks.
+///
+/// As opposed to `map`, this offers destructuring.
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case Subclass(:final field):
+///     return ...;
+///   case Subclass2(:final field2):
+///     return ...;
+/// }
+/// ```
+
+@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( int position,  double value,  AutomationCurveTypeDto curveType,  double tension)  $default,) {final _that = this;
+switch (_that) {
+case _UiCurvePoint():
+return $default(_that.position,_that.value,_that.curveType,_that.tension);}
+}
+/// A variant of `when` that fallback to returning `null`
+///
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case Subclass(:final field):
+///     return ...;
+///   case _:
+///     return null;
+/// }
+/// ```
+
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( int position,  double value,  AutomationCurveTypeDto curveType,  double tension)?  $default,) {final _that = this;
+switch (_that) {
+case _UiCurvePoint() when $default != null:
+return $default(_that.position,_that.value,_that.curveType,_that.tension);case _:
+  return null;
+
+}
+}
+
+}
+
+/// @nodoc
+
+
+class _UiCurvePoint implements UiCurvePoint {
+  const _UiCurvePoint({required this.position, required this.value, required this.curveType, required this.tension});
+  
+
+@override final  int position;
+@override final  double value;
+@override final  AutomationCurveTypeDto curveType;
+@override final  double tension;
+
+/// Create a copy of UiCurvePoint
+/// with the given fields replaced by the non-null parameter values.
+@override @JsonKey(includeFromJson: false, includeToJson: false)
+@pragma('vm:prefer-inline')
+_$UiCurvePointCopyWith<_UiCurvePoint> get copyWith => __$UiCurvePointCopyWithImpl<_UiCurvePoint>(this, _$identity);
+
+
+
+@override
+bool operator ==(Object other) {
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is _UiCurvePoint&&(identical(other.position, position) || other.position == position)&&(identical(other.value, value) || other.value == value)&&(identical(other.curveType, curveType) || other.curveType == curveType)&&(identical(other.tension, tension) || other.tension == tension));
+}
+
+
+@override
+int get hashCode => Object.hash(runtimeType,position,value,curveType,tension);
+
+@override
+String toString() {
+  return 'UiCurvePoint(position: $position, value: $value, curveType: $curveType, tension: $tension)';
+}
+
+
+}
+
+/// @nodoc
+abstract mixin class _$UiCurvePointCopyWith<$Res> implements $UiCurvePointCopyWith<$Res> {
+  factory _$UiCurvePointCopyWith(_UiCurvePoint value, $Res Function(_UiCurvePoint) _then) = __$UiCurvePointCopyWithImpl;
+@override @useResult
+$Res call({
+ int position, double value, AutomationCurveTypeDto curveType, double tension
+});
+
+
+
+
+}
+/// @nodoc
+class __$UiCurvePointCopyWithImpl<$Res>
+    implements _$UiCurvePointCopyWith<$Res> {
+  __$UiCurvePointCopyWithImpl(this._self, this._then);
+
+  final _UiCurvePoint _self;
+  final $Res Function(_UiCurvePoint) _then;
+
+/// Create a copy of UiCurvePoint
+/// with the given fields replaced by the non-null parameter values.
+@override @pragma('vm:prefer-inline') $Res call({Object? position = null,Object? value = null,Object? curveType = null,Object? tension = null,}) {
+  return _then(_UiCurvePoint(
+position: null == position ? _self.position : position // ignore: cast_nullable_to_non_nullable
+as int,value: null == value ? _self.value : value // ignore: cast_nullable_to_non_nullable
+as double,curveType: null == curveType ? _self.curveType : curveType // ignore: cast_nullable_to_non_nullable
+as AutomationCurveTypeDto,tension: null == tension ? _self.tension : tension // ignore: cast_nullable_to_non_nullable
+as double,
+  ));
+}
+
+
+}
 
 /// @nodoc
 mixin _$UiEnvelopePoint {
@@ -3591,7 +4428,7 @@ as int,
 /// @nodoc
 mixin _$UiPluginInstance {
 
- int get registryId; String get name; bool get bypass;
+ int get registryId; String get name; String? get displayName; String get label; bool get bypass;
 /// Create a copy of UiPluginInstance
 /// with the given fields replaced by the non-null parameter values.
 @JsonKey(includeFromJson: false, includeToJson: false)
@@ -3602,16 +4439,16 @@ $UiPluginInstanceCopyWith<UiPluginInstance> get copyWith => _$UiPluginInstanceCo
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is UiPluginInstance&&(identical(other.registryId, registryId) || other.registryId == registryId)&&(identical(other.name, name) || other.name == name)&&(identical(other.bypass, bypass) || other.bypass == bypass));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is UiPluginInstance&&(identical(other.registryId, registryId) || other.registryId == registryId)&&(identical(other.name, name) || other.name == name)&&(identical(other.displayName, displayName) || other.displayName == displayName)&&(identical(other.label, label) || other.label == label)&&(identical(other.bypass, bypass) || other.bypass == bypass));
 }
 
 
 @override
-int get hashCode => Object.hash(runtimeType,registryId,name,bypass);
+int get hashCode => Object.hash(runtimeType,registryId,name,displayName,label,bypass);
 
 @override
 String toString() {
-  return 'UiPluginInstance(registryId: $registryId, name: $name, bypass: $bypass)';
+  return 'UiPluginInstance(registryId: $registryId, name: $name, displayName: $displayName, label: $label, bypass: $bypass)';
 }
 
 
@@ -3622,7 +4459,7 @@ abstract mixin class $UiPluginInstanceCopyWith<$Res>  {
   factory $UiPluginInstanceCopyWith(UiPluginInstance value, $Res Function(UiPluginInstance) _then) = _$UiPluginInstanceCopyWithImpl;
 @useResult
 $Res call({
- int registryId, String name, bool bypass
+ int registryId, String name, String? displayName, String label, bool bypass
 });
 
 
@@ -3639,10 +4476,12 @@ class _$UiPluginInstanceCopyWithImpl<$Res>
 
 /// Create a copy of UiPluginInstance
 /// with the given fields replaced by the non-null parameter values.
-@pragma('vm:prefer-inline') @override $Res call({Object? registryId = null,Object? name = null,Object? bypass = null,}) {
+@pragma('vm:prefer-inline') @override $Res call({Object? registryId = null,Object? name = null,Object? displayName = freezed,Object? label = null,Object? bypass = null,}) {
   return _then(_self.copyWith(
 registryId: null == registryId ? _self.registryId : registryId // ignore: cast_nullable_to_non_nullable
 as int,name: null == name ? _self.name : name // ignore: cast_nullable_to_non_nullable
+as String,displayName: freezed == displayName ? _self.displayName : displayName // ignore: cast_nullable_to_non_nullable
+as String?,label: null == label ? _self.label : label // ignore: cast_nullable_to_non_nullable
 as String,bypass: null == bypass ? _self.bypass : bypass // ignore: cast_nullable_to_non_nullable
 as bool,
   ));
@@ -3726,10 +4565,10 @@ return $default(_that);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( int registryId,  String name,  bool bypass)?  $default,{required TResult orElse(),}) {final _that = this;
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( int registryId,  String name,  String? displayName,  String label,  bool bypass)?  $default,{required TResult orElse(),}) {final _that = this;
 switch (_that) {
 case _UiPluginInstance() when $default != null:
-return $default(_that.registryId,_that.name,_that.bypass);case _:
+return $default(_that.registryId,_that.name,_that.displayName,_that.label,_that.bypass);case _:
   return orElse();
 
 }
@@ -3747,10 +4586,10 @@ return $default(_that.registryId,_that.name,_that.bypass);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( int registryId,  String name,  bool bypass)  $default,) {final _that = this;
+@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( int registryId,  String name,  String? displayName,  String label,  bool bypass)  $default,) {final _that = this;
 switch (_that) {
 case _UiPluginInstance():
-return $default(_that.registryId,_that.name,_that.bypass);}
+return $default(_that.registryId,_that.name,_that.displayName,_that.label,_that.bypass);}
 }
 /// A variant of `when` that fallback to returning `null`
 ///
@@ -3764,10 +4603,10 @@ return $default(_that.registryId,_that.name,_that.bypass);}
 /// }
 /// ```
 
-@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( int registryId,  String name,  bool bypass)?  $default,) {final _that = this;
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( int registryId,  String name,  String? displayName,  String label,  bool bypass)?  $default,) {final _that = this;
 switch (_that) {
 case _UiPluginInstance() when $default != null:
-return $default(_that.registryId,_that.name,_that.bypass);case _:
+return $default(_that.registryId,_that.name,_that.displayName,_that.label,_that.bypass);case _:
   return null;
 
 }
@@ -3779,11 +4618,13 @@ return $default(_that.registryId,_that.name,_that.bypass);case _:
 
 
 class _UiPluginInstance implements UiPluginInstance {
-  const _UiPluginInstance({required this.registryId, required this.name, required this.bypass});
+  const _UiPluginInstance({required this.registryId, required this.name, this.displayName, required this.label, required this.bypass});
   
 
 @override final  int registryId;
 @override final  String name;
+@override final  String? displayName;
+@override final  String label;
 @override final  bool bypass;
 
 /// Create a copy of UiPluginInstance
@@ -3796,16 +4637,16 @@ _$UiPluginInstanceCopyWith<_UiPluginInstance> get copyWith => __$UiPluginInstanc
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is _UiPluginInstance&&(identical(other.registryId, registryId) || other.registryId == registryId)&&(identical(other.name, name) || other.name == name)&&(identical(other.bypass, bypass) || other.bypass == bypass));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is _UiPluginInstance&&(identical(other.registryId, registryId) || other.registryId == registryId)&&(identical(other.name, name) || other.name == name)&&(identical(other.displayName, displayName) || other.displayName == displayName)&&(identical(other.label, label) || other.label == label)&&(identical(other.bypass, bypass) || other.bypass == bypass));
 }
 
 
 @override
-int get hashCode => Object.hash(runtimeType,registryId,name,bypass);
+int get hashCode => Object.hash(runtimeType,registryId,name,displayName,label,bypass);
 
 @override
 String toString() {
-  return 'UiPluginInstance(registryId: $registryId, name: $name, bypass: $bypass)';
+  return 'UiPluginInstance(registryId: $registryId, name: $name, displayName: $displayName, label: $label, bypass: $bypass)';
 }
 
 
@@ -3816,7 +4657,7 @@ abstract mixin class _$UiPluginInstanceCopyWith<$Res> implements $UiPluginInstan
   factory _$UiPluginInstanceCopyWith(_UiPluginInstance value, $Res Function(_UiPluginInstance) _then) = __$UiPluginInstanceCopyWithImpl;
 @override @useResult
 $Res call({
- int registryId, String name, bool bypass
+ int registryId, String name, String? displayName, String label, bool bypass
 });
 
 
@@ -3833,10 +4674,12 @@ class __$UiPluginInstanceCopyWithImpl<$Res>
 
 /// Create a copy of UiPluginInstance
 /// with the given fields replaced by the non-null parameter values.
-@override @pragma('vm:prefer-inline') $Res call({Object? registryId = null,Object? name = null,Object? bypass = null,}) {
+@override @pragma('vm:prefer-inline') $Res call({Object? registryId = null,Object? name = null,Object? displayName = freezed,Object? label = null,Object? bypass = null,}) {
   return _then(_UiPluginInstance(
 registryId: null == registryId ? _self.registryId : registryId // ignore: cast_nullable_to_non_nullable
 as int,name: null == name ? _self.name : name // ignore: cast_nullable_to_non_nullable
+as String,displayName: freezed == displayName ? _self.displayName : displayName // ignore: cast_nullable_to_non_nullable
+as String?,label: null == label ? _self.label : label // ignore: cast_nullable_to_non_nullable
 as String,bypass: null == bypass ? _self.bypass : bypass // ignore: cast_nullable_to_non_nullable
 as bool,
   ));

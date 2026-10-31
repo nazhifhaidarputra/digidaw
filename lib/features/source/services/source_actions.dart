@@ -9,6 +9,49 @@ import 'package:karbeat/src/rust/api/track.dart';
 // Source actions shared by the Source screen and the track list's source
 // panel, so both ask the same questions before changing the project.
 
+/// Asks for the name a plugin generator is shown under. Leaving the field empty
+/// goes back to the plugin's own name.
+Future<void> renameGeneratorWithDialog(
+  BuildContext context,
+  WidgetRef ref,
+  int generatorId,
+  UiPluginInstance plugin,
+) async {
+  final current = plugin.displayName ?? '';
+  var pendingName = current;
+  final newName = await showDialog<String>(
+    context: context,
+    builder: (dialogContext) => AlertDialog(
+      title: Text("Rename ${plugin.name}"),
+      content: TextFormField(
+        initialValue: current,
+        autofocus: true,
+        decoration: InputDecoration(
+          labelText: "Instrument name",
+          helperText: "Empty shows ${plugin.name}",
+          border: const OutlineInputBorder(),
+        ),
+        onChanged: (value) => pendingName = value,
+        onFieldSubmitted: (value) => Navigator.pop(dialogContext, value),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(dialogContext),
+          child: const Text("Cancel"),
+        ),
+        ElevatedButton(
+          onPressed: () => Navigator.pop(dialogContext, pendingName),
+          child: const Text("Rename"),
+        ),
+      ],
+    ),
+  );
+  if (newName == null || newName.trim() == current) return;
+  await ref
+      .read(projectProvider.notifier)
+      .renameGenerator(generatorId, newName.trim());
+}
+
 Future<void> renamePatternWithDialog(
   BuildContext context,
   WidgetRef ref,

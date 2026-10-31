@@ -17,6 +17,7 @@ import 'package:karbeat/src/rust/api/pattern.dart';
 // Rust FFI Imports
 import 'package:karbeat/src/rust/api/project.dart';
 import 'package:karbeat/src/rust/api/audio.dart' as audio_api;
+import 'package:karbeat/src/rust/api/plugin.dart' as plugin_api;
 import 'package:karbeat/src/rust/api/serialization.dart' as serialization_api;
 import 'package:karbeat/src/rust/api/session.dart' as session_api;
 import 'package:karbeat/src/rust/api/simple.dart';
@@ -540,6 +541,39 @@ class ProjectNotifier extends AsyncNotifier<ApplicationDataStore> {
         sourceEnvelopes: current.sourceEnvelopes.addAll(envelopes.lock),
       ),
     );
+  }
+
+  /// Names a plugin generator in the backend, then stores the result. An empty
+  /// name goes back to the plugin's own name.
+  Future<void> renameGenerator(int generatorId, String displayName) async {
+    final result = await ref.guardApi(
+      () => plugin_api.renameGenerator(
+        ctx: dawContext,
+        generatorId: generatorId,
+        displayName: displayName.isEmpty ? null : displayName,
+      ),
+      title: 'Could not rename the instrument',
+    );
+    if (result case AsyncData(:final value)) {
+      upsertGenerator(generatorId, value);
+    }
+  }
+
+  /// Sets the part of an audio source that plays in the backend, then stores the
+  /// envelope, whose points moved along with the trim start.
+  Future<void> setSourceTrim(int sourceId, int trimStart, int trimEnd) async {
+    final result = await ref.guardApi(() async {
+      await audio_api.setAudioSourceTrim(
+        ctx: dawContext,
+        sourceId: sourceId,
+        trimStart: trimStart,
+        trimEnd: trimEnd,
+      );
+      return audio_api.getAudioSourceEnvelopes(ctx: dawContext);
+    }, title: 'Could not trim the audio');
+    if (result case AsyncData(:final value)) {
+      upsertSourceEnvelopes(value);
+    }
   }
 
   /// Replaces an audio source's waveform envelope in the backend, then stores

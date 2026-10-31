@@ -10,6 +10,7 @@ pub use super::clip::Clip;
 pub use super::clipboard::ClipboardContent;
 pub use super::generator::GeneratorInstance;
 pub use super::plugin::AudioPlugin;
+use super::track::audio_waveform::SourceTrim;
 pub use super::track::{AudioTrack, audio_waveform::AudioWaveform, midi::Pattern};
 pub use super::transport::TransportState;
 
@@ -493,6 +494,44 @@ impl ApplicationState {
             &mut Arc::make_mut(entry).envelope,
             envelope.normalized(),
         ))
+    }
+
+    /// Sets the part of an audio source that plays and returns the previous trim and envelope.
+    ///
+    /// `trim_start` and `trim_end` count frames of the original audio; a `trim_end` of zero plays
+    /// to the end. Envelope points count frames from the trim start, so they shift with it and
+    /// stay on the same audio.
+    ///
+    /// Copy-on-write: the engine or UI may still hold the old waveform.
+    pub fn set_audio_source_trim(
+        &mut self,
+        source_id: AudioSourceId,
+        trim_start: u32,
+        trim_end: u32,
+    ) -> anyhow::Result<SourceTrim> {
+        let entry = self
+            .asset_library
+            .source_map
+            .get_mut(source_id)
+            .ok_or_else(|| anyhow!("Audio source {source_id} not found"))?;
+        let frames = entry.original_frames();
+        let end = if trim_end == 0 { frames } else { trim_end };
+        anyhow::ensure!(end <= frames, "Trim end is past the end of the audio");
+        anyhow::ensure!(trim_start < end, "Trim start must be before the trim end");
+
+        let waveform = Arc::make_mut(entry);
+        let previous = SourceTrim {
+            trim_start: waveform.trim_start,
+            trim_end: waveform.trim_end,
+            envelope: waveform.envelope.clone(),
+        };
+        let moved = i64::from(trim_start) - i64::from(waveform.trim_start);
+        for point in &mut waveform.envelope.points {
+            point.position = point.position.saturating_add_signed(-moved);
+        }
+        waveform.trim_start = trim_start;
+        waveform.trim_end = trim_end;
+        Ok(previous)
     }
 
     /// reset current application state to default

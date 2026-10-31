@@ -156,6 +156,7 @@ mod tests {
                         offset_start: 0,
                     },
                     envelope: None,
+                    modulation: None,
                 })
             })
             .collect();

@@ -71,7 +71,7 @@ String automationSourceName(
   return switch (target) {
     AutomationTargetDto_Generator(:final generatorId) =>
       switch (project.generators[generatorId]?.instanceType) {
-        UiGeneratorInstanceType_Plugin(:final field0) => field0.name,
+        UiGeneratorInstanceType_Plugin(:final field0) => field0.label,
         UiGeneratorInstanceType_Sampler() => 'Sampler',
         null => 'Missing instrument',
       },

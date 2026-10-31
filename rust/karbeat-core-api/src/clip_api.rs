@@ -3,6 +3,7 @@ use karbeat_core::core::history::actions::{ClipEditRecorder, ClipsMadeUnique};
 use karbeat_core::core::project::clip::{
     Clip, ClipSourceType, ClipTimeUnit, MadeUnique, ResizeEdge,
 };
+use karbeat_core::core::project::clip_modulation::ClipModulation;
 use karbeat_core::core::project::envelope::GainEnvelope;
 use karbeat_core::shared::id::*;
 
@@ -341,6 +342,21 @@ pub fn set_clip_envelope(
 ) -> anyhow::Result<Clip> {
     let recorder = ClipEditRecorder::begin(&ctx.app_state, "Edit Clip Envelope", &[], &[clip_id]);
     let clip = ctx.app_state.set_clip_envelope(clip_id, envelope)?;
+    let action = recorder.finish(&mut ctx.app_state);
+    ctx.push_history(action);
+
+    ctx.broadcast_track_graph();
+    Ok(clip)
+}
+
+/// Replaces an audio clip's pan and pitch curves and loop as one reversible operation.
+pub fn set_clip_modulation(
+    ctx: &mut DawContext,
+    clip_id: ClipId,
+    modulation: ClipModulation,
+) -> anyhow::Result<Clip> {
+    let recorder = ClipEditRecorder::begin(&ctx.app_state, "Edit Clip Modulation", &[], &[clip_id]);
+    let clip = ctx.app_state.set_clip_modulation(clip_id, modulation)?;
     let action = recorder.finish(&mut ctx.app_state);
     ctx.push_history(action);
 

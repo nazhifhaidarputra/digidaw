@@ -32,6 +32,16 @@ Future<List<UiPluginInfo>> getAvailablePluginsWithIds({
 }) => RustLib.instance.api.crateApiPluginGetAvailablePluginsWithIds(ctx: ctx);
 
 /// Get a single generator state from the Generator Pool
+Future<UiGeneratorInstance> renameGenerator({
+  required DawContext ctx,
+  required int generatorId,
+  String? displayName,
+}) => RustLib.instance.api.crateApiPluginRenameGenerator(
+  ctx: ctx,
+  generatorId: generatorId,
+  displayName: displayName,
+);
+
 Future<UiGeneratorInstance> getGenerator({
   required DawContext ctx,
   required int generatorId,

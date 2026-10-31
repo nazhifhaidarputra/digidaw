@@ -4,6 +4,9 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:karbeat/app/providers/floating_midi_keyboard_state.dart';
+import 'package:karbeat/features/track/services/automation_editor_service.dart';
+import 'package:karbeat/app/providers/range_select_state.dart';
+import 'package:karbeat/app/providers/clip_placement_state.dart';
 import 'package:karbeat/app/providers/notification_provider.dart';
 import 'package:karbeat/app/providers/piano_roll_state.dart';
 import 'package:karbeat/app/providers/project_provider.dart';
@@ -89,6 +92,12 @@ class MainScreen extends ConsumerWidget {
               NewProjectIntent: CallbackAction<NewProjectIntent>(
                 onInvoke: (_) {
                   unawaited(newProject(context, ref));
+                  return null;
+                },
+              ),
+              CancelSelectionIntent: CallbackAction<CancelSelectionIntent>(
+                onInvoke: (_) {
+                  _cancelSelection(ref);
                   return null;
                 },
               ),
@@ -307,6 +316,16 @@ class MainScreen extends ConsumerWidget {
         ),
       ),
     );
+  }
+
+  /// Clears every selection and ends a clip placement in progress.
+  void _cancelSelection(WidgetRef ref) {
+    ref.read(trackListStateProvider.notifier).deselectAllClips();
+    ref.read(rangeSelectProvider.notifier).cancel();
+    ref.read(clipPlacementProvider.notifier).cancelPlacement();
+    ref.read(automationEditorProvider.notifier).clearSelection();
+    ref.read(pianoRollProvider.notifier).clearNoteSelection();
+    ref.read(workspaceStateProvider.notifier).hideInteractionPanel();
   }
 
   Future<void> _runHistoryAction(WidgetRef ref, {required bool undo}) async {

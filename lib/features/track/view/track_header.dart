@@ -15,6 +15,7 @@ import 'package:karbeat/core/widgets/db_level_meter.dart';
 import 'package:karbeat/features/plugins/services/plugin_ui_launcher.dart';
 import 'package:karbeat/features/plugins/widgets/plugin_browser_dialog.dart';
 import 'package:karbeat/features/setting/services/host_devices_settings_provider.dart';
+import 'package:karbeat/features/source/services/source_actions.dart';
 import 'package:karbeat/features/track/view/plugin_automation_parameter_dialog.dart';
 import 'package:karbeat/src/rust/api/mixer.dart';
 import 'package:karbeat/src/rust/api/plugin.dart';
@@ -164,9 +165,20 @@ class TrackHeader extends ConsumerWidget {
                 target: UiPluginTarget.generator(generatorId),
                 registryId: generatorPlugin.registryId,
                 instanceId: generatorId,
-                pluginName: generatorPlugin.name,
+                pluginName: generatorPlugin.label,
               );
             },
+          ),
+        if (generatorId != null && generatorPlugin != null)
+          DawContextAction(
+            title: "Rename instrument...",
+            icon: Icons.edit,
+            onTap: () => renameGeneratorWithDialog(
+              context,
+              ref,
+              generatorId,
+              generatorPlugin,
+            ),
           ),
         if (track.trackType == UiTrackType.midi)
           DawContextAction(

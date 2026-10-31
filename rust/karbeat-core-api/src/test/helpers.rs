@@ -102,6 +102,7 @@ pub fn make_midi_clip_at(start_ticks: u32, length_ticks: u32, pattern_id: Patter
             offset_start: 0,
         },
         envelope: None,
+        modulation: None,
     }
 }
 

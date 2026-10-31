@@ -827,9 +827,6 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
     final horizontalZoom = ref.watch(
       workspaceStateProvider.select((state) => state.horizontalZoomLevel),
     );
-    final selectedClipIds = ref.watch(
-      trackListStateProvider.select((s) => s.selectedClipIds),
-    );
     final bool isZooming = _isCtrlPressed || selectedTool == ToolSelection.zoom;
 
     MouseCursor handleCursor() {
@@ -1075,61 +1072,70 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
             ),
           ),
         ),
-
-        if (selectedClipIds.isNotEmpty)
-          FloatingContextPanel(
-            actions: [
-              DawContextAction(
-                title: "Copy",
-                icon: Icons.copy,
-                onTap: () async {
-                  final trackId = ref
-                      .read(trackListStateProvider)
-                      .selectedTrackId;
-                  if (trackId == null) return;
-                  await ref
-                      .read(trackListStateProvider.notifier)
-                      .copySelectedClips(
-                        trackId: trackId,
-                        clipIds: selectedClipIds.toList(),
-                      );
-                },
-              ),
-              DawContextAction(
-                title: "Cut",
-                icon: Icons.cut,
-                onTap: () async {
-                  final trackId = ref
-                      .read(trackListStateProvider)
-                      .selectedTrackId;
-                  if (trackId == null) return;
-                  await ref
-                      .read(trackListStateProvider.notifier)
-                      .cutSelectedClips(
-                        trackId: trackId,
-                        clipIds: selectedClipIds.toList(),
-                      );
-                  ref.read(trackListStateProvider.notifier).deselectAllClips();
-                },
-              ),
-              DawContextAction(
-                title: "Delete",
-                icon: Icons.delete,
-                isDestructive: true,
-                onTap: () async {
-                  ref
-                      .read(trackListStateProvider.notifier)
-                      .deleteSelectedClips();
-                  ref.read(trackListStateProvider.notifier).deselectAllClips();
-                },
-              ),
-            ],
-            onClose: () =>
-                ref.read(trackListStateProvider.notifier).deselectAllClips(),
-            title:
-                "${selectedClipIds.length} Clip${selectedClipIds.length == 1 ? '' : 's'}",
-          ),
       ],
+    );
+  }
+
+  /// Actions for the selected clips. It floats over the whole track list, so
+  /// resizing the split areas does not move it.
+  Widget _buildSelectionPanel() {
+    return Consumer(
+      builder: (context, ref, _) {
+        final selectedClipIds = ref.watch(
+          trackListStateProvider.select((s) => s.selectedClipIds),
+        );
+        if (selectedClipIds.isEmpty) return const SizedBox.shrink();
+        return FloatingContextPanel(
+          actions: [
+            DawContextAction(
+              title: "Copy",
+              icon: Icons.copy,
+              onTap: () async {
+                final trackId = ref
+                    .read(trackListStateProvider)
+                    .selectedTrackId;
+                if (trackId == null) return;
+                await ref
+                    .read(trackListStateProvider.notifier)
+                    .copySelectedClips(
+                      trackId: trackId,
+                      clipIds: selectedClipIds.toList(),
+                    );
+              },
+            ),
+            DawContextAction(
+              title: "Cut",
+              icon: Icons.cut,
+              onTap: () async {
+                final trackId = ref
+                    .read(trackListStateProvider)
+                    .selectedTrackId;
+                if (trackId == null) return;
+                await ref
+                    .read(trackListStateProvider.notifier)
+                    .cutSelectedClips(
+                      trackId: trackId,
+                      clipIds: selectedClipIds.toList(),
+                    );
+                ref.read(trackListStateProvider.notifier).deselectAllClips();
+              },
+            ),
+            DawContextAction(
+              title: "Delete",
+              icon: Icons.delete,
+              isDestructive: true,
+              onTap: () async {
+                ref.read(trackListStateProvider.notifier).deleteSelectedClips();
+                ref.read(trackListStateProvider.notifier).deselectAllClips();
+              },
+            ),
+          ],
+          onClose: () =>
+              ref.read(trackListStateProvider.notifier).deselectAllClips(),
+          title:
+              "${selectedClipIds.length} Clip${selectedClipIds.length == 1 ? '' : 's'}",
+        );
+      },
     );
   }
 
@@ -1451,37 +1457,43 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
       children: [
         _buildToolbar(),
         Expanded(
-          child: MultiSplitViewTheme(
-            data: MultiSplitViewThemeData(
-              dividerPainter: DividerPainters.grooved1(
-                color: colors.outlineVariant,
-                highlightedColor: colors.primary,
-                thickness: 1,
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              MultiSplitViewTheme(
+                data: MultiSplitViewThemeData(
+                  dividerPainter: DividerPainters.grooved1(
+                    color: colors.outlineVariant,
+                    highlightedColor: colors.primary,
+                    thickness: 1,
+                  ),
+                ),
+                child: MultiSplitView(
+                  controller: _trackSplitViewController,
+                  areaClipBehavior: Clip.none,
+                  builder: (context, area) {
+                    switch (area.data) {
+                      case 'mixerPanel':
+                        return const MixerChannelSidePanel();
+                      case 'header':
+                        return _buildHeaderArea();
+                      case 'timeline':
+                        // Areas paint in reverse order, so without a clip the
+                        // playhead and cut line overflow onto the browser panel.
+                        return ClipRect(child: _buildTimelineArea(context));
+                      case 'rightPanel':
+                        return RightSidePanel(
+                          browserScrollController: _browserPanelController,
+                          sourceScrollController: _sourcePanelController,
+                        );
+                      default:
+                        return const SizedBox();
+                    }
+                  },
+                ),
               ),
-            ),
-            child: MultiSplitView(
-              controller: _trackSplitViewController,
-              areaClipBehavior: Clip.none,
-              builder: (context, area) {
-                switch (area.data) {
-                  case 'mixerPanel':
-                    return const MixerChannelSidePanel();
-                  case 'header':
-                    return _buildHeaderArea();
-                  case 'timeline':
-                    // Areas paint in reverse order, so without a clip the
-                    // playhead and cut line overflow onto the browser panel.
-                    return ClipRect(child: _buildTimelineArea(context));
-                  case 'rightPanel':
-                    return RightSidePanel(
-                      browserScrollController: _browserPanelController,
-                      sourceScrollController: _sourcePanelController,
-                    );
-                  default:
-                    return const SizedBox();
-                }
-              },
-            ),
+              _buildSelectionPanel(),
+            ],
           ),
         ),
       ],

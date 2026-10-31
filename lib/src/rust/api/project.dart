@@ -15,8 +15,8 @@ import 'timeline.dart';
 import 'waveform.dart';
 part 'project.freezed.dart';
 
-// These functions are ignored because they are not marked as `pub`: `envelope_position`, `export_project_blocking`
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `try_from`, `try_from`, `try_from`
+// These functions are ignored because they are not marked as `pub`: `curve_points_from_ui`, `curve_points_to_ui`, `envelope_position`, `export_project_blocking`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `try_from`, `try_from`, `try_from`
 // These functions are ignored (category: IgnoreBecauseExplicitAttribute): `from_track`, `try_from_with_context`
 
 UiProjectMetadata projectMetadataNew() =>
@@ -48,6 +48,30 @@ UiTransportState transportStateNewWithParam({
 }) => RustLib.instance.api.crateApiProjectTransportStateNewWithParam(
   bpm: bpm,
   timeSignature: timeSignature,
+);
+
+/// Samples a clip curve at `positions`, with the code the audio engine plays.
+Float64List sampleClipCurve({
+  required UiClipModulation modulation,
+  required UiClipCurve curve,
+  required List<double> positions,
+}) => RustLib.instance.api.crateApiProjectSampleClipCurve(
+  modulation: modulation,
+  curve: curve,
+  positions: positions,
+);
+
+/// Clip-relative samples where repeats start in a looping clip, at most `limit` of them.
+List<int> clipLoopStarts({
+  required UiClipModulation modulation,
+  required int offsetStart,
+  required int loopLength,
+  required int limit,
+}) => RustLib.instance.api.crateApiProjectClipLoopStarts(
+  modulation: modulation,
+  offsetStart: offsetStart,
+  loopLength: loopLength,
+  limit: limit,
 );
 
 /// Samples the gain of an envelope at `positions`, with the code the audio engine plays.
@@ -176,6 +200,8 @@ abstract class AudioWaveformUiForAudioProperties
 
   double? get originalBpm;
 
+  int get originalFrames;
+
   double get pitchCents;
 
   bool get preserveFormants;
@@ -225,6 +251,8 @@ abstract class AudioWaveformUiForAudioProperties
   set normalized(bool normalized);
 
   set originalBpm(double? originalBpm);
+
+  set originalFrames(int originalFrames);
 
   set pitchCents(double pitchCents);
 
@@ -444,7 +472,31 @@ sealed class UiClip with _$UiClip {
     required int loopLength,
     required bool isSampleBased,
     UiGainEnvelope? envelope,
+    UiClipModulation? modulation,
   }) = _UiClip;
+}
+
+/// A clip curve, for sampling.
+enum UiClipCurve { pan, pitch, loopTime }
+
+/// Repeating part of an audio clip.
+@freezed
+sealed class UiClipLoop with _$UiClipLoop {
+  const factory UiClipLoop({
+    required bool enabled,
+    required int time,
+    required List<UiCurvePoint> curve,
+  }) = _UiClipLoop;
+}
+
+/// Pan and pitch curves and loop of an audio clip.
+@freezed
+sealed class UiClipModulation with _$UiClipModulation {
+  const factory UiClipModulation({
+    required List<UiCurvePoint> pan,
+    required List<UiCurvePoint> pitch,
+    required UiClipLoop looping,
+  }) = _UiClipModulation;
 }
 
 @freezed
@@ -455,6 +507,17 @@ sealed class UiClipSource with _$UiClipSource {
       UiClipSource_Audio;
   const factory UiClipSource.midi({required int patternId}) = UiClipSource_Midi;
   const factory UiClipSource.none() = UiClipSource_None;
+}
+
+/// One breakpoint of a clip curve.
+@freezed
+sealed class UiCurvePoint with _$UiCurvePoint {
+  const factory UiCurvePoint({
+    required int position,
+    required double value,
+    required AutomationCurveTypeDto curveType,
+    required double tension,
+  }) = _UiCurvePoint;
 }
 
 /// One gain breakpoint of a gain envelope.
@@ -514,6 +577,8 @@ sealed class UiPluginInstance with _$UiPluginInstance {
   const factory UiPluginInstance({
     required int registryId,
     required String name,
+    String? displayName,
+    required String label,
     required bool bypass,
   }) = _UiPluginInstance;
 }

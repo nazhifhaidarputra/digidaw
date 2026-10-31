@@ -121,14 +121,41 @@ class _InteractiveClipState extends ConsumerState<_InteractiveClip> {
     );
   }
 
-  /// Opens the editor of what this clip plays: the piano roll for a pattern,
-  /// the audio properties for an audio source.
-  void _openClipEditor() {
+  /// Opens what this clip plays: the piano roll for a pattern, the audio
+  /// properties for an audio source.
+  void _openClipParent() {
     switch (widget.clip.source) {
       case UiClipSource_Midi(:final patternId):
         _openInPianoRoll(patternId);
       case UiClipSource_Audio(:final sourceId):
         _openAudioProperties(sourceId);
+      case UiClipSource_None():
+        break;
+    }
+  }
+
+  void _openClipInformation() {
+    ref
+        .read(trackListStateProvider.notifier)
+        .selectClip(trackId: widget.trackId, clipId: widget.clip.id);
+    showClipPropertiesDialog(
+      context,
+      trackId: widget.trackId,
+      clipId: widget.clip.id,
+      onGoToParent: () {
+        if (mounted) _openClipParent();
+      },
+    );
+  }
+
+  /// A double-click opens a pattern in the piano roll and shows the clip
+  /// information of an audio clip.
+  void _openOnDoubleClick() {
+    switch (widget.clip.source) {
+      case UiClipSource_Midi(:final patternId):
+        _openInPianoRoll(patternId);
+      case UiClipSource_Audio():
+        _openClipInformation();
       case UiClipSource_None():
         break;
     }
@@ -343,7 +370,7 @@ class _InteractiveClipState extends ConsumerState<_InteractiveClip> {
       behavior: HitTestBehavior.opaque,
       onTapUp: (details) async {
         if (_completesDoubleClick()) {
-          _openClipEditor();
+          _openOnDoubleClick();
           return;
         }
         if (widget.selectedTool == ToolSelection.select) {
@@ -596,15 +623,21 @@ class _InteractiveClipState extends ConsumerState<_InteractiveClip> {
       title: widget.clip.name,
       actions: [
         DawContextAction(title: "Rename", icon: Icons.edit, onTap: _renameClip),
+        if (widget.clip.source is! UiClipSource_None)
+          DawContextAction(
+            title: "Go to Clip Information",
+            icon: Icons.info_outline,
+            onTap: _openClipInformation,
+          ),
         if (widget.clip.source case UiClipSource_Midi(:final patternId))
           DawContextAction(
-            title: "Open in Piano Roll",
+            title: "Go to Piano Roll",
             icon: Icons.piano,
             onTap: () => _openInPianoRoll(patternId),
           ),
         if (widget.clip.source case UiClipSource_Audio(:final sourceId))
           DawContextAction(
-            title: "Open Audio Properties",
+            title: "Go to Audio Properties",
             icon: Icons.audio_file,
             onTap: () => _openAudioProperties(sourceId),
           ),

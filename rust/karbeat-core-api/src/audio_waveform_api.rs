@@ -5,7 +5,9 @@ use anyhow::Context;
 use karbeat_audio::context::DawContext;
 use karbeat_core::core::{
     file_manager::audio_loader::{AudioLoader, load_audio_file},
-    history::actions::{AudioSourceRemoved, ClipEditRecorder, SourceEnvelopeChanged},
+    history::actions::{
+        AudioSourceRemoved, ClipEditRecorder, SourceEnvelopeChanged, SourceTrimChanged,
+    },
     project::{AudioSourceId, AudioWaveform, ClipId, DawSource, GainEnvelope, TrackId, TrackType},
 };
 
@@ -310,4 +312,28 @@ pub fn set_audio_source_envelope(
         .map(|waveform| waveform.envelope.clone())
         .unwrap_or_default();
     Ok(stored)
+}
+
+/// Sets the part of an audio source that plays, in frames of the original audio, as one
+/// reversible operation and republishes only that source to the audio engine. A `trim_end` of
+/// zero plays to the end.
+pub fn set_audio_source_trim(
+    ctx: &mut DawContext,
+    source_id: AudioSourceId,
+    trim_start: u32,
+    trim_end: u32,
+) -> anyhow::Result<()> {
+    let unchanged = ctx
+        .app_state
+        .get_audio_source(&source_id)
+        .is_some_and(|waveform| waveform.trim_start == trim_start && waveform.trim_end == trim_end);
+    if unchanged {
+        return Ok(());
+    }
+    let previous = ctx
+        .app_state
+        .set_audio_source_trim(source_id, trim_start, trim_end)?;
+    ctx.push_history(SourceTrimChanged::new(source_id, previous));
+    ctx.broadcast_audio_source(source_id);
+    Ok(())
 }

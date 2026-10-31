@@ -1576,6 +1576,7 @@ impl AudioEngine {
                             clip_offset,
                             waveform,
                             clip_data.envelope.as_ref(),
+                            clip_data.modulation.as_ref(),
                             crossfade,
                             start_time,
                             end_time,

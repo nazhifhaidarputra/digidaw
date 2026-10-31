@@ -287,7 +287,12 @@ ApplicationDataStore _projectData({UiMixerChannel? channel}) {
       7: const UiGeneratorInstance(
         id: 7,
         instanceType: UiGeneratorInstanceType.plugin(
-          UiPluginInstance(registryId: 42, name: 'Test Synth', bypass: false),
+          UiPluginInstance(
+            registryId: 42,
+            name: 'Test Synth',
+            label: 'Test Synth',
+            bypass: false,
+          ),
         ),
       ),
     }),

@@ -434,6 +434,24 @@ pub fn set_audio_source_envelope(
     Ok(UiGainEnvelope::from(&stored))
 }
 
+/// Sets the part of an audio source that plays, in frames of the original audio. A `trim_end` of
+/// zero plays to the end.
+pub fn set_audio_source_trim(
+    ctx: &DawContext,
+    source_id: u64,
+    trim_start: u32,
+    trim_end: u32,
+) -> Result<(), String> {
+    crate::api::context::project_ctx!(ctx);
+    audio_waveform_api::set_audio_source_trim(
+        ctx,
+        AudioSourceId::from_u64(source_id),
+        trim_start,
+        trim_end,
+    )
+    .map_err(|error| error.to_string())
+}
+
 /// ACTION: Play the sound via the Engine
 pub fn play_source_preview(ctx: &DawContext, id: u64) {
     if let Err(e) =
