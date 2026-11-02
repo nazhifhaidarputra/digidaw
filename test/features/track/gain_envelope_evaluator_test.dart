@@ -23,10 +23,37 @@ void main() {
     expect(isIdentityEnvelope(_fades(10, 0)), isFalse);
   });
 
-  test('overlapping fades scale to fit', () {
+  test('a lowered sustain or a decay is not the identity', () {
+    expect(
+      isIdentityEnvelope(identityEnvelope.copyWith(sustain: 0.5)),
+      isFalse,
+    );
+    expect(
+      isIdentityEnvelope(
+        identityEnvelope.copyWith(decay: noFade.copyWith(length: 10)),
+      ),
+      isFalse,
+    );
+  });
+
+  test('overlapping stages scale to fit', () {
     final envelope = _fades(300, 100);
-    expect(envelopeFadeLengths(envelope, 200), (150, 50));
-    expect(envelopeFadeLengths(envelope, 1000), (300, 100));
+    expect(envelopeStageLengths(envelope, 200), (150, 0, 50));
+    expect(envelopeStageLengths(envelope, 1000), (300, 0, 100));
+
+    final withDecay = envelope.copyWith(
+      decay: noFade.copyWith(length: 100),
+      sustain: 0.5,
+    );
+    expect(envelopeStageLengths(withDecay, 250), (150, 50, 50));
+  });
+
+  test('a decay toward unity takes no room', () {
+    final envelope = _fades(
+      100,
+      100,
+    ).copyWith(decay: noFade.copyWith(length: 100));
+    expect(envelopeStageLengths(envelope, 200), (100, 0, 100));
   });
 
   test('equal-power crossfade keeps constant power', () {

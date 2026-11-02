@@ -70,6 +70,12 @@ impl Lv2PluginHost {
             .ok_or(HostError::UnknownInstance(id))
     }
 
+    /// Lets tests drive an instance's internals, such as its editor message rings.
+    #[cfg(test)]
+    pub(crate) fn instance_for_test(&mut self, id: HostInstanceId) -> Option<&mut Lv2Instance> {
+        self.instances.get_mut(&id)
+    }
+
     fn instance_mut(&mut self, id: HostInstanceId) -> Result<&mut Lv2Instance, HostError> {
         self.check_thread()?;
         self.instances

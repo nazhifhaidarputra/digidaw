@@ -401,6 +401,8 @@ impl AudioPlugin for ClapProcessor {
             // SAFETY: Gate excludes UI reconfiguration and any other processing call.
             let dsp = unsafe { &mut *self.slot.dsp.get() };
             dsp.reset_pending |= std::mem::take(&mut self.reset_pending);
+            // This block answers every request made before it starts.
+            self.exchange.work.processed();
             dsp.process(buffers, context, &self.exchange);
         } else {
             self.reset_pending |= !context.midi_events.is_empty();
@@ -412,6 +414,9 @@ impl AudioPlugin for ClapProcessor {
     fn set_bypass(&mut self, bypass: bool) {
         self.reset_pending |= self.bypass != bypass;
         self.bypass = bypass;
+    }
+    fn has_pending_work(&self) -> bool {
+        self.exchange.work.is_pending()
     }
     fn latency_samples(&self) -> u32 {
         self.slot.latency.load(Ordering::Acquire)

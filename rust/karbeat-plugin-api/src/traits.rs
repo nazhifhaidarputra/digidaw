@@ -114,6 +114,17 @@ pub trait AudioPlugin: Any + Send {
         false
     }
 
+    /// Whether the plugin has work that only its process callback completes: messages from its
+    /// editor (such as a sample file to load), results of background jobs it takes back while
+    /// processing, or a processing call it asked for.
+    ///
+    /// The engine processes the plugin while this holds, even when it is parked with no notes
+    /// or input, so that work finishes without waiting for the next note. Called on the audio
+    /// thread every block; it must be real-time safe.
+    fn has_pending_work(&self) -> bool {
+        false
+    }
+
     fn set_parameter(&mut self, id: u32, value: f32);
     fn get_parameter(&self, id: u32) -> f32;
 

@@ -20,7 +20,7 @@ fn main() {
 )]
 mod lv2 {
     use karbeat_audio::{
-        commands::EffectTarget,
+        commands::{EffectTarget, MixerChannelTarget},
         context::DawContext,
         message::TelemetryRegistry,
         {
@@ -30,7 +30,7 @@ mod lv2 {
     };
     use karbeat_core::core::project::GeneratorInstanceType;
     use karbeat_core_api::{
-        audio_api, audio_settings_api, external_plugin_api, project_api, track_api,
+        audio_api, audio_settings_api, external_plugin_api, mixer_api, project_api, track_api,
     };
     use karbeat_host::{HostError, PluginDescriptor, PluginFormat};
     use std::{
@@ -278,6 +278,70 @@ mod lv2 {
             audio_api::play_preview_note(&mut ctx, first.id, 65, 100, true).unwrap();
             wait_audible(&audible, "DX10 did not play after the project was reloaded");
             audio_api::play_preview_note(&mut ctx, first.id, 65, 0, false).unwrap();
+
+            // A saved chain loads onto another channel as new hosted instances.
+            let source_effect = ctx.app_state.mixer.channels[first.id]
+                .channel
+                .effects
+                .to_vec()[0]
+                .id;
+            mixer_api::set_effect_bypass(
+                &mut ctx,
+                MixerChannelTarget::Track(first.id),
+                source_effect,
+                true,
+            )
+            .unwrap();
+            let template = directory.path().join("chain.effch");
+            mixer_api::save_channel_template(
+                &ctx,
+                MixerChannelTarget::Track(first.id),
+                template.to_str().unwrap(),
+            )
+            .unwrap();
+            let skipped = mixer_api::load_channel_template(
+                &mut ctx,
+                MixerChannelTarget::Track(second.id),
+                template.to_str().unwrap(),
+            )
+            .unwrap();
+            assert!(skipped.is_empty(), "{skipped:?}");
+            let source = ctx.app_state.mixer.channels[first.id]
+                .channel
+                .effects
+                .to_vec();
+            let copies = ctx.app_state.mixer.channels[second.id]
+                .channel
+                .effects
+                .to_vec();
+            assert_eq!(copies.len(), source.len());
+            for (copy, source) in copies.iter().zip(&source) {
+                let external = copy.instance.external.as_ref().unwrap();
+                assert_eq!(
+                    external.descriptor.identity,
+                    source
+                        .instance
+                        .external
+                        .as_ref()
+                        .unwrap()
+                        .descriptor
+                        .identity
+                );
+                assert!(external.state.is_some());
+                assert_eq!(copy.instance.bypass, source.instance.bypass);
+                assert_ne!(
+                    hosted_instance(&ctx, PluginTarget::TrackEffect(second.id, copy.id)),
+                    hosted_instance(&ctx, PluginTarget::TrackEffect(first.id, source.id))
+                );
+            }
+            assert!(copies[0].instance.bypass);
+            audible.store(false, Ordering::Release);
+            audio_api::play_preview_note(&mut ctx, second.id, 66, 100, true).unwrap();
+            wait_audible(
+                &audible,
+                "DX10 did not pass through the loaded effect chain",
+            );
+            audio_api::play_preview_note(&mut ctx, second.id, 66, 0, false).unwrap();
 
             track_api::delete_track(&mut ctx, first.id).unwrap();
             assert!(ctx.app_state.tracks.get(first.id).is_none());

@@ -202,6 +202,7 @@ class _ClipRenderer extends ConsumerWidget {
       maxCrossfade: frames ~/ 2,
       color: Colors.amber,
       interactive: envelopeInteractive,
+      canAddPoints: false,
       onCommit: (envelope) => ref
           .read(projectProvider.notifier)
           .setSourceEnvelope(sourceId, envelope),
@@ -209,10 +210,12 @@ class _ClipRenderer extends ConsumerWidget {
   }
 
   Widget _buildContent(BuildContext context, WidgetRef ref) {
-    final transportState = ref.watch(transportProvider).value?.state;
-    final projectState = ref.watch(projectProvider).value;
-    if (transportState == null || projectState == null) return const SizedBox();
-    final tempo = transportState.bpm;
+    // Select only the tempo: the whole transport store also carries playback
+    // state, so watching it would rebuild every clip on each transport change.
+    final tempo = ref.watch(
+      transportProvider.select((s) => s.value?.state?.bpm),
+    );
+    if (tempo == null) return const SizedBox();
 
     switch (clip.source) {
       case UiClipSource_Audio(:final sourceId):
@@ -286,7 +289,9 @@ class _ClipRenderer extends ConsumerWidget {
           ],
         );
       case UiClipSource_Midi(:final patternId):
-        final pattern = projectState.patterns[patternId];
+        final pattern = ref.watch(
+          projectProvider.select((s) => s.value?.patterns[patternId]),
+        );
 
         if (pattern == null) {
           return Center(

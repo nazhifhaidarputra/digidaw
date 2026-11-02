@@ -64,12 +64,19 @@ class TrackHeader extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final colors = Theme.of(context).colorScheme;
-    final project = ref.watch(projectProvider).value;
-    final track = project?.tracks[trackId];
-    final magnitude = ref.watch(
-      mixerStateProvider.select(
-        (state) => state.trackMagnitudes[trackId] ?? 0.0,
-      ),
+    // Select only this track (and its generator below) so unrelated project
+    // publishes don't rebuild the header. The meter magnitude is watched by
+    // the [_TrackLevelMeter] leaf, not here, so meter ticks don't rebuild it.
+    final track = ref.watch(
+      projectProvider.select((s) => s.value?.tracks[trackId]),
+    );
+    final generatorInstanceType = ref.watch(
+      projectProvider.select((s) {
+        final generatorId = s.value?.tracks[trackId]?.generatorId;
+        return generatorId == null
+            ? null
+            : s.value?.generators[generatorId]?.instanceType;
+      }),
     );
 
     final channelFlags = ref.watch(
@@ -106,9 +113,7 @@ class TrackHeader extends ConsumerWidget {
     final trackColor = track.color.fromRGBorRGBAtoColor();
     final trackForeground = _getContrastColor(trackColor);
     final generatorId = track.generatorId;
-    final generatorPlugin = switch (generatorId == null
-        ? null
-        : project?.generators[generatorId]?.instanceType) {
+    final generatorPlugin = switch (generatorInstanceType) {
       UiGeneratorInstanceType_Plugin(:final field0) => field0,
       _ => null,
     };
@@ -474,14 +479,9 @@ class TrackHeader extends ConsumerWidget {
                             ),
                             SizedBox(
                               height: 7,
-                              child: Semantics(
-                                label: '${track.name} output level',
-                                value:
-                                    '${magnitudeToDb(magnitude).toStringAsFixed(1)} dB',
-                                child: DbLevelMeter(
-                                  magnitude: magnitude,
-                                  axis: Axis.horizontal,
-                                ),
+                              child: _TrackLevelMeter(
+                                trackId: trackId,
+                                trackName: track.name,
                               ),
                             ),
                             const SizedBox(height: 3),
@@ -580,6 +580,29 @@ List<UiTrackInput> _inputChoices(UiTrackInput current, int deviceChannels) {
     for (var channel = 0; channel + 1 < channels; channel += 2)
       current.copyWith(firstChannel: channel, channels: 2),
   ];
+}
+
+/// The header's output meter. It is the only part of the header that watches
+/// the meter magnitude, so a telemetry tick rebuilds this leaf alone.
+class _TrackLevelMeter extends ConsumerWidget {
+  const _TrackLevelMeter({required this.trackId, required this.trackName});
+
+  final int trackId;
+  final String trackName;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final magnitude = ref.watch(
+      mixerStateProvider.select(
+        (state) => state.trackMagnitudes[trackId] ?? 0.0,
+      ),
+    );
+    return Semantics(
+      label: '$trackName output level',
+      value: '${magnitudeToDb(magnitude).toStringAsFixed(1)} dB',
+      child: DbLevelMeter(magnitude: magnitude, axis: Axis.horizontal),
+    );
+  }
 }
 
 class LaneCollapseToggle extends StatelessWidget {

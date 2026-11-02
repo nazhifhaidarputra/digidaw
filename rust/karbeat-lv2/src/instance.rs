@@ -246,12 +246,13 @@ impl Lv2Instance {
             .bundle
             .plugin_record(&self.descriptor.identity.native_id)?;
         let instance =
-            PluginInstance::instantiate(record, &self.model, config).inspect_err(|error| {
-                tracing::warn!(
-                    "{}: LV2 instantiation failed: {error}",
-                    self.descriptor.name
-                )
-            })?;
+            PluginInstance::instantiate(record, &self.model, config, &self.exchange.work)
+                .inspect_err(|error| {
+                    tracing::warn!(
+                        "{}: LV2 instantiation failed: {error}",
+                        self.descriptor.name
+                    )
+                })?;
         self.plugin_handle = instance.handle();
         let (dsp_link, editor_link) = self.editor_rings();
         let mut dsp = Dsp::new(instance, config.clone(), &self.model, dsp_urids(), dsp_link);
@@ -277,6 +278,9 @@ impl Lv2Instance {
                     .collect(),
             }));
         }
+        // The previous instance, its worker, and the message rings went with the old DSP, and
+        // their outstanding work with them.
+        self.exchange.work.reset();
         self.editor_link = editor_link;
         self.advance(|lifecycle| lifecycle.finish_prepare(config.clone()))?;
         // LV2 reports latency through a control output, which only a rendered block updates.
@@ -558,5 +562,193 @@ mod tests {
         let suspended = running.suspended().ok().unwrap();
         assert!(matches!(suspended, AnyInstanceLifecycle::Prepared(_)));
         assert_eq!(suspended.config(), Some(&config()));
+    }
+}
+
+/// Opt-in check against LSP Sampler: `cargo test -p karbeat-lv2 --lib lsp_sampler -- --ignored`
+/// (`LSP_LV2_PATH` overrides `/usr/lib64/lv2/lsp-plugins.lv2`).
+#[cfg(test)]
+#[allow(clippy::unwrap_used, reason = "test fixtures fail immediately")]
+mod lsp_sampler {
+    use crate::{Lv2PluginHost, urid, world};
+    use karbeat_host_api::{PluginInstanceManager, ProcessingConfig};
+    use karbeat_plugin_api::prelude::AudioPlugin;
+    use karbeat_plugin_api::types::{
+        AudioBuffers, AudioBusBuffer, MidiEvent, MidiMessage, ProcessContext, ProcessingMode,
+    };
+
+    const SAMPLER: &str = "http://lsp-plug.in/plugins/lv2/sampler_stereo";
+    const FRAMES: usize = 256;
+
+    /// Renders one block and returns its peak.
+    fn block(processor: &mut dyn AudioPlugin, events: &[MidiEvent]) -> f32 {
+        let mut left = vec![0.0; FRAMES];
+        let mut right = vec![0.0; FRAMES];
+        let mut channels: [&mut [f32]; 2] = [&mut left, &mut right];
+        let mut output = [AudioBusBuffer {
+            channel_data: &mut channels,
+            is_silent: false,
+        }];
+        let context = ProcessContext {
+            bpm: 120.0,
+            time_sig_numerator: 4,
+            time_sig_denominator: 4,
+            is_playing: false,
+            is_recording: false,
+            mode: ProcessingMode::Realtime,
+            project_time_seconds: 0.0,
+            project_time_samples: 0,
+            beat_position: 0.0,
+            bar_position: 0.0,
+            loop_start_beat: None,
+            loop_end_beat: None,
+            midi_events: events,
+            param_changes: &[],
+        };
+        processor.process(
+            &mut AudioBuffers {
+                main_inputs: &mut [],
+                main_outputs: &mut output,
+                aux_inputs: &mut [],
+                aux_outputs: &mut [],
+            },
+            &context,
+        );
+        left.iter()
+            .chain(&right)
+            .fold(0.0_f32, |peak, sample| peak.max(sample.abs()))
+    }
+
+    /// A one-second 16-bit stereo 440 Hz tone at half scale.
+    fn tone_wav() -> Vec<u8> {
+        let frames = 48_000_u32;
+        let data = frames * 4;
+        let mut wav = Vec::new();
+        wav.extend(b"RIFF");
+        wav.extend((36 + data).to_le_bytes());
+        wav.extend(b"WAVEfmt ");
+        wav.extend(16_u32.to_le_bytes());
+        wav.extend(1_u16.to_le_bytes());
+        wav.extend(2_u16.to_le_bytes());
+        wav.extend(48_000_u32.to_le_bytes());
+        wav.extend((48_000_u32 * 4).to_le_bytes());
+        wav.extend(4_u16.to_le_bytes());
+        wav.extend(16_u16.to_le_bytes());
+        wav.extend(b"data");
+        wav.extend(data.to_le_bytes());
+        for frame in 0..frames {
+            let phase = f64::from(frame) * 440.0 * std::f64::consts::TAU / 48_000.0;
+            #[allow(
+                clippy::as_conversions,
+                clippy::cast_possible_truncation,
+                reason = "test tone"
+            )]
+            let sample = (phase.sin() * 16_000.0) as i16;
+            wav.extend(sample.to_le_bytes());
+            wav.extend(sample.to_le_bytes());
+        }
+        wav
+    }
+
+    /// The `patch:Set` LSP's editor sends to load `path` into the first sample slot.
+    fn load_message(path: &str) -> Vec<u8> {
+        let mut body = Vec::new();
+        let mut word = |value: u32| body.extend(value.to_ne_bytes());
+        word(0);
+        word(urid::map_str("http://lv2plug.in/ns/ext/patch#Set"));
+        word(urid::map_str("http://lv2plug.in/ns/ext/patch#property"));
+        word(0);
+        word(4);
+        word(urid::map_str("http://lv2plug.in/ns/ext/atom#URID"));
+        word(urid::map_str(&format!("{SAMPLER}/ports#sf_0")));
+        word(0);
+        word(urid::map_str("http://lv2plug.in/ns/ext/patch#value"));
+        word(0);
+        word(u32::try_from(path.len() + 1).unwrap());
+        word(urid::map_str("http://lv2plug.in/ns/ext/atom#Path"));
+        body.extend(path.as_bytes());
+        body.push(0);
+        body.resize(body.len().next_multiple_of(8), 0);
+        body
+    }
+
+    #[test]
+    #[ignore = "needs LSP's LV2 bundle installed"]
+    fn a_parked_sampler_loads_the_file_its_editor_sends() {
+        let bundle = std::env::var_os("LSP_LV2_PATH").map_or_else(
+            || "/usr/lib64/lv2/lsp-plugins.lv2".into(),
+            std::path::PathBuf::from,
+        );
+        let descriptor = world::probe_bundle(&bundle)
+            .unwrap()
+            .into_iter()
+            .find(|descriptor| descriptor.identity.native_id == SAMPLER)
+            .unwrap();
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("tone.wav");
+        std::fs::write(&path, tone_wav()).unwrap();
+
+        let mut host = Lv2PluginHost::new();
+        let id = host.create(&descriptor).unwrap();
+        host.prepare(
+            id,
+            &ProcessingConfig {
+                sample_rate: 48_000.0,
+                max_block_size: FRAMES,
+                main_input_channels: 0,
+                main_output_channels: 2,
+                sidechain_channels: 0,
+                offline: false,
+            },
+        )
+        .unwrap();
+        let mut processor = host.take_processor(id).unwrap();
+        host.resume(id).unwrap();
+        assert!(!processor.has_pending_work());
+
+        // What the editor's `write_function` does with the file the user picked.
+        let instance = host.instance_for_test(id).unwrap();
+        let port = instance.model.atom_inputs[0].index;
+        let link = instance.editor_link.as_mut().unwrap();
+        instance.exchange.work.begin();
+        assert!(link.to_dsp.send(
+            port,
+            urid::map_str("http://lv2plug.in/ns/ext/atom#Object"),
+            &load_message(path.to_str().unwrap()),
+        ));
+
+        // The engine processes a parked instrument only while it reports pending work: the
+        // message, then the worker loading the file, then the loaded sample's hand-over.
+        assert!(processor.has_pending_work());
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+        while processor.has_pending_work() {
+            assert!(
+                std::time::Instant::now() < deadline,
+                "the load never finished"
+            );
+            block(processor.as_mut(), &[]);
+            std::thread::sleep(std::time::Duration::from_millis(2));
+        }
+
+        let notes: Vec<MidiEvent> = (0..128)
+            .map(|key| MidiEvent {
+                sample_offset: 0,
+                data: MidiMessage::NoteOn {
+                    note_id: None,
+                    channel: 0,
+                    key,
+                    velocity: 100,
+                },
+            })
+            .collect();
+        let mut peak = block(processor.as_mut(), &notes);
+        for _ in 0..20 {
+            peak = peak.max(block(processor.as_mut(), &[]));
+        }
+        assert!(peak > 0.05, "the sample does not play: peak {peak}");
+
+        host.suspend(id).unwrap();
+        drop(processor);
+        host.destroy(id).unwrap();
     }
 }

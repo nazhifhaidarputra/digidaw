@@ -296,6 +296,9 @@ class _TrimmedWaveformOverlayState
   }) {
     final colors = Theme.of(context).colorScheme;
     return Positioned(
+      // The envelope editor leaves the stack while a grip drags. Without a key
+      // the grips would swap elements, and the drag would move the other point.
+      key: ValueKey(start ? 'trim-start-grip' : 'trim-end-grip'),
       left: start ? x : x - _gripWidth,
       top: (height - _gripHeight) / 2,
       width: _gripWidth,
@@ -545,6 +548,7 @@ class _WaveformEnvelopeEditor extends ConsumerWidget {
         contentLength: frames,
         maxCrossfade: frames ~/ 2,
         color: Colors.amber,
+        canAddPoints: false,
         onCommit: (next) => ref
             .read(projectProvider.notifier)
             .setSourceEnvelope(sourceId, next),
@@ -553,7 +557,7 @@ class _WaveformEnvelopeEditor extends ConsumerWidget {
   }
 }
 
-/// Fade, loop crossfade, and point count of the waveform envelope.
+/// ADSR stages, loop crossfade, and point count of the waveform envelope.
 class _EnvelopeReadout extends StatelessWidget {
   const _EnvelopeReadout({required this.envelope, required this.sampleRate});
 
@@ -573,10 +577,13 @@ class _EnvelopeReadout extends StatelessWidget {
       child: Wrap(
         spacing: 16,
         children: [
-          Text('Fade in ${_ms(envelope.fadeIn.length)}', style: style),
-          Text('Fade out ${_ms(envelope.fadeOut.length)}', style: style),
+          Text('Attack ${_ms(envelope.fadeIn.length)}', style: style),
+          Text('Decay ${_ms(envelope.decay.length)}', style: style),
+          Text('Sustain ${(envelope.sustain * 100).round()}%', style: style),
+          Text('Release ${_ms(envelope.fadeOut.length)}', style: style),
           Text('Loop crossfade ${_ms(envelope.crossfade)}', style: style),
-          Text('Points ${envelope.points.length}', style: style),
+          if (envelope.points.isNotEmpty)
+            Text('Points ${envelope.points.length}', style: style),
         ],
       ),
     );

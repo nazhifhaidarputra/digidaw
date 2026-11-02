@@ -3,9 +3,12 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:karbeat/app/providers/mixer_state.dart';
 import 'package:karbeat/app/providers/project_provider.dart';
 import 'package:karbeat/core/utils/result_type.dart';
 import 'package:karbeat/core/widgets/channel_toggle_button.dart';
+import 'package:karbeat/core/widgets/context_menu.dart';
+import 'package:karbeat/core/widgets/db_level_meter.dart';
 import 'package:karbeat/features/plugins/services/plugin_ui_launcher.dart';
 import 'package:karbeat/features/setting/services/external_plugin_service.dart';
 import 'package:karbeat/features/track/view/track_header.dart';
@@ -30,6 +33,14 @@ class _ProjectNotifier extends ProjectNotifier {
 
   @override
   Future<ApplicationDataStore> build() async => project;
+}
+
+class _MixerNotifier extends MixerNotifier {
+  void setTrackMagnitude(int trackId, double magnitude) {
+    state = state.copyWith(
+      trackMagnitudes: state.trackMagnitudes.add(trackId, magnitude),
+    );
+  }
 }
 
 class _ExternalPluginService extends ExternalPluginService {
@@ -192,6 +203,29 @@ void main() {
     expect(find.byTooltip('Expand lane'), findsOneWidget);
   });
 
+  testWidgets('a meter tick rebuilds only the meter, not the header', (
+    tester,
+  ) async {
+    final mixer = _MixerNotifier();
+    await _pumpTrackHeader(
+      tester,
+      service: _ExternalPluginService(isExternal: false),
+      launcher: _FlutterPluginLauncher(),
+      mixer: mixer,
+    );
+    final headerBody = tester.widget(find.byType(ContextMenuWrapper));
+
+    mixer.setTrackMagnitude(1, 0.5);
+    await tester.pump();
+
+    expect(
+      tester.widget<DbLevelMeter>(find.byType(DbLevelMeter)).magnitude,
+      0.5,
+    );
+    // A rebuilt TrackHeader would create a new ContextMenuWrapper instance.
+    expect(tester.widget(find.byType(ContextMenuWrapper)), same(headerBody));
+  });
+
   testWidgets('tapping the header body selects the track', (tester) async {
     var selectCount = 0;
     await _pumpTrackHeader(
@@ -217,6 +251,7 @@ Future<void> _pumpTrackHeader(
   required PluginFlutterUiLauncher launcher,
   UiMixerChannel? channel,
   VoidCallback? onSelect,
+  MixerNotifier? mixer,
 }) async {
   final project = _projectData(channel: channel);
   await tester.pumpWidget(
@@ -225,6 +260,7 @@ Future<void> _pumpTrackHeader(
         projectProvider.overrideWith(() => _ProjectNotifier(project)),
         externalPluginServiceProvider.overrideWithValue(service),
         pluginFlutterUiLauncherProvider.overrideWithValue(launcher),
+        if (mixer != null) mixerStateProvider.overrideWith(() => mixer),
       ],
       child: MaterialApp(
         home: Scaffold(

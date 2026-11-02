@@ -57,14 +57,17 @@ double _yToGain(double y, double height) {
 
 /// Draws a gain envelope over audio content and edits it in place.
 ///
-/// Fades attach to the edges of the content, which starts at [contentStart]
-/// and is [contentLength] samples long; points sit at absolute positions.
-/// Drag the top fade handles to change fade lengths, the fade midpoints to
-/// bend them, the bottom handle to change the crossfade, and the points to
-/// move them. Drag the small ring between two points to bend that segment, and
-/// double-tap the ring to straighten it. Double-tap to add a point; right-click
-/// or long-press a point or fade handle for its curve options. Each gesture
-/// commits once, on release.
+/// The ADSR fade attaches to the edges of the content, which starts at
+/// [contentStart] and is [contentLength] samples long; points sit at absolute
+/// positions. Drag the Attack, Decay, and Release handles to change their
+/// lengths, the Sustain handle to change the held level, and a stage's midpoint
+/// to bend it. The Decay handle appears once the sustain is below unity, since
+/// a decay to unity changes nothing. Drag the bottom handle to change the
+/// crossfade and the points to move them. Drag the small ring between two
+/// points to bend that segment, and double-tap the ring to straighten it.
+/// Double-tap to add a point when [canAddPoints] is true; right-click or
+/// long-press a point or stage handle for its options. Each gesture commits
+/// once, on release.
 class GainEnvelopeEditor extends ConsumerStatefulWidget {
   const GainEnvelopeEditor({
     super.key,
@@ -76,6 +79,7 @@ class GainEnvelopeEditor extends ConsumerStatefulWidget {
     required this.color,
     required this.onCommit,
     this.interactive = true,
+    this.canAddPoints = true,
   });
 
   final UiGainEnvelope envelope;
@@ -91,14 +95,21 @@ class GainEnvelopeEditor extends ConsumerStatefulWidget {
   /// Paint only when false, letting pointer events reach the widgets below.
   final bool interactive;
 
+  /// Whether double-tapping adds a point. Points already in the envelope stay
+  /// editable either way.
+  final bool canAddPoints;
+
   @override
   ConsumerState<GainEnvelopeEditor> createState() => _GainEnvelopeEditorState();
 }
 
 enum _Grip {
   fadeIn,
+  decay,
+  sustain,
   fadeOut,
   fadeInTension,
+  decayTension,
   fadeOutTension,
   crossfade,
   point,
@@ -146,6 +157,7 @@ class _GainEnvelopeEditorState extends ConsumerState<GainEnvelopeEditor> {
       _draft = _envelope;
       _tensionAnchor = switch (grip) {
         _Grip.fadeInTension => _envelope.fadeIn.tension,
+        _Grip.decayTension => _envelope.decay.tension,
         _Grip.fadeOutTension => _envelope.fadeOut.tension,
         _Grip.pointTension => _envelope.points[pointIndex].tension,
         _ => 0,
@@ -183,12 +195,25 @@ class _GainEnvelopeEditorState extends ConsumerState<GainEnvelopeEditor> {
           length: (position - widget.contentStart).clamp(0, length),
         ),
       ),
+      _Grip.decay => envelope.copyWith(
+        decay: envelope.decay.copyWith(
+          length:
+              (position -
+                      widget.contentStart -
+                      envelopeStageLengths(envelope, length).$1)
+                  .clamp(0, length),
+        ),
+      ),
+      _Grip.sustain => envelope.copyWith(
+        sustain: _yToGain(local.dy, height).clamp(0.0, 1.0),
+      ),
       _Grip.fadeOut => envelope.copyWith(
         fadeOut: envelope.fadeOut.copyWith(
           length: (_contentEnd - position).clamp(0, length),
         ),
       ),
       _Grip.fadeInTension => envelope.copyWith(fadeIn: bend(envelope.fadeIn)),
+      _Grip.decayTension => _bendDecay(envelope, details.delta.dy, height),
       _Grip.fadeOutTension => envelope.copyWith(
         fadeOut: bend(envelope.fadeOut),
       ),
@@ -243,6 +268,22 @@ class _GainEnvelopeEditorState extends ConsumerState<GainEnvelopeEditor> {
       1.0,
     );
     return _withPointTension(envelope, _pointIndex, tension);
+  }
+
+  /// Bends the decay the same way as a segment between two points.
+  UiGainEnvelope _bendDecay(UiGainEnvelope envelope, double dy, double height) {
+    final decay = envelope.decay;
+    _dragDy += dy;
+    final direction = tensionDragDirection(
+      ref.read(curveSamplerProvider).traits(decay.curveType),
+      decay.curveType,
+      envelope.sustain - 1,
+    );
+    final tension = (_tensionAnchor - _dragDy / height * 2.0 * direction).clamp(
+      -1.0,
+      1.0,
+    );
+    return envelope.copyWith(decay: decay.copyWith(tension: tension));
   }
 
   UiGainEnvelope _withPointTension(
@@ -312,16 +353,14 @@ class _GainEnvelopeEditorState extends ConsumerState<GainEnvelopeEditor> {
     ];
   }
 
-  void _openFadeMenu({required bool fadeIn}) {
-    final envelope = _envelope;
-    final fade = fadeIn ? envelope.fadeIn : envelope.fadeOut;
-    UiGainEnvelope withFade(UiFade next) => fadeIn
-        ? envelope.copyWith(fadeIn: next)
-        : envelope.copyWith(fadeOut: next);
-
+  void _openStageMenu({
+    required String title,
+    required UiFade fade,
+    required UiGainEnvelope Function(UiFade next) withFade,
+  }) {
     showDawContextMenu(
       context: context,
-      title: fadeIn ? 'Fade in' : 'Fade out',
+      title: title,
       actions: [
         ..._curveActions(
           current: fade.curveType,
@@ -331,10 +370,24 @@ class _GainEnvelopeEditorState extends ConsumerState<GainEnvelopeEditor> {
           onResetTension: () => _commit(withFade(fade.copyWith(tension: 0))),
         ),
         DawContextAction(
-          title: 'Remove fade',
+          title: 'Remove ${title.toLowerCase()}',
           icon: Icons.delete_outline,
           isDestructive: true,
           onTap: () => _commit(withFade(fade.copyWith(length: 0))),
+        ),
+      ],
+    );
+  }
+
+  void _openSustainMenu() {
+    showDawContextMenu(
+      context: context,
+      title: 'Sustain',
+      actions: [
+        DawContextAction(
+          title: 'Reset sustain',
+          icon: Icons.restart_alt,
+          onTap: () => _commit(_envelope.copyWith(sustain: 1)),
         ),
       ],
     );
@@ -512,11 +565,14 @@ class _GainEnvelopeEditorState extends ConsumerState<GainEnvelopeEditor> {
         );
         if (!widget.interactive) return IgnorePointer(child: painter);
 
-        final (fadeIn, fadeOut) = envelopeFadeLengths(
+        final (attack, decay, release) = envelopeStageLengths(
           envelope,
           widget.contentLength,
         );
         final unityY = _gainToY(1, height);
+        final sustainY = _gainToY(envelope.sustain, height);
+        final decayEnd = widget.contentStart + attack + decay;
+        final releaseStart = _contentEnd - release;
         bool visible(double x) => x >= -6 && x <= width + 6;
 
         final handles = <Widget>[];
@@ -524,33 +580,76 @@ class _GainEnvelopeEditorState extends ConsumerState<GainEnvelopeEditor> {
           if (visible(x)) handles.add(build());
         }
 
-        final fadeInX = axis.toX(widget.contentStart + fadeIn);
+        final attackX = axis.toX(widget.contentStart + attack);
         add(
           () => _handle(
-            center: Offset(fadeInX, unityY),
+            center: Offset(attackX, unityY),
             grip: _Grip.fadeIn,
             height: height,
             cursor: SystemMouseCursors.resizeLeftRight,
             shape: BoxShape.rectangle,
-            onMenu: () => _openFadeMenu(fadeIn: true),
+            tooltip: 'Attack',
+            onMenu: () => _openStageMenu(
+              title: 'Attack',
+              fade: envelope.fadeIn,
+              withFade: (next) => envelope.copyWith(fadeIn: next),
+            ),
           ),
-          fadeInX,
+          attackX,
         );
-        final fadeOutX = axis.toX(_contentEnd - fadeOut);
+        // A decay to unity changes nothing, and its handle would hide Attack.
+        if (envelope.sustain < 1) {
+          final decayX = axis.toX(decayEnd);
+          add(
+            () => _handle(
+              center: Offset(decayX, sustainY),
+              grip: _Grip.decay,
+              height: height,
+              cursor: SystemMouseCursors.resizeLeftRight,
+              shape: BoxShape.rectangle,
+              tooltip: 'Decay',
+              onMenu: () => _openStageMenu(
+                title: 'Decay',
+                fade: envelope.decay,
+                withFade: (next) => envelope.copyWith(decay: next),
+              ),
+            ),
+            decayX,
+          );
+        }
+        final sustainX = axis.toX((decayEnd + releaseStart) / 2);
         add(
           () => _handle(
-            center: Offset(fadeOutX, unityY),
+            center: Offset(sustainX, sustainY),
+            grip: _Grip.sustain,
+            height: height,
+            cursor: SystemMouseCursors.resizeUpDown,
+            shape: BoxShape.rectangle,
+            tooltip: 'Sustain',
+            onMenu: _openSustainMenu,
+          ),
+          sustainX,
+        );
+        final releaseX = axis.toX(releaseStart);
+        add(
+          () => _handle(
+            center: Offset(releaseX, sustainY),
             grip: _Grip.fadeOut,
             height: height,
             cursor: SystemMouseCursors.resizeLeftRight,
             shape: BoxShape.rectangle,
-            onMenu: () => _openFadeMenu(fadeIn: false),
+            tooltip: 'Release',
+            onMenu: () => _openStageMenu(
+              title: 'Release',
+              fade: envelope.fadeOut,
+              withFade: (next) => envelope.copyWith(fadeOut: next),
+            ),
           ),
-          fadeOutX,
+          releaseX,
         );
-        if (fadeIn > 0 &&
+        if (attack > 0 &&
             sampler.traits(envelope.fadeIn.curveType).supportsTension) {
-          final x = axis.toX(widget.contentStart + fadeIn / 2);
+          final x = axis.toX(widget.contentStart + attack / 2);
           add(
             () => _handle(
               center: Offset(
@@ -565,14 +664,39 @@ class _GainEnvelopeEditorState extends ConsumerState<GainEnvelopeEditor> {
             x,
           );
         }
-        if (fadeOut > 0 &&
+        if (decay > 0 &&
+            sampler.traits(envelope.decay.curveType).supportsTension) {
+          final midpoint = widget.contentStart + attack + decay / 2;
+          final x = axis.toX(midpoint);
+          // Sampled without the points, so the ring stays on the decay itself.
+          final gain = sampler.sampleEnvelope(
+            envelope.copyWith(points: const []),
+            contentStart: widget.contentStart,
+            contentLength: widget.contentLength,
+            positions: [midpoint],
+          )[0];
+          add(
+            () => _handle(
+              center: Offset(x, _gainToY(gain, height)),
+              grip: _Grip.decayTension,
+              height: height,
+              cursor: SystemMouseCursors.resizeUpDown,
+              shape: BoxShape.circle,
+            ),
+            x,
+          );
+        }
+        if (release > 0 &&
             sampler.traits(envelope.fadeOut.curveType).supportsTension) {
-          final x = axis.toX(_contentEnd - fadeOut / 2);
+          final x = axis.toX(_contentEnd - release / 2);
           add(
             () => _handle(
               center: Offset(
                 x,
-                _gainToY(sampler.fadeGain(envelope.fadeOut, 0.5), height),
+                _gainToY(
+                  sampler.fadeGain(envelope.fadeOut, 0.5) * envelope.sustain,
+                  height,
+                ),
               ),
               grip: _Grip.fadeOutTension,
               height: height,
@@ -618,9 +742,12 @@ class _GainEnvelopeEditorState extends ConsumerState<GainEnvelopeEditor> {
             Positioned.fill(
               child: GestureDetector(
                 behavior: HitTestBehavior.translucent,
-                onDoubleTapDown: (details) =>
-                    _doubleTapPosition = details.localPosition,
-                onDoubleTap: () => _addPoint(height),
+                onDoubleTapDown: widget.canAddPoints
+                    ? (details) => _doubleTapPosition = details.localPosition
+                    : null,
+                onDoubleTap: widget.canAddPoints
+                    ? () => _addPoint(height)
+                    : null,
                 child: painter,
               ),
             ),
@@ -670,15 +797,20 @@ class _GainEnvelopePainter extends CustomPainter {
         ..strokeWidth = 1,
     );
 
-    // Sample the curve; breakpoints and fade edges are added so corners stay
+    // Sample the curve; breakpoints and stage edges are added so corners stay
     // exact whatever the sampling step.
+    final (attack, decay, release) = envelopeStageLengths(
+      envelope,
+      contentLength,
+    );
     final step = math.max(2.0, (right - left) / 1500);
     final xs = <double>[
       for (var x = left; x < right; x += step) x,
       right,
       for (final point in envelope.points) axis.toX(point.position),
-      axis.toX(contentStart + envelope.fadeIn.length),
-      axis.toX(contentEnd - envelope.fadeOut.length),
+      axis.toX(contentStart + attack),
+      axis.toX(contentStart + attack + decay),
+      axis.toX(contentEnd - release),
     ].where((x) => x >= left && x <= right).toList()..sort();
 
     // An untouched envelope is unity everywhere, so it needs no sampling.

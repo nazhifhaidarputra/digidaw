@@ -59,7 +59,7 @@ class GridPainter extends CustomPainter {
 
       const double buffer = 200.0;
       startX = (offset - buffer).clamp(0.0, double.infinity);
-      endX = offset + viewportWidth + buffer;
+      endX = offset + _visibleWidth(position) + buffer;
     }
 
     final paint = Paint()
@@ -99,6 +99,14 @@ class GridPainter extends CustomPainter {
       currentX = gridIndex * visualInterval;
     }
   }
+
+  /// Width of the scroll view's viewport. [viewportWidth] comes from a
+  /// LayoutBuilder that sits inside the scrolled content on the timeline, so
+  /// there it is the whole timeline width; culling with it painted every line
+  /// of the timeline on each zoom step and scroll frame.
+  double _visibleWidth(ScrollPosition position) => position.hasViewportDimension
+      ? position.viewportDimension
+      : viewportWidth;
 
   @override
   bool shouldRepaint(covariant GridPainter oldDelegate) {

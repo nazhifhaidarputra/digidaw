@@ -251,8 +251,12 @@ class _InteractiveClipState extends ConsumerState<_InteractiveClip> {
     final double safeWidth = width < 1 ? 1 : width;
     const resizeEdgeSize = 25.0;
 
-    final sampleRate = ref.watch(transportProvider).value?.sampleRate ?? 48000;
-    final tempo = ref.watch(transportProvider).value?.state?.bpm ?? 120.0;
+    final sampleRate =
+        ref.watch(transportProvider.select((s) => s.value?.sampleRate)) ??
+        48000;
+    final tempo =
+        ref.watch(transportProvider.select((s) => s.value?.state?.bpm)) ??
+        120.0;
 
     // final isMoving = _currentAction == _DragAction.move;
 
@@ -273,9 +277,12 @@ class _InteractiveClipState extends ConsumerState<_InteractiveClip> {
     }
 
     // Check if this is a follower in a batch move (should be semi-transparent)
-    final placementState = ref.watch(clipPlacementProvider);
-    final isPartOfBatchDrag =
-        widget.isSelected && placementState.isDraggingExisting;
+    // Only the drag flag matters here; the full placement state changes on
+    // every pointer move during a drag or placement.
+    final isDraggingExisting = ref.watch(
+      clipPlacementProvider.select((s) => s.isDraggingExisting),
+    );
+    final isPartOfBatchDrag = widget.isSelected && isDraggingExisting;
 
     return Positioned(
       left: left,
@@ -290,7 +297,7 @@ class _InteractiveClipState extends ConsumerState<_InteractiveClip> {
             ? 0.3
             : 1.0,
         child: IgnorePointer(
-          ignoring: placementState.isDraggingExisting,
+          ignoring: isDraggingExisting,
           child: MouseRegion(
             cursor: cursor,
             // Detect Hover for Resize Cursors (only if not in Delete mode)
@@ -349,8 +356,7 @@ class _InteractiveClipState extends ConsumerState<_InteractiveClip> {
       trackType: widget.trackType,
       color: widget.color,
       zoomLevel: widget.zoomLevel,
-      projectSampleRate:
-          ref.watch(transportProvider).value?.sampleRate ?? 48000,
+      projectSampleRate: sampleRate,
       overrideOffset: _visualOffset.toDouble(),
       isSelected: widget.isSelected,
       scrollController: widget.horizontalScrollController,

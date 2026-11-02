@@ -20,6 +20,15 @@ const karbeatProjectTypeGroup = XTypeGroup(
   extensions: <String>[karbeatProjectExtension],
 );
 
+/// File extension for mixer channel templates.
+const channelTemplateExtension = 'effch';
+
+/// Channel template save filter.
+const channelTemplateTypeGroup = XTypeGroup(
+  label: 'Channel Template (.effch)',
+  extensions: <String>[channelTemplateExtension],
+);
+
 const _projectOpenTypeGroups = <XTypeGroup>[
   dgdawProjectTypeGroup,
   karbeatProjectTypeGroup,
@@ -129,6 +138,59 @@ Future<String?> pickAudioExportFileToSave({
   );
   if (location == null) return null;
   return withFileExtension(location.path, normalizedExtension);
+}
+
+/// Suggested file name for a template of the channel called [channelName].
+///
+/// Characters that file systems reject in a name are replaced.
+String channelTemplateFileName(String channelName) {
+  final name = channelName.replaceAll(RegExp(r'[/\\:*?"<>|]'), '_');
+  return '$name.$channelTemplateExtension';
+}
+
+/// Opens the save chooser for a channel template and returns a path ending in
+/// `.effch`.
+///
+/// Returns `null` when the user cancels.
+Future<String?> pickChannelTemplateFileToSave(String channelName) async {
+  final suggestedName = channelTemplateFileName(channelName);
+  if (!_usesDesktopTypeLabels) {
+    final path = await picker.FilePicker.saveFile(
+      fileName: suggestedName,
+      type: picker.FileType.custom,
+      allowedExtensions: const <String>[channelTemplateExtension],
+    );
+    return path == null
+        ? null
+        : withFileExtension(path, channelTemplateExtension);
+  }
+
+  final location = await getSaveLocation(
+    acceptedTypeGroups: const <XTypeGroup>[channelTemplateTypeGroup],
+    suggestedName: suggestedName,
+    confirmButtonText: 'Save',
+  );
+  if (location == null) return null;
+  return withFileExtension(location.path, channelTemplateExtension);
+}
+
+/// Opens the chooser for a channel template to load.
+///
+/// Returns `null` when the user cancels.
+Future<String?> pickChannelTemplateFileToOpen() async {
+  if (!_usesDesktopTypeLabels) {
+    final result = await picker.FilePicker.pickFiles(
+      type: picker.FileType.custom,
+      allowedExtensions: const <String>[channelTemplateExtension],
+    );
+    return result?.files.single.path;
+  }
+
+  final file = await openFile(
+    acceptedTypeGroups: const <XTypeGroup>[channelTemplateTypeGroup],
+    confirmButtonText: 'Open',
+  );
+  return file?.path;
 }
 
 /// [path] with exactly [extension] as its final extension.

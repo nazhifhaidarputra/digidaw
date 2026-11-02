@@ -46,11 +46,13 @@ impl AudioEffectInstance {
         }
     }
 
-    /// Whether this slot is processed even while its channel carries no signal; bypassed
-    /// slots are skipped by the chain and never are.
+    /// Whether this slot is processed even while its channel carries no signal: it always
+    /// processes, or has work only processing completes. Bypassed slots are skipped by the
+    /// chain and never are.
     #[inline]
     pub fn keeps_processing(&self) -> bool {
-        !self.bypass && self.plugin.needs_continuous_processing()
+        !self.bypass
+            && (self.plugin.needs_continuous_processing() || self.plugin.has_pending_work())
     }
 }
 

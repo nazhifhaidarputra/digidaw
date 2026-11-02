@@ -230,6 +230,9 @@ impl AudioPlugin for HostedProcessor {
         // Endpoints that genuinely generate or scan audio without input opt in explicitly.
         self.continuous_processing || self.inner.needs_continuous_processing()
     }
+    fn has_pending_work(&self) -> bool {
+        self.inner.has_pending_work()
+    }
     fn set_parameter(&mut self, id: u32, value: f32) {
         self.inner.set_parameter(id, value);
     }

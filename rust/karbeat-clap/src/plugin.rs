@@ -26,7 +26,7 @@ use clack_host::{
     host::HostInfo, plugin::PluginInstance, process::PluginAudioConfiguration, utils::ClapId,
 };
 use karbeat_host_api::{
-    EDIT_CHANGED, HostError, NativeParentHandle, ParameterExchange, PluginDescriptor,
+    EDIT_CHANGED, HostError, NativeParentHandle, ParameterExchange, PendingWork, PluginDescriptor,
     PluginIdentity, PluginState, ProcessingConfig, ProcessingGate,
     native_host::EditorResizeHandler,
 };
@@ -177,8 +177,9 @@ impl ClapInstance {
         let info = HostInfo::new("DigiDAW", "DigiDAW", "", env!("CARGO_PKG_VERSION"))
             .map_err(|_| unavailable("host information contains a NUL byte"))?;
         let label = descriptor.name.clone();
+        let pending_work = Arc::new(PendingWork::default());
         let mut plugin = PluginInstance::<ClapHostHandlers>::new(
-            |_| ClapHostSharedHandler::new(&label),
+            |_| ClapHostSharedHandler::new(&label, pending_work.clone()),
             |shared| ClapHostMainThreadHandler::new(shared),
             module.entry(),
             &id,
@@ -235,7 +236,7 @@ impl ClapInstance {
         }
         Ok(Self {
             descriptor,
-            exchange: ParameterExchange::new(&values),
+            exchange: ParameterExchange::with_work(&values, pending_work),
             parameters: Arc::from(list),
             note_input,
             lifecycle: AnyInstanceLifecycle::unprepared(),

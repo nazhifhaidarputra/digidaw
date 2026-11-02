@@ -204,6 +204,14 @@ enum PendingInstallTarget {
     Effect(EffectTarget),
 }
 
+/// Saved settings an install starts from. The default is a fresh plugin.
+#[derive(Default)]
+struct InstallPreset {
+    state: Option<karbeat_host::PluginState>,
+    bypass: bool,
+    display_name: Option<String>,
+}
+
 pub struct PendingPluginInstall {
     staged: ApplicationState,
     registry_id: u32,
@@ -211,6 +219,7 @@ pub struct PendingPluginInstall {
     config: ProcessingConfig,
     target: PendingInstallTarget,
     handles: ControlHandles,
+    preset: InstallPreset,
 }
 
 pub struct CompletedPluginInstall {
@@ -263,6 +272,7 @@ fn begin_install(
         config,
         target,
         handles: ctx.control_handles(),
+        preset: InstallPreset::default(),
     })
 }
 
@@ -320,6 +330,33 @@ pub fn begin_add_effect(
     )
 }
 
+/// Prepares to append an external effect saved in a channel template, with its saved state.
+///
+/// The plugin is found by its identity, because catalog IDs are local to one machine. Fails when
+/// it is not installed here.
+pub fn begin_add_template_effect(
+    ctx: &DawContext,
+    target: EffectTarget,
+    saved: &PluginInstance,
+) -> anyhow::Result<PendingPluginInstall> {
+    let external = saved
+        .external
+        .as_ref()
+        .context("Saved effect is not an external plugin")?;
+    let registry_id = ctx
+        .plugin_catalog
+        .resolve(&external.descriptor.identity)
+        .with_context(|| format!("{} is not installed on this computer", saved.name))?
+        .id;
+    let mut pending = begin_add_effect(ctx, target, registry_id)?;
+    pending.preset = InstallPreset {
+        state: external.state.clone(),
+        bypass: saved.bypass,
+        display_name: saved.display_name.clone(),
+    };
+    Ok(pending)
+}
+
 fn wait_for_install(
     mut receipt: karbeat_audio::hosted_plugin::HostedInstallReceipt,
 ) -> anyhow::Result<Option<triple_buffer::Output<karbeat_audio::engine::PluginTelemetrySnapshot>>> {
@@ -336,20 +373,21 @@ pub fn execute_install(
         futures_lite::future::block_on(pending.handles.external_plugins.prepare(PrepareRequest {
             descriptor: pending.descriptor.clone(),
             config: pending.config.clone(),
-            state: None,
+            state: pending.preset.state.take(),
         }))?;
     let instance = prepared.instance;
+    let bypass = pending.preset.bypass;
     let plugin = PluginInstance {
         registry_id: pending.registry_id,
         name: pending.descriptor.name.clone(),
-        bypass: false,
+        bypass,
         parameter_specs: prepared.parameters.clone(),
         plugin_state: Vec::new(),
         external: Some(ExternalPluginInstance {
             descriptor: pending.descriptor,
             state: Some(prepared.state.clone()),
         }),
-        display_name: None,
+        display_name: pending.preset.display_name.take(),
     };
 
     let mut replaced_generator = None;
@@ -434,7 +472,11 @@ pub fn execute_install(
                 pending.config,
                 prepared.processor,
             );
-            (InstalledPlugin::Effect(effect), install, receipt)
+            (
+                InstalledPlugin::Effect(effect),
+                install.with_bypass(bypass),
+                receipt,
+            )
         }
     };
 

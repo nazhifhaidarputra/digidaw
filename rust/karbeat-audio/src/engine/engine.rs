@@ -188,6 +188,16 @@ impl AudioExportSnapshot {
         self.bpm
     }
 
+    /// DSP sample rate of the live engine the snapshot was taken from.
+    pub fn sample_rate(&self) -> u32 {
+        self.config.sample_rate
+    }
+
+    /// Frames per block the live engine renders.
+    pub fn block_size(&self) -> usize {
+        self.render_state.graph.buffer_size
+    }
+
     pub fn hosted_instance(&self, target: PluginTarget) -> Option<HostInstanceId> {
         match target {
             PluginTarget::Generator(id) => self
@@ -621,6 +631,13 @@ impl AudioEngine {
 
         if plugin_latency_changed || self.routing.latency_dirty {
             self.recalculate_latencies();
+        }
+
+        // A block without frames only applies the commands. Rendering it would hand queued
+        // MIDI to generators that have no frames to apply it in, while the voices count it as
+        // delivered: a note-off queued by a stop was then lost and the note held forever.
+        if output_buffer.is_empty() {
+            return;
         }
 
         // Clear Buffer
@@ -1140,6 +1157,28 @@ impl AudioEngine {
         }
     }
 
+    /// Renders generators that have work only processing completes, such as a sample their
+    /// editor asked them to load, though they play no notes: parked, they would not receive it
+    /// until the next note. A generator that never played gets its voice here.
+    fn wake_generators_with_pending_work(&mut self) {
+        for (_, generator) in self.plugin_state.generators.iter() {
+            if !generator.plugin.has_pending_work() {
+                continue;
+            }
+            let voices = &mut self.voices.active_generators;
+            let index = voices
+                .iter()
+                .position(|voice| voice.id == generator.id)
+                .unwrap_or_else(|| {
+                    voices.push(GeneratorVoice::new(generator.id, generator.track_id, true));
+                    voices.len() - 1
+                });
+            if let Some(voice) = voices.get_mut(index) {
+                voice.active = true;
+            }
+        }
+    }
+
     pub(super) fn cleanup_finished_voices(&mut self, frame_count: usize) {
         // Generators stay resident, but only process while they have events, held notes, or a
         // reported tail left. This is what lets a hosted instrument go idle after its last note.
@@ -1156,7 +1195,13 @@ impl AudioEngine {
         for gen_voice in self.voices.active_generators.iter_mut() {
             let had_events = !gen_voice.midi_events.is_empty();
             gen_voice.finish_block();
+            // Pending work restarts the tail too, so replies the plugin sends once the work is
+            // done (such as telling its editor a sample loaded) still get blocks to go out in.
+            let has_pending_work = plugin_state
+                .get_generator(gen_voice.id)
+                .is_some_and(|generator| generator.plugin.has_pending_work());
             let has_activity = had_events
+                || has_pending_work
                 || !gen_voice.midi_events.is_empty()
                 || !gen_voice.playing_notes.is_empty();
             if has_activity {
@@ -1311,6 +1356,7 @@ impl AudioEngine {
         if self.render_plan.is_stale() || self.render_plan.workers() != self.dsp_workers() {
             self.rebuild_render_plan();
         }
+        self.wake_generators_with_pending_work();
 
         let sample_rate = self.config.sample_rate as f64;
         let bpm = self.transport.bpm as f64;
@@ -1935,6 +1981,12 @@ impl AudioEngine {
             self.plugin_state.master_effects.iter(),
         )
         .any(AudioEffectInstance::keeps_processing)
+    }
+
+    /// Frames by which delay compensation holds back the master output: output frame `n` plays
+    /// the timeline at frame `n - system_latency()`.
+    pub fn system_latency(&self) -> u32 {
+        self.routing.system_latency
     }
 
     /// Returns the exact number of samples needed to fully clear all plugin delays and reverb tails.

@@ -248,7 +248,17 @@ class _KarbeatAppState extends ConsumerState<KarbeatApp> {
       );
     }
 
-    final projectState = ref.watch(projectProvider);
+    // Only the load phase picks the home screen; watching the whole project
+    // would rebuild the app shell on every project publish.
+    final projectPhase = ref.watch(
+      projectProvider.select(
+        (s) => s.when<({bool ready, Object? error, StackTrace? stack})>(
+          data: (_) => (ready: true, error: null, stack: null),
+          loading: () => (ready: false, error: null, stack: null),
+          error: (err, stack) => (ready: false, error: err, stack: stack),
+        ),
+      ),
+    );
     // The setter only notifies when the map actually changes
     _shortcutManager.shortcuts = ref.watch(activeShortcutMapProvider);
 
@@ -261,11 +271,14 @@ class _KarbeatAppState extends ConsumerState<KarbeatApp> {
         themeMode: themeMode,
         debugShowCheckedModeBanner: false,
         builder: _notificationBuilder,
-        home: projectState.when(
-          data: (_) => const MainScreen(),
-          loading: () => const LoadingScreen(),
-          error: (err, stack) => ErrorInitScreen(err: err, stack: stack),
-        ),
+        home: switch (projectPhase) {
+          (error: final err?, stack: final stack, ready: _) => ErrorInitScreen(
+            err: err,
+            stack: stack,
+          ),
+          (ready: true, error: _, stack: _) => const MainScreen(),
+          _ => const LoadingScreen(),
+        },
       ),
     );
   }

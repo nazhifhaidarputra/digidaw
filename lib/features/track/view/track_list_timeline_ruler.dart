@@ -112,9 +112,15 @@ class _TimelineRulerPainter extends CustomPainter {
       final position = scrollController.positions.first;
       final offset = position.pixels;
 
+      // [viewportWidth] is the whole timeline here (the LayoutBuilder sits
+      // inside the scrolled content), so cull with the real viewport.
+      final visibleWidth = position.hasViewportDimension
+          ? position.viewportDimension
+          : viewportWidth;
+
       const double buffer = 200.0;
       startPixel = (offset - buffer).clamp(0.0, double.infinity);
-      endPixel = offset + viewportWidth + buffer;
+      endPixel = offset + visibleWidth + buffer;
     }
 
     // Determine Start Index

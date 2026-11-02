@@ -2084,3 +2084,235 @@ fn song_loop_without_region_still_wraps_at_the_song_end() {
     engine.process(&mut block);
     assert_eq!(engine.transport.song.playhead_samples, 512);
 }
+
+/// Plays a constant level while any note is held. Like hosted instruments (LSP, Vital,
+/// Surge), it applies MIDI only inside its frame loop, so events in a block without frames
+/// are never seen.
+#[derive(Default)]
+struct HoldingGenerator {
+    held: Vec<u8>,
+}
+
+impl karbeat_plugin_api::traits::AudioPlugin for HoldingGenerator {
+    test_effect_boilerplate!();
+    fn process(
+        &mut self,
+        buffers: &mut karbeat_plugin_api::types::AudioBuffers,
+        context: &karbeat_plugin_api::types::ProcessContext,
+    ) {
+        let frames = buffers
+            .main_outputs
+            .first()
+            .and_then(|output| output.channel_data.first())
+            .map_or(0, |channel| channel.len());
+        for frame in 0..frames {
+            for event in context.midi_events {
+                if event.sample_offset != frame {
+                    continue;
+                }
+                match event.data {
+                    MidiMessage::NoteOn { key, .. } => self.held.push(key),
+                    MidiMessage::NoteOff { key, .. } => self.held.retain(|held| *held != key),
+                    _ => {}
+                }
+            }
+            let level = if self.held.is_empty() { 0.0 } else { 0.25 };
+            for output in buffers.main_outputs.iter_mut() {
+                for channel in output.channel_data.iter_mut() {
+                    channel[frame] = level;
+                }
+            }
+        }
+    }
+}
+
+#[test]
+fn a_stop_applied_in_an_empty_block_still_releases_held_notes() {
+    use karbeat_core::core::project::{RoutingConnection, RoutingNode};
+
+    let (_, command_consumer) = RingBuffer::<AudioCommand>::new(32);
+    let (position_producer, _) = RingBuffer::<TransportFeedback>::new(1024);
+    let (feedback_producer, _) = RingBuffer::<AudioFeedback>::new(1024);
+    let (telemetry_sender, _) = mpsc::sync_channel::<TelemetryRegistration>(32);
+    let mut engine = AudioEngine::new(
+        command_consumer,
+        position_producer,
+        feedback_producer,
+        48_000,
+        2,
+        120.0,
+        512,
+        AudioEngineTelemetry::new_for_export(),
+        telemetry_sender,
+    );
+    let mut app_state = ApplicationState::default();
+    let track_id = app_state.tracks.insert_with_key(|id| {
+        AudioTrack::new(id, "Synth", Color::new_from_rgb(0, 0, 0), TrackType::Midi)
+    });
+    engine.process_command(AudioCommand::ReplaceFullGraph {
+        graph: AudioGraphState::from(&app_state),
+    });
+    engine.process_command(AudioCommand::UpdateRouting {
+        routing: vec![RoutingConnection::new(
+            RoutingNode::Track(track_id),
+            RoutingNode::Master,
+        )]
+        .into_boxed_slice(),
+    });
+    let generator_id = karbeat_core::shared::GeneratorId::from(1);
+    engine.process_command(AudioCommand::AddGenerator {
+        generator_id,
+        track_id,
+        registry_id: 0,
+        plugin_factory: || Box::new(HoldingGenerator::default()),
+    });
+    engine.process_command(AudioCommand::SetPlaybackMode(
+        crate::engine::PlaybackMode::Song,
+    ));
+    engine.process_command(AudioCommand::SetPlaying(true));
+    engine.process_command(AudioCommand::PlayPreviewNote {
+        note_key: 60,
+        generator_id,
+        velocity: 100,
+        is_note_on: true,
+    });
+    let peak = |block: &[f32]| block.iter().fold(0.0_f32, |peak, s| peak.max(s.abs()));
+    let mut block = vec![0.0_f32; 512 * 2];
+    for _ in 0..4 {
+        engine.process(&mut block);
+    }
+    assert!(peak(&block) > 0.01, "the held note must sound");
+
+    // The export stops the song like this before rendering the remainder.
+    engine.process_command(AudioCommand::SetPlaying(false));
+    engine.process(&mut []);
+    for _ in 0..4 {
+        engine.process(&mut block);
+    }
+    assert_eq!(peak(&block), 0.0, "the note was never released");
+}
+
+/// Counts its process calls and reports pending work while `pending` is set.
+struct PendingWorkProbe {
+    calls: std::sync::Arc<std::sync::atomic::AtomicUsize>,
+    pending: std::sync::Arc<std::sync::atomic::AtomicBool>,
+}
+
+impl karbeat_plugin_api::traits::AudioPlugin for PendingWorkProbe {
+    test_effect_boilerplate!();
+    fn has_pending_work(&self) -> bool {
+        self.pending.load(std::sync::atomic::Ordering::Relaxed)
+    }
+    fn process(
+        &mut self,
+        buffers: &mut karbeat_plugin_api::types::AudioBuffers,
+        _: &karbeat_plugin_api::types::ProcessContext,
+    ) {
+        self.calls
+            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        for output in buffers.main_outputs.iter_mut() {
+            for channel in output.channel_data.iter_mut() {
+                channel.fill(0.0);
+            }
+        }
+    }
+}
+
+#[test]
+fn plugins_with_pending_work_are_processed_while_parked() {
+    use karbeat_core::core::project::{RoutingConnection, RoutingNode};
+    use std::sync::{
+        Arc,
+        atomic::{AtomicBool, AtomicUsize, Ordering},
+    };
+
+    let (_, command_consumer) = RingBuffer::<AudioCommand>::new(32);
+    let (position_producer, _) = RingBuffer::<TransportFeedback>::new(1024);
+    let (feedback_producer, _) = RingBuffer::<AudioFeedback>::new(1024);
+    let (telemetry_sender, _) = mpsc::sync_channel::<TelemetryRegistration>(32);
+    let mut engine = AudioEngine::new(
+        command_consumer,
+        position_producer,
+        feedback_producer,
+        48_000,
+        2,
+        120.0,
+        512,
+        AudioEngineTelemetry::new_for_export(),
+        telemetry_sender,
+    );
+    let mut app_state = ApplicationState::default();
+    let track_id = app_state.tracks.insert_with_key(|id| {
+        AudioTrack::new(id, "Sampler", Color::new_from_rgb(0, 0, 0), TrackType::Midi)
+    });
+    engine.process_command(AudioCommand::ReplaceFullGraph {
+        graph: AudioGraphState::from(&app_state),
+    });
+    engine.process_command(AudioCommand::UpdateRouting {
+        routing: vec![RoutingConnection::new(
+            RoutingNode::Track(track_id),
+            RoutingNode::Master,
+        )]
+        .into_boxed_slice(),
+    });
+    let probe = || {
+        let calls = Arc::new(AtomicUsize::new(0));
+        let pending = Arc::new(AtomicBool::new(false));
+        let plugin = Box::new(PendingWorkProbe {
+            calls: calls.clone(),
+            pending: pending.clone(),
+        });
+        (plugin, calls, pending)
+    };
+    let (generator, generator_calls, generator_pending) = probe();
+    engine.process_command(AudioCommand::InstallGenerator {
+        generator_id: karbeat_core::shared::GeneratorId::from(1),
+        track_id,
+        registry_id: 0,
+        plugin: generator,
+        telemetry: None,
+    });
+    let (effect, effect_calls, effect_pending) = probe();
+    engine.process_command(AudioCommand::InstallEffect {
+        target: EffectTarget::Master,
+        effect_id: karbeat_core::shared::EffectId::from(1),
+        registry_id: 0,
+        plugin: effect,
+        telemetry: None,
+    });
+    let mut block = vec![0.0_f32; 512 * 2];
+    let mut render = |blocks: usize| {
+        for _ in 0..blocks {
+            engine.process(&mut block);
+        }
+    };
+
+    // No notes and no signal: both stay parked.
+    render(8);
+    assert_eq!(generator_calls.load(Ordering::Relaxed), 0);
+    assert_eq!(effect_calls.load(Ordering::Relaxed), 0);
+
+    // An instrument whose editor sent it a file to load is processed until the work is done.
+    generator_pending.store(true, Ordering::Relaxed);
+    render(3);
+    assert_eq!(generator_calls.load(Ordering::Relaxed), 3);
+    generator_pending.store(false, Ordering::Relaxed);
+    // It keeps its tail after the work, then parks again.
+    render(4 * 48_000 / 512);
+    let parked = generator_calls.load(Ordering::Relaxed);
+    assert!(parked > 3, "the tail after the work was not rendered");
+    render(8);
+    assert_eq!(generator_calls.load(Ordering::Relaxed), parked);
+
+    // An effect on a silent channel likewise. (It also ran while the generator fed it.)
+    let before = effect_calls.load(Ordering::Relaxed);
+    render(8);
+    assert_eq!(effect_calls.load(Ordering::Relaxed), before);
+    effect_pending.store(true, Ordering::Relaxed);
+    render(3);
+    assert_eq!(effect_calls.load(Ordering::Relaxed), before + 3);
+    effect_pending.store(false, Ordering::Relaxed);
+    let calls = effect_calls.load(Ordering::Relaxed);
+    render(8);
+    assert_eq!(effect_calls.load(Ordering::Relaxed), calls);
+}

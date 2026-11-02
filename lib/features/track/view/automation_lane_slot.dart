@@ -784,11 +784,22 @@ class _AutomationLaneSlotState extends ConsumerState<AutomationLaneSlot> {
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
-    final state = ref.watch(workspaceStateProvider);
-    final transportState = ref.watch(transportProvider).value;
+    // Select only what the lane draws with; the whole workspace and transport
+    // stores change for unrelated reasons (playback, other panels).
+    final state = ref.watch(
+      workspaceStateProvider.select(
+        (s) => (
+          horizontalZoomLevel: s.horizontalZoomLevel,
+          gridSize: s.gridSize,
+          selectedTool: s.selectedTool,
+        ),
+      ),
+    );
     final zoomLevel = state.horizontalZoomLevel;
     final gridSize = state.gridSize;
-    final tempo = transportState?.state?.bpm ?? 120.0;
+    final tempo =
+        ref.watch(transportProvider.select((s) => s.value?.state?.bpm)) ??
+        120.0;
     final safeSampleRate = widget.sampleRate <= 0 ? 48000 : widget.sampleRate;
 
     final laneId = widget.lane.id;

@@ -1,5 +1,7 @@
 /// Audio decoding, resampling, caching, and waveform construction.
 pub mod audio_loader;
+/// Mixer channel template files.
+pub mod channel_template;
 /// Versioned project payloads and their migrations.
 pub mod format;
 /// Safe ownership wrapper for memory-mapped audio data.

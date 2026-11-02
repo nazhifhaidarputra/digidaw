@@ -5,6 +5,7 @@ use crate::{
     commands::AudioCommand,
     context::DawContext,
     engine::{AudioEngine, AudioExportSnapshot},
+    rate_bridge::DeviceRateBridge,
     writer::{AudioExportConfig, AudioWriter, create_writer, metadata::AudioMetadata},
 };
 use karbeat_core::core::project::ClipTimeUnit;
@@ -263,9 +264,12 @@ where
         range,
         ..
     } = options;
-    let sample_rate = config.sample_rate();
-    let channels = config.channels() as usize;
-    let block_size = 4096;
+    // Render exactly as the live engine does: at its DSP rate, in its block size. Automation,
+    // LFOs and other per-block work then step as they do live, and sources are resampled to
+    // the same rate. The file's own rate and channels are applied afterwards by the sink, as
+    // the device stream applies the device's.
+    let sample_rate = snapshot.sample_rate();
+    let block_size = snapshot.block_size().max(1);
     let bpm = snapshot.bpm();
     let mut snapshot = match options.purpose {
         RenderPurpose::Export => snapshot,
@@ -284,29 +288,38 @@ where
                         id: instance,
                     },
                     sample_rate,
-                    max_block_size: block_size,
-                    output_channels: channels,
+                    // The engine prepares plugins for at least 512 frames.
+                    max_block_size: block_size.max(512),
+                    output_channels: ENGINE_CHANNELS,
                 },
             ))
             .map(|prepared| prepared.processor)
         })
         .map_err(|error| AudioExportError::new("HostedPlugin", error.to_string()))?;
     let (mut cmd_producer, cmd_consumer) = RingBuffer::<AudioCommand>::new(16);
-    let (pos_producer, mut pos_consumer) = RingBuffer::new(1024);
-    let (feedback_producer, mut feedback_consumer) = RingBuffer::new(1024);
-    let mut offline_engine = AudioEngine::from_export_snapshot(
+    let (pos_producer, position) = RingBuffer::new(1024);
+    let (feedback_producer, feedback) = RingBuffer::new(1024);
+    let engine = AudioEngine::from_export_snapshot(
         snapshot,
         &plugin_registry,
-        channels as u16,
+        ENGINE_CHANNELS as u16,
         cmd_consumer,
         pos_producer,
         feedback_producer,
     )
     .map_err(|e| AudioExportError::new("Snapshot", e.to_string()))?;
+    let (file_rate, file_channels) = (config.sample_rate(), usize::from(config.channels()));
     let path = std::path::Path::new(output_path);
-    let mut writer = create_writer(path, config, metadata).map_err(|e| {
+    let writer = create_writer(path, config, metadata).map_err(|e| {
         AudioExportError::new("WriterInit", format!("Failed to create writer: {e}"))
     })?;
+    let mut sink = ExportSink::new(writer, sample_rate, file_rate, file_channels, block_size)?;
+    let mut render = OfflineRender {
+        engine,
+        buffer: vec![0.0; block_size * ENGINE_CHANNELS],
+        position,
+        feedback,
+    };
 
     cmd_producer
         .push(AudioCommand::UpdateAudioConfig {
@@ -319,24 +332,23 @@ where
             crate::engine::PlaybackMode::Song,
         ))
         .map_err(|_| AudioExportError::new("Engine", "Command queue full"))?;
-    // Apply the render sample rate first: the song length and the range depend on it
-    offline_engine.process(&mut []);
-    validate_rendered_block(&offline_engine, &[])?;
+    render.engine.process(&mut []);
+    validate_rendered_block(&render.engine, &[])?;
 
-    let mut mix_buffer = vec![0.0; block_size * channels];
     settle_hosted_plugins(
-        &mut offline_engine,
-        &mut mix_buffer,
+        &mut render.engine,
+        &mut render.buffer,
         HOSTED_SETTLE_TIME,
-        &mut pos_consumer,
-        &mut feedback_consumer,
+        &mut render.position,
+        &mut render.feedback,
     )?;
 
-    let tail_samples = offline_engine.get_project_tail_length();
+    let tail_samples = render.engine.get_project_tail_length();
     let (start_sample, song_length_samples) = match range {
         ExportRange::Song => (
             0,
-            offline_engine
+            render
+                .engine
                 .get_export_length()
                 .saturating_sub(tail_samples),
         ),
@@ -352,26 +364,19 @@ where
     cmd_producer
         .push(AudioCommand::SetPlaying(true))
         .map_err(|_| AudioExportError::new("Engine", "Command queue full"))?;
-    offline_engine.process(&mut []);
-    validate_rendered_block(&offline_engine, &[])?;
+    render.engine.process(&mut []);
+    validate_rendered_block(&render.engine, &[])?;
     let throttle_limit = (sample_rate / block_size as u32 / 30).max(1);
     let mut loop_counter = 0;
 
     if matches!(tail_handling, TailHandling::WrapRemainder) {
-        let mut preroll_processed = 0;
-        while preroll_processed < song_length_samples {
-            let frames = (song_length_samples - preroll_processed).min(block_size as u32) as usize;
-            offline_engine.process(&mut mix_buffer[..frames * channels]);
-            validate_rendered_block(&offline_engine, &mix_buffer[..frames * channels])?;
-            drain_engine_feedback(&mut pos_consumer, &mut feedback_consumer);
-            preroll_processed += frames as u32;
+        let completed = render.render(song_length_samples, None, |rendered| {
             loop_counter += 1;
-
-            if loop_counter % throttle_limit == 0
-                && !progress_callback(preroll_processed as f32 / song_length_samples as f32 * 0.5)
-            {
-                return finalize_cancelled(writer);
-            }
+            loop_counter % throttle_limit != 0
+                || progress_callback(rendered as f32 / song_length_samples as f32 * 0.5)
+        })?;
+        if !completed {
+            return sink.cancel();
         }
 
         cmd_producer
@@ -379,88 +384,263 @@ where
             .map_err(|_| AudioExportError::new("Engine", "Command queue full"))?;
     }
 
+    // Delay compensation holds the output back by the system latency. Render past it so the
+    // file starts on the first frame of the range, as the live playhead display does.
+    let latency = render.engine.system_latency();
+    render.render(latency, None, |_| true)?;
+
     let (progress_base, progress_scale) = match tail_handling {
         TailHandling::CutRemainder => (0.0, 1.0),
         TailHandling::LeaveRemainder => (0.0, 0.95),
         TailHandling::WrapRemainder => (0.5, 0.5),
     };
-    let mut processed_samples = 0;
-
-    while processed_samples < song_length_samples {
-        let frames = (song_length_samples - processed_samples).min(block_size as u32) as usize;
-        let active_slice = &mut mix_buffer[..frames * channels];
-        offline_engine.process(active_slice);
-        validate_rendered_block(&offline_engine, active_slice)?;
-        writer
-            .write(active_slice)
-            .map_err(|e| AudioExportError::new("Writer", format!("Write error: {e}")))?;
-        drain_engine_feedback(&mut pos_consumer, &mut feedback_consumer);
-        processed_samples += frames as u32;
+    let completed = render.render(song_length_samples, Some(&mut sink), |rendered| {
         loop_counter += 1;
-
-        if loop_counter % throttle_limit == 0 {
-            let progress = progress_base
-                + processed_samples as f32 / song_length_samples as f32 * progress_scale;
-            if !progress_callback(progress) {
-                return finalize_cancelled(writer);
-            }
-        }
+        loop_counter % throttle_limit != 0
+            || progress_callback(
+                progress_base + rendered as f32 / song_length_samples as f32 * progress_scale,
+            )
+    })?;
+    if !completed {
+        return sink.cancel();
     }
 
     if matches!(tail_handling, TailHandling::LeaveRemainder) {
         cmd_producer
             .push(AudioCommand::SetPlaying(false))
             .map_err(|_| AudioExportError::new("Engine", "Command queue full"))?;
-        offline_engine.process(&mut []);
-        validate_rendered_block(&offline_engine, &[])?;
+        render.engine.process(&mut []);
+        validate_rendered_block(&render.engine, &[])?;
 
-        let mut tail_processed = 0;
-        while tail_processed < tail_samples {
-            let frames = (tail_samples - tail_processed).min(block_size as u32) as usize;
-            let active_slice = &mut mix_buffer[..frames * channels];
-            offline_engine.process(active_slice);
-            validate_rendered_block(&offline_engine, active_slice)?;
-            writer
-                .write(active_slice)
-                .map_err(|e| AudioExportError::new("Writer", format!("Write error: {e}")))?;
-            drain_engine_feedback(&mut pos_consumer, &mut feedback_consumer);
-            tail_processed += frames as u32;
-
-            let progress = if tail_samples == 0 {
-                1.0
-            } else {
-                0.95 + tail_processed as f32 / tail_samples as f32 * 0.05
-            };
-            if !progress_callback(progress) {
-                return finalize_cancelled(writer);
-            }
+        let completed = render.render(tail_samples, Some(&mut sink), |rendered| {
+            progress_callback(0.95 + rendered as f32 / tail_samples as f32 * 0.05)
+        })?;
+        if !completed {
+            return sink.cancel();
         }
 
         // Hosted plugins often report no tail at all (LSP's convolution reverbs do), so keep
         // rendering while they are still audible.
-        if offline_engine.has_continuous_effects() {
+        if render.engine.has_continuous_effects() {
             let limit = RING_OUT_LIMIT_SECONDS.saturating_mul(sample_rate);
+            let mut tail_processed = tail_samples;
             while tail_processed < limit
-                && render_ring_out_block(&mut offline_engine, &mut mix_buffer)?
+                && render_ring_out_block(&mut render.engine, &mut render.buffer)?
             {
-                writer
-                    .write(&mix_buffer)
-                    .map_err(|e| AudioExportError::new("Writer", format!("Write error: {e}")))?;
-                drain_engine_feedback(&mut pos_consumer, &mut feedback_consumer);
+                sink.push(&render.buffer)?;
+                drain_engine_feedback(&mut render.position, &mut render.feedback);
                 tail_processed += block_size as u32;
                 if !progress_callback(1.0) {
-                    return finalize_cancelled(writer);
+                    return sink.cancel();
                 }
             }
         }
     }
 
     let _ = progress_callback(1.0);
-    writer
-        .finalize()
-        .map_err(|e| AudioExportError::new("Writer", format!("Finalize error: {e}")))?;
+    sink.finish()?;
     tracing::info!("Offline render successfully completed");
     Ok(())
+}
+
+/// Channels the engine renders: interleaved stereo, whatever the file's layout.
+const ENGINE_CHANNELS: usize = 2;
+
+/// The offline engine and the queues it reports into.
+struct OfflineRender {
+    engine: AudioEngine,
+    /// One engine block of interleaved stereo.
+    buffer: Vec<f32>,
+    position: rtrb::Consumer<crate::event::TransportFeedback>,
+    feedback: rtrb::Consumer<crate::commands::AudioFeedback>,
+}
+
+impl OfflineRender {
+    /// Renders `frames` frames in engine blocks, handing each to `sink`, or dropping it without
+    /// one. `on_block` gets the frames rendered so far and returns `false` to cancel. Returns
+    /// whether every frame was rendered.
+    fn render(
+        &mut self,
+        frames: u32,
+        mut sink: Option<&mut ExportSink>,
+        mut on_block: impl FnMut(u32) -> bool,
+    ) -> Result<bool, AudioExportError> {
+        let block = self.buffer.len() / ENGINE_CHANNELS;
+        let mut rendered = 0;
+        while rendered < frames {
+            let count = ((frames - rendered) as usize).min(block);
+            let slice = &mut self.buffer[..count * ENGINE_CHANNELS];
+            self.engine.process(slice);
+            validate_rendered_block(&self.engine, slice)?;
+            if let Some(sink) = sink.as_deref_mut() {
+                sink.push(slice)?;
+            }
+            drain_engine_feedback(&mut self.position, &mut self.feedback);
+            rendered += count as u32;
+            if !on_block(rendered) {
+                return Ok(false);
+            }
+        }
+        Ok(true)
+    }
+}
+
+/// Carries rendered engine audio to the file the way the device stream carries it to the
+/// speakers: through the same [`DeviceRateBridge`] when the file's rate differs from the DSP
+/// rate, then into the file's channel layout.
+struct ExportSink {
+    writer: Box<dyn AudioWriter>,
+    /// `None` when the file is at the DSP rate.
+    bridge: Option<DeviceRateBridge>,
+    /// Interleaved stereo DSP-rate audio waiting for a full resampler call.
+    pending: Vec<f32>,
+    /// Resampled audio of the last call.
+    resampled: Vec<f32>,
+    /// File frames per DSP frame.
+    ratio: f64,
+    channels: usize,
+    /// DSP frames accepted.
+    input_frames: u64,
+    /// File frames written.
+    output_frames: u64,
+    /// Resampled frames still to drop: the resampler's delay.
+    delay: usize,
+    /// One write in the file's layout.
+    scratch: Vec<f32>,
+}
+
+impl ExportSink {
+    fn new(
+        writer: Box<dyn AudioWriter>,
+        dsp_rate: u32,
+        file_rate: u32,
+        channels: usize,
+        block_size: usize,
+    ) -> Result<Self, AudioExportError> {
+        if channels == 0 {
+            return Err(AudioExportError::new(
+                "WriterInit",
+                "The export needs at least one channel",
+            ));
+        }
+        let bridge = (dsp_rate != file_rate)
+            .then(|| DeviceRateBridge::new(dsp_rate, file_rate, ENGINE_CHANNELS, block_size))
+            .transpose()
+            .map_err(|error| AudioExportError::new("Resampler", error.to_string()))?;
+        Ok(Self {
+            delay: bridge
+                .as_ref()
+                .map_or(0, DeviceRateBridge::output_delay_frames),
+            writer,
+            bridge,
+            pending: Vec::new(),
+            resampled: Vec::new(),
+            ratio: f64::from(file_rate) / f64::from(dsp_rate),
+            channels,
+            input_frames: 0,
+            output_frames: 0,
+            scratch: Vec::new(),
+        })
+    }
+
+    /// File frames the accepted DSP frames make.
+    fn target_frames(&self) -> u64 {
+        (self.input_frames as f64 * self.ratio).round() as u64
+    }
+
+    /// Takes interleaved stereo frames at the DSP rate.
+    fn push(&mut self, stereo: &[f32]) -> Result<(), AudioExportError> {
+        self.input_frames += (stereo.len() / ENGINE_CHANNELS) as u64;
+        if self.bridge.is_none() {
+            return self.write(stereo);
+        }
+        self.pending.extend_from_slice(stereo);
+        self.resample_pending()
+    }
+
+    /// Runs every full resampler call the pending audio allows.
+    fn resample_pending(&mut self) -> Result<(), AudioExportError> {
+        loop {
+            let Some(bridge) = self.bridge.as_mut() else {
+                return Ok(());
+            };
+            let needed = bridge.input_frames_next() * ENGINE_CHANNELS;
+            if needed == 0 || self.pending.len() < needed {
+                return Ok(());
+            }
+            let output = bridge.process(&self.pending[..needed]);
+            self.resampled.clear();
+            self.resampled.extend_from_slice(output);
+            self.pending.drain(..needed);
+            let resampled = std::mem::take(&mut self.resampled);
+            let result = self.write(&resampled);
+            self.resampled = resampled;
+            result?;
+        }
+    }
+
+    /// Writes stereo frames in the file's layout, after the resampler's delay and up to the
+    /// frames the accepted audio makes.
+    fn write(&mut self, stereo: &[f32]) -> Result<(), AudioExportError> {
+        let (frames, _) = stereo.as_chunks::<ENGINE_CHANNELS>();
+        let skip = self.delay.min(frames.len());
+        self.delay -= skip;
+        let room = self.target_frames().saturating_sub(self.output_frames) as usize;
+        self.scratch.clear();
+        let mut written = 0_u64;
+        for &[left, right] in frames.iter().skip(skip).take(room) {
+            if self.channels == 1 {
+                self.scratch.push((left + right) * 0.5);
+            } else {
+                self.scratch.extend_from_slice(&[left, right]);
+                self.scratch
+                    .extend(std::iter::repeat_n(0.0, self.channels - ENGINE_CHANNELS));
+            }
+            written += 1;
+        }
+        self.output_frames += written;
+        if self.scratch.is_empty() {
+            return Ok(());
+        }
+        self.writer
+            .write(&self.scratch)
+            .map_err(|e| AudioExportError::new("Writer", format!("Write error: {e}")))
+    }
+
+    /// Flushes the resampler and finalizes the file.
+    fn finish(mut self) -> Result<(), AudioExportError> {
+        if let Some((call_frames, delay)) = self.bridge.as_ref().map(|bridge| {
+            (
+                bridge.maximum_input_frames().max(1),
+                bridge.output_delay_frames(),
+            )
+        }) {
+            // Feed silence until the resampler has given out every accepted frame. Its delay,
+            // in input frames, plus a few calls bounds how many calls that takes.
+            let calls = (delay as f64 / self.ratio / call_frames as f64).ceil() as usize + 3;
+            for _ in 0..calls {
+                if self.output_frames >= self.target_frames() {
+                    break;
+                }
+                let needed = self
+                    .bridge
+                    .as_ref()
+                    .map_or(0, DeviceRateBridge::input_frames_next)
+                    * ENGINE_CHANNELS;
+                let missing = needed.saturating_sub(self.pending.len());
+                self.pending.extend(std::iter::repeat_n(0.0, missing));
+                self.resample_pending()?;
+            }
+        }
+        self.writer
+            .finalize()
+            .map_err(|e| AudioExportError::new("Writer", format!("Finalize error: {e}")))
+    }
+
+    /// Finalizes what was written so far after a cancelled render.
+    fn cancel(self) -> Result<(), AudioExportError> {
+        finalize_cancelled(self.writer)
+    }
 }
 
 /// Converts a tick range to `(start_sample, length_in_samples)` at the render sample rate.
@@ -886,6 +1066,107 @@ mod tests {
             assert!(
                 (bounce - reference * 2.0).abs() < 1e-4,
                 "{bounce} != 2 * {reference}"
+            );
+        }
+    }
+
+    /// Renders the whole song to a 32-bit float WAV at `sample_rate` with `channels`, and reads
+    /// back the interleaved samples.
+    fn render_song(engine: &AudioEngine, sample_rate: u32, channels: u16) -> Vec<f32> {
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("song.wav");
+        render_snapshot(
+            engine.export_snapshot(),
+            path.to_str().unwrap(),
+            AudioExportConfig::Wav(WavAudioWriterConfig {
+                sample_rate,
+                channels,
+                bit_depth: BitDepth::BitPerSample(BitPerSample::B32),
+            }),
+            &AudioMetadata::default(),
+            RenderOptions::default(),
+            PluginRegistry::new_with_defaults(),
+            karbeat_host::HostClient::unavailable(),
+            hashbrown::HashMap::new(),
+            &mut |_| true,
+        )
+        .unwrap();
+        let mut reader = hound::WavReader::open(&path).unwrap();
+        assert_eq!(reader.spec().sample_rate, sample_rate);
+        assert_eq!(reader.spec().channels, channels);
+        reader.samples::<f32>().map(Result::unwrap).collect()
+    }
+
+    #[test]
+    fn delay_compensation_does_not_shift_the_export() {
+        use crate::engine::tests::song_engine_with_ramp_clip;
+        use karbeat_utils::hash::hash_str;
+
+        let mut engine = song_engine_with_ramp_clip();
+        let registry = PluginRegistry::new_with_defaults();
+        let registry_id = hash_str("effect_pitch_shifter");
+        let (effect_factory, _) = registry.create_plugin_by_id(registry_id).unwrap();
+        engine.process_command(AudioCommand::AddEffect {
+            target: crate::commands::EffectTarget::Master,
+            effect_id: EffectId::from(1),
+            registry_id,
+            effect_factory,
+        });
+        engine.process(&mut [0.0; 1_024 * 2]);
+        let latency = engine.system_latency();
+        assert!(latency > 2_000, "the shifter must delay the mix: {latency}");
+
+        let left: Vec<f32> = render_song(&engine, RENDER_RATE, 2)
+            .chunks(2)
+            .map(|frame| frame[0])
+            .collect();
+        // The whole song, not shortened by the latency.
+        assert_eq!(left.len(), 96_000);
+        // The ramp reaches 0.5 by frame 500; uncompensated, the file opened with `latency`
+        // frames of silence.
+        assert!(
+            left[..2_000].iter().any(|sample| sample.abs() > 0.05),
+            "the export starts with silence"
+        );
+    }
+
+    #[test]
+    fn exports_at_another_rate_are_resampled_after_rendering() {
+        use crate::engine::tests::song_engine_with_ramp_clip;
+
+        let engine = song_engine_with_ramp_clip();
+        let native = render_song(&engine, RENDER_RATE, 2);
+        let resampled = render_song(&engine, 44_100, 2);
+        // Two seconds at either rate.
+        assert_eq!(native.len(), 96_000 * 2);
+        assert_eq!(resampled.len(), 88_200 * 2);
+        // The ramp keeps its timing: its first wrap, frame 1,000 at 48 kHz, lands at frame
+        // ~919 at 44.1 kHz. Band-limiting spreads the drop over a few frames, so the wrap is
+        // where the ramp first falls below half its peak after rising.
+        let first_wrap = |interleaved: &[f32]| {
+            let left: Vec<f32> = interleaved.chunks(2).map(|frame| frame[0]).collect();
+            let peak = left[..2_000].iter().fold(0.0_f32, |peak, s| peak.max(*s));
+            let top = left.iter().position(|s| *s > peak * 0.9).unwrap();
+            top + left[top..].iter().position(|s| *s < peak * 0.5).unwrap()
+        };
+        assert_eq!(first_wrap(&native), 1_000);
+        let wrap = first_wrap(&resampled);
+        assert!((915..=923).contains(&wrap), "wrap at {wrap}");
+    }
+
+    #[test]
+    fn mono_exports_mix_both_channels_at_full_length() {
+        use crate::engine::tests::song_engine_with_ramp_clip;
+
+        let engine = song_engine_with_ramp_clip();
+        let stereo = render_song(&engine, RENDER_RATE, 2);
+        let mono = render_song(&engine, RENDER_RATE, 1);
+        assert_eq!(mono.len(), 96_000);
+        for (index, (mono, frame)) in mono.iter().zip(stereo.chunks(2)).enumerate() {
+            let mixed = (frame[0] + frame[1]) * 0.5;
+            assert!(
+                (mono - mixed).abs() < 1e-6,
+                "frame {index}: {mono} != {mixed}"
             );
         }
     }

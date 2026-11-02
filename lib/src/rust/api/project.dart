@@ -541,11 +541,13 @@ sealed class UiFade with _$UiFade {
   }) = _UiFade;
 }
 
-/// Fades, crossfade, and gain points of a waveform or audio clip.
+/// ADSR fade, crossfade, and gain points of a waveform or audio clip.
 @freezed
 sealed class UiGainEnvelope with _$UiGainEnvelope {
   const factory UiGainEnvelope({
     required UiFade fadeIn,
+    required UiFade decay,
+    required double sustain,
     required UiFade fadeOut,
     required int crossfade,
     required List<UiEnvelopePoint> points,

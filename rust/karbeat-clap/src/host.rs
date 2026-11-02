@@ -5,7 +5,10 @@
 
 use std::{
     cell::{Cell, RefCell},
-    sync::atomic::{AtomicBool, AtomicU64, Ordering},
+    sync::{
+        Arc,
+        atomic::{AtomicBool, AtomicU64, Ordering},
+    },
     thread::ThreadId,
     time::{Duration, Instant},
 };
@@ -30,6 +33,8 @@ use clack_host::{
     },
     plugin::InitializingPluginHandle,
 };
+
+use karbeat_host_api::PendingWork;
 
 use crate::wrapper::in_audio_context;
 
@@ -83,11 +88,14 @@ pub(crate) struct ClapHostSharedHandler {
     pub resize_requested: AtomicU64,
     /// The editor was closed or lost its connection to the plugin.
     pub editor_closed: AtomicBool,
+    /// Shared with the instance's parameter exchange; `request_process` asks for a block here.
+    pending_work: Arc<PendingWork>,
 }
 
 impl ClapHostSharedHandler {
-    /// Must be created on the UI owner, which CLAP calls the main thread.
-    pub fn new(label: &str) -> Self {
+    /// Must be created on the UI owner, which CLAP calls the main thread. Processing requests
+    /// are recorded in `pending_work`, which the instance's exchange shares.
+    pub fn new(label: &str, pending_work: Arc<PendingWork>) -> Self {
         Self {
             owner: std::thread::current().id(),
             label: label.to_owned(),
@@ -96,6 +104,7 @@ impl ClapHostSharedHandler {
             flush_requested: AtomicBool::new(false),
             resize_requested: AtomicU64::new(0),
             editor_closed: AtomicBool::new(false),
+            pending_work,
         }
     }
 
@@ -117,7 +126,9 @@ impl<'a> SharedHandler<'a> for ClapHostSharedHandler {
     }
 
     fn request_process(&self) {
-        // Prepared instances stay activated and are processed continuously while running.
+        // The engine parks idle instruments and quiet effects, so a plugin that wants a block
+        // (for its GUI's edits or a finished background job) is woken through its exchange.
+        self.pending_work.request();
     }
 
     fn request_callback(&self) {
@@ -391,7 +402,7 @@ mod tests {
 
     #[test]
     fn timers_fire_when_due_and_stop_once_unregistered() {
-        let shared = ClapHostSharedHandler::new("Test");
+        let shared = ClapHostSharedHandler::new("Test", Arc::default());
         let host = ClapHostMainThreadHandler::new(&shared);
         let first = host.register_timer(1).unwrap();
         let second = host.register_timer(1_000).unwrap();
@@ -405,8 +416,19 @@ mod tests {
     }
 
     #[test]
+    fn a_processing_request_becomes_pending_work_until_a_block_is_processed() {
+        let work = Arc::new(PendingWork::default());
+        let shared = ClapHostSharedHandler::new("Test", work.clone());
+        assert!(!work.is_pending());
+        shared.request_process();
+        assert!(work.is_pending());
+        work.processed();
+        assert!(!work.is_pending());
+    }
+
+    #[test]
     fn editor_resize_requests_are_validated_and_taken_once() {
-        let shared = ClapHostSharedHandler::new("Test");
+        let shared = ClapHostSharedHandler::new("Test", Arc::default());
         assert!(
             shared
                 .request_resize(GuiSize {

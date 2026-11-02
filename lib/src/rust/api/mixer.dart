@@ -11,7 +11,7 @@ import 'plugin.dart';
 import 'project.dart';
 part 'mixer.freezed.dart';
 
-// These functions are ignored because they are not marked as `pub`: `add_effect_to_bus_blocking`, `add_effect_to_master_bus_blocking`, `add_effect_to_mixer_channel_by_id_blocking`, `delete_bus_blocking`, `remove_effect_from_master_bus_blocking`, `remove_effect_from_mixer_channel_blocking`, `remove_effect_from_target_mixer_channel_blocking`
+// These functions are ignored because they are not marked as `pub`: `add_effect_to_bus_blocking`, `add_effect_to_master_bus_blocking`, `add_effect_to_mixer_channel_by_id_blocking`, `delete_bus_blocking`, `load_channel_template_blocking`, `remove_effect_from_master_bus_blocking`, `remove_effect_from_mixer_channel_blocking`, `remove_effect_from_target_mixer_channel_blocking`, `save_channel_template_blocking`
 // These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`
 
 /// Set a single DSP parameter on a mixer channel.
@@ -141,6 +141,29 @@ Future<void> setEffectBypass({
   target: target,
   effectInstanceId: effectInstanceId,
   bypass: bypass,
+);
+
+/// Saves a channel's effect chain, as it currently sounds, to a `.effch` template file.
+Future<void> saveChannelTemplate({
+  required DawContext ctx,
+  required UiMixerChannelTarget target,
+  required String path,
+}) => RustLib.instance.api.crateApiMixerSaveChannelTemplate(
+  ctx: ctx,
+  target: target,
+  path: path,
+);
+
+/// Appends a `.effch` template's effects to a channel. Returns the names of the plugins that were
+/// skipped, such as external plugins that are not on this machine.
+Future<List<String>> loadChannelTemplate({
+  required DawContext ctx,
+  required UiMixerChannelTarget target,
+  required String path,
+}) => RustLib.instance.api.crateApiMixerLoadChannelTemplate(
+  ctx: ctx,
+  target: target,
+  path: path,
 );
 
 /// Removes an effect and the automation lanes that drive it in one transaction, returning

@@ -7,10 +7,10 @@
 use std::{
     ffi::{CStr, c_void},
     ptr::NonNull,
-    sync::MutexGuard,
+    sync::{Arc, MutexGuard},
 };
 
-use karbeat_host_api::{HostError, ProcessingConfig};
+use karbeat_host_api::{HostError, PendingWork, ProcessingConfig};
 use lilv_sys as sys;
 
 use crate::{
@@ -55,13 +55,17 @@ struct Features {
 }
 
 impl Features {
-    fn new(max_block_size: usize, with_worker: bool) -> Result<Box<Self>, HostError> {
+    fn new(
+        max_block_size: usize,
+        with_worker: bool,
+        work: &Arc<PendingWork>,
+    ) -> Result<Box<Self>, HostError> {
         let max_block =
             i32::try_from(max_block_size).map_err(|_| HostError::InvalidConfiguration)?;
         let mut features = Box::new(Self {
             block_lengths: [1, max_block],
             options: [end_of_options(); 3],
-            worker: with_worker.then(WorkerPort::new),
+            worker: with_worker.then(|| WorkerPort::new(work.clone())),
             records: Vec::new(),
             pointers: Vec::new(),
         });
@@ -121,12 +125,14 @@ impl PluginInstance {
     /// Instantiates and activates `plugin` for `config`, with control inputs at their defaults.
     ///
     /// Audio, CV, and atom ports are left for the caller to connect before the first `run`.
+    /// Worker jobs and their responses are counted in `work` until the plugin has them back.
     pub fn instantiate(
         plugin: *const sys::LilvPlugin,
         model: &PluginModel,
         config: &ProcessingConfig,
+        work: &Arc<PendingWork>,
     ) -> Result<Self, HostError> {
-        let features = Features::new(config.max_block_size, model.schedules_work)?;
+        let features = Features::new(config.max_block_size, model.schedules_work, work)?;
         // SAFETY: Runs plugin code on the UI owner. The plugin record belongs to a live world
         // and the feature list is null-terminated and outlives the instance.
         let raw = unsafe {

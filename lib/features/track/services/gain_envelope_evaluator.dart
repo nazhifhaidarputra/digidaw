@@ -12,7 +12,7 @@ import 'package:karbeat/src/rust/api/project.dart';
 /// Largest envelope point gain (+6 dB).
 const double maxEnvelopeGain = 2.0;
 
-/// A fade of zero length with a linear curve.
+/// An ADSR stage of zero length with a linear curve.
 const UiFade noFade = UiFade(
   length: 0,
   curveType: AutomationCurveTypeDto.linear,
@@ -22,6 +22,8 @@ const UiFade noFade = UiFade(
 /// An envelope that leaves audio untouched.
 const UiGainEnvelope identityEnvelope = UiGainEnvelope(
   fadeIn: noFade,
+  decay: noFade,
+  sustain: 1,
   fadeOut: noFade,
   crossfade: 0,
   points: [],
@@ -31,18 +33,23 @@ const UiGainEnvelope identityEnvelope = UiGainEnvelope(
 bool isIdentityEnvelope(UiGainEnvelope envelope) =>
     envelope.fadeIn.length == 0 &&
     envelope.fadeOut.length == 0 &&
+    envelope.decay.length == 0 &&
+    envelope.sustain >= 1 &&
     envelope.crossfade == 0 &&
     envelope.points.isEmpty;
 
-/// Fade-in and fade-out lengths for content of [length] samples; fades that
-/// would overlap are scaled down proportionally so they meet.
-(int, int) envelopeFadeLengths(UiGainEnvelope envelope, int length) {
-  final fadeIn = envelope.fadeIn.length;
-  final fadeOut = envelope.fadeOut.length;
-  final total = fadeIn + fadeOut;
-  if (total <= length || total == 0) return (fadeIn, fadeOut);
-  final scaledIn = fadeIn * length ~/ total;
-  return (scaledIn, length - scaledIn);
+/// Attack, decay, and release lengths for content of [length] samples; stages
+/// that would overlap are scaled down proportionally so they meet. A decay
+/// toward unity changes nothing, so it takes no room.
+(int, int, int) envelopeStageLengths(UiGainEnvelope envelope, int length) {
+  final attack = envelope.fadeIn.length;
+  final decay = envelope.sustain < 1 ? envelope.decay.length : 0;
+  final release = envelope.fadeOut.length;
+  final total = attack + decay + release;
+  if (total <= length || total == 0) return (attack, decay, release);
+  final scaledAttack = attack * length ~/ total;
+  final scaledDecay = decay * length ~/ total;
+  return (scaledAttack, scaledDecay, length - scaledAttack - scaledDecay);
 }
 
 /// Index after every point at or before [position] in sorted [points].

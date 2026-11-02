@@ -688,9 +688,9 @@ class _ClipAutomationSectionState
 
   String get _hint => switch (_parameter) {
     _ClipParameter.volume =>
-      'Double-click to add a point. Drag the top corners for fades, and a ring '
-          'between two points to bend that segment. Right-click a point for its '
-          'curve.',
+      'Drag the Attack, Decay, Sustain, and Release handles to shape the fade. '
+          'Double-click to add a point, and drag a ring between two points to '
+          'bend that segment. Right-click a point for its curve.',
     _ClipParameter.loop =>
       'Each repeat lasts the loop time where it starts, so a falling line '
           'speeds up the stutter. Drag a ring to bend a segment. Shift-drag '

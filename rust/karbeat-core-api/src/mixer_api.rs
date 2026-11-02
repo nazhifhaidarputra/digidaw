@@ -7,9 +7,13 @@ use karbeat_audio::{
 };
 use karbeat_core::{
     core::{
-        history::actions::{
-            AutomationRecorder, BusRecolored, BusRenamed, EffectBypassed, EffectMoved,
-            EffectToggled, RoutingRecorder, StructureRecorder,
+        file_manager::channel_template::load_channel_template as load_channel_template_file,
+        history::{
+            EngineSync, HistoryAction, PluginSync,
+            actions::{
+                AutomationRecorder, Batch, BusRecolored, BusRenamed, EffectBypassed, EffectMoved,
+                EffectToggled, RoutingRecorder, StructureRecorder,
+            },
         },
         project::{
             AutomationTarget, MasterAutomationTarget, MixerChannelParamTarget, RemovedModulations,
@@ -18,6 +22,7 @@ use karbeat_core::{
                 BusMixerChannel, EffectInstance, MixerChannel, MixerChannelParams, MixerState,
                 RoutingConnection, RoutingNode, RoutingTap,
             },
+            plugin::PluginInstance,
         },
     },
     shared::id::*,
@@ -848,6 +853,202 @@ fn record_effect_added(ctx: &mut DawContext, target: EffectTarget, effect_id: Ef
     if let Some(index) = index {
         ctx.push_history(EffectToggled::added(target, effect_id, index));
     }
+}
+
+/// Serialize channel template (list of placed effect chains on a channel)
+///
+/// The template are stored as .effch (effect channel) file
+/// This action does not modify any project structure, so it is not pushed into the action history
+///
+/// Waits for the engine and plugin hosts while holding `ctx`. Callers that share the project
+/// across threads should use the `project_api` begin and execute steps instead.
+pub fn save_channel_template(
+    ctx: &DawContext,
+    source_channel: MixerChannelTarget,
+    path: impl Into<String>,
+) -> anyhow::Result<()> {
+    let pending =
+        super::project_api::begin_save_channel_template(ctx, source_channel, &path.into())?;
+    super::project_api::execute_save_channel_template(pending)
+}
+
+/// Appends a channel template's effects to the target channel, after any effects it already has.
+/// Returns the names of the plugins that were skipped, such as external plugins that are not on
+/// this machine.
+///
+/// Waits on plugin hosts while holding `ctx`. Callers that share the project across threads should
+/// run the begin, execute, and commit steps themselves and hold the project only for begin and
+/// commit.
+pub fn load_channel_template(
+    ctx: &mut DawContext,
+    target_channel: MixerChannelTarget,
+    path: impl Into<String>,
+) -> anyhow::Result<Vec<String>> {
+    let mut load = begin_load_channel_template(ctx, target_channel, &path.into())?;
+    for saved in load.take_effects() {
+        let pending = begin_template_effect(ctx, &load, saved);
+        let completed = execute_template_effect(pending);
+        commit_template_effect(ctx, &mut load, completed);
+    }
+    Ok(commit_load_channel_template(ctx, load))
+}
+
+/// A channel template being loaded onto a channel.
+///
+/// Each external install stages a copy of the project, so every effect needs its own begin,
+/// execute, and commit, in order, after the previous effect has been committed.
+pub struct PendingChannelTemplateLoad {
+    target: EffectTarget,
+    effects: Vec<PluginInstance>,
+    undoable: Vec<Box<dyn HistoryAction>>,
+    skipped: Vec<String>,
+}
+
+impl PendingChannelTemplateLoad {
+    /// Hands over the effects for the caller to run through the per-effect steps.
+    pub fn take_effects(&mut self) -> Vec<PluginInstance> {
+        std::mem::take(&mut self.effects)
+    }
+}
+
+pub struct PendingTemplateEffect {
+    name: String,
+    install: anyhow::Result<PendingTemplateInstall>,
+}
+
+enum PendingTemplateInstall {
+    External(Box<super::external_plugin_api::PendingPluginInstall>),
+    BuiltIn(Box<PluginInstance>),
+}
+
+pub struct CompletedTemplateEffect {
+    name: String,
+    install: anyhow::Result<CompletedTemplateInstall>,
+}
+
+enum CompletedTemplateInstall {
+    External(Box<super::external_plugin_api::CompletedPluginInstall>),
+    BuiltIn(Box<PluginInstance>),
+}
+
+/// Reads a template file and checks that its target channel exists.
+pub fn begin_load_channel_template(
+    ctx: &DawContext,
+    target_channel: MixerChannelTarget,
+    path: &str,
+) -> anyhow::Result<PendingChannelTemplateLoad> {
+    let template = load_channel_template_file(std::path::Path::new(path))?;
+    anyhow::ensure!(
+        ctx.app_state
+            .get_mixer_channel_from_target(target_channel)
+            .is_some(),
+        "Cannot find the target mixer channel"
+    );
+    Ok(PendingChannelTemplateLoad {
+        target: effect_target_from_mixer_target(&target_channel),
+        effects: template.effects,
+        undoable: Vec::new(),
+        skipped: Vec::new(),
+    })
+}
+
+/// Prepares one effect of a template. A failure is carried to [`commit_template_effect`], which
+/// skips the effect so the rest of the template still loads.
+pub fn begin_template_effect(
+    ctx: &DawContext,
+    load: &PendingChannelTemplateLoad,
+    saved: PluginInstance,
+) -> PendingTemplateEffect {
+    let name = saved.name.clone();
+    let install = if saved.external.is_some() {
+        super::external_plugin_api::begin_add_template_effect(ctx, load.target, &saved)
+            .map(|pending| PendingTemplateInstall::External(Box::new(pending)))
+    } else {
+        Ok(PendingTemplateInstall::BuiltIn(Box::new(saved)))
+    };
+    PendingTemplateEffect { name, install }
+}
+
+/// Starts an external effect on its plugin host. Run this without holding the project.
+pub fn execute_template_effect(pending: PendingTemplateEffect) -> CompletedTemplateEffect {
+    let PendingTemplateEffect { name, install } = pending;
+    let install = install.and_then(|install| match install {
+        PendingTemplateInstall::External(pending) => {
+            super::external_plugin_api::execute_install(*pending)
+                .map(|completed| CompletedTemplateInstall::External(Box::new(completed)))
+        }
+        PendingTemplateInstall::BuiltIn(saved) => Ok(CompletedTemplateInstall::BuiltIn(saved)),
+    });
+    CompletedTemplateEffect { name, install }
+}
+
+/// Adds one effect to the channel, or records it as skipped if any step failed.
+pub fn commit_template_effect(
+    ctx: &mut DawContext,
+    load: &mut PendingChannelTemplateLoad,
+    completed: CompletedTemplateEffect,
+) {
+    let CompletedTemplateEffect { name, install } = completed;
+    let added = install.and_then(|install| match install {
+        CompletedTemplateInstall::External(completed) => {
+            super::external_plugin_api::commit_install(ctx, *completed);
+            // Committing an external install clears the history, including this template's
+            // earlier effects.
+            load.undoable.clear();
+            Ok(())
+        }
+        CompletedTemplateInstall::BuiltIn(saved) => {
+            let action = add_built_in_template_effect(ctx, load.target, *saved)?;
+            load.undoable.push(Box::new(action));
+            Ok(())
+        }
+    });
+    if let Err(error) = added {
+        tracing::warn!("Skipped {name} while loading a channel template: {error:#}");
+        load.skipped.push(name);
+    }
+}
+
+/// Records the undo step and returns the names of the plugins that were skipped.
+///
+/// Built-in effects undo as one step. Installing an external effect clears the undo history, so
+/// only the effects loaded after the last external one can be undone.
+pub fn commit_load_channel_template(
+    ctx: &mut DawContext,
+    load: PendingChannelTemplateLoad,
+) -> Vec<String> {
+    if !load.undoable.is_empty() {
+        ctx.push_history(Batch::new("Load Channel Template", load.undoable));
+    }
+    load.skipped
+}
+
+/// Appends a first-party effect with its saved state. Returns the action that undoes it, for the
+/// caller to record with the rest of the template.
+fn add_built_in_template_effect(
+    ctx: &mut DawContext,
+    target: EffectTarget,
+    saved: PluginInstance,
+) -> anyhow::Result<EffectToggled> {
+    anyhow::ensure!(
+        ctx.get_plugin_factory(saved.registry_id).is_some(),
+        "This version of DigiDAW does not include the plugin"
+    );
+    let channel = ctx
+        .app_state
+        .get_mixer_channel_from_target_mut(target.into())
+        .context("Cannot find the target mixer channel")?;
+    let effect_id = channel.effects.insert(saved);
+    let index = channel
+        .effects
+        .position(effect_id)
+        .context("Effect not found after insertion")?;
+    // Undo reinstalls effects the same way, from their saved state, bypass flag, and position.
+    ctx.apply_engine_sync(EngineSync::plugin(PluginSync::InstallEffect {
+        target,
+        effect_id,
+    }));
+    Ok(EffectToggled::added(target, effect_id, index))
 }
 
 #[cfg(test)]

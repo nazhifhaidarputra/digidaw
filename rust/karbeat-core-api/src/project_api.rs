@@ -5,7 +5,7 @@ use karbeat_audio::exporter::{
     export_project as export_project_internal,
 };
 
-use karbeat_audio::commands::AudioCommand;
+use karbeat_audio::commands::{AudioCommand, MixerChannelTarget};
 use karbeat_audio::context::DawContext;
 use karbeat_audio::writer::AudioExportConfig;
 use karbeat_core::core::file_manager::project_loader::load_daw_project;
@@ -58,7 +58,7 @@ where
 mod restore;
 mod save;
 pub use restore::{CompletedProjectRestore, PendingProjectRestore};
-pub use save::{CompletedProjectSave, PendingProjectSave};
+pub use save::{CompletedProjectSave, PendingChannelTemplateSave, PendingProjectSave};
 pub(crate) use save::{capture_live_state, hosted_instance_with_handles};
 
 pub fn begin_save_project(ctx: &DawContext, path_name: &str) -> PendingProjectSave {
@@ -71,6 +71,21 @@ pub fn execute_save_project(pending: PendingProjectSave) -> anyhow::Result<Compl
 
 pub fn commit_save_project(ctx: &mut DawContext, completed: CompletedProjectSave) {
     save::commit_save(ctx, completed);
+}
+
+/// Prepares to save a channel's effect chain as a template at `path_name`.
+pub fn begin_save_channel_template(
+    ctx: &DawContext,
+    channel: MixerChannelTarget,
+    path_name: &str,
+) -> anyhow::Result<PendingChannelTemplateSave> {
+    save::begin_channel_template_save(ctx, channel, Path::new(path_name))
+}
+
+/// Captures the chain's live plugin state and atomically writes the template. Needs no project
+/// lock, and leaves the project unchanged.
+pub fn execute_save_channel_template(pending: PendingChannelTemplateSave) -> anyhow::Result<()> {
+    save::execute_channel_template_save(pending, std::time::Duration::from_secs(2))
 }
 
 /// Reads a project file into a staged state that remembers `path_name` as its project file.

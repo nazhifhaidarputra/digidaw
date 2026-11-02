@@ -3551,7 +3551,7 @@ as double,
 /// @nodoc
 mixin _$UiGainEnvelope {
 
- UiFade get fadeIn; UiFade get fadeOut; int get crossfade; List<UiEnvelopePoint> get points;
+ UiFade get fadeIn; UiFade get decay; double get sustain; UiFade get fadeOut; int get crossfade; List<UiEnvelopePoint> get points;
 /// Create a copy of UiGainEnvelope
 /// with the given fields replaced by the non-null parameter values.
 @JsonKey(includeFromJson: false, includeToJson: false)
@@ -3562,16 +3562,16 @@ $UiGainEnvelopeCopyWith<UiGainEnvelope> get copyWith => _$UiGainEnvelopeCopyWith
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is UiGainEnvelope&&(identical(other.fadeIn, fadeIn) || other.fadeIn == fadeIn)&&(identical(other.fadeOut, fadeOut) || other.fadeOut == fadeOut)&&(identical(other.crossfade, crossfade) || other.crossfade == crossfade)&&const DeepCollectionEquality().equals(other.points, points));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is UiGainEnvelope&&(identical(other.fadeIn, fadeIn) || other.fadeIn == fadeIn)&&(identical(other.decay, decay) || other.decay == decay)&&(identical(other.sustain, sustain) || other.sustain == sustain)&&(identical(other.fadeOut, fadeOut) || other.fadeOut == fadeOut)&&(identical(other.crossfade, crossfade) || other.crossfade == crossfade)&&const DeepCollectionEquality().equals(other.points, points));
 }
 
 
 @override
-int get hashCode => Object.hash(runtimeType,fadeIn,fadeOut,crossfade,const DeepCollectionEquality().hash(points));
+int get hashCode => Object.hash(runtimeType,fadeIn,decay,sustain,fadeOut,crossfade,const DeepCollectionEquality().hash(points));
 
 @override
 String toString() {
-  return 'UiGainEnvelope(fadeIn: $fadeIn, fadeOut: $fadeOut, crossfade: $crossfade, points: $points)';
+  return 'UiGainEnvelope(fadeIn: $fadeIn, decay: $decay, sustain: $sustain, fadeOut: $fadeOut, crossfade: $crossfade, points: $points)';
 }
 
 
@@ -3582,11 +3582,11 @@ abstract mixin class $UiGainEnvelopeCopyWith<$Res>  {
   factory $UiGainEnvelopeCopyWith(UiGainEnvelope value, $Res Function(UiGainEnvelope) _then) = _$UiGainEnvelopeCopyWithImpl;
 @useResult
 $Res call({
- UiFade fadeIn, UiFade fadeOut, int crossfade, List<UiEnvelopePoint> points
+ UiFade fadeIn, UiFade decay, double sustain, UiFade fadeOut, int crossfade, List<UiEnvelopePoint> points
 });
 
 
-$UiFadeCopyWith<$Res> get fadeIn;$UiFadeCopyWith<$Res> get fadeOut;
+$UiFadeCopyWith<$Res> get fadeIn;$UiFadeCopyWith<$Res> get decay;$UiFadeCopyWith<$Res> get fadeOut;
 
 }
 /// @nodoc
@@ -3599,10 +3599,12 @@ class _$UiGainEnvelopeCopyWithImpl<$Res>
 
 /// Create a copy of UiGainEnvelope
 /// with the given fields replaced by the non-null parameter values.
-@pragma('vm:prefer-inline') @override $Res call({Object? fadeIn = null,Object? fadeOut = null,Object? crossfade = null,Object? points = null,}) {
+@pragma('vm:prefer-inline') @override $Res call({Object? fadeIn = null,Object? decay = null,Object? sustain = null,Object? fadeOut = null,Object? crossfade = null,Object? points = null,}) {
   return _then(_self.copyWith(
 fadeIn: null == fadeIn ? _self.fadeIn : fadeIn // ignore: cast_nullable_to_non_nullable
-as UiFade,fadeOut: null == fadeOut ? _self.fadeOut : fadeOut // ignore: cast_nullable_to_non_nullable
+as UiFade,decay: null == decay ? _self.decay : decay // ignore: cast_nullable_to_non_nullable
+as UiFade,sustain: null == sustain ? _self.sustain : sustain // ignore: cast_nullable_to_non_nullable
+as double,fadeOut: null == fadeOut ? _self.fadeOut : fadeOut // ignore: cast_nullable_to_non_nullable
 as UiFade,crossfade: null == crossfade ? _self.crossfade : crossfade // ignore: cast_nullable_to_non_nullable
 as int,points: null == points ? _self.points : points // ignore: cast_nullable_to_non_nullable
 as List<UiEnvelopePoint>,
@@ -3616,6 +3618,15 @@ $UiFadeCopyWith<$Res> get fadeIn {
   
   return $UiFadeCopyWith<$Res>(_self.fadeIn, (value) {
     return _then(_self.copyWith(fadeIn: value));
+  });
+}/// Create a copy of UiGainEnvelope
+/// with the given fields replaced by the non-null parameter values.
+@override
+@pragma('vm:prefer-inline')
+$UiFadeCopyWith<$Res> get decay {
+  
+  return $UiFadeCopyWith<$Res>(_self.decay, (value) {
+    return _then(_self.copyWith(decay: value));
   });
 }/// Create a copy of UiGainEnvelope
 /// with the given fields replaced by the non-null parameter values.
@@ -3705,10 +3716,10 @@ return $default(_that);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( UiFade fadeIn,  UiFade fadeOut,  int crossfade,  List<UiEnvelopePoint> points)?  $default,{required TResult orElse(),}) {final _that = this;
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( UiFade fadeIn,  UiFade decay,  double sustain,  UiFade fadeOut,  int crossfade,  List<UiEnvelopePoint> points)?  $default,{required TResult orElse(),}) {final _that = this;
 switch (_that) {
 case _UiGainEnvelope() when $default != null:
-return $default(_that.fadeIn,_that.fadeOut,_that.crossfade,_that.points);case _:
+return $default(_that.fadeIn,_that.decay,_that.sustain,_that.fadeOut,_that.crossfade,_that.points);case _:
   return orElse();
 
 }
@@ -3726,10 +3737,10 @@ return $default(_that.fadeIn,_that.fadeOut,_that.crossfade,_that.points);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( UiFade fadeIn,  UiFade fadeOut,  int crossfade,  List<UiEnvelopePoint> points)  $default,) {final _that = this;
+@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( UiFade fadeIn,  UiFade decay,  double sustain,  UiFade fadeOut,  int crossfade,  List<UiEnvelopePoint> points)  $default,) {final _that = this;
 switch (_that) {
 case _UiGainEnvelope():
-return $default(_that.fadeIn,_that.fadeOut,_that.crossfade,_that.points);}
+return $default(_that.fadeIn,_that.decay,_that.sustain,_that.fadeOut,_that.crossfade,_that.points);}
 }
 /// A variant of `when` that fallback to returning `null`
 ///
@@ -3743,10 +3754,10 @@ return $default(_that.fadeIn,_that.fadeOut,_that.crossfade,_that.points);}
 /// }
 /// ```
 
-@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( UiFade fadeIn,  UiFade fadeOut,  int crossfade,  List<UiEnvelopePoint> points)?  $default,) {final _that = this;
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( UiFade fadeIn,  UiFade decay,  double sustain,  UiFade fadeOut,  int crossfade,  List<UiEnvelopePoint> points)?  $default,) {final _that = this;
 switch (_that) {
 case _UiGainEnvelope() when $default != null:
-return $default(_that.fadeIn,_that.fadeOut,_that.crossfade,_that.points);case _:
+return $default(_that.fadeIn,_that.decay,_that.sustain,_that.fadeOut,_that.crossfade,_that.points);case _:
   return null;
 
 }
@@ -3758,10 +3769,12 @@ return $default(_that.fadeIn,_that.fadeOut,_that.crossfade,_that.points);case _:
 
 
 class _UiGainEnvelope implements UiGainEnvelope {
-  const _UiGainEnvelope({required this.fadeIn, required this.fadeOut, required this.crossfade, required final  List<UiEnvelopePoint> points}): _points = points;
+  const _UiGainEnvelope({required this.fadeIn, required this.decay, required this.sustain, required this.fadeOut, required this.crossfade, required final  List<UiEnvelopePoint> points}): _points = points;
   
 
 @override final  UiFade fadeIn;
+@override final  UiFade decay;
+@override final  double sustain;
 @override final  UiFade fadeOut;
 @override final  int crossfade;
  final  List<UiEnvelopePoint> _points;
@@ -3782,16 +3795,16 @@ _$UiGainEnvelopeCopyWith<_UiGainEnvelope> get copyWith => __$UiGainEnvelopeCopyW
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is _UiGainEnvelope&&(identical(other.fadeIn, fadeIn) || other.fadeIn == fadeIn)&&(identical(other.fadeOut, fadeOut) || other.fadeOut == fadeOut)&&(identical(other.crossfade, crossfade) || other.crossfade == crossfade)&&const DeepCollectionEquality().equals(other._points, _points));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is _UiGainEnvelope&&(identical(other.fadeIn, fadeIn) || other.fadeIn == fadeIn)&&(identical(other.decay, decay) || other.decay == decay)&&(identical(other.sustain, sustain) || other.sustain == sustain)&&(identical(other.fadeOut, fadeOut) || other.fadeOut == fadeOut)&&(identical(other.crossfade, crossfade) || other.crossfade == crossfade)&&const DeepCollectionEquality().equals(other._points, _points));
 }
 
 
 @override
-int get hashCode => Object.hash(runtimeType,fadeIn,fadeOut,crossfade,const DeepCollectionEquality().hash(_points));
+int get hashCode => Object.hash(runtimeType,fadeIn,decay,sustain,fadeOut,crossfade,const DeepCollectionEquality().hash(_points));
 
 @override
 String toString() {
-  return 'UiGainEnvelope(fadeIn: $fadeIn, fadeOut: $fadeOut, crossfade: $crossfade, points: $points)';
+  return 'UiGainEnvelope(fadeIn: $fadeIn, decay: $decay, sustain: $sustain, fadeOut: $fadeOut, crossfade: $crossfade, points: $points)';
 }
 
 
@@ -3802,11 +3815,11 @@ abstract mixin class _$UiGainEnvelopeCopyWith<$Res> implements $UiGainEnvelopeCo
   factory _$UiGainEnvelopeCopyWith(_UiGainEnvelope value, $Res Function(_UiGainEnvelope) _then) = __$UiGainEnvelopeCopyWithImpl;
 @override @useResult
 $Res call({
- UiFade fadeIn, UiFade fadeOut, int crossfade, List<UiEnvelopePoint> points
+ UiFade fadeIn, UiFade decay, double sustain, UiFade fadeOut, int crossfade, List<UiEnvelopePoint> points
 });
 
 
-@override $UiFadeCopyWith<$Res> get fadeIn;@override $UiFadeCopyWith<$Res> get fadeOut;
+@override $UiFadeCopyWith<$Res> get fadeIn;@override $UiFadeCopyWith<$Res> get decay;@override $UiFadeCopyWith<$Res> get fadeOut;
 
 }
 /// @nodoc
@@ -3819,10 +3832,12 @@ class __$UiGainEnvelopeCopyWithImpl<$Res>
 
 /// Create a copy of UiGainEnvelope
 /// with the given fields replaced by the non-null parameter values.
-@override @pragma('vm:prefer-inline') $Res call({Object? fadeIn = null,Object? fadeOut = null,Object? crossfade = null,Object? points = null,}) {
+@override @pragma('vm:prefer-inline') $Res call({Object? fadeIn = null,Object? decay = null,Object? sustain = null,Object? fadeOut = null,Object? crossfade = null,Object? points = null,}) {
   return _then(_UiGainEnvelope(
 fadeIn: null == fadeIn ? _self.fadeIn : fadeIn // ignore: cast_nullable_to_non_nullable
-as UiFade,fadeOut: null == fadeOut ? _self.fadeOut : fadeOut // ignore: cast_nullable_to_non_nullable
+as UiFade,decay: null == decay ? _self.decay : decay // ignore: cast_nullable_to_non_nullable
+as UiFade,sustain: null == sustain ? _self.sustain : sustain // ignore: cast_nullable_to_non_nullable
+as double,fadeOut: null == fadeOut ? _self.fadeOut : fadeOut // ignore: cast_nullable_to_non_nullable
 as UiFade,crossfade: null == crossfade ? _self.crossfade : crossfade // ignore: cast_nullable_to_non_nullable
 as int,points: null == points ? _self._points : points // ignore: cast_nullable_to_non_nullable
 as List<UiEnvelopePoint>,
@@ -3837,6 +3852,15 @@ $UiFadeCopyWith<$Res> get fadeIn {
   
   return $UiFadeCopyWith<$Res>(_self.fadeIn, (value) {
     return _then(_self.copyWith(fadeIn: value));
+  });
+}/// Create a copy of UiGainEnvelope
+/// with the given fields replaced by the non-null parameter values.
+@override
+@pragma('vm:prefer-inline')
+$UiFadeCopyWith<$Res> get decay {
+  
+  return $UiFadeCopyWith<$Res>(_self.decay, (value) {
+    return _then(_self.copyWith(decay: value));
   });
 }/// Create a copy of UiGainEnvelope
 /// with the given fields replaced by the non-null parameter values.

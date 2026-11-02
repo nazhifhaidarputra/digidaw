@@ -5,6 +5,10 @@
 //! come back over a second ring and are delivered after the next block. While rendering
 //! offline the job runs inside `schedule_work`, so an export never races a job such as loading
 //! a sample.
+//!
+//! Every job and every response counts as [`PendingWork`] until the plugin has taken it back,
+//! because only a `run` delivers responses: a plugin parked between notes would otherwise never
+//! receive the sample it asked to load.
 
 use std::{
     ffi::c_void,
@@ -16,7 +20,7 @@ use std::{
     time::Duration,
 };
 
-use karbeat_host_api::HostError;
+use karbeat_host_api::{HostError, PendingWork};
 
 use crate::atoms::{AtomReceiver, AtomSender, atom_ring};
 
@@ -56,7 +60,7 @@ impl Work {
     /// job of this instance may be running.
     unsafe fn run(
         &self,
-        responses: &mut AtomSender,
+        responses: &mut ResponseQueue,
         size: u32,
         data: *const c_void,
     ) -> lv2_sys::LV2_Worker_Status {
@@ -67,6 +71,13 @@ impl Work {
     }
 }
 
+/// Where a job's responses go: the ring back to the audio side, each counted as pending work
+/// until it is delivered.
+struct ResponseQueue {
+    sender: AtomSender,
+    pending: Arc<PendingWork>,
+}
+
 /// Where `schedule_work` sends a request.
 enum Route {
     /// The plugin asked for the feature but offers no worker interface.
@@ -75,9 +86,14 @@ enum Route {
     Threaded {
         requests: AtomSender,
         thread: Thread,
+        /// Counts each job from scheduling until the worker thread has run it.
+        pending: Arc<PendingWork>,
     },
     /// Run the job immediately; used while rendering offline.
-    Inline { work: Work, responses: AtomSender },
+    Inline {
+        work: Work,
+        responses: ResponseQueue,
+    },
 }
 
 /// The `worker:schedule` feature of one instance.
@@ -87,10 +103,12 @@ enum Route {
 pub(crate) struct WorkerPort {
     record: Box<lv2_sys::LV2_Worker_Schedule>,
     route: Box<Route>,
+    pending: Arc<PendingWork>,
 }
 
 impl WorkerPort {
-    pub fn new() -> Self {
+    /// A port whose jobs and responses are counted in `pending` until the plugin has them.
+    pub fn new(pending: Arc<PendingWork>) -> Self {
         let mut route = Box::new(Route::Detached);
         Self {
             record: Box::new(lv2_sys::LV2_Worker_Schedule {
@@ -98,6 +116,7 @@ impl WorkerPort {
                 schedule_work: Some(schedule_work),
             }),
             route,
+            pending,
         }
     }
 
@@ -125,18 +144,20 @@ impl WorkerPort {
         };
         let work = Work { call, instance };
         let (to_audio, from_worker) = atom_ring(RING_BYTES);
+        let responses = ResponseQueue {
+            sender: to_audio,
+            pending: self.pending.clone(),
+        };
         let thread = if offline {
-            *self.route = Route::Inline {
-                work,
-                responses: to_audio,
-            };
+            *self.route = Route::Inline { work, responses };
             None
         } else {
             let (to_worker, from_audio) = atom_ring(RING_BYTES);
-            let thread = WorkerThread::spawn(work, from_audio, to_audio)?;
+            let thread = WorkerThread::spawn(work, from_audio, responses, self.pending.clone())?;
             *self.route = Route::Threaded {
                 requests: to_worker,
                 thread: thread.handle(),
+                pending: self.pending.clone(),
             };
             Some(thread)
         };
@@ -146,6 +167,7 @@ impl WorkerPort {
                 respond: interface.work_response,
                 end_run: interface.end_run,
                 scratch: Vec::with_capacity(RING_BYTES),
+                pending: self.pending.clone(),
             },
             thread,
         ))
@@ -179,15 +201,22 @@ unsafe extern "C" fn schedule_work(
     let route = unsafe { &mut *handle.cast::<Route>() };
     match route {
         Route::Detached => UNKNOWN,
-        Route::Threaded { requests, thread } => {
+        Route::Threaded {
+            requests,
+            thread,
+            pending,
+        } => {
             // SAFETY: The plugin passes `size` readable bytes for this call.
             let Some(body) = (unsafe { message(size, data) }) else {
                 return UNKNOWN;
             };
+            // Counted before the worker can see it; the worker finishes it after the job.
+            pending.begin();
             if requests.send(0, 0, body) {
                 thread.unpark();
                 SUCCESS
             } else {
+                pending.finish();
                 NO_SPACE
             }
         }
@@ -208,12 +237,18 @@ unsafe extern "C" fn respond(
         return UNKNOWN;
     }
     // SAFETY: The handle is the response queue passed to `work`, used only for that call.
-    let responses = unsafe { &mut *handle.cast::<AtomSender>() };
+    let responses = unsafe { &mut *handle.cast::<ResponseQueue>() };
     // SAFETY: The plugin passes `size` readable bytes for this call.
-    match unsafe { message(size, data) } {
-        Some(body) if responses.send(0, 0, body) => SUCCESS,
-        Some(_) => NO_SPACE,
-        None => UNKNOWN,
+    let Some(body) = (unsafe { message(size, data) }) else {
+        return UNKNOWN;
+    };
+    // Counted before the audio side can see it; delivery finishes it.
+    responses.pending.begin();
+    if responses.sender.send(0, 0, body) {
+        SUCCESS
+    } else {
+        responses.pending.finish();
+        NO_SPACE
     }
 }
 
@@ -226,13 +261,16 @@ pub(crate) struct WorkerResponses {
     end_run: Option<unsafe extern "C" fn(lv2_sys::LV2_Handle) -> lv2_sys::LV2_Worker_Status>,
     /// Preallocated to the ring's capacity so a response never allocates on the audio thread.
     scratch: Vec<u8>,
+    pending: Arc<PendingWork>,
 }
 
 impl WorkerResponses {
     /// Hands every finished job's response to the plugin and closes the block.
     pub fn deliver(&mut self, instance: lv2_sys::LV2_Handle) {
-        let (respond, scratch) = (self.respond, &mut self.scratch);
+        let (respond, scratch, pending) = (self.respond, &mut self.scratch, &self.pending);
         self.receiver.drain(|_, _, parts| {
+            // Delivered below, or dropped as oversized: the response is done either way.
+            pending.finish();
             scratch.clear();
             if parts[0].len() + parts[1].len() > scratch.capacity() {
                 return;
@@ -269,7 +307,8 @@ impl WorkerThread {
     fn spawn(
         work: Work,
         mut requests: AtomReceiver,
-        mut responses: AtomSender,
+        mut responses: ResponseQueue,
+        pending: Arc<PendingWork>,
     ) -> Result<Self, HostError> {
         let shared = Arc::new(Shared {
             stop: AtomicBool::new(false),
@@ -286,12 +325,15 @@ impl WorkerThread {
                         scratch.extend_from_slice(parts[0]);
                         scratch.extend_from_slice(parts[1]);
                         let Ok(size) = u32::try_from(scratch.len()) else {
+                            pending.finish();
                             return;
                         };
                         let _busy = worker.busy.lock().unwrap_or_else(PoisonError::into_inner);
                         // SAFETY: The instance outlives this thread, `work` may run beside
                         // `run`, and this thread runs one job at a time from its own copy.
                         unsafe { work.run(&mut responses, size, scratch.as_ptr().cast()) };
+                        // Its responses are counted on their own, so the job is done.
+                        pending.finish();
                     });
                     if worker.stop.load(Ordering::Acquire) {
                         break;
@@ -391,8 +433,10 @@ mod tests {
             work_response: Some(work_response),
             end_run: Some(end_run),
         };
-        let mut detached = WorkerPort::new();
+        let offline_work = Arc::new(PendingWork::default());
+        let mut detached = WorkerPort::new(offline_work.clone());
         assert_eq!(schedule(&detached, 1), UNKNOWN);
+        assert!(!offline_work.is_pending());
 
         // Offline: the job has already run when `schedule_work` returns.
         let (mut responses, thread) = detached
@@ -402,24 +446,37 @@ mod tests {
         let jobs = JOBS.load(Ordering::SeqCst);
         assert_eq!(schedule(&detached, 3), SUCCESS);
         assert_eq!(JOBS.load(Ordering::SeqCst), jobs + 1);
+        // The response waits for the next block, so the plugin still has work pending.
+        assert!(offline_work.is_pending());
         responses.deliver(std::ptr::null_mut());
+        // Delivered; it stays pending only for the follow-up blocks.
+        for _ in 0..PendingWork::FOLLOW_UP_BLOCKS {
+            assert!(offline_work.is_pending());
+            offline_work.processed();
+        }
+        assert!(!offline_work.is_pending());
         assert_eq!(RESPONSES.swap(0, Ordering::SeqCst), 6);
         assert_eq!(BLOCKS.swap(0, Ordering::SeqCst), 1);
 
         // Realtime: the job runs on the worker thread and its response arrives with a later
         // block.
-        let mut port = WorkerPort::new();
+        let realtime_work = Arc::new(PendingWork::default());
+        let mut port = WorkerPort::new(realtime_work.clone());
         let (mut responses, thread) = port
             .attach(&interface, std::ptr::null_mut(), false)
             .unwrap();
         let thread = thread.unwrap();
         assert_eq!(schedule(&port, 5), SUCCESS);
+        assert!(realtime_work.is_pending());
         let deadline = std::time::Instant::now() + Duration::from_secs(5);
-        while RESPONSES.load(Ordering::SeqCst) == 0 {
+        // Pending until the job ran and its response was delivered to the plugin.
+        while RESPONSES.load(Ordering::SeqCst) == 0 || realtime_work.is_pending() {
             assert!(
                 std::time::Instant::now() < deadline,
                 "worker never responded"
             );
+            // One processed block.
+            realtime_work.processed();
             responses.deliver(std::ptr::null_mut());
             std::thread::sleep(Duration::from_millis(1));
         }

@@ -509,11 +509,17 @@ pub struct UiEnvelopePoint {
     pub tension: f64,
 }
 
-/// Fades, crossfade, and gain points of a waveform or audio clip.
+/// ADSR fade, crossfade, and gain points of a waveform or audio clip.
 #[derive(Clone, Debug)]
 #[frb(dart_metadata=("freezed"))]
 pub struct UiGainEnvelope {
+    /// Attack: rises from silence to unity.
     pub fade_in: UiFade,
+    /// Decay: falls from unity to the sustain level after the attack.
+    pub decay: UiFade,
+    /// Linear gain held between the decay and the release, 0.0 to 1.0.
+    pub sustain: f32,
+    /// Release: falls from the sustain level to silence at the end.
     pub fade_out: UiFade,
     /// Equal-power crossfade length in samples: the loop crossfade on a waveform, the crossfade
     /// with overlapping neighbours on a clip.
@@ -613,6 +619,8 @@ impl From<&GainEnvelope> for UiGainEnvelope {
     fn from(value: &GainEnvelope) -> Self {
         Self {
             fade_in: UiFade::from(&value.fade_in),
+            decay: UiFade::from(&value.decay),
+            sustain: value.sustain,
             fade_out: UiFade::from(&value.fade_out),
             crossfade: value.crossfade,
             points: value
@@ -633,6 +641,8 @@ impl From<UiGainEnvelope> for GainEnvelope {
     fn from(value: UiGainEnvelope) -> Self {
         Self {
             fade_in: value.fade_in.into(),
+            decay: value.decay.into(),
+            sustain: value.sustain,
             fade_out: value.fade_out.into(),
             crossfade: value.crossfade,
             points: value

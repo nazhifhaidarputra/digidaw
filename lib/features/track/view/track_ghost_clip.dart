@@ -57,7 +57,14 @@ class TrackGhostClip extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final colors = Theme.of(context).colorScheme;
-    final placementState = ref.watch(clipPlacementProvider);
+    // Rows that aren't the placement target select null and stay put while
+    // the pointer moves over other rows.
+    final placementState = ref.watch(
+      clipPlacementProvider.select((s) => s.trackId == trackId ? s : null),
+    );
+    if (placementState == null) {
+      return const Positioned.fill(child: Stack(clipBehavior: Clip.none));
+    }
 
     List<Widget> ghostWidgets = [];
 

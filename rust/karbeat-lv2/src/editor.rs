@@ -334,9 +334,14 @@ unsafe extern "C" fn write_port(
         unsafe { std::slice::from_raw_parts(buffer.cast::<u8>().wrapping_add(8), body_size) };
     if let Ok(mut link) = controller.link.try_borrow_mut()
         && let Some(ends) = link.as_mut()
-        && !ends.to_dsp.send(port, atom_type, body)
     {
-        controller.exchange.overflow.store(true, Ordering::Relaxed);
+        // Counted before the processor can take it, so the engine wakes a parked plugin to
+        // deliver it; the processor finishes the unit once it has.
+        controller.exchange.work.begin();
+        if !ends.to_dsp.send(port, atom_type, body) {
+            controller.exchange.work.finish();
+            controller.exchange.overflow.store(true, Ordering::Relaxed);
+        }
     }
 }
 

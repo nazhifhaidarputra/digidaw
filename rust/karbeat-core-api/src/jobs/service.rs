@@ -37,6 +37,8 @@ pub enum JobKind {
     Bounce,
     ProjectLoad,
     ProjectSave,
+    ChannelTemplateSave,
+    ChannelTemplateLoad,
     ProjectRestore,
     AudioImport,
     WaveformRender,

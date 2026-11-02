@@ -35,6 +35,8 @@ enum UiJobKind {
   bounce,
   projectLoad,
   projectSave,
+  channelTemplateSave,
+  channelTemplateLoad,
   projectRestore,
   audioImport,
   waveformRender,

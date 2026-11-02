@@ -18,7 +18,7 @@ use karbeat_core::core::project::mixer::{
 };
 use karbeat_core_api::{
     jobs::{JobClass, JobKind, JobSpec},
-    mixer_api,
+    mixer_api, project_api,
 };
 
 // ======================================
@@ -669,6 +669,73 @@ pub fn set_effect_bypass(
         bypass,
     )
     .map_err(|error| error.to_string())
+}
+
+/// Saves a channel's effect chain, as it currently sounds, to a `.effch` template file.
+pub async fn save_channel_template(
+    ctx: &DawContext,
+    target: UiMixerChannelTarget,
+    path: String,
+) -> Result<(), String> {
+    let ctx = ctx.clone();
+    run_job(
+        JobSpec::new(JobKind::ChannelTemplateSave, JobClass::Control),
+        move |_| save_channel_template_blocking(&ctx, &target, &path),
+    )
+    .await
+}
+
+fn save_channel_template_blocking(
+    ctx: &DawContext,
+    target: &UiMixerChannelTarget,
+    path: &str,
+) -> Result<(), String> {
+    let operation = ctx.begin_project_operation();
+    let pending = project_api::begin_save_channel_template(
+        &operation.read_core(),
+        MixerChannelTarget::from(target),
+        path,
+    )
+    .map_err(|error| error.to_string())?;
+    project_api::execute_save_channel_template(pending).map_err(|error| format!("{error:#}"))?;
+    tracing::info!("Saved channel template to {}", path);
+    Ok(())
+}
+
+/// Appends a `.effch` template's effects to a channel. Returns the names of the plugins that were
+/// skipped, such as external plugins that are not on this machine.
+pub async fn load_channel_template(
+    ctx: &DawContext,
+    target: UiMixerChannelTarget,
+    path: String,
+) -> Result<Vec<String>, String> {
+    let ctx = ctx.clone();
+    run_job(
+        JobSpec::new(JobKind::ChannelTemplateLoad, JobClass::Control),
+        move |_| load_channel_template_blocking(&ctx, &target, &path),
+    )
+    .await
+}
+
+fn load_channel_template_blocking(
+    ctx: &DawContext,
+    target: &UiMixerChannelTarget,
+    path: &str,
+) -> Result<Vec<String>, String> {
+    let operation = ctx.begin_project_operation();
+    let mut load = mixer_api::begin_load_channel_template(
+        &operation.read_core(),
+        MixerChannelTarget::from(target),
+        path,
+    )
+    .map_err(|error| format!("{error:#}"))?;
+    for saved in load.take_effects() {
+        let pending = mixer_api::begin_template_effect(&operation.read_core(), &load, saved);
+        let completed = mixer_api::execute_template_effect(pending);
+        mixer_api::commit_template_effect(&mut operation.write_core(), &mut load, completed);
+    }
+    let skipped = mixer_api::commit_load_channel_template(&mut operation.write_core(), load);
+    Ok(skipped)
 }
 
 /// Removes an effect and the automation lanes that drive it in one transaction, returning

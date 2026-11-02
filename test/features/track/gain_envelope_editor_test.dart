@@ -25,6 +25,8 @@ Future<void> _pump(
   WidgetTester tester, {
   required List<UiEnvelopePoint> points,
   required ValueChanged<UiGainEnvelope> onCommit,
+  UiGainEnvelope? envelope,
+  bool canAddPoints = true,
 }) async {
   await tester.pumpWidget(
     ProviderScope(
@@ -36,7 +38,8 @@ Future<void> _pump(
               width: 400,
               height: 200,
               child: GainEnvelopeEditor(
-                envelope: identityEnvelope.copyWith(points: points),
+                envelope: envelope ?? identityEnvelope.copyWith(points: points),
+                canAddPoints: canAddPoints,
                 axis: const EnvelopeAxis(
                   pixelsPerSample: 0.1,
                   originPosition: 0,
@@ -123,5 +126,120 @@ void main() {
     await tester.pumpAndSettle(const Duration(milliseconds: 400));
     expect(committed!.points, hasLength(2));
     expect(committed!.points[0].tension, 0);
+  });
+
+  group('ADSR', () {
+    // Attack 1000 ends at x 100, the release of 1000 starts at x 300, and a
+    // sustain of 0.5 sits at y 125, halfway between unity (50) and silence (200).
+    final adsr = identityEnvelope.copyWith(
+      fadeIn: noFade.copyWith(length: 1000),
+      fadeOut: noFade.copyWith(length: 1000),
+      sustain: 0.5,
+    );
+
+    testWidgets('each stage has a named handle', (tester) async {
+      await _pump(tester, points: const [], envelope: adsr, onCommit: (_) {});
+      for (final stage in ['Attack', 'Decay', 'Sustain', 'Release']) {
+        expect(find.byTooltip(stage), findsOneWidget, reason: stage);
+      }
+    });
+
+    testWidgets('a full sustain hides the decay handle', (tester) async {
+      await _pump(
+        tester,
+        points: const [],
+        envelope: adsr.copyWith(sustain: 1),
+        onCommit: (_) {},
+      );
+      expect(find.byTooltip('Attack'), findsOneWidget);
+      expect(find.byTooltip('Decay'), findsNothing);
+    });
+
+    testWidgets('dragging Sustain changes only the held level', (tester) async {
+      UiGainEnvelope? committed;
+      await _pump(
+        tester,
+        points: const [],
+        envelope: adsr,
+        onCommit: (next) => committed = next,
+      );
+      await tester.drag(find.byTooltip('Sustain'), const Offset(30, 40));
+      await tester.pumpAndSettle();
+
+      expect(committed!.sustain, lessThan(0.5));
+      expect(committed!.fadeIn.length, 1000);
+      expect(committed!.fadeOut.length, 1000);
+    });
+
+    testWidgets('Sustain cannot rise above the attack peak', (tester) async {
+      UiGainEnvelope? committed;
+      await _pump(
+        tester,
+        points: const [],
+        envelope: adsr,
+        onCommit: (next) => committed = next,
+      );
+      await tester.drag(find.byTooltip('Sustain'), const Offset(0, -150));
+      await tester.pumpAndSettle();
+      expect(committed!.sustain, 1);
+    });
+
+    testWidgets('dragging Decay lengthens the decay after the attack', (
+      tester,
+    ) async {
+      UiGainEnvelope? committed;
+      await _pump(
+        tester,
+        points: const [],
+        envelope: adsr,
+        onCommit: (next) => committed = next,
+      );
+      await tester.drag(find.byTooltip('Decay'), const Offset(60, 0));
+      await tester.pumpAndSettle();
+
+      // The drag ends at x 160 at most, so the decay is at most 600 samples.
+      expect(committed!.decay.length, inInclusiveRange(1, 600));
+      expect(committed!.fadeIn.length, 1000);
+      expect(committed!.sustain, 0.5);
+    });
+
+    testWidgets('double-tapping adds no point when points are off', (
+      tester,
+    ) async {
+      UiGainEnvelope? committed;
+      await _pump(
+        tester,
+        points: const [],
+        envelope: adsr,
+        canAddPoints: false,
+        onCommit: (next) => committed = next,
+      );
+      final box = tester.getRect(find.byType(GainEnvelopeEditor));
+      final blank = box.topLeft + const Offset(160, 20);
+      await tester.tapAt(blank);
+      await tester.pump(const Duration(milliseconds: 50));
+      await tester.tapAt(blank);
+      await tester.pumpAndSettle(const Duration(milliseconds: 400));
+      expect(committed, isNull);
+    });
+
+    testWidgets('double-tapping adds a point when points are on', (
+      tester,
+    ) async {
+      UiGainEnvelope? committed;
+      await _pump(
+        tester,
+        points: const [],
+        envelope: adsr,
+        onCommit: (next) => committed = next,
+      );
+      final box = tester.getRect(find.byType(GainEnvelopeEditor));
+      final blank = box.topLeft + const Offset(160, 20);
+      await tester.tapAt(blank);
+      await tester.pump(const Duration(milliseconds: 50));
+      await tester.tapAt(blank);
+      await tester.pumpAndSettle(const Duration(milliseconds: 400));
+      expect(committed!.points, hasLength(1));
+    });
   });
 }
