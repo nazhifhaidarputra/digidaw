@@ -6,9 +6,11 @@
 //! played, and keeps a peak preview the UI draws while the take grows.
 
 use std::{
-    path::PathBuf,
+    fs::remove_file as fs_remove_file,
+    io::ErrorKind,
+    path::{Path, PathBuf},
     sync::Arc,
-    thread::JoinHandle,
+    thread::{Builder, JoinHandle, sleep},
     time::{Duration, Instant},
 };
 
@@ -186,7 +188,7 @@ impl RecordingRegistry {
             skip: None,
             frames: 0,
         };
-        let writer = std::thread::Builder::new()
+        let writer = Builder::new()
             .name("karbeat-take-writer".into())
             .spawn(move || writer.run())
             .context("Could not start the recording writer")?;
@@ -320,7 +322,7 @@ impl TakeWriter {
             if ended {
                 return Ok(());
             }
-            std::thread::sleep(WRITER_INTERVAL);
+            sleep(WRITER_INTERVAL);
         }
     }
 
@@ -396,9 +398,9 @@ fn latency_frames(clocks: &TakeClocks, start: TakeStart, sample_rate: u32) -> u6
     latency
 }
 
-fn remove_file(path: &std::path::Path) {
-    if let Err(error) = std::fs::remove_file(path)
-        && error.kind() != std::io::ErrorKind::NotFound
+fn remove_file(path: &Path) {
+    if let Err(error) = fs_remove_file(path)
+        && error.kind() != ErrorKind::NotFound
     {
         tracing::warn!("Could not remove {}: {error}", path.display());
     }
@@ -490,7 +492,7 @@ mod tests {
         let deadline = Instant::now() + Duration::from_secs(5);
         let mut progress = registry.progress();
         while progress[0].frames < (PEAK_FRAMES * 4) as u64 && Instant::now() < deadline {
-            std::thread::sleep(Duration::from_millis(5));
+            sleep(Duration::from_millis(5));
             progress = registry.progress();
         }
         let total: usize = progress.iter().map(|p| p.peaks.len()).sum();

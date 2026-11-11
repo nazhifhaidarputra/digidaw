@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+use std::{path::PathBuf, thread::Builder};
 
 use karbeat_host_api::{
     ConvertParameterRequest, DuplicateRequest, ExternalPluginInstanceHandle, HostCapabilities,
@@ -6,8 +6,9 @@ use karbeat_host_api::{
     ParseParameterRequest, PluginController, PluginFormat, PluginFormatExecutor,
     PluginInstanceManager, PluginState, PrepareRequest, PreparedExternalPlugin, ReconfigureRequest,
     ScanRequest, SetParameterRequest,
-    scanner::{ModuleScanner, ScanCache, ScanResult, ScanSettings},
+    scanner::{ModuleScanner, ScanCache, ScanResult, ScanSettings, scan},
 };
+use tokio::sync::oneshot::channel;
 
 use crate::{native, world};
 
@@ -55,7 +56,7 @@ impl Lv2Executor {
             ScanCache::default()
         };
         let progress = request.progress;
-        let result = karbeat_host_api::scanner::scan(
+        let result = scan(
             &ModuleScanner {
                 format: PluginFormat::Lv2,
                 extension: world::BUNDLE_EXTENSION,
@@ -82,8 +83,8 @@ impl Lv2Executor {
         name: &str,
         work: impl FnOnce() -> Result<T, HostError> + Send + 'static,
     ) -> Result<T, HostError> {
-        let (reply, result) = tokio::sync::oneshot::channel();
-        std::thread::Builder::new()
+        let (reply, result) = channel();
+        Builder::new()
             .name(name.into())
             .spawn(move || drop(reply.send(work())))?;
         result.await.map_err(|_| {

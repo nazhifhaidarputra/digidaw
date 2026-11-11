@@ -6,7 +6,7 @@ mod tests {
     use crate::test::helpers::make_ctx;
     use crate::track_api;
     use karbeat_audio::commands::AudioCommand;
-    use karbeat_core::shared::id::{AudioSourceId, TrackId};
+    use karbeat_core::shared::id::{AudioSourceId, GeneratorId, TrackId};
     use rtrb::RingBuffer;
 
     #[test]
@@ -112,7 +112,6 @@ mod tests {
     #[test]
     fn play_preview_note_generator_without_audio_stream_returns_err() {
         let mut ctx = make_ctx();
-        use karbeat_core::shared::id::GeneratorId;
         let gen_id = GeneratorId::from(1);
         let result = audio_api::play_preview_note_generator(&mut ctx, gen_id, 60, 100, true);
         assert!(result.is_err(), "An unavailable audio queue should fail");

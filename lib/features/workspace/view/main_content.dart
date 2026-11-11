@@ -34,12 +34,18 @@ class _MainContentState extends ConsumerState<MainContent>
   late final ProviderSubscription<WorkspaceView> _workspaceSubscription;
   late final ProviderSubscription<int?> _patternSubscription;
   bool _telemetryActive = false;
+  static const _telemetryInterval = Duration(microseconds: 33333);
+  Duration _lastTelemetryPoll = -_telemetryInterval;
 
   @override
   void initState() {
     super.initState();
     _dawContext = ref.read(projectProvider.notifier).dawContext;
-    _mixerTelemetryTicker = createTicker((_) {
+    _mixerTelemetryTicker = createTicker((elapsed) {
+      // The engine publishes telemetry at ~30 Hz; polling at display refresh
+      // would only re-read the same snapshot across FFI.
+      if (elapsed - _lastTelemetryPoll < _telemetryInterval) return;
+      _lastTelemetryPoll = elapsed;
       if (ref.read(telemetryPollingSuppressionProvider) != 0) return;
       ref.read(mixerStateProvider.notifier).pollTelemetry();
     });
@@ -71,6 +77,8 @@ class _MainContentState extends ConsumerState<MainContent>
     if (_telemetryActive == active) return;
     _telemetryActive = active;
     if (active) {
+      // A restarted ticker counts elapsed from zero again.
+      _lastTelemetryPoll = -_telemetryInterval;
       _mixerTelemetryTicker.start();
     } else {
       _mixerTelemetryTicker.stop();

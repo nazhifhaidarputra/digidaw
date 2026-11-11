@@ -55,7 +55,12 @@ final _project = ApplicationDataStore(
     2: UiGeneratorInstance(
       id: 2,
       instanceType: UiGeneratorInstanceType.plugin(
-        UiPluginInstance(registryId: 0, name: 'Vital', bypass: false),
+        UiPluginInstance(
+          registryId: 0,
+          name: 'Vital',
+          label: 'Vital',
+          bypass: false,
+        ),
       ),
     ),
   }),

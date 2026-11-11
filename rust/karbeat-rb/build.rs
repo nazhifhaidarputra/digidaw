@@ -5,6 +5,7 @@
 )]
 
 use std::env;
+use std::env::var;
 use std::path::PathBuf;
 
 fn main() {
@@ -13,7 +14,7 @@ fn main() {
     println!("cargo:rerun-if-env-changed=RUBBERBAND_STATIC");
 
     if target_os == "windows" {
-        let manifest_dir = std::env::var("CARGO_MANIFEST_DIR").unwrap();
+        let manifest_dir = var("CARGO_MANIFEST_DIR").unwrap();
         let vcpkg_env = format!("{}\\..\\vcpkg_installed\\x64-windows", manifest_dir);
 
         // Tell Cargo where the .lib is

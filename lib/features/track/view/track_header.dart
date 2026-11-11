@@ -15,6 +15,7 @@ import 'package:karbeat/core/widgets/db_level_meter.dart';
 import 'package:karbeat/features/plugins/services/plugin_ui_launcher.dart';
 import 'package:karbeat/features/plugins/widgets/plugin_browser_dialog.dart';
 import 'package:karbeat/features/setting/services/host_devices_settings_provider.dart';
+import 'package:karbeat/features/source/services/source_actions.dart';
 import 'package:karbeat/features/track/view/plugin_automation_parameter_dialog.dart';
 import 'package:karbeat/src/rust/api/mixer.dart';
 import 'package:karbeat/src/rust/api/plugin.dart';
@@ -63,12 +64,19 @@ class TrackHeader extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final colors = Theme.of(context).colorScheme;
-    final project = ref.watch(projectProvider).value;
-    final track = project?.tracks[trackId];
-    final magnitude = ref.watch(
-      mixerStateProvider.select(
-        (state) => state.trackMagnitudes[trackId] ?? 0.0,
-      ),
+    // Select only this track (and its generator below) so unrelated project
+    // publishes don't rebuild the header. The meter magnitude is watched by
+    // the [_TrackLevelMeter] leaf, not here, so meter ticks don't rebuild it.
+    final track = ref.watch(
+      projectProvider.select((s) => s.value?.tracks[trackId]),
+    );
+    final generatorInstanceType = ref.watch(
+      projectProvider.select((s) {
+        final generatorId = s.value?.tracks[trackId]?.generatorId;
+        return generatorId == null
+            ? null
+            : s.value?.generators[generatorId]?.instanceType;
+      }),
     );
 
     final channelFlags = ref.watch(
@@ -105,9 +113,7 @@ class TrackHeader extends ConsumerWidget {
     final trackColor = track.color.fromRGBorRGBAtoColor();
     final trackForeground = _getContrastColor(trackColor);
     final generatorId = track.generatorId;
-    final generatorPlugin = switch (generatorId == null
-        ? null
-        : project?.generators[generatorId]?.instanceType) {
+    final generatorPlugin = switch (generatorInstanceType) {
       UiGeneratorInstanceType_Plugin(:final field0) => field0,
       _ => null,
     };
@@ -164,9 +170,20 @@ class TrackHeader extends ConsumerWidget {
                 target: UiPluginTarget.generator(generatorId),
                 registryId: generatorPlugin.registryId,
                 instanceId: generatorId,
-                pluginName: generatorPlugin.name,
+                pluginName: generatorPlugin.label,
               );
             },
+          ),
+        if (generatorId != null && generatorPlugin != null)
+          DawContextAction(
+            title: "Rename instrument...",
+            icon: Icons.edit,
+            onTap: () => renameGeneratorWithDialog(
+              context,
+              ref,
+              generatorId,
+              generatorPlugin,
+            ),
           ),
         if (track.trackType == UiTrackType.midi)
           DawContextAction(
@@ -342,7 +359,6 @@ class TrackHeader extends ConsumerWidget {
           height: itemHeight,
           child: Container(
             margin: const EdgeInsets.only(bottom: 2),
-            padding: EdgeInsets.only(right: collapsed ? 6 : 10),
             decoration: BoxDecoration(
               color: trackColor,
               border: Border(
@@ -355,196 +371,222 @@ class TrackHeader extends ConsumerWidget {
                     border: Border.all(color: trackForeground, width: 2),
                   )
                 : null,
-            child: Row(
+            // The meter runs along the bottom edge, from border to border.
+            child: Column(
               children: [
-                Draggable<int>(
-                  data: trackId,
-                  dragAnchorStrategy: pointerDragAnchorStrategy,
-                  rootOverlay: true,
-                  onDragStarted: onDragStarted,
-                  onDragEnd: (details) => onDragEnded(details.wasAccepted),
-                  feedback: Material(
-                    color: Colors.transparent,
-                    child: DecoratedBox(
-                      decoration: BoxDecoration(
-                        color: colors.surfaceContainerHighest,
-                        borderRadius: BorderRadius.circular(4),
-                        boxShadow: const [
-                          BoxShadow(color: Colors.black38, blurRadius: 6),
-                        ],
-                      ),
-                      child: Padding(
-                        padding: const EdgeInsets.all(6),
-                        child: Icon(
-                          Icons.drag_indicator,
-                          size: 18,
-                          color: colors.onSurface,
-                        ),
-                      ),
-                    ),
-                  ),
-                  childWhenDragging: const SizedBox(width: 20),
-                  child: MouseRegion(
-                    cursor: SystemMouseCursors.grab,
-                    child: Semantics(
-                      label: 'Reorder ${track.name}',
-                      button: true,
-                      child: SizedBox(
-                        width: 20,
-                        child: Icon(
-                          Icons.drag_indicator,
-                          size: 16,
-                          color: trackForeground.withValues(alpha: 0.65),
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-                LaneCollapseToggle(
-                  collapsed: collapsed,
-                  color: trackForeground.withValues(alpha: 0.72),
-                  onPressed: toggleCollapsed,
-                ),
                 Expanded(
-                  child: collapsed
-                      ? Text(
-                          track.name,
-                          style: TextStyle(
-                            color: trackForeground,
-                            fontWeight: FontWeight.bold,
-                            fontSize: 12,
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        )
-                      : Column(
-                          children: [
-                            Expanded(
-                              child: Row(
-                                children: [
-                                  Icon(
-                                    _getTrackIcon(track.trackType),
-                                    color: trackForeground.withValues(
-                                      alpha: 0.72,
-                                    ),
+                  child: Padding(
+                    padding: EdgeInsets.only(right: collapsed ? 6 : 10),
+                    child: Row(
+                      children: [
+                        Draggable<int>(
+                          data: trackId,
+                          dragAnchorStrategy: pointerDragAnchorStrategy,
+                          rootOverlay: true,
+                          onDragStarted: onDragStarted,
+                          onDragEnd: (details) =>
+                              onDragEnded(details.wasAccepted),
+                          feedback: Material(
+                            color: Colors.transparent,
+                            child: DecoratedBox(
+                              decoration: BoxDecoration(
+                                color: colors.surfaceContainerHighest,
+                                borderRadius: BorderRadius.circular(4),
+                                boxShadow: const [
+                                  BoxShadow(
+                                    color: Colors.black38,
+                                    blurRadius: 6,
                                   ),
-                                  const SizedBox(width: 10),
-                                  Expanded(
-                                    child: Column(
-                                      mainAxisAlignment:
-                                          MainAxisAlignment.center,
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.start,
-                                      children: [
-                                        Text(
-                                          track.name,
-                                          style: TextStyle(
-                                            color: trackForeground,
-                                            fontWeight: FontWeight.bold,
-                                            fontSize: 14,
-                                          ),
-                                          overflow: TextOverflow.ellipsis,
-                                        ),
-                                        Text(
-                                          track.trackType.name.toUpperCase(),
-                                          style: TextStyle(
-                                            color: trackForeground.withValues(
-                                              alpha: 0.8,
-                                            ),
-                                            fontSize: 10,
-                                          ),
-                                        ),
-                                      ],
+                                ],
+                              ),
+                              child: Padding(
+                                padding: const EdgeInsets.all(6),
+                                child: Icon(
+                                  Icons.drag_indicator,
+                                  size: 18,
+                                  color: colors.onSurface,
+                                ),
+                              ),
+                            ),
+                          ),
+                          childWhenDragging: const SizedBox(width: 20),
+                          child: MouseRegion(
+                            cursor: SystemMouseCursors.grab,
+                            child: Semantics(
+                              label: 'Reorder ${track.name}',
+                              button: true,
+                              child: SizedBox(
+                                width: 20,
+                                child: Icon(
+                                  Icons.drag_indicator,
+                                  size: 16,
+                                  color: trackForeground.withValues(
+                                    alpha: 0.65,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                        LaneCollapseToggle(
+                          collapsed: collapsed,
+                          color: trackForeground.withValues(alpha: 0.72),
+                          onPressed: toggleCollapsed,
+                        ),
+                        Expanded(
+                          child: collapsed
+                              ? Text(
+                                  track.name,
+                                  style: TextStyle(
+                                    color: trackForeground,
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 12,
+                                  ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                )
+                              : Row(
+                                  children: [
+                                    Icon(
+                                      _getTrackIcon(track.trackType),
+                                      color: trackForeground.withValues(
+                                        alpha: 0.72,
+                                      ),
                                     ),
+                                    const SizedBox(width: 10),
+                                    Expanded(
+                                      child: Column(
+                                        mainAxisAlignment:
+                                            MainAxisAlignment.center,
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            track.name,
+                                            style: TextStyle(
+                                              color: trackForeground,
+                                              fontWeight: FontWeight.bold,
+                                              fontSize: 14,
+                                            ),
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
+                                          Text(
+                                            track.trackType.name.toUpperCase(),
+                                            style: TextStyle(
+                                              color: trackForeground.withValues(
+                                                alpha: 0.8,
+                                              ),
+                                              fontSize: 10,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                        ),
+                        if (!collapsed) ...[
+                          const SizedBox(width: 8),
+                          if (isAudioTrack) ...[
+                            _ScaleDownColumn(
+                              child: Column(
+                                mainAxisAlignment: MainAxisAlignment.start,
+                                children: [
+                                  ChannelToggleButton(
+                                    label: 'R',
+                                    tooltip: switch (take) {
+                                      null => 'Arm for recording',
+                                      TrackTake(startSamples: null) =>
+                                        'Armed: records when playback starts. Click to disarm.',
+                                      _ =>
+                                        'Recording. Click to stop and keep the take.',
+                                    },
+                                    isActive: take != null,
+                                    // A take waiting for playback shows lighter than one recording.
+                                    activeColor: take?.startSamples == null
+                                        ? colors.error.withValues(alpha: 0.5)
+                                        : colors.error,
+                                    onTap: () => ref
+                                        .read(recordingProvider.notifier)
+                                        .toggleTrack(trackId),
                                   ),
                                 ],
                               ),
                             ),
-                            SizedBox(
-                              height: 7,
-                              child: Semantics(
-                                label: '${track.name} output level',
-                                value:
-                                    '${magnitudeToDb(magnitude).toStringAsFixed(1)} dB',
-                                child: DbLevelMeter(
-                                  magnitude: magnitude,
-                                  axis: Axis.horizontal,
-                                ),
-                              ),
-                            ),
-                            const SizedBox(height: 3),
+                            const SizedBox(width: 4),
                           ],
-                        ),
-                ),
-                if (!collapsed) ...[
-                  const SizedBox(width: 8),
-                  if (isAudioTrack) ...[
-                    SizedBox(
-                      height: 50,
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.start,
-                        children: [
-                          ChannelToggleButton(
-                            label: 'R',
-                            tooltip: switch (take) {
-                              null => 'Arm for recording',
-                              TrackTake(startSamples: null) =>
-                                'Armed: records when playback starts. Click to disarm.',
-                              _ =>
-                                'Recording. Click to stop and keep the take.',
-                            },
-                            isActive: take != null,
-                            // A take waiting for playback shows lighter than one recording.
-                            activeColor: take?.startSamples == null
-                                ? colors.error.withValues(alpha: 0.5)
-                                : colors.error,
-                            onTap: () => ref
-                                .read(recordingProvider.notifier)
-                                .toggleTrack(trackId),
+                          _ScaleDownColumn(
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                ChannelToggleButton(
+                                  label: 'M',
+                                  tooltip: isMuted ? 'Unmute' : 'Mute',
+                                  isActive: isMuted,
+                                  activeColor: colors.error,
+                                  onTap: () => ref
+                                      .read(mixerStateProvider.notifier)
+                                      .setMixerChannelParam(
+                                        trackId: trackId,
+                                        param: UiMixerChannelParams.mute(
+                                          !isMuted,
+                                        ),
+                                      ),
+                                ),
+                                ChannelToggleButton(
+                                  label: 'S',
+                                  tooltip: isSoloed ? 'Unsolo' : 'Solo',
+                                  isActive: isSoloed,
+                                  activeColor: colors.tertiary,
+                                  onTap: () => ref
+                                      .read(mixerStateProvider.notifier)
+                                      .setMixerChannelParam(
+                                        trackId: trackId,
+                                        param: UiMixerChannelParams.solo(
+                                          !isSoloed,
+                                        ),
+                                      ),
+                                ),
+                              ],
+                            ),
                           ),
                         ],
-                      ),
-                    ),
-                    const SizedBox(width: 4),
-                  ],
-                  SizedBox(
-                    height: 50,
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        ChannelToggleButton(
-                          label: 'M',
-                          tooltip: isMuted ? 'Unmute' : 'Mute',
-                          isActive: isMuted,
-                          activeColor: colors.error,
-                          onTap: () => ref
-                              .read(mixerStateProvider.notifier)
-                              .setMixerChannelParam(
-                                trackId: trackId,
-                                param: UiMixerChannelParams.mute(!isMuted),
-                              ),
-                        ),
-                        ChannelToggleButton(
-                          label: 'S',
-                          tooltip: isSoloed ? 'Unsolo' : 'Solo',
-                          isActive: isSoloed,
-                          activeColor: colors.tertiary,
-                          onTap: () => ref
-                              .read(mixerStateProvider.notifier)
-                              .setMixerChannelParam(
-                                trackId: trackId,
-                                param: UiMixerChannelParams.solo(!isSoloed),
-                              ),
-                        ),
                       ],
                     ),
                   ),
-                ],
+                ),
+                if (!collapsed)
+                  SizedBox(
+                    height: _meterHeight,
+                    child: _TrackLevelMeter(
+                      trackId: trackId,
+                      trackName: track.name,
+                    ),
+                  ),
               ],
             ),
           ),
         ),
       ),
+    );
+  }
+}
+
+/// Thickness of the output meter along the bottom of the header.
+const double _meterHeight = 6;
+
+/// A column of header buttons, 50 px tall when the header has room and scaled
+/// down to fit a shorter header.
+class _ScaleDownColumn extends StatelessWidget {
+  const _ScaleDownColumn({required this.child});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return FittedBox(
+      fit: BoxFit.scaleDown,
+      child: SizedBox(height: 50, child: child),
     );
   }
 }
@@ -568,6 +610,29 @@ List<UiTrackInput> _inputChoices(UiTrackInput current, int deviceChannels) {
     for (var channel = 0; channel + 1 < channels; channel += 2)
       current.copyWith(firstChannel: channel, channels: 2),
   ];
+}
+
+/// The header's output meter. It is the only part of the header that watches
+/// the meter magnitude, so a telemetry tick rebuilds this leaf alone.
+class _TrackLevelMeter extends ConsumerWidget {
+  const _TrackLevelMeter({required this.trackId, required this.trackName});
+
+  final int trackId;
+  final String trackName;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final magnitude = ref.watch(
+      mixerStateProvider.select(
+        (state) => state.trackMagnitudes[trackId] ?? 0.0,
+      ),
+    );
+    return Semantics(
+      label: '$trackName output level',
+      value: '${magnitudeToDb(magnitude).toStringAsFixed(1)} dB',
+      child: DbLevelMeter(magnitude: magnitude, axis: Axis.horizontal),
+    );
+  }
 }
 
 class LaneCollapseToggle extends StatelessWidget {

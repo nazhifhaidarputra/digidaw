@@ -14,10 +14,11 @@ members = [
     "karbeat-utils",
     "karbeat-macros",
     "karbeat-plugin-types", "karbeat-vst3", "karbeat-clap", "karbeat-lv2", "karbeat-signalsmith", "karbeat-audio",
+    "karbeat-settings",
 ]
 
 [workspace.package]
-version = "0.8.0"
+version = "0.8.2"
 edition = "2024"
 license = "GPL 3.0"
 
@@ -39,6 +40,7 @@ karbeat-plugins = { path = "karbeat-plugins" }
 karbeat-utils = { path = "karbeat-utils" }
 karbeat-macros = { path = "karbeat-macros" }
 karbeat-plugin-types = { path = "karbeat-plugin-types" }
+karbeat-settings = { path = "karbeat-settings" }
 anyhow = "1.0.103"
 cpal = { version = "0.17.3"}
 fastrand = "2.4"

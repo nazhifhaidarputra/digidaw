@@ -65,6 +65,9 @@ class MixerNotifier extends Notifier<MixerEditorState> {
   mixer_api.UiMixerState? get _mixerState =>
       ref.read(projectProvider).value?.mixer;
 
+  NotificationNotifier get _notifications =>
+      ref.read(notificationProvider.notifier);
+
   @override
   MixerEditorState build() {
     return const MixerEditorState();
@@ -144,8 +147,12 @@ class MixerNotifier extends Notifier<MixerEditorState> {
   /// Apply a real-time DSP snapshot pushed from the audio thread.
   /// Params listed in [MixerEditorState.touchedParams] are ignored to prevent
   /// in-flight slider values from being overwritten.
-  /// Called 60 times a second by the UI Ticker.
-  /// Reads the latest snapshot from triple_buffer SPSC ring buffer
+  /// Called at the telemetry rate (~30 Hz) by the UI ticker.
+  /// Reads the latest snapshot from triple_buffer SPSC ring buffer.
+  ///
+  /// Meter magnitudes and the project mixer are only republished when they
+  /// actually changed, and unchanged channels keep their instances, so idle
+  /// playback doesn't rebuild everything that watches the project.
   void pollTelemetry() {
     final mixer = _mixerState;
     if (mixer == null) return;
@@ -154,99 +161,133 @@ class MixerNotifier extends Notifier<MixerEditorState> {
     final snapshot = getMixerTelemetrySync(ctx: _ctx);
     final touched = state.touchedParams;
 
-    state = state.copyWith(
-      trackMagnitudes: snapshot.tracks
-          .map((id, channel) => MapEntry(id, channel.magnitude))
-          .lock,
-      busMagnitudes: snapshot.buses
-          .map((id, channel) => MapEntry(id, channel.magnitude))
-          .lock,
-      masterMagnitude: snapshot.master?.magnitude ?? 0.0,
+    final masterMagnitude = snapshot.master?.magnitude ?? 0.0;
+    final tracksMetered = _magnitudesMatch(
+      state.trackMagnitudes,
+      snapshot.tracks,
     );
-
-    // 2. MASTER BUS
-    var newMaster = mixer.masterBus;
-    if (snapshot.master != null) {
-      final snap = snapshot.master!;
-      const int masterSentinel = 4294967294; // u32::MAX - 1
-      newMaster = mixer_api.UiMixerChannel(
-        volume: touched.contains((masterSentinel, 'volume'))
-            ? newMaster.volume
-            : snap.volume,
-        pan: touched.contains((masterSentinel, 'pan'))
-            ? newMaster.pan
-            : snap.pan,
-        mute: touched.contains((masterSentinel, 'mute'))
-            ? newMaster.mute
-            : snap.mute,
-        solo: touched.contains((masterSentinel, 'solo'))
-            ? newMaster.solo
-            : snap.solo,
-        invertedPhase: snap.invertedPhase,
-        effects: newMaster.effects,
+    final busesMetered = _magnitudesMatch(state.busMagnitudes, snapshot.buses);
+    if (!tracksMetered ||
+        !busesMetered ||
+        masterMagnitude != state.masterMagnitude) {
+      state = state.copyWith(
+        trackMagnitudes: tracksMetered
+            ? state.trackMagnitudes
+            : _magnitudesOf(snapshot.tracks),
+        busMagnitudes: busesMetered
+            ? state.busMagnitudes
+            : _magnitudesOf(snapshot.buses),
+        masterMagnitude: masterMagnitude,
       );
     }
 
-    // 3. TRACK CHANNELS
-    final newTracks = Map<int, mixer_api.UiMixerChannel>.from(mixer.channels);
-    for (final entry in snapshot.tracks.entries) {
-      final trackId = entry.key;
-      final snap = entry.value;
-      final currentCh = newTracks[trackId];
+    // 2. MASTER BUS
+    const int masterSentinel = 4294967294; // u32::MAX - 1
+    final masterSnap = snapshot.master;
+    final newMaster = masterSnap == null
+        ? mixer.masterBus
+        : _applyChannelSnapshot(
+            mixer.masterBus,
+            masterSnap,
+            masterSentinel,
+            touched,
+          );
 
-      if (currentCh != null) {
-        newTracks[trackId] = mixer_api.UiMixerChannel(
-          volume: touched.contains((trackId, 'volume'))
-              ? currentCh.volume
-              : snap.volume,
-          pan: touched.contains((trackId, 'pan')) ? currentCh.pan : snap.pan,
-          mute: touched.contains((trackId, 'mute'))
-              ? currentCh.mute
-              : snap.mute,
-          solo: touched.contains((trackId, 'solo'))
-              ? currentCh.solo
-              : snap.solo,
-          invertedPhase: snap.invertedPhase,
-          effects: currentCh.effects,
-        );
-      }
+    // 3. TRACK CHANNELS
+    Map<int, mixer_api.UiMixerChannel>? newTracks;
+    for (final entry in snapshot.tracks.entries) {
+      final currentCh = mixer.channels[entry.key];
+      if (currentCh == null) continue;
+      final next = _applyChannelSnapshot(
+        currentCh,
+        entry.value,
+        entry.key,
+        touched,
+      );
+      if (identical(next, currentCh)) continue;
+      (newTracks ??= Map.of(mixer.channels))[entry.key] = next;
     }
 
     // 4. BUS CHANNELS
-    final newBuses = Map<int, mixer_api.UiBus>.from(mixer.buses);
+    Map<int, mixer_api.UiBus>? newBuses;
     for (final entry in snapshot.buses.entries) {
-      final busId = entry.key;
-      final snap = entry.value;
-      final currentBus = newBuses[busId];
-
-      if (currentBus != null) {
-        final currentCh = currentBus.channel;
-        newBuses[busId] = currentBus.copyWith(
-          channel: mixer_api.UiMixerChannel(
-            volume: touched.contains((busId, 'volume'))
-                ? currentCh.volume
-                : snap.volume,
-            pan: touched.contains((busId, 'pan')) ? currentCh.pan : snap.pan,
-            mute: touched.contains((busId, 'mute'))
-                ? currentCh.mute
-                : snap.mute,
-            solo: touched.contains((busId, 'solo'))
-                ? currentCh.solo
-                : snap.solo,
-            invertedPhase: snap.invertedPhase,
-            effects: currentCh.effects,
-          ),
-        );
-      }
+      final currentBus = mixer.buses[entry.key];
+      if (currentBus == null) continue;
+      final next = _applyChannelSnapshot(
+        currentBus.channel,
+        entry.value,
+        entry.key,
+        touched,
+      );
+      if (identical(next, currentBus.channel)) continue;
+      (newBuses ??= Map.of(mixer.buses))[entry.key] = currentBus.copyWith(
+        channel: next,
+      );
     }
 
-    // 5. BULK UPDATE: Fire a single state change to Riverpod to prevent UI stutter
+    // 5. BULK UPDATE: one project publish, and only when a param moved
+    // (automation, or an edit made elsewhere). Idle playback publishes nothing.
+    if (identical(newMaster, mixer.masterBus) &&
+        newTracks == null &&
+        newBuses == null) {
+      return;
+    }
     _projectNotifier.updateMixer(
       mixer.copyWith(
         masterBus: newMaster,
-        channels: newTracks,
-        buses: newBuses,
+        channels: newTracks ?? mixer.channels,
+        buses: newBuses ?? mixer.buses,
       ),
+    );
+  }
+
+  static bool _magnitudesMatch(
+    IMap<int, double> current,
+    Map<int, mixer_api.UiMixerChannelSnapshot> snapshots,
+  ) {
+    if (current.length != snapshots.length) return false;
+    for (final entry in snapshots.entries) {
+      if (current[entry.key] != entry.value.magnitude) return false;
+    }
+    return true;
+  }
+
+  static IMap<int, double> _magnitudesOf(
+    Map<int, mixer_api.UiMixerChannelSnapshot> snapshots,
+  ) => snapshots.map((id, channel) => MapEntry(id, channel.magnitude)).lock;
+
+  /// [current] with the snapshot's untouched params applied, or [current]
+  /// itself when nothing differs.
+  static mixer_api.UiMixerChannel _applyChannelSnapshot(
+    mixer_api.UiMixerChannel current,
+    mixer_api.UiMixerChannelSnapshot snap,
+    int channelId,
+    ISet<(int, String)> touched,
+  ) {
+    final volume = touched.contains((channelId, 'volume'))
+        ? current.volume
+        : snap.volume;
+    final pan = touched.contains((channelId, 'pan')) ? current.pan : snap.pan;
+    final mute = touched.contains((channelId, 'mute'))
+        ? current.mute
+        : snap.mute;
+    final solo = touched.contains((channelId, 'solo'))
+        ? current.solo
+        : snap.solo;
+    if (volume == current.volume &&
+        pan == current.pan &&
+        mute == current.mute &&
+        solo == current.solo &&
+        snap.invertedPhase == current.invertedPhase) {
+      return current;
+    }
+    return mixer_api.UiMixerChannel(
+      volume: volume,
+      pan: pan,
+      mute: mute,
+      solo: solo,
+      invertedPhase: snap.invertedPhase,
+      effects: current.effects,
     );
   }
 
@@ -610,6 +651,80 @@ extension MixerService on MixerNotifier {
           'MixerNotifier: failed to add effect to master bus: ${result.error}',
         );
         return notifyErrorResult(Exception(result.error.toString()));
+      }
+      return Result.ok(null);
+    });
+  }
+
+  /// Save the effect chain of [target] as a template file at [path].
+  Future<Result<void>> saveChannelTemplate({
+    required mixer_api.UiMixerChannelTarget target,
+    required String path,
+  }) {
+    return _runBackendOperation(() async {
+      final result = await AsyncValue.guard(
+        () => mixer_api.saveChannelTemplate(
+          ctx: _ctx,
+          target: target,
+          path: path,
+        ),
+      );
+
+      if (result.hasError) {
+        AppLogger.error(
+          'MixerNotifier: failed to save channel template: ${result.error}',
+        );
+        _notifications.error(
+          result.error!,
+          title: 'Could not save channel template',
+        );
+        return Result.error(Exception(result.error.toString()));
+      }
+      _notifications.info('Saved channel template to $path');
+      return Result.ok(null);
+    });
+  }
+
+  /// Append the effects of the template file at [path] to [target], and warn
+  /// about any plugin that could not be loaded.
+  Future<Result<void>> loadChannelTemplate({
+    required mixer_api.UiMixerChannelTarget target,
+    required String path,
+  }) {
+    return _runBackendOperation(() async {
+      final result = await AsyncValue.guard(() async {
+        final skipped = await mixer_api.loadChannelTemplate(
+          ctx: _ctx,
+          target: target,
+          path: path,
+        );
+        await switch (target) {
+          mixer_api.UiMixerChannelTarget_Track(:final field0) =>
+            syncMixerChannel(field0),
+          mixer_api.UiMixerChannelTarget_Bus() => syncBuses(),
+          mixer_api.UiMixerChannelTarget_Master() => syncMasterBus(),
+        };
+        return skipped;
+      });
+
+      if (result.hasError) {
+        AppLogger.error(
+          'MixerNotifier: failed to load channel template: ${result.error}',
+        );
+        _notifications.error(
+          result.error!,
+          title: 'Could not load channel template',
+        );
+        return Result.error(Exception(result.error.toString()));
+      }
+      final skipped = result.requireValue;
+      if (skipped.isEmpty) {
+        _notifications.info('Loaded channel template');
+      } else {
+        _notifications.warn(
+          'Skipped unavailable plugins: ${skipped.join(', ')}',
+          title: 'Loaded channel template',
+        );
       }
       return Result.ok(null);
     });

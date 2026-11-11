@@ -1,5 +1,11 @@
-use karbeat_audio::commands::AudioCommand;
+use super::{
+    external_plugin_api::{
+        add_instrument, delete_track as external_plugin_api_delete_track, descriptor, track_targets,
+    },
+    project_api::capture_live_state,
+};
 use karbeat_audio::commands::MixerChannelTarget;
+use karbeat_audio::commands::{AudioCommand, EffectTarget};
 use karbeat_audio::context::DawContext;
 use karbeat_audio::event::PluginTarget;
 use karbeat_core::core::history::actions::{
@@ -9,6 +15,7 @@ use karbeat_core::core::project::track::RemovedTrackType;
 use karbeat_core::core::project::{AudioTrack, TrackInputSettings, TrackType};
 use karbeat_core::shared::id::*;
 use karbeat_utils::color::Color;
+use std::mem::replace;
 
 /// Looks up a track and maps it while borrowed from project state.
 pub fn get_track<T, F>(ctx: &DawContext, track_id: TrackId, mapper: F) -> Option<T>
@@ -25,7 +32,7 @@ pub fn add_midi_track_with_generator_id(
     registry_id: u32,
 ) -> anyhow::Result<AudioTrack> {
     if ctx.plugin_catalog.external(registry_id).is_some() {
-        return super::external_plugin_api::add_instrument(ctx, registry_id);
+        return add_instrument(ctx, registry_id);
     }
     let structure_before = StructureRecorder::begin(&ctx.app_state, &[], &[]);
     let (audio_track, gen_id, generator_plugin_factory) = ctx
@@ -72,11 +79,11 @@ pub fn replace_track_generator(
         .map(|generator| PluginTarget::Generator(generator.id));
     if let Some(previous) = previous {
         anyhow::ensure!(
-            super::external_plugin_api::descriptor(ctx, previous).is_none(),
+            descriptor(ctx, previous).is_none(),
             "Remove the external generator before replacing it"
         );
         // Undo reinstalls the previous generator from project state, so keep its live settings.
-        if let Err(error) = super::project_api::capture_live_state(ctx, &[previous], &[]) {
+        if let Err(error) = capture_live_state(ctx, &[previous], &[]) {
             tracing::warn!("Replacing generator without its live plugin state: {error:#}");
         }
     }
@@ -118,7 +125,7 @@ pub fn change_track_name(
         .tracks
         .get_mut(track_id)
         .ok_or_else(|| anyhow::anyhow!("Track not found"))?;
-    let previous = std::mem::replace(&mut track.name, new_name.to_string());
+    let previous = replace(&mut track.name, new_name.to_string());
     ctx.push_history(TrackRenamed::new(track_id, previous));
     Ok(())
 }
@@ -137,7 +144,7 @@ pub fn change_track_color(
     let color = Color::new_from_string(new_color).ok_or_else(|| {
         anyhow::anyhow!("Invalid color format. Use hex string like #RRGGBB or #RRGGBBAA")
     })?;
-    let previous = std::mem::replace(&mut track.color, color);
+    let previous = replace(&mut track.color, color);
     ctx.push_history(TrackRecolored::new(track_id, previous));
     Ok(())
 }
@@ -212,19 +219,15 @@ where
 
 /// Removes a track and its dependent project/audio state, returning its track type.
 pub fn delete_track(ctx: &mut DawContext, track_id: TrackId) -> anyhow::Result<RemovedTrackType> {
-    if super::external_plugin_api::track_targets(ctx, track_id)
+    if track_targets(ctx, track_id)
         .iter()
-        .any(|target| super::external_plugin_api::descriptor(ctx, *target).is_some())
+        .any(|target| descriptor(ctx, *target).is_some())
     {
-        return super::external_plugin_api::delete_track(ctx, track_id);
+        return external_plugin_api_delete_track(ctx, track_id);
     }
 
-    let plugins = super::external_plugin_api::track_targets(ctx, track_id);
-    if let Err(error) = super::project_api::capture_live_state(
-        ctx,
-        &plugins,
-        &[MixerChannelTarget::Track(track_id)],
-    ) {
+    let plugins = track_targets(ctx, track_id);
+    if let Err(error) = capture_live_state(ctx, &plugins, &[MixerChannelTarget::Track(track_id)]) {
         tracing::warn!("Deleting track without its live plugin state: {error:#}");
     }
     let structure_before = StructureRecorder::begin(&ctx.app_state, &[track_id], &[]);
@@ -258,7 +261,7 @@ pub fn delete_track(ctx: &mut DawContext, track_id: TrackId) -> anyhow::Result<R
     }
     for effect_id in effect_ids {
         let _ = ctx.send_audio_command(AudioCommand::RemoveEffect {
-            target: karbeat_audio::commands::EffectTarget::Track(track_id),
+            target: EffectTarget::Track(track_id),
             effect_id,
         });
     }

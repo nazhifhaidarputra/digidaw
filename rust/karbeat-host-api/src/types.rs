@@ -1,5 +1,10 @@
-use std::path::PathBuf;
+use std::{
+    io::Error,
+    path::PathBuf,
+    sync::atomic::{AtomicU64, Ordering},
+};
 
+use crate::native_ui::NativeUiError;
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Hash, Serialize, Deserialize)]
@@ -64,16 +69,12 @@ impl HostInstanceId {
     ///
     /// Returns [`HostError::InvalidTransition`] once the ID space is exhausted.
     pub fn allocate() -> Result<Self, HostError> {
-        static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
-        let mut next = NEXT.load(std::sync::atomic::Ordering::Relaxed);
+        static NEXT: AtomicU64 = AtomicU64::new(1);
+        let mut next = NEXT.load(Ordering::Relaxed);
         loop {
             let following = next.checked_add(1).ok_or(HostError::InvalidTransition)?;
-            match NEXT.compare_exchange_weak(
-                next,
-                following,
-                std::sync::atomic::Ordering::Relaxed,
-                std::sync::atomic::Ordering::Relaxed,
-            ) {
+            match NEXT.compare_exchange_weak(next, following, Ordering::Relaxed, Ordering::Relaxed)
+            {
                 Ok(_) => return Ok(Self(next)),
                 Err(current) => next = current,
             }
@@ -278,22 +279,23 @@ pub enum HostError {
     RuntimeUnavailable,
     /// Native editor windowing or UI dispatch failed.
     #[error(transparent)]
-    NativeUi(#[from] crate::native_ui::NativeUiError),
+    NativeUi(#[from] NativeUiError),
     /// Filesystem, process, or state-stream I/O failed.
     #[error("plugin I/O: {0}")]
-    Io(#[from] std::io::Error),
+    Io(#[from] Error),
 }
 
 #[cfg(test)]
 #[allow(clippy::unwrap_used, reason = "the ID space cannot run out in a test")]
 mod tests {
     use super::*;
+    use std::thread::spawn;
 
     #[test]
     fn instance_ids_are_unique_across_threads_and_never_zero() {
         let workers: Vec<_> = (0..4)
             .map(|_| {
-                std::thread::spawn(|| {
+                spawn(|| {
                     (0..256)
                         .map(|_| HostInstanceId::allocate().unwrap())
                         .collect::<Vec<_>>()

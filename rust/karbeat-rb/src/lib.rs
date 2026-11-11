@@ -17,6 +17,7 @@ mod live;
 mod stretcher;
 
 pub use live::{LiveOptions, LiveShifter};
+use std::ptr::{null, null_mut};
 pub use stretcher::{Stretcher, StretcherOptions};
 
 #[allow(
@@ -77,7 +78,7 @@ fn read_pointers<C: AsRef<[f32]>>(
             got: channels.len(),
         });
     }
-    let mut pointers = [std::ptr::null(); MAX_CHANNELS];
+    let mut pointers = [null(); MAX_CHANNELS];
     let mut frames = usize::MAX;
     for (pointer, channel) in pointers.iter_mut().zip(channels) {
         let channel = channel.as_ref();
@@ -99,7 +100,7 @@ fn write_pointers<C: AsMut<[f32]>>(
         });
     }
     let empty = channels.is_empty();
-    let mut pointers = [std::ptr::null_mut(); MAX_CHANNELS];
+    let mut pointers = [null_mut(); MAX_CHANNELS];
     let mut frames = usize::MAX;
     for (pointer, channel) in pointers.iter_mut().zip(channels) {
         let channel = channel.as_mut();

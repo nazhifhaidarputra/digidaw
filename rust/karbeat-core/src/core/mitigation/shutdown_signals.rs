@@ -1,4 +1,4 @@
-use std::{path::PathBuf, sync::Once};
+use std::{path::PathBuf, sync::Once, thread::Builder};
 
 use signal_hook::{
     consts::{SIGHUP, SIGINT, SIGTERM},
@@ -24,7 +24,7 @@ pub fn watch(marker: PathBuf) {
                 return;
             }
         };
-        let spawned = std::thread::Builder::new()
+        let spawned = Builder::new()
             .name("karbeat-shutdown-signals".into())
             .spawn(move || {
                 if let Some(signal) = signals.forever().next() {

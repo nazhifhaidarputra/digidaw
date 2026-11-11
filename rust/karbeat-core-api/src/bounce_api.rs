@@ -6,7 +6,10 @@
 //! processed twice once it plays back through the master.
 
 use std::collections::HashSet;
-use std::path::{Path, PathBuf};
+use std::{
+    fs::{create_dir_all, remove_file},
+    path::{Path, PathBuf},
+};
 
 use anyhow::Context;
 use karbeat_audio::context::DawContext;
@@ -93,20 +96,8 @@ pub fn execute_bounce(
         bit_depth: BitDepth::BitPerSample(BitPerSample::B32),
     });
 
-    let mut cancelled = false;
-    let rendered = execute_export(export, &path, config, options, |fraction| {
-        let keep_going = progress(fraction);
-        cancelled |= !keep_going;
-        keep_going
-    });
-    if let Err(error) = rendered {
-        discard(&output_path);
-        return Err(error.into());
-    }
-    if cancelled {
-        discard(&output_path);
-        anyhow::bail!("Bounce cancelled");
-    }
+    // A cancelled or failed render leaves no file behind.
+    execute_export(export, &path, config, options, &mut progress)?;
 
     let waveform = load_audio_file(&path, Some(&name), sample_rate).inspect_err(|_| {
         discard(&output_path);
@@ -140,7 +131,7 @@ fn new_bounce_file() -> anyhow::Result<PathBuf> {
     let directory = app_cache_dir()
         .context("No cache directory is available for bounced audio")?
         .join("bounces");
-    std::fs::create_dir_all(&directory)
+    create_dir_all(&directory)
         .with_context(|| format!("Failed to create {}", directory.display()))?;
     let (_, path) = tempfile::Builder::new()
         .prefix("bounce-")
@@ -153,7 +144,7 @@ fn new_bounce_file() -> anyhow::Result<PathBuf> {
 }
 
 fn discard(path: &Path) {
-    if let Err(error) = std::fs::remove_file(path) {
+    if let Err(error) = remove_file(path) {
         tracing::warn!(
             "Failed to remove the bounce file {}: {error}",
             path.display()
@@ -182,6 +173,7 @@ fn bounce_name(app: &ApplicationState, region: LoopRegion) -> String {
 )]
 mod tests {
     use super::*;
+    use crate::test::helpers::make_ctx;
 
     #[test]
     fn bounce_names_list_the_bars_the_region_touches() {
@@ -194,7 +186,7 @@ mod tests {
 
     #[test]
     fn bouncing_needs_a_loop_region() {
-        let ctx = crate::test::helpers::make_ctx();
+        let ctx = make_ctx();
         let error = begin_bounce(&ctx).err().unwrap();
         assert!(error.to_string().contains("loop region"), "{error}");
     }

@@ -8,14 +8,21 @@ use crate::{
 };
 use karbeat_host_api::{
     HostError, PluginDescriptor, PluginKind, ProcessingConfig, ProcessingGate,
+    bypass::BypassDelay,
     channels::{adapt_channels, silence},
 };
-use karbeat_plugin_api::prelude::{
-    AudioBuffers, AudioPlugin, BusConfig, MidiMessage, NoteExpressionType, ParameterSpec,
-    ProcessContext,
+use karbeat_plugin_api::{
+    prelude::{
+        AudioBuffers, AudioPlugin, BusConfig, MidiMessage, NoteExpressionType, ParameterSpec,
+        ProcessContext,
+    },
+    traits::HashMap,
+    types::PluginCategory,
 };
 use std::{
+    any::Any,
     cell::UnsafeCell,
+    mem::{take, zeroed},
     ptr,
     sync::{
         Arc,
@@ -25,7 +32,13 @@ use std::{
 use vst3::{
     ComPtr, ComWrapper,
     Steinberg::{
-        Vst::{self, IAudioProcessor, IAudioProcessorTrait, IEventList, IParameterChanges},
+        Vst::{
+            self, IAudioProcessor, IAudioProcessorTrait, IEventList, IParameterChanges,
+            ProcessContext_::StatesAndFlags_::{
+                kBarPositionValid, kCycleActive, kCycleValid, kPlaying, kProjectTimeMusicValid,
+                kRecording, kTempoValid, kTimeSigValid,
+            },
+        },
         kResultOk,
     },
 };
@@ -190,7 +203,7 @@ impl Dsp {
         let was_processing = self.is_processing();
         self.start()?;
         // SAFETY: This ABI record contains only integer/float/plain-record fields.
-        let mut transport: Vst::ProcessContext = unsafe { std::mem::zeroed() };
+        let mut transport: Vst::ProcessContext = unsafe { zeroed() };
         transport.sampleRate = self.config.sample_rate;
         let mut data = self.process_data(i32::try_from(frames).unwrap_or(0), &raw mut transport);
         // SAFETY: The caller holds exclusive suspended DSP access; all pointers refer to
@@ -591,7 +604,6 @@ fn note_event(
     }
 }
 fn transport_context(context: &ProcessContext, sample_rate: f64) -> Vst::ProcessContext {
-    use Vst::ProcessContext_::StatesAndFlags_::*;
     let mut flags = kTempoValid | kTimeSigValid | kProjectTimeMusicValid | kBarPositionValid;
     if context.is_playing {
         flags |= kPlaying;
@@ -603,7 +615,7 @@ fn transport_context(context: &ProcessContext, sample_rate: f64) -> Vst::Process
         flags |= kCycleActive | kCycleValid;
     }
     // SAFETY: This ABI record contains only integer/float/plain-record fields.
-    let mut result: Vst::ProcessContext = unsafe { std::mem::zeroed() };
+    let mut result: Vst::ProcessContext = unsafe { zeroed() };
     result.state = u32::try_from(flags).unwrap_or_default();
     result.sampleRate = sample_rate;
     result.projectTimeSamples = i64::try_from(context.project_time_samples).unwrap_or(i64::MAX);
@@ -644,7 +656,7 @@ pub struct Vst3Processor {
     pub(crate) bypass: bool,
     pub(crate) reset_pending: bool,
     pub(crate) latency_seen: u32,
-    pub(crate) bypass_delay: karbeat_host_api::bypass::BypassDelay,
+    pub(crate) bypass_delay: BypassDelay,
 }
 impl Drop for Vst3Processor {
     fn drop(&mut self) {
@@ -661,11 +673,11 @@ impl AudioPlugin for Vst3Processor {
     fn version(&self) -> &str {
         &self.descriptor.version
     }
-    fn category(&self) -> karbeat_plugin_api::types::PluginCategory {
+    fn category(&self) -> PluginCategory {
         match self.descriptor.kind {
-            PluginKind::Instrument => karbeat_plugin_api::types::PluginCategory::Instrument,
-            PluginKind::Effect => karbeat_plugin_api::types::PluginCategory::Effect,
-            PluginKind::MidiEffect => karbeat_plugin_api::types::PluginCategory::MidiEffect,
+            PluginKind::Instrument => PluginCategory::Instrument,
+            PluginKind::Effect => PluginCategory::Effect,
+            PluginKind::MidiEffect => PluginCategory::MidiEffect,
         }
     }
     fn prepare(&mut self, _sample_rate: f32, _max_buffer_size: usize) {}
@@ -685,7 +697,9 @@ impl AudioPlugin for Vst3Processor {
         if guard.is_some() && !self.bypass {
             // SAFETY: Gate excludes UI reconfiguration and any other processing call.
             let dsp = unsafe { &mut *self.slot.dsp.get() };
-            dsp.recover_notes |= std::mem::take(&mut self.reset_pending);
+            dsp.recover_notes |= take(&mut self.reset_pending);
+            // This block answers every request made before it starts.
+            self.exchange.work.processed();
             dsp.process(buffers, context, &self.exchange);
         } else {
             self.reset_pending |= !context.midi_events.is_empty();
@@ -697,6 +711,9 @@ impl AudioPlugin for Vst3Processor {
     fn set_bypass(&mut self, bypass: bool) {
         self.reset_pending |= self.bypass != bypass;
         self.bypass = bypass;
+    }
+    fn has_pending_work(&self) -> bool {
+        self.exchange.work.is_pending()
     }
     fn latency_samples(&self) -> u32 {
         self.slot.latency.load(Ordering::Acquire)
@@ -737,7 +754,7 @@ impl AudioPlugin for Vst3Processor {
             parameter.clear_user_edited();
         }
     }
-    fn default_parameters(&self) -> karbeat_plugin_api::traits::HashMap<u32, f32> {
+    fn default_parameters(&self) -> HashMap<u32, f32> {
         self.specs
             .iter()
             .map(|p| (p.id, narrow_sample(p.default_value)))
@@ -749,7 +766,7 @@ impl AudioPlugin for Vst3Processor {
     fn get_parameter_specs(&self) -> Vec<ParameterSpec> {
         self.specs.clone()
     }
-    fn as_any(&self) -> &dyn std::any::Any {
+    fn as_any(&self) -> &dyn Any {
         self
     }
 }
@@ -762,7 +779,9 @@ impl AudioPlugin for Vst3Processor {
 )]
 mod tests {
     use super::*;
-    use std::cell::Cell;
+    use karbeat_host_api::{PluginFormat, PluginIdentity, PluginKind};
+    use karbeat_plugin_api::prelude::{AudioBusBuffer, MidiEvent, ProcessingMode};
+    use std::{cell::Cell, slice::from_raw_parts_mut};
     use vst3::Steinberg::{
         Vst::{IEventListTrait, IParamValueQueueTrait, IParameterChangesTrait},
         kNotImplemented, kResultFalse,
@@ -926,7 +945,7 @@ mod tests {
         // SAFETY: The bus has at least one channel pointer.
         let plane = unsafe { *planes };
         // SAFETY: The caller guarantees the channel holds `frames` writable samples.
-        unsafe { std::slice::from_raw_parts_mut(plane, frames) }
+        unsafe { from_raw_parts_mut(plane, frames) }
     }
 
     #[test]
@@ -954,15 +973,15 @@ mod tests {
         let mut main_channels: [&mut [f32]; 2] = [&mut in_l, &mut in_r];
         let mut side_channels: [&mut [f32]; 2] = [&mut side_l, &mut side_r];
         let mut out_channels: [&mut [f32]; 2] = [&mut out_l, &mut out_r];
-        let mut main = [karbeat_plugin_api::prelude::AudioBusBuffer {
+        let mut main = [AudioBusBuffer {
             channel_data: &mut main_channels,
             is_silent: false,
         }];
-        let mut side = [karbeat_plugin_api::prelude::AudioBusBuffer {
+        let mut side = [AudioBusBuffer {
             channel_data: &mut side_channels,
             is_silent: false,
         }];
-        let mut output = [karbeat_plugin_api::prelude::AudioBusBuffer {
+        let mut output = [AudioBusBuffer {
             channel_data: &mut out_channels,
             is_silent: false,
         }];
@@ -1083,7 +1102,7 @@ mod tests {
             bypass: false,
             reset_pending: false,
             latency_seen: 0,
-            bypass_delay: karbeat_host_api::bypass::BypassDelay::new(1, 0).unwrap(),
+            bypass_delay: BypassDelay::new(1, 0).unwrap(),
         }
     }
 
@@ -1106,11 +1125,11 @@ mod tests {
         assert!((endpoint.get_parameter(77) - 1.0).abs() < 1e-6);
     }
 
-    fn render_notes(endpoint: &mut Vst3Processor, midi: &[karbeat_plugin_api::prelude::MidiEvent]) {
+    fn render_notes(endpoint: &mut Vst3Processor, midi: &[MidiEvent]) {
         endpoint.set_parameter(77, 0.5);
         let mut samples = [0.0_f32; 32];
         let mut channels: [&mut [f32]; 1] = [&mut samples];
-        let mut output = [karbeat_plugin_api::prelude::AudioBusBuffer {
+        let mut output = [AudioBusBuffer {
             channel_data: &mut channels,
             is_silent: false,
         }];
@@ -1125,14 +1144,14 @@ mod tests {
         );
     }
 
-    fn context(midi: &[karbeat_plugin_api::prelude::MidiEvent]) -> ProcessContext<'_> {
+    fn context(midi: &[MidiEvent]) -> ProcessContext<'_> {
         ProcessContext {
             bpm: 120.0,
             time_sig_numerator: 4,
             time_sig_denominator: 4,
             is_playing: true,
             is_recording: false,
-            mode: karbeat_plugin_api::prelude::ProcessingMode::Realtime,
+            mode: ProcessingMode::Realtime,
             project_time_seconds: 0.0,
             project_time_samples: 0,
             beat_position: 0.0,
@@ -1146,8 +1165,6 @@ mod tests {
 
     #[test]
     fn bypass_suspension_and_reset_release_old_notes_without_discarding_new_notes() {
-        use karbeat_host_api::{PluginFormat, PluginIdentity, PluginKind};
-        use karbeat_plugin_api::prelude::MidiEvent;
         for scenario in 0..3 {
             let processor = ComWrapper::new(FlushProcessor(Cell::new(None)));
             let mut dsp = Dsp::new(
@@ -1196,7 +1213,7 @@ mod tests {
                 bypass: false,
                 reset_pending: false,
                 latency_seen: 0,
-                bypass_delay: karbeat_host_api::bypass::BypassDelay::new(1, 0).unwrap(),
+                bypass_delay: BypassDelay::new(1, 0).unwrap(),
             };
             let note_on = |key, note_id| MidiEvent {
                 sample_offset: 7,

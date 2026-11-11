@@ -121,14 +121,41 @@ class _InteractiveClipState extends ConsumerState<_InteractiveClip> {
     );
   }
 
-  /// Opens the editor of what this clip plays: the piano roll for a pattern,
-  /// the audio properties for an audio source.
-  void _openClipEditor() {
+  /// Opens what this clip plays: the piano roll for a pattern, the audio
+  /// properties for an audio source.
+  void _openClipParent() {
     switch (widget.clip.source) {
       case UiClipSource_Midi(:final patternId):
         _openInPianoRoll(patternId);
       case UiClipSource_Audio(:final sourceId):
         _openAudioProperties(sourceId);
+      case UiClipSource_None():
+        break;
+    }
+  }
+
+  void _openClipInformation() {
+    ref
+        .read(trackListStateProvider.notifier)
+        .selectClip(trackId: widget.trackId, clipId: widget.clip.id);
+    showClipPropertiesDialog(
+      context,
+      trackId: widget.trackId,
+      clipId: widget.clip.id,
+      onGoToParent: () {
+        if (mounted) _openClipParent();
+      },
+    );
+  }
+
+  /// A double-click opens a pattern in the piano roll and shows the clip
+  /// information of an audio clip.
+  void _openOnDoubleClick() {
+    switch (widget.clip.source) {
+      case UiClipSource_Midi(:final patternId):
+        _openInPianoRoll(patternId);
+      case UiClipSource_Audio():
+        _openClipInformation();
       case UiClipSource_None():
         break;
     }
@@ -224,8 +251,12 @@ class _InteractiveClipState extends ConsumerState<_InteractiveClip> {
     final double safeWidth = width < 1 ? 1 : width;
     const resizeEdgeSize = 25.0;
 
-    final sampleRate = ref.watch(transportProvider).value?.sampleRate ?? 48000;
-    final tempo = ref.watch(transportProvider).value?.state?.bpm ?? 120.0;
+    final sampleRate =
+        ref.watch(transportProvider.select((s) => s.value?.sampleRate)) ??
+        48000;
+    final tempo =
+        ref.watch(transportProvider.select((s) => s.value?.state?.bpm)) ??
+        120.0;
 
     // final isMoving = _currentAction == _DragAction.move;
 
@@ -246,9 +277,12 @@ class _InteractiveClipState extends ConsumerState<_InteractiveClip> {
     }
 
     // Check if this is a follower in a batch move (should be semi-transparent)
-    final placementState = ref.watch(clipPlacementProvider);
-    final isPartOfBatchDrag =
-        widget.isSelected && placementState.isDraggingExisting;
+    // Only the drag flag matters here; the full placement state changes on
+    // every pointer move during a drag or placement.
+    final isDraggingExisting = ref.watch(
+      clipPlacementProvider.select((s) => s.isDraggingExisting),
+    );
+    final isPartOfBatchDrag = widget.isSelected && isDraggingExisting;
 
     return Positioned(
       left: left,
@@ -263,7 +297,7 @@ class _InteractiveClipState extends ConsumerState<_InteractiveClip> {
             ? 0.3
             : 1.0,
         child: IgnorePointer(
-          ignoring: placementState.isDraggingExisting,
+          ignoring: isDraggingExisting,
           child: MouseRegion(
             cursor: cursor,
             // Detect Hover for Resize Cursors (only if not in Delete mode)
@@ -322,8 +356,7 @@ class _InteractiveClipState extends ConsumerState<_InteractiveClip> {
       trackType: widget.trackType,
       color: widget.color,
       zoomLevel: widget.zoomLevel,
-      projectSampleRate:
-          ref.watch(transportProvider).value?.sampleRate ?? 48000,
+      projectSampleRate: sampleRate,
       overrideOffset: _visualOffset.toDouble(),
       isSelected: widget.isSelected,
       scrollController: widget.horizontalScrollController,
@@ -343,7 +376,7 @@ class _InteractiveClipState extends ConsumerState<_InteractiveClip> {
       behavior: HitTestBehavior.opaque,
       onTapUp: (details) async {
         if (_completesDoubleClick()) {
-          _openClipEditor();
+          _openOnDoubleClick();
           return;
         }
         if (widget.selectedTool == ToolSelection.select) {
@@ -596,15 +629,21 @@ class _InteractiveClipState extends ConsumerState<_InteractiveClip> {
       title: widget.clip.name,
       actions: [
         DawContextAction(title: "Rename", icon: Icons.edit, onTap: _renameClip),
+        if (widget.clip.source is! UiClipSource_None)
+          DawContextAction(
+            title: "Go to Clip Information",
+            icon: Icons.info_outline,
+            onTap: _openClipInformation,
+          ),
         if (widget.clip.source case UiClipSource_Midi(:final patternId))
           DawContextAction(
-            title: "Open in Piano Roll",
+            title: "Go to Piano Roll",
             icon: Icons.piano,
             onTap: () => _openInPianoRoll(patternId),
           ),
         if (widget.clip.source case UiClipSource_Audio(:final sourceId))
           DawContextAction(
-            title: "Open Audio Properties",
+            title: "Go to Audio Properties",
             icon: Icons.audio_file,
             onTap: () => _openAudioProperties(sourceId),
           ),

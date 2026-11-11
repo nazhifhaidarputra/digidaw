@@ -22,6 +22,7 @@ mod x11_editor;
     reason = "integration test setup failures should fail the test"
 )]
 mod lsp {
+    use super::x11_editor::{exercise_editor, exercise_native_editor};
     use karbeat_host_api::{
         HostInstanceId, PluginController, PluginDescriptor, PluginInstanceManager, PluginKind,
         ProcessingConfig,
@@ -29,7 +30,11 @@ mod lsp {
     use karbeat_lv2::{Lv2PluginHost, world};
     use karbeat_plugin_api::prelude::AudioPlugin;
     use karbeat_plugin_api::types::{AudioBuffers, AudioBusBuffer, ProcessContext, ProcessingMode};
-    use std::path::PathBuf;
+    use std::{
+        env::{args, var_os},
+        f64::consts::TAU,
+        path::PathBuf,
+    };
 
     const BLOCK: usize = 256;
     const BLOCKS: usize = 64;
@@ -59,7 +64,7 @@ mod lsp {
                     clippy::cast_possible_truncation,
                     reason = "test tone"
                 )]
-                let value = (sample * 440.0 * std::f64::consts::TAU / 48_000.0).sin() as f32;
+                let value = (sample * 440.0 * TAU / 48_000.0).sin() as f32;
                 value * 0.25
             };
             let mut in_l: Vec<f32> = (0..BLOCK).map(phase).collect();
@@ -262,12 +267,10 @@ mod lsp {
     }
 
     pub(super) fn main() {
-        if std::env::var_os("LSP_LV2_PATH").is_none()
-            && !std::env::args().any(|arg| arg == "--ignored")
-        {
+        if var_os("LSP_LV2_PATH").is_none() && !args().any(|arg| arg == "--ignored") {
             return;
         }
-        let path = std::env::var_os("LSP_LV2_PATH").map_or_else(
+        let path = var_os("LSP_LV2_PATH").map_or_else(
             || PathBuf::from("/usr/lib64/lv2/lsp-plugins.lv2"),
             PathBuf::from,
         );
@@ -327,22 +330,19 @@ mod lsp {
 
         state_round_trip(&mut host, clipper);
 
-        if std::env::var_os("LSP_TEST_EDITOR").is_some() {
+        if var_os("LSP_TEST_EDITOR").is_some() {
             let id = host.create(sidechain).unwrap();
             host.prepare(id, &config(sidechain.kind, BLOCK)).unwrap();
             let mut processor = host.take_processor(id).unwrap();
             host.resume(id).unwrap();
-            super::x11_editor::exercise_editor(&mut host, id, &mut || {
+            exercise_editor(&mut host, id, &mut || {
                 render(processor.as_mut(), false);
             });
             host.suspend(id).unwrap();
             drop(processor);
             host.destroy(id).unwrap();
             drop(host);
-            super::x11_editor::exercise_native_editor(
-                sidechain.clone(),
-                config(sidechain.kind, BLOCK),
-            );
+            exercise_native_editor(sidechain.clone(), config(sidechain.kind, BLOCK));
         }
     }
 }

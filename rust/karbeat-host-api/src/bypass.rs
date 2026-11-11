@@ -1,3 +1,4 @@
+use crate::HostError;
 use karbeat_plugin_api::types::AudioBuffers;
 
 /// Prepared dry-path delay, advanced during active processing to preserve suspension timing.
@@ -13,16 +14,16 @@ impl BypassDelay {
     /// # Errors
     ///
     /// Rejects more than two channels, latency above 1,048,576 frames, or allocation failure.
-    pub fn new(channels: usize, latency: usize) -> Result<Self, crate::HostError> {
+    pub fn new(channels: usize, latency: usize) -> Result<Self, HostError> {
         if channels > 2 || latency > 1_048_576 {
-            return Err(crate::HostError::InvalidConfiguration);
+            return Err(HostError::InvalidConfiguration);
         }
         let mut delay = Vec::with_capacity(channels);
         for _ in 0..channels {
             let mut channel = Vec::new();
             channel
                 .try_reserve_exact(latency)
-                .map_err(|_| crate::HostError::InvalidConfiguration)?;
+                .map_err(|_| HostError::InvalidConfiguration)?;
             channel.resize(latency, 0.0);
             delay.push(channel);
         }

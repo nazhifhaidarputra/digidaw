@@ -4,7 +4,10 @@ use karbeat_plugin_types::SmoothableParam;
 use karbeat_utils::hash::hash_str;
 use rodio::math::db_to_linear;
 
-use crate::commands::{MixerChannelSnapshot, MixerChannelTarget};
+use crate::{
+    commands::{MixerChannelSnapshot, MixerChannelTarget},
+    engine::kernels::finite_peak,
+};
 use karbeat_core::{
     core::project::{MixerChannel, MixerChannelParams},
     shared::*,
@@ -127,7 +130,7 @@ impl AudioMixerChannelValues {
     /// is decayed once per audio block by the engine, producing a fast peak
     /// response with a readable release rather than a flickering raw value.
     pub fn observe_magnitude(&mut self, buffer: &[f32]) {
-        self.observe_peak(crate::engine::kernels::finite_peak(buffer));
+        self.observe_peak(finite_peak(buffer));
     }
 
     /// Raises the meter to `peak`, the loudest finite sample of a processed block.

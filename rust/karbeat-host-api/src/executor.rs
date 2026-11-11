@@ -1,7 +1,10 @@
 use std::{
     fmt,
     path::PathBuf,
-    sync::{Arc, atomic::AtomicBool},
+    sync::{
+        Arc,
+        atomic::{AtomicBool, Ordering},
+    },
 };
 
 use karbeat_plugin_api::prelude::ParameterSpec;
@@ -39,10 +42,7 @@ impl fmt::Debug for ScanRequest {
             .field("directories", &self.directories)
             .field("timeout_seconds", &self.timeout_seconds)
             .field("retry_quarantined", &self.retry_quarantined)
-            .field(
-                "cancelled",
-                &self.cancelled.load(std::sync::atomic::Ordering::Relaxed),
-            )
+            .field("cancelled", &self.cancelled.load(Ordering::Relaxed))
             .field("cache_path", &self.cache_path)
             .field("has_progress_observer", &self.progress.is_some())
             .finish()

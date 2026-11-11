@@ -6,14 +6,18 @@ use std::{
         Arc, OnceLock,
         atomic::{AtomicBool, AtomicU64, Ordering},
     },
+    thread::sleep as thread_sleep,
     time::{Duration, Instant},
 };
 
+use futures_lite::future::{block_on, or};
 use karbeat_core::shared::id::AudioSourceId;
 use parking_lot::Mutex;
 use tokio::{
-    runtime::{Handle, Runtime},
+    runtime::{Builder, Handle, Runtime},
     sync::{OwnedSemaphorePermit, Semaphore, oneshot, watch},
+    task::{JoinHandle, spawn_blocking},
+    time::sleep as tokio_sleep,
 };
 
 use super::{
@@ -37,6 +41,8 @@ pub enum JobKind {
     Bounce,
     ProjectLoad,
     ProjectSave,
+    ChannelTemplateSave,
+    ChannelTemplateLoad,
     ProjectRestore,
     AudioImport,
     WaveformRender,
@@ -326,7 +332,7 @@ impl<T> JobHandle<T> {
     ///
     /// Only for synchronous callers outside the job runtime, such as tests.
     pub fn wait_blocking(self) -> Result<T, JobError> {
-        futures_lite::future::block_on(self.wait())
+        block_on(self.wait())
     }
 }
 
@@ -399,12 +405,11 @@ impl Shared {
         let Some(semaphore) = self.semaphore(class) else {
             return Ok(None);
         };
-        let acquired =
-            futures_lite::future::or(async { Some(semaphore.acquire_owned().await) }, async {
-                cancel.cancelled().await;
-                None
-            })
-            .await;
+        let acquired = or(async { Some(semaphore.acquire_owned().await) }, async {
+            cancel.cancelled().await;
+            None
+        })
+        .await;
         match acquired {
             Some(Ok(permit)) => Ok(Some(permit)),
             Some(Err(_)) => Err(JobError::ShuttingDown),
@@ -536,7 +541,7 @@ impl JobService {
                 shared: Arc::clone(&shared),
                 last_progress: Mutex::new(None),
             };
-            let joined = tokio::task::spawn_blocking(move || work(&context)).await;
+            let joined = spawn_blocking(move || work(&context)).await;
             drop(permit);
             let result = match joined {
                 Ok(Ok(value)) => Ok(value),
@@ -611,11 +616,11 @@ impl JobService {
         F: FnOnce(&JobContext) -> Result<T, E> + Send + 'static,
     {
         self.submit_async(spec, move |job| async move {
-            tokio::time::sleep(delay).await;
+            tokio_sleep(delay).await;
             if job.is_cancelled() {
                 return Err(String::from("superseded"));
             }
-            tokio::task::spawn_blocking(move || work(&job).map_err(|error| format!("{error:#}")))
+            spawn_blocking(move || work(&job).map_err(|error| format!("{error:#}")))
                 .await
                 .unwrap_or_else(|_| Err(String::from("the job panicked")))
         })
@@ -633,9 +638,9 @@ impl JobService {
         };
         let shared = Arc::clone(&self.shared);
         runtime.spawn(async move {
-            tokio::time::sleep(delay).await;
+            tokio_sleep(delay).await;
             if shared.accepting.load(Ordering::Acquire) {
-                drop(tokio::task::spawn_blocking(task).await);
+                drop(spawn_blocking(task).await);
             }
         });
     }
@@ -693,7 +698,7 @@ impl JobService {
                 );
                 return false;
             }
-            std::thread::sleep(SHUTDOWN_POLL);
+            thread_sleep(SHUTDOWN_POLL);
         }
         true
     }
@@ -701,7 +706,7 @@ impl JobService {
 
 /// Runs `future` as its own task so a panic inside it is caught instead of unwinding the
 /// orchestration task.
-fn runtime_spawn_result<Fut>(future: Fut) -> tokio::task::JoinHandle<Fut::Output>
+fn runtime_spawn_result<Fut>(future: Fut) -> JoinHandle<Fut::Output>
 where
     Fut: Future + Send + 'static,
     Fut::Output: Send + 'static,
@@ -725,7 +730,7 @@ fn process_runtime() -> Result<Handle, JobError> {
         return Ok(provider());
     }
     let fallback = FALLBACK_RUNTIME.get_or_init(|| {
-        tokio::runtime::Builder::new_multi_thread()
+        Builder::new_multi_thread()
             .worker_threads(2)
             .thread_name("karbeat-jobs")
             .enable_all()

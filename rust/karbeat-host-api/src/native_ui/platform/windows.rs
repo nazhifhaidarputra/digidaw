@@ -1,5 +1,11 @@
 use std::{
-    cell::RefCell, collections::VecDeque, ffi::c_void, num::NonZeroIsize, ptr, thread::ThreadId,
+    cell::RefCell,
+    collections::VecDeque,
+    ffi::c_void,
+    iter::once,
+    num::NonZeroIsize,
+    ptr,
+    thread::{ThreadId, current as thread_current},
 };
 
 use raw_window_handle::{RawWindowHandle, Win32WindowHandle};
@@ -59,7 +65,7 @@ pub struct WindowsNativeWindow {
 
 impl WindowsNativeWindow {
     fn check_thread(&self) -> Result<(), NativeUiError> {
-        if self.owner == std::thread::current().id() {
+        if self.owner == thread_current().id() {
             Ok(())
         } else {
             Err(NativeUiError::WrongThread)
@@ -202,7 +208,7 @@ impl NativeWindow for WindowsNativeWindow {
 
 impl Drop for WindowsNativeWindow {
     fn drop(&mut self) {
-        if self.owner == std::thread::current().id() && !self.context.hwnd.is_null() {
+        if self.owner == thread_current().id() && !self.context.hwnd.is_null() {
             // SAFETY: normal lifecycle destroys the live window on its owner thread.
             if unsafe { DestroyWindow(self.context.hwnd) } == 0 {
                 tracing::error!("failed to destroy Win32 VST3 editor host window");
@@ -229,7 +235,7 @@ impl NativeUiPlatform for WindowsNativeUi {
         register_window_class(instance)?;
         Ok((
             Self {
-                owner: std::thread::current().id(),
+                owner: thread_current().id(),
                 instance,
             },
             Win32WakeHandle,
@@ -237,7 +243,7 @@ impl NativeUiPlatform for WindowsNativeUi {
     }
 
     fn is_owner_thread(&self) -> bool {
-        self.owner == std::thread::current().id()
+        self.owner == thread_current().id()
     }
 
     fn capabilities(&self) -> NativeSurfaceCapabilities {
@@ -552,7 +558,7 @@ fn wide_string(value: &str) -> Result<Vec<u16>, NativeUiError> {
             "Win32 text contains an interior NUL".into(),
         ));
     }
-    Ok(value.encode_utf16().chain(std::iter::once(0)).collect())
+    Ok(value.encode_utf16().chain(once(0)).collect())
 }
 
 fn push_event(event: NativeWindowEvent) {

@@ -15,6 +15,7 @@ use crate::core::{
     },
 };
 use crate::shared::id::{BusId, ClipId, EffectId, GeneratorId, GraphNodeId, TrackId};
+use std::mem::swap;
 
 fn effects_mut(
     app: &mut ApplicationState,
@@ -59,7 +60,7 @@ impl StructureChanged {
             }
             *other = current;
         }
-        std::mem::swap(&mut app.mixer.routing, &mut self.routing);
+        swap(&mut app.mixer.routing, &mut self.routing);
         let mut sync = self.automation.swap(app)?;
 
         sync.merge(self.plugin_sync(app));
@@ -341,7 +342,7 @@ impl EffectBypassed {
         let effect = effects_mut(app, self.target)?
             .get_mut(self.effect_id)
             .ok_or(HistoryError::missing("Effect"))?;
-        std::mem::swap(&mut effect.instance.bypass, &mut self.bypass);
+        swap(&mut effect.instance.bypass, &mut self.bypass);
         Ok(EngineSync::plugin(PluginSync::SetEffectBypass {
             target: self.target,
             effect_id: self.effect_id,
@@ -362,7 +363,7 @@ pub struct RoutingChanged {
 
 impl RoutingChanged {
     fn swap(&mut self, app: &mut ApplicationState) -> Result<EngineSync, HistoryError> {
-        std::mem::swap(&mut app.mixer.routing, &mut self.routing);
+        swap(&mut app.mixer.routing, &mut self.routing);
         self.graph_nodes
             .swap(&mut app.mixer.graph_nodes, "Routing node")?;
         Ok(EngineSync::routing())

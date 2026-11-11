@@ -1,4 +1,4 @@
-use std::{fs, path::PathBuf};
+use std::{error::Error, fs, path::PathBuf};
 
 use heck::ToSnakeCase;
 use karbeat_plugin_types::ParameterSpec;
@@ -21,7 +21,7 @@ pub trait Manifestable {
     fn build_manifest() -> PluginManifest;
 
     /// Automatically handles routing the JSON to the correct folder and saving it
-    fn export_manifest(base_dir: &str) -> Result<(), Box<dyn std::error::Error>> {
+    fn export_manifest(base_dir: &str) -> Result<(), Box<dyn Error>> {
         let mut manifest = Self::build_manifest();
 
         // SANITIZATION PASS

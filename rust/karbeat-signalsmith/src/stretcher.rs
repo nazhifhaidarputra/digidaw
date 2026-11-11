@@ -168,12 +168,13 @@ impl Drop for Stretcher {
 )]
 mod tests {
     use super::*;
+    use std::f32::consts::TAU;
 
     const RATE: u32 = 48_000;
 
     fn sine(frames: usize, hz: f32) -> Vec<f32> {
         (0..frames)
-            .map(|i| (i as f32 * hz * std::f32::consts::TAU / RATE as f32).sin() * 0.5)
+            .map(|i| (i as f32 * hz * TAU / RATE as f32).sin() * 0.5)
             .collect()
     }
 

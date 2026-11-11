@@ -9,7 +9,7 @@
 )]
 
 use karbeat_audio::context::DawContext;
-use karbeat_core::core::history::HistoryError;
+use karbeat_core::core::history::{EngineSync, HistoryError};
 
 /// Tempo fitting and offline renders of audio sources.
 pub mod audio_analysis_api;
@@ -83,10 +83,7 @@ pub fn redo(ctx: &mut DawContext) -> Result<(), String> {
 
 fn finish_history_step(
     ctx: &mut DawContext,
-    result: Result<
-        karbeat_core::core::history::EngineSync,
-        karbeat_core::core::history::HistoryError,
-    >,
+    result: Result<EngineSync, HistoryError>,
 ) -> Result<(), String> {
     match result {
         Ok(sync) => {

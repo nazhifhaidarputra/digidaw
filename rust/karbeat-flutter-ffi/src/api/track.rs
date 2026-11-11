@@ -5,12 +5,25 @@ use std::collections::HashMap;
 use crate::api::context::DawContext;
 use crate::api::jobs::run_job;
 use crate::api::pattern::UiPattern;
-use crate::api::project::{UiClip, UiGainEnvelope, UiTrack, UiTrackInput};
+use crate::api::{
+    audio_analysis::schedule_source_renders,
+    context::{project_ctx, read_ctx},
+    project::{UiClip, UiClipModulation, UiGainEnvelope, UiTrack, UiTrackInput},
+};
 use flutter_rust_bridge::frb;
-use karbeat_core::core::project::clip::ResizeEdge;
+use karbeat_audio::event::PluginTarget;
+use karbeat_core::core::project::{
+    TrackType,
+    clip::{ClipSourceType, ResizeEdge},
+};
 use karbeat_core::shared::id::*;
 use karbeat_core_api::{
     clip_api,
+    external_plugin_api::{
+        InstalledPlugin, RemovedProjectItem, begin_add_instrument, begin_delete_track,
+        begin_remove_generator, begin_replace_instrument, commit_install, commit_removal,
+        descriptor, execute_install, execute_removal, track_targets,
+    },
     jobs::{JobClass, JobKind, JobSpec},
     track_api,
 };
@@ -59,11 +72,11 @@ pub fn create_clip(
     track_id: u64,
     start_time: u32,
 ) -> Result<UiClip, String> {
-    crate::api::context::project_ctx!(ctx);
+    project_ctx!(ctx);
     let track_id = TrackId::from_u64(track_id);
     let core_source_type = match source_type {
-        UiSourceType::Audio => karbeat_core::core::project::clip::ClipSourceType::Audio,
-        UiSourceType::Midi => karbeat_core::core::project::clip::ClipSourceType::Midi,
+        UiSourceType::Audio => ClipSourceType::Audio,
+        UiSourceType::Midi => ClipSourceType::Midi,
     };
 
     let clip = clip_api::add_clip(ctx, source_id, core_source_type, track_id, start_time)
@@ -74,7 +87,7 @@ pub fn create_clip(
 }
 
 pub fn delete_clip(ctx: &DawContext, track_id: u64, clip_id: u64) -> Result<(), String> {
-    crate::api::context::project_ctx!(ctx);
+    project_ctx!(ctx);
     let track_id = TrackId::from_u64(track_id);
     let clip_id = ClipId::from_u64(clip_id);
 
@@ -109,7 +122,7 @@ pub fn resize_clip(
     .map_err(|e| format!("{}", e))?;
     if stretch {
         // A stretching resize changes the source tempo; render it in the background.
-        crate::api::audio_analysis::schedule_source_renders(ctx, false);
+        schedule_source_renders(ctx, false);
     }
 
     Ok(UiClip::from(&res))
@@ -122,7 +135,7 @@ pub fn move_clip(
     new_start_time: u64,
     new_track_id: Option<u64>,
 ) -> Result<UiClip, String> {
-    crate::api::context::project_ctx!(ctx);
+    project_ctx!(ctx);
     let source_track_id = TrackId::from_u64(source_track_id);
     let clip_id = ClipId::from_u64(clip_id);
     let target_track_id = new_track_id
@@ -157,7 +170,7 @@ pub fn slice_clip(
     clip_id: u64,
     cut_point: u64,
 ) -> Result<Vec<UiClip>, String> {
-    crate::api::context::project_ctx!(ctx);
+    project_ctx!(ctx);
     let source_track_id_typed = TrackId::from_u64(source_track_id);
     let clip_id_typed = ClipId::from_u64(clip_id);
 
@@ -199,17 +212,13 @@ fn add_midi_track_with_generator_id_blocking(
 
     let pending = {
         let core = operation.read_core();
-        karbeat_core_api::external_plugin_api::begin_add_instrument(&core, registry_id)
-            .map_err(|error| error.to_string())?
+        begin_add_instrument(&core, registry_id).map_err(|error| error.to_string())?
     };
-    let completed = karbeat_core_api::external_plugin_api::execute_install(pending)
-        .map_err(|error| error.to_string())?;
+    let completed = execute_install(pending).map_err(|error| error.to_string())?;
     let mut core = operation.write_core();
-    match karbeat_core_api::external_plugin_api::commit_install(&mut core, completed) {
-        karbeat_core_api::external_plugin_api::InstalledPlugin::Instrument(track) => {
-            Ok(UiTrack::from_track(&track, &core.app_state))
-        }
-        karbeat_core_api::external_plugin_api::InstalledPlugin::Effect(_) => {
+    match commit_install(&mut core, completed) {
+        InstalledPlugin::Instrument(track) => Ok(UiTrack::from_track(&track, &core.app_state)),
+        InstalledPlugin::Effect(_) => {
             Err("External instrument transaction returned an effect".into())
         }
     }
@@ -248,11 +257,7 @@ fn replace_track_generator_blocking(
             .get(track_id)
             .and_then(|track| track.generator.as_ref())
             .is_some_and(|generator| {
-                karbeat_core_api::external_plugin_api::descriptor(
-                    &core,
-                    karbeat_audio::event::PluginTarget::Generator(generator.id),
-                )
-                .is_some()
+                descriptor(&core, PluginTarget::Generator(generator.id)).is_some()
             });
         (
             current_external,
@@ -265,15 +270,10 @@ fn replace_track_generator_blocking(
     if current_external {
         let pending = {
             let core = operation.read_core();
-            karbeat_core_api::external_plugin_api::begin_remove_generator(&core, track_id)
-                .map_err(|error| error.to_string())?
+            begin_remove_generator(&core, track_id).map_err(|error| error.to_string())?
         };
-        let completed = karbeat_core_api::external_plugin_api::execute_removal(pending)
-            .map_err(|error| error.to_string())?;
-        karbeat_core_api::external_plugin_api::commit_removal(
-            &mut operation.write_core(),
-            completed,
-        );
+        let completed = execute_removal(pending).map_err(|error| error.to_string())?;
+        commit_removal(&mut operation.write_core(), completed);
     }
 
     if !replacement_external {
@@ -285,28 +285,20 @@ fn replace_track_generator_blocking(
 
     let pending = {
         let core = operation.read_core();
-        karbeat_core_api::external_plugin_api::begin_replace_instrument(
-            &core,
-            track_id,
-            registry_id,
-        )
-        .map_err(|error| error.to_string())?
+        begin_replace_instrument(&core, track_id, registry_id).map_err(|error| error.to_string())?
     };
-    let completed = karbeat_core_api::external_plugin_api::execute_install(pending)
-        .map_err(|error| error.to_string())?;
+    let completed = execute_install(pending).map_err(|error| error.to_string())?;
     let mut core = operation.write_core();
-    match karbeat_core_api::external_plugin_api::commit_install(&mut core, completed) {
-        karbeat_core_api::external_plugin_api::InstalledPlugin::Instrument(track) => {
-            Ok(UiTrack::from_track(&track, &core.app_state))
-        }
-        karbeat_core_api::external_plugin_api::InstalledPlugin::Effect(_) => {
+    match commit_install(&mut core, completed) {
+        InstalledPlugin::Instrument(track) => Ok(UiTrack::from_track(&track, &core.app_state)),
+        InstalledPlugin::Effect(_) => {
             Err("External instrument transaction returned an effect".into())
         }
     }
 }
 
 pub fn get_clip(ctx: &DawContext, track_id: u64, clip_id: u64) -> Result<UiClip, String> {
-    crate::api::context::read_ctx!(ctx);
+    read_ctx!(ctx);
     clip_api::get_clip(
         ctx,
         TrackId::from_u64(track_id),
@@ -318,7 +310,7 @@ pub fn get_clip(ctx: &DawContext, track_id: u64, clip_id: u64) -> Result<UiClip,
 
 // Alternatively, fetching the whole Track is often useful too and still cheaper than all tracks
 pub fn get_track(ctx: &DawContext, track_id: u64) -> Option<UiTrack> {
-    crate::api::context::read_ctx!(ctx);
+    read_ctx!(ctx);
     track_api::get_track(ctx, TrackId::from_u64(track_id), |t| {
         UiTrack::from_track(t, &ctx.app_state)
     })
@@ -336,7 +328,7 @@ pub fn move_clip_batch(
     delta_ticks: i64,
     new_track_id: Option<u64>,
 ) -> Result<Vec<UiClip>, String> {
-    crate::api::context::project_ctx!(ctx);
+    project_ctx!(ctx);
     let source_track_id = TrackId::from_u64(source_track_id);
     let target_track_id = new_track_id
         .map(TrackId::from_u64)
@@ -374,7 +366,7 @@ pub fn resize_clip_batch(
     .map_err(|e| format!("{}", e))?;
     if stretch {
         // A stretching resize changes the source tempo; render it in the background.
-        crate::api::audio_analysis::schedule_source_renders(ctx, false);
+        schedule_source_renders(ctx, false);
     }
 
     Ok(res.iter().map(UiClip::from).collect())
@@ -389,7 +381,7 @@ pub fn duplicate_clip_groups(
     clip_ids: Vec<u64>,
     group_start_times: Vec<u64>,
 ) -> Result<Vec<UiClip>, String> {
-    crate::api::context::project_ctx!(ctx);
+    project_ctx!(ctx);
     let track_id = TrackId::from_u64(track_id);
     let clip_ids = clip_ids.into_iter().map(ClipId::from_u64).collect();
     let duplicated =
@@ -405,7 +397,7 @@ pub fn delete_clip_batch(
     track_id: u64,
     clip_ids: Vec<u64>,
 ) -> Result<(), String> {
-    crate::api::context::project_ctx!(ctx);
+    project_ctx!(ctx);
     let track_id = TrackId::from_u64(track_id);
     let clip_ids: Vec<ClipId> = clip_ids.into_iter().map(ClipId::from_u64).collect();
     clip_api::batch_delete_clips(ctx, track_id, clip_ids)
@@ -415,7 +407,7 @@ pub fn delete_clip_batch(
 }
 
 pub fn change_track_name(ctx: &DawContext, track_id: u64, new_name: &str) -> Result<(), String> {
-    crate::api::context::project_ctx!(ctx);
+    project_ctx!(ctx);
     track_api::change_track_name(ctx, TrackId::from_u64(track_id), new_name)
         .map_err(|e| e.to_string())?;
     Ok(())
@@ -423,7 +415,7 @@ pub fn change_track_name(ctx: &DawContext, track_id: u64, new_name: &str) -> Res
 
 /// Change the track header's color to a new color specified by a hex string (e.g. "#RRGGBB" or "#RRGGBBAA").
 pub fn change_track_color(ctx: &DawContext, track_id: u64, new_color: &str) -> Result<(), String> {
-    crate::api::context::project_ctx!(ctx);
+    project_ctx!(ctx);
     track_api::change_track_color(ctx, TrackId::from_u64(track_id), new_color)
         .map_err(|e| e.to_string())?;
     Ok(())
@@ -435,7 +427,7 @@ pub fn set_track_input(
     track_id: u64,
     input: UiTrackInput,
 ) -> Result<UiTrack, String> {
-    crate::api::context::project_ctx!(ctx);
+    project_ctx!(ctx);
     let track = track_api::set_track_input(ctx, TrackId::from_u64(track_id), input.into())
         .map_err(|e| e.to_string())?;
     Ok(UiTrack::from_track(&track, &ctx.app_state))
@@ -457,25 +449,18 @@ fn delete_track_blocking(ctx: &DawContext, track_id: u64) -> Result<String, Stri
     let track_id = TrackId::from_u64(track_id);
     let external = {
         let core = operation.read_core();
-        karbeat_core_api::external_plugin_api::track_targets(&core, track_id)
+        track_targets(&core, track_id)
             .iter()
-            .any(|target| {
-                karbeat_core_api::external_plugin_api::descriptor(&core, *target).is_some()
-            })
+            .any(|target| descriptor(&core, *target).is_some())
     };
     let removed_track_type = if external {
         let pending = {
             let core = operation.read_core();
-            karbeat_core_api::external_plugin_api::begin_delete_track(&core, track_id)
-                .map_err(|error| error.to_string())?
+            begin_delete_track(&core, track_id).map_err(|error| error.to_string())?
         };
-        let completed = karbeat_core_api::external_plugin_api::execute_removal(pending)
-            .map_err(|error| error.to_string())?;
-        match karbeat_core_api::external_plugin_api::commit_removal(
-            &mut operation.write_core(),
-            completed,
-        ) {
-            karbeat_core_api::external_plugin_api::RemovedProjectItem::Track(removed) => removed,
+        let completed = execute_removal(pending).map_err(|error| error.to_string())?;
+        match commit_removal(&mut operation.write_core(), completed) {
+            RemovedProjectItem::Track(removed) => removed,
             _ => return Err("Track removal transaction returned an incompatible result".into()),
         }
     } else {
@@ -483,9 +468,9 @@ fn delete_track_blocking(ctx: &DawContext, track_id: u64) -> Result<String, Stri
             .map_err(|error| error.to_string())?
     };
     let type_string = match removed_track_type {
-        karbeat_core::core::project::TrackType::Audio => "audio",
-        karbeat_core::core::project::TrackType::Midi => "midi",
-        karbeat_core::core::project::TrackType::Automation => "automation",
+        TrackType::Audio => "audio",
+        TrackType::Midi => "midi",
+        TrackType::Automation => "automation",
     };
 
     Ok(type_string.into())
@@ -493,7 +478,7 @@ fn delete_track_blocking(ctx: &DawContext, track_id: u64) -> Result<String, Stri
 
 /// Update track order in the timeline
 pub fn update_track_order(ctx: &DawContext, track_id: u64, new_idx: usize) -> Result<(), String> {
-    crate::api::context::project_ctx!(ctx);
+    project_ctx!(ctx);
     track_api::update_track_order(ctx, TrackId::from_u64(track_id), new_idx)
         .map_err(|e| e.to_string())
 }
@@ -501,7 +486,7 @@ pub fn update_track_order(ctx: &DawContext, track_id: u64, new_idx: usize) -> Re
 /// Rename clip. Could result in error if [new_name]
 /// does not meet the required constraint or the clip not found
 pub fn rename_clip(ctx: &DawContext, clip_id: u64, new_name: &str) -> Result<(), String> {
-    crate::api::context::project_ctx!(ctx);
+    project_ctx!(ctx);
     clip_api::rename_clip(ctx, ClipId::from_u64(clip_id), new_name).map_err(|e| e.to_string())
 }
 
@@ -523,7 +508,7 @@ pub fn make_clips_unique(
     track_id: u64,
     clip_ids: Vec<u64>,
 ) -> Result<UiMadeUnique, String> {
-    crate::api::context::project_ctx!(ctx);
+    project_ctx!(ctx);
     let clip_ids = clip_ids.into_iter().map(ClipId::from_u64).collect();
     let made = clip_api::make_clips_unique(ctx, TrackId::from_u64(track_id), clip_ids)
         .map_err(|error| error.to_string())?;
@@ -553,8 +538,20 @@ pub fn set_clip_envelope(
     clip_id: u64,
     envelope: UiGainEnvelope,
 ) -> Result<UiClip, String> {
-    crate::api::context::project_ctx!(ctx);
+    project_ctx!(ctx);
     let clip = clip_api::set_clip_envelope(ctx, ClipId::from_u64(clip_id), envelope.into())
+        .map_err(|error| error.to_string())?;
+    Ok(UiClip::from(&clip))
+}
+
+/// Replaces an audio clip's pan and pitch curves and loop.
+pub fn set_clip_modulation(
+    ctx: &DawContext,
+    clip_id: u64,
+    modulation: UiClipModulation,
+) -> Result<UiClip, String> {
+    project_ctx!(ctx);
+    let clip = clip_api::set_clip_modulation(ctx, ClipId::from_u64(clip_id), modulation.into())
         .map_err(|error| error.to_string())?;
     Ok(UiClip::from(&clip))
 }

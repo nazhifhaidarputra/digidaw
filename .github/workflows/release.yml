@@ -22,7 +22,9 @@ env:
 jobs:
   linux:
     name: Linux x64 release
-    runs-on: ubuntu-26.04
+    # The bundle needs the glibc of the build machine or newer, so build on an older base.
+    # CI uses the same one, so a break here shows up before a tag is pushed.
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
         with:
@@ -82,7 +84,7 @@ jobs:
 
           PipeWire (with its JACK compatibility layer) or JACK is recommended for low-latency audio.
 
-          Built on Ubuntu 26.04, so older distributions may not be able to run it.
+          Built on Ubuntu 24.04, so it needs glibc 2.39 or newer. Older distributions may not be able to run it.
           EOF
 
       - name: Publish GitHub release

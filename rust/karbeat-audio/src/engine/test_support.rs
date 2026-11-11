@@ -9,7 +9,10 @@
     reason = "fixtures fail immediately when a deterministic project cannot be built"
 )]
 
-use std::sync::{Arc, mpsc};
+use std::{
+    f32::consts::TAU,
+    sync::{Arc, mpsc},
+};
 
 use karbeat_plugins::registry::PluginRegistry;
 use karbeat_utils::hash::hash_str;
@@ -19,6 +22,7 @@ use crate::{
     commands::{AudioCommand, AudioFeedback, EffectTarget, MixerChannelTarget},
     engine::{AudioEngine, AudioEngineTelemetry, PlaybackMode},
     event::{PluginTarget, TransportFeedback},
+    missing_plugin::MissingPlugin,
     render_state::AudioGraphState,
 };
 use karbeat_core::{
@@ -128,7 +132,7 @@ pub fn tone(rate: u32, left_hz: f32, right_hz: f32) -> impl Fn(usize, usize) -> 
     move |frame, channel| {
         let hz = if channel == 0 { left_hz } else { right_hz };
         let level = if channel == 0 { 0.5 } else { 0.35 };
-        (frame as f32 * hz * std::f32::consts::TAU / rate as f32).sin() * level
+        (frame as f32 * hz * TAU / rate as f32).sin() * level
     }
 }
 
@@ -355,7 +359,7 @@ pub fn bench_engine(shape: BenchProject, block: usize) -> (AudioEngine, Vec<Trac
                 target: EffectTarget::Track(*track),
                 effect_id: EffectId::from(100 + index as u32),
                 registry_id: 0,
-                plugin: crate::missing_plugin::MissingPlugin::effect(),
+                plugin: MissingPlugin::effect(),
                 telemetry: None,
             });
         }

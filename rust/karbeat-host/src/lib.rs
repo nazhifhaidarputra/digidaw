@@ -5,12 +5,14 @@
 //! statically dispatched; audio-thread processor transfer remains in the shared API crate.
 //! A Tokio watch signal stops admission, drains accepted work, and marks the service unavailable.
 
-use std::{path::PathBuf, sync::OnceLock};
+use std::{path::PathBuf, sync::OnceLock, thread::Builder};
 
 use async_executor::LocalExecutor;
 use tokio::sync::{mpsc, oneshot, watch};
 
+use futures_lite::future::{block_on, race, yield_now};
 pub use karbeat_host_api::*;
+use mpsc::error::TrySendError;
 
 const HOST_REQUEST_CAPACITY: usize = 128;
 static DEFAULT_CLIENT: OnceLock<HostClient> = OnceLock::new();
@@ -311,8 +313,8 @@ impl HostClient {
         self.tx
             .try_send(request(reply))
             .map_err(|error| match error {
-                mpsc::error::TrySendError::Full(_) => HostError::QueueFull,
-                mpsc::error::TrySendError::Closed(_) => HostError::RuntimeUnavailable,
+                TrySendError::Full(_) => HostError::QueueFull,
+                TrySendError::Closed(_) => HostError::RuntimeUnavailable,
             })?;
         receive.await.map_err(|_| HostError::RuntimeUnavailable)?
     }
@@ -490,7 +492,7 @@ impl HostStateCapture for HostClient {
         identity: &PluginIdentity,
         instance: HostInstanceId,
     ) -> Result<PluginState, HostError> {
-        futures_lite::future::block_on(self.capture_state(ExternalPluginInstanceHandle {
+        block_on(self.capture_state(ExternalPluginInstanceHandle {
             format: identity.format,
             id: instance,
         }))
@@ -511,7 +513,7 @@ impl PluginHostService {
         let (tx, receiver) = mpsc::channel(HOST_REQUEST_CAPACITY);
         let (shutdown, shutdown_receiver) = watch::channel(false);
         let (availability, available) = watch::channel(true);
-        std::thread::Builder::new()
+        Builder::new()
             .name("external-plugin-host".into())
             .spawn(move || {
                 run_service(
@@ -543,9 +545,9 @@ fn run_service<V, C, L>(
     L: PluginFormatExecutor,
 {
     let executor = LocalExecutor::new();
-    futures_lite::future::block_on(executor.run(async {
+    block_on(executor.run(async {
         loop {
-            let request = futures_lite::future::race(receiver.recv(), async {
+            let request = race(receiver.recv(), async {
                 drop(shutdown.changed().await);
                 None
             })
@@ -566,7 +568,7 @@ fn run_service<V, C, L>(
                 .detach();
         }
         while !executor.is_empty() {
-            futures_lite::future::yield_now().await;
+            yield_now().await;
         }
     }));
     let _ = availability.send(false);

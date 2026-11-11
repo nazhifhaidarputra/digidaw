@@ -6,11 +6,11 @@
 
 use std::{
     ffi::{CStr, c_void},
-    ptr::NonNull,
-    sync::MutexGuard,
+    ptr::{NonNull, from_mut, from_ref, null, null_mut},
+    sync::{Arc, MutexGuard},
 };
 
-use karbeat_host_api::{HostError, ProcessingConfig};
+use karbeat_host_api::{HostError, PendingWork, ProcessingConfig};
 use lilv_sys as sys;
 
 use crate::{
@@ -40,7 +40,7 @@ const fn end_of_options() -> lv2_sys::LV2_Options_Option {
         key: 0,
         size: 0,
         type_: 0,
-        value: std::ptr::null(),
+        value: null(),
     }
 }
 
@@ -55,13 +55,17 @@ struct Features {
 }
 
 impl Features {
-    fn new(max_block_size: usize, with_worker: bool) -> Result<Box<Self>, HostError> {
+    fn new(
+        max_block_size: usize,
+        with_worker: bool,
+        work: &Arc<PendingWork>,
+    ) -> Result<Box<Self>, HostError> {
         let max_block =
             i32::try_from(max_block_size).map_err(|_| HostError::InvalidConfiguration)?;
         let mut features = Box::new(Self {
             block_lengths: [1, max_block],
             options: [end_of_options(); 3],
-            worker: with_worker.then(WorkerPort::new),
+            worker: with_worker.then(|| WorkerPort::new(work.clone())),
             records: Vec::new(),
             pointers: Vec::new(),
         });
@@ -70,7 +74,7 @@ impl Features {
             key: urid::map(uri(key)),
             size: 4,
             type_: int,
-            value: std::ptr::from_ref(value).cast(),
+            value: from_ref(value).cast(),
             ..end_of_options()
         };
         let [minimum, maximum] = &features.block_lengths;
@@ -81,11 +85,11 @@ impl Features {
         ];
         let options = lv2_sys::LV2_Feature {
             URI: lv2_sys::LV2_OPTIONS__options.as_ptr().cast(),
-            data: std::ptr::from_mut(&mut features.options).cast(),
+            data: from_mut(&mut features.options).cast(),
         };
         let bounded = lv2_sys::LV2_Feature {
             URI: lv2_sys::LV2_BUF_SIZE__boundedBlockLength.as_ptr().cast(),
-            data: std::ptr::null_mut(),
+            data: null_mut(),
         };
         features.records = [urid::map_feature(), urid::unmap_feature(), options, bounded]
             .into_iter()
@@ -94,8 +98,8 @@ impl Features {
         features.pointers = features
             .records
             .iter()
-            .map(std::ptr::from_ref)
-            .chain([std::ptr::null()])
+            .map(from_ref)
+            .chain([null()])
             .collect();
         Ok(features)
     }
@@ -121,12 +125,14 @@ impl PluginInstance {
     /// Instantiates and activates `plugin` for `config`, with control inputs at their defaults.
     ///
     /// Audio, CV, and atom ports are left for the caller to connect before the first `run`.
+    /// Worker jobs and their responses are counted in `work` until the plugin has them back.
     pub fn instantiate(
         plugin: *const sys::LilvPlugin,
         model: &PluginModel,
         config: &ProcessingConfig,
+        work: &Arc<PendingWork>,
     ) -> Result<Self, HostError> {
-        let features = Features::new(config.max_block_size, model.schedules_work)?;
+        let features = Features::new(config.max_block_size, model.schedules_work, work)?;
         // SAFETY: Runs plugin code on the UI owner. The plugin record belongs to a live world
         // and the feature list is null-terminated and outlives the instance.
         let raw = unsafe {
@@ -169,7 +175,7 @@ impl PluginInstance {
             else {
                 continue;
             };
-            let location = std::ptr::from_mut(value).cast();
+            let location = from_mut(value).cast();
             // SAFETY: The boxed control storage lives as long as the instance and never moves.
             unsafe { instance.connect(port, location) };
         }
@@ -209,12 +215,10 @@ impl PluginInstance {
 
     /// Looks up plugin extension data such as its state or worker interface.
     pub fn extension_data(&self, extension: &CStr) -> *const c_void {
-        self.descriptor()
-            .extension_data
-            .map_or(std::ptr::null(), |lookup| {
-                // SAFETY: The plugin's lookup receives a NUL-terminated extension URI.
-                unsafe { lookup(extension.as_ptr()) }
-            })
+        self.descriptor().extension_data.map_or(null(), |lookup| {
+            // SAFETY: The plugin's lookup receives a NUL-terminated extension URI.
+            unsafe { lookup(extension.as_ptr()) }
+        })
     }
 
     /// Connects `port` to `location`.

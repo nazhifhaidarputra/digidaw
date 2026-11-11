@@ -6,6 +6,7 @@
 use karbeat_macros::karbeat_plugin;
 
 use crate::oscillator::Waveform;
+use std::f64::consts::TAU;
 
 /// A reusable module/component to
 /// help creating plugin in which LFO
@@ -89,7 +90,7 @@ impl Lfo {
 
         let phase = self.current_phase;
 
-        let tau_f64 = std::f64::consts::TAU;
+        let tau_f64 = TAU;
         let mut val = match self.waveform.get() {
             Waveform::Sine => (phase * tau_f64).sin(),
             Waveform::Saw => {

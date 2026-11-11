@@ -1,6 +1,7 @@
 use std::{
     error::Error,
-    fmt,
+    fmt::{self, Display, Formatter, Result as FmtResult},
+    io::Error as IoError,
     path::{Path, PathBuf},
 };
 use thiserror::Error;
@@ -47,7 +48,7 @@ pub enum AudioWriteError {
     #[error("audio writer has already been finalized")]
     Finalized,
     #[error("failed to write audio file: {0}")]
-    Io(#[from] std::io::Error),
+    Io(#[from] IoError),
     #[error("{format} encoder error: {source}")]
     Encoder {
         format: AudioFileFormat,
@@ -93,13 +94,13 @@ impl BitPerSample {
 #[derive(Debug)]
 pub struct BitPerSampleError;
 
-impl std::fmt::Display for BitPerSampleError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl Display for BitPerSampleError {
+    fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
         write!(f, "Not a valid BitPerSample value")
     }
 }
 
-impl std::error::Error for BitPerSampleError {}
+impl Error for BitPerSampleError {}
 
 impl TryFrom<u16> for BitPerSample {
     type Error = BitPerSampleError;
@@ -169,13 +170,13 @@ impl AudioExportConfig {
 #[derive(Debug)]
 pub struct BitPerSecondError;
 
-impl std::fmt::Display for BitPerSecondError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl Display for BitPerSecondError {
+    fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
         write!(f, "Not a valid BitPerSecond value")
     }
 }
 
-impl std::error::Error for BitPerSecondError {}
+impl Error for BitPerSecondError {}
 
 impl TryFrom<u16> for BitPerSecond {
     type Error = BitPerSecondError;
@@ -277,9 +278,18 @@ pub trait AudioExporter {
 mod tag_tests {
     use super::*;
     use crate::writer::metadata::{ggez, test_cover};
-    use std::{fs::File, io::BufReader};
-    use symphonia::core::{
-        formats::FormatOptions, io::MediaSourceStream, meta::MetadataOptions, probe::Hint,
+    use std::{
+        fs::{File, read as fs_read},
+        io::BufReader,
+    };
+    use symphonia::{
+        core::{
+            formats::FormatOptions,
+            io::MediaSourceStream,
+            meta::{MetadataOptions, MetadataRevision},
+            probe::Hint,
+        },
+        default::get_probe,
     };
 
     fn ggez_with_cover() -> AudioMetadata {
@@ -313,7 +323,7 @@ mod tag_tests {
             MediaSourceStream::new(Box::new(File::open(path).unwrap()), Default::default());
         let mut hint = Hint::new();
         hint.with_extension(extension);
-        let mut probed = symphonia::default::get_probe()
+        let mut probed = get_probe()
             .format(
                 &hint,
                 source,
@@ -328,7 +338,7 @@ mod tag_tests {
             values: Vec::new(),
             pictures: Vec::new(),
         };
-        let mut collect = |revision: &symphonia::core::meta::MetadataRevision| {
+        let mut collect = |revision: &MetadataRevision| {
             read.values
                 .extend(revision.tags().iter().map(|tag| tag.value.to_string()));
             read.pictures.extend(
@@ -447,9 +457,9 @@ mod tag_tests {
             assert!(read.pictures.is_empty(), "{extension} has a picture");
         }
 
-        let mp3 = std::fs::read(dir.path().join("blank.mp3")).unwrap();
+        let mp3 = fs_read(dir.path().join("blank.mp3")).unwrap();
         assert_ne!(&mp3[..3], b"ID3");
-        let flac = std::fs::read(dir.path().join("blank.flac")).unwrap();
+        let flac = fs_read(dir.path().join("blank.flac")).unwrap();
         assert_eq!(flac[4], 0x80, "STREAMINFO stays the last metadata block");
     }
 
@@ -489,7 +499,7 @@ mod tag_tests {
         });
         export(&path, config, &ggez_with_cover(), &samples);
 
-        let bytes = std::fs::read(&path).unwrap();
+        let bytes = fs_read(&path).unwrap();
         let chunks = riff_chunks(&bytes);
         let ids: Vec<&[u8; 4]> = chunks.iter().map(|(id, _)| id).collect();
         assert_eq!(ids, [b"fmt ", b"data", b"LIST", b"id3 "]);
@@ -530,7 +540,7 @@ mod tag_tests {
         });
         export(&path, config, &AudioMetadata::default(), &stereo_sine(100));
 
-        let bytes = std::fs::read(&path).unwrap();
+        let bytes = fs_read(&path).unwrap();
         let ids: Vec<[u8; 4]> = riff_chunks(&bytes).into_iter().map(|(id, _)| id).collect();
         assert_eq!(ids, [*b"fmt ", *b"data"]);
     }

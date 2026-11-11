@@ -4,6 +4,7 @@ use karbeat_core::core::{
     project::{DawSource, GeneratorId, Pattern, PatternId},
 };
 use karbeat_core::shared::id::{ClipId, TrackId};
+use std::mem::replace;
 
 /// Returns a cloned MIDI pattern or an error when the identifier is absent.
 pub fn get_pattern(ctx: &DawContext, pattern_id: &PatternId) -> anyhow::Result<Pattern> {
@@ -52,7 +53,7 @@ pub fn rename_pattern(
         .pattern_pool
         .get_mut(pattern_id)
         .ok_or_else(|| anyhow::anyhow!("Pattern {:?} not found", pattern_id))?;
-    let old_name = std::mem::replace(&mut pattern.name, new_name.to_owned());
+    let old_name = replace(&mut pattern.name, new_name.to_owned());
 
     let mut previous_clip_names = Vec::new();
     for (clip_id, clip) in ctx.app_state.clips_pool.iter_mut() {

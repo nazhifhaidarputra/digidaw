@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+use std::{path::PathBuf, thread::Builder};
 
 use karbeat_host_api::{
     ConvertParameterRequest, DuplicateRequest, ExternalPluginInstanceHandle, HostCapabilities,
@@ -6,8 +6,11 @@ use karbeat_host_api::{
     ParseParameterRequest, PluginController, PluginFormat, PluginFormatExecutor,
     PluginInstanceManager, PluginState, PrepareRequest, PreparedExternalPlugin, ReconfigureRequest,
     ScanRequest, SetParameterRequest,
-    scanner::{ModuleScanner, ScanCache, ScanResult, ScanSettings},
+    scanner::{
+        ModuleScanner, ScanCache, ScanResult, ScanSettings, helper_probe, scan, scanner_executable,
+    },
 };
+use tokio::sync::oneshot::channel;
 
 use crate::{module, native};
 
@@ -49,18 +52,18 @@ impl ClapExecutor {
             directories: request.directories,
             timeout_seconds: request.timeout_seconds,
         };
-        let helper = karbeat_host_api::scanner::scanner_executable()?;
+        let helper = scanner_executable()?;
         let mut cache = if let Some(path) = &request.cache_path {
             ScanCache::load(path)?
         } else {
             ScanCache::default()
         };
         let progress = request.progress;
-        let result = karbeat_host_api::scanner::scan(
+        let result = scan(
             &ModuleScanner {
                 format: PluginFormat::Clap,
                 extension: module::MODULE_EXTENSION,
-                probe: &karbeat_host_api::scanner::helper_probe(&helper, PluginFormat::Clap),
+                probe: &helper_probe(&helper, PluginFormat::Clap),
             },
             &settings,
             &mut cache,
@@ -92,8 +95,8 @@ impl PluginFormatExecutor for ClapExecutor {
         request.directories.extend(self.default_scan_paths());
         // The scanner waits on helper processes. Running it on its own thread keeps this
         // executor serving prepare, parameter and editor requests during a scan.
-        let (reply, result) = tokio::sync::oneshot::channel();
-        std::thread::Builder::new()
+        let (reply, result) = channel();
+        Builder::new()
             .name("clap-scan".into())
             .spawn(move || drop(reply.send(Self::scan_blocking(request))))?;
         result

@@ -40,6 +40,10 @@ pub struct PluginInstance {
     /// Native state is captured by the control owner, independently of the audio snapshot.
     #[serde(default)]
     pub external: Option<ExternalPluginInstance>,
+
+    /// Name the user gave this instance. `None` shows the plugin's own name.
+    #[serde(default)]
+    pub display_name: Option<String>,
 }
 
 impl PartialEq for PluginInstance {
@@ -49,6 +53,7 @@ impl PartialEq for PluginInstance {
             && self.bypass == other.bypass
             && self.plugin_state == other.plugin_state
             && self.external == other.external
+            && self.display_name == other.display_name
         // Note: We ignore parameter_specs for equality checks because they are just metadata
     }
 }
@@ -63,6 +68,7 @@ impl PluginInstance {
             parameter_specs: Vec::new(),
             plugin_state: Vec::new(),
             external: None,
+            display_name: None,
         }
     }
 
@@ -75,6 +81,15 @@ impl PluginInstance {
             parameter_specs: Vec::new(),
             plugin_state: Vec::new(),
             external: None,
+            display_name: None,
+        }
+    }
+
+    /// Name to show for this instance: "Lead 1 (Vital)" when renamed, else "Vital".
+    pub fn label(&self) -> String {
+        match &self.display_name {
+            Some(display_name) => format!("{display_name} ({})", self.name),
+            None => self.name.clone(),
         }
     }
 }
@@ -105,6 +120,20 @@ mod tests {
             rmp_serde::from_slice(&rmp_serde::to_vec(&sequence).unwrap()).unwrap();
         assert!(restored.external.is_none());
         assert_eq!(restored.registry_id, 42);
+    }
+
+    #[test]
+    fn display_name_is_optional_in_saved_projects_and_labels_the_instance() {
+        let json = r#"{"registry_id":42,"name":"Vital","bypass":false}"#;
+        let mut plugin: PluginInstance = serde_json::from_str(json).unwrap();
+        assert_eq!(plugin.display_name, None);
+        assert_eq!(plugin.label(), "Vital");
+
+        plugin.display_name = Some("Lead 1".into());
+        assert_eq!(plugin.label(), "Lead 1 (Vital)");
+        let restored: PluginInstance =
+            serde_json::from_slice(&serde_json::to_vec(&plugin).unwrap()).unwrap();
+        assert_eq!(restored, plugin);
     }
 
     #[test]

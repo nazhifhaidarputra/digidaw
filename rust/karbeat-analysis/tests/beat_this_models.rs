@@ -13,11 +13,15 @@
 )]
 
 use std::{
+    env::var,
+    f32::consts::TAU,
+    fs::read_to_string,
     path::PathBuf,
     sync::{
         Arc,
         atomic::{AtomicBool, Ordering},
     },
+    time::Instant,
 };
 
 use karbeat_analysis::{AnalysisError, AudioInput, ModelPaths, analyze_tempo, configure_models};
@@ -63,11 +67,11 @@ fn drum_loop(seconds: f32) -> Vec<f32> {
             let mut value = 0.15 * (-t * 120.0).exp() * noise();
             if step % 4 == 0 {
                 let pitch = 50.0 + 90.0 * (-t * 30.0).exp();
-                value += 0.9 * (-t * 25.0).exp() * (std::f32::consts::TAU * pitch * t).sin();
+                value += 0.9 * (-t * 25.0).exp() * (TAU * pitch * t).sin();
             }
             if step % 4 == 2 {
                 value += 0.5 * (-t * 30.0).exp() * noise()
-                    + 0.3 * (-t * 20.0).exp() * (std::f32::consts::TAU * 190.0 * t).sin();
+                    + 0.3 * (-t * 20.0).exp() * (TAU * 190.0 * t).sin();
             }
             mono[start + offset] += value;
         }
@@ -168,7 +172,7 @@ fn cancellation_stops_before_the_next_model_call() {
 
 /// Peak resident memory of this process in MiB, from `/proc/self/status` on Linux.
 fn peak_rss_mb() -> Option<u64> {
-    let status = std::fs::read_to_string("/proc/self/status").ok()?;
+    let status = read_to_string("/proc/self/status").ok()?;
     let line = status.lines().find(|line| line.starts_with("VmHWM:"))?;
     let kb: u64 = line.split_whitespace().nth(1)?.parse().ok()?;
     Some(kb / 1024)
@@ -178,11 +182,11 @@ fn peak_rss_mb() -> Option<u64> {
 #[ignore = "measures peak memory and time; run alone"]
 fn measure_peak_memory_and_time() {
     let Some(paths) = models() else { return };
-    let workers: usize = std::env::var("KARBEAT_WORKERS")
+    let workers: usize = var("KARBEAT_WORKERS")
         .ok()
         .and_then(|value| value.parse().ok())
         .unwrap_or(1);
-    let seconds: f32 = std::env::var("KARBEAT_SECONDS")
+    let seconds: f32 = var("KARBEAT_SECONDS")
         .ok()
         .and_then(|value| value.parse().ok())
         .unwrap_or(300.0);
@@ -190,7 +194,7 @@ fn measure_peak_memory_and_time() {
     let before = peak_rss_mb().unwrap_or(0);
     configure_models(paths).unwrap();
     let pool = pool(workers);
-    let started = std::time::Instant::now();
+    let started = Instant::now();
     let analysis = analyze(&samples, (workers > 1).then_some(&pool));
     let after = peak_rss_mb().unwrap_or(0);
     eprintln!(

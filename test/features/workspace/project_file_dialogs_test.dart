@@ -21,6 +21,12 @@ void main() {
     expect(isSupportedProjectFile('/music/song'), isFalse);
   });
 
+  test('channel templates are named after their channel', () {
+    expect(channelTemplateFileName('Lead Vocal'), 'Lead Vocal.effch');
+    expect(channelTemplateFileName('Drums 1.5'), 'Drums 1.5.effch');
+    expect(channelTemplateFileName(r'A/B\C:D'), 'A_B_C_D.effch');
+  });
+
   test('a save path gets exactly the requested extension', () {
     expect(withFileExtension('/music/song', 'dgdaw'), '/music/song.dgdaw');
     expect(

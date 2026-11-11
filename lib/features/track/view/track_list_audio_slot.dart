@@ -496,7 +496,9 @@ class _AudioTrackSlotState extends ConsumerState<AudioTrackSlot> {
         ? <int>[]
         : trackSelectedClipIdsStr.split(',').map(int.parse).toList();
 
-    final placementState = ref.watch(clipPlacementProvider);
+    final isPlacing = ref.watch(
+      clipPlacementProvider.select((s) => s.isPlacing),
+    );
 
     if (track == null) return const SizedBox();
 
@@ -562,7 +564,7 @@ class _AudioTrackSlotState extends ConsumerState<AudioTrackSlot> {
                       ? SystemMouseCursors.precise
                       : SystemMouseCursors.basic,
                   onHover: (event) {
-                    if (!placementState.isPlacing) return;
+                    if (!isPlacing) return;
                     double ticks = event.localPosition.dx * zoomLevel;
                     if (ref.read(workspaceStateProvider).snapToGrid) {
                       ticks = _snapTick(
@@ -577,7 +579,7 @@ class _AudioTrackSlotState extends ConsumerState<AudioTrackSlot> {
                   child: GestureDetector(
                     behavior: HitTestBehavior.translucent,
                     onPanUpdate: (details) {
-                      if (!placementState.isPlacing) return;
+                      if (!isPlacing) return;
                       double ticks = details.localPosition.dx * zoomLevel;
                       if (ref.read(workspaceStateProvider).snapToGrid) {
                         ticks = _snapTick(
@@ -591,7 +593,7 @@ class _AudioTrackSlotState extends ConsumerState<AudioTrackSlot> {
                           .updatePlacementTarget(widget.trackId, ticks);
                     },
                     onTapDown: (details) {
-                      if (!placementState.isPlacing) return;
+                      if (!isPlacing) return;
                       double ticks = details.localPosition.dx * zoomLevel;
                       if (ref.read(workspaceStateProvider).snapToGrid) {
                         ticks = _snapTick(
@@ -604,7 +606,7 @@ class _AudioTrackSlotState extends ConsumerState<AudioTrackSlot> {
                           .updatePlacementTarget(widget.trackId, ticks);
                     },
                     onTapUp: (details) async {
-                      if (placementState.isPlacing) {
+                      if (isPlacing) {
                         await ref
                             .read(clipPlacementProvider.notifier)
                             .confirmPlacement();
@@ -774,7 +776,7 @@ class _AudioTrackSlotState extends ConsumerState<AudioTrackSlot> {
     );
 
     Widget toolSlot = trackSlot;
-    if (!placementState.isPlacing) {
+    if (!isPlacing) {
       switch (selectedTool) {
         case ToolSelection.draw:
           toolSlot = Listener(

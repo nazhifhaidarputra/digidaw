@@ -165,7 +165,10 @@ impl LivePitchShifter for SignalsmithLiveShifter {
     reason = "test fixtures fail immediately on unexpected results"
 )]
 mod tests {
-    use std::time::{Duration, Instant};
+    use std::{
+        f32::consts::TAU,
+        time::{Duration, Instant},
+    };
 
     use super::*;
 
@@ -181,7 +184,7 @@ mod tests {
                 .map(|i| {
                     let t = i as f32 / RATE as f32;
                     (1..6)
-                        .map(|h| (t * 220.0 * detune * h as f32 * std::f32::consts::TAU).sin())
+                        .map(|h| (t * 220.0 * detune * h as f32 * TAU).sin())
                         .sum::<f32>()
                         * 0.1
                         + (noise.f32() - 0.5) * 0.05

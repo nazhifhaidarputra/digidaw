@@ -1,43 +1,32 @@
+import 'dart:io';
+
+import 'package:file_picker/file_picker.dart';
 import 'package:karbeat/core/utils/result_type.dart';
 import 'package:karbeat/src/rust/api/mitigation.dart' as mitigation_api;
 import 'package:karbeat/src/rust/api/project.dart';
+import 'package:karbeat/src/rust/api/settings.dart' as settings_api;
 import 'package:karbeat/src/rust/api/simple.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
+/// Loads, saves and applies the settings on the General page. Rust stores
+/// them and replaces stored values the engine would reject with defaults.
 class SettingsService {
-  static const historyLimitPreferenceKey = 'settings.history_limit.v1';
-  static const defaultHistoryLimit = 100;
   static const maxHistoryLimit = 1000;
 
-  static const autoSaveEnabledPreferenceKey = 'settings.auto_save.enabled.v1';
-  static const autoSaveIntervalPreferenceKey =
-      'settings.auto_save.interval_seconds.v1';
-  static const defaultAutoSaveEnabled = true;
-  static const defaultAutoSaveIntervalSeconds = 300;
   static const minAutoSaveIntervalSeconds = 60;
   static const maxAutoSaveIntervalSeconds = 3600;
 
+  Future<Result<settings_api.UiGeneralSettings>> loadGeneralSettings() {
+    return attemptAsync(settings_api.loadGeneralSettings);
+  }
+
   Future<Result<int>> loadHistoryLimit() {
-    return attemptAsync(() async {
-      final preferences = SharedPreferencesAsync();
-      final stored = await preferences.getInt(historyLimitPreferenceKey);
-      if (stored == null) return defaultHistoryLimit;
-      if (!isValidHistoryLimit(stored)) {
-        await preferences.setInt(
-          historyLimitPreferenceKey,
-          defaultHistoryLimit,
-        );
-        return defaultHistoryLimit;
-      }
-      return stored;
-    });
+    return attemptAsync(
+      () async => (await settings_api.loadGeneralSettings()).historyLimit,
+    );
   }
 
   Future<Result<void>> saveHistoryLimit(int limit) {
-    return attemptAsync(() async {
-      final preferences = SharedPreferencesAsync();
-      await preferences.setInt(historyLimitPreferenceKey, limit);
-    });
+    return attemptAsync(() => settings_api.saveHistoryLimit(limit: limit));
   }
 
   Future<Result<int>> applyHistoryLimit(DawContext context, int limit) {
@@ -57,39 +46,17 @@ class SettingsService {
   }
 
   Future<Result<mitigation_api.UiAutoSaveSettings>> loadAutoSaveSettings() {
-    return attemptAsync(() async {
-      final preferences = SharedPreferencesAsync();
-      final enabled = await preferences.getBool(autoSaveEnabledPreferenceKey);
-      final interval = await preferences.getInt(autoSaveIntervalPreferenceKey);
-      if (interval != null && !isValidAutoSaveInterval(interval)) {
-        await preferences.setInt(
-          autoSaveIntervalPreferenceKey,
-          defaultAutoSaveIntervalSeconds,
-        );
-      }
-      return mitigation_api.UiAutoSaveSettings(
-        isEnabled: enabled ?? defaultAutoSaveEnabled,
-        intervalSeconds: interval != null && isValidAutoSaveInterval(interval)
-            ? interval
-            : defaultAutoSaveIntervalSeconds,
-      );
-    });
+    return attemptAsync(
+      () async => (await settings_api.loadGeneralSettings()).autoSave,
+    );
   }
 
   Future<Result<void>> saveAutoSaveSettings(
     mitigation_api.UiAutoSaveSettings settings,
   ) {
-    return attemptAsync(() async {
-      final preferences = SharedPreferencesAsync();
-      await preferences.setBool(
-        autoSaveEnabledPreferenceKey,
-        settings.isEnabled,
-      );
-      await preferences.setInt(
-        autoSaveIntervalPreferenceKey,
-        settings.intervalSeconds,
-      );
-    });
+    return attemptAsync(
+      () => settings_api.saveAutoSavePreferences(settings: settings),
+    );
   }
 
   Future<Result<mitigation_api.UiAutoSaveSettings>> applyAutoSaveSettings(
@@ -117,4 +84,49 @@ class SettingsService {
     return seconds >= minAutoSaveIntervalSeconds &&
         seconds <= maxAutoSaveIntervalSeconds;
   }
+
+  /// Sets the folder project dialogs start in; null clears it. Rust rejects
+  /// a folder that does not exist.
+  Future<Result<settings_api.UiGeneralSettings>> saveDefaultProjectFolder(
+    String? folder,
+  ) {
+    return attemptAsync(
+      () => settings_api.saveDefaultProjectFolder(folder: folder),
+    );
+  }
+
+  /// Sets the folder exports go to; null clears it. Rust rejects a folder
+  /// that does not exist.
+  Future<Result<settings_api.UiGeneralSettings>> saveDefaultExportFolder(
+    String? folder,
+  ) {
+    return attemptAsync(
+      () => settings_api.saveDefaultExportFolder(folder: folder),
+    );
+  }
+
+  /// Shows or hides the recent projects in the project menu.
+  Future<Result<settings_api.UiGeneralSettings>> saveShowRecentProjects(
+    bool visible,
+  ) {
+    return attemptAsync(
+      () => settings_api.saveShowRecentProjects(visible: visible),
+    );
+  }
+
+  /// Asks the user for a folder, starting in [initialDirectory] when given.
+  Future<Result<String?>> pickFolder({
+    required String dialogTitle,
+    String? initialDirectory,
+  }) {
+    return attemptAsync(
+      () => FilePicker.getDirectoryPath(
+        dialogTitle: dialogTitle,
+        initialDirectory: initialDirectory,
+      ),
+    );
+  }
+
+  /// Whether [path] is a folder that exists.
+  Future<bool> folderExists(String path) => Directory(path).exists();
 }

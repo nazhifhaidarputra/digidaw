@@ -48,7 +48,7 @@ class _FloatingMidiKeyboardState extends ConsumerState<FloatingMidiKeyboard> {
 
   String _getGeneratorName(UiGeneratorInstance instance) {
     return instance.instanceType.when(
-      plugin: (p) => p.name,
+      plugin: (p) => p.label,
       sampler: (assetId, rootNote) => "Sampler",
     );
   }

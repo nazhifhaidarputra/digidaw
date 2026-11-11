@@ -7,7 +7,10 @@
 //! description, on the scan thread, and its result is cached by the shared scanner.
 
 use std::{
+    collections::HashSet,
+    env::{consts::ARCH, split_paths, var_os},
     ffi::OsStr,
+    fs::canonicalize,
     path::{Path, PathBuf},
     rc::Rc,
 };
@@ -37,16 +40,13 @@ fn module_error(path: &Path, message: impl ToString) -> HostError {
 /// `LV2_PATH` entries come first, as they do for other LV2 hosts. Paths are returned whether or
 /// not they exist.
 pub fn default_scan_paths() -> Vec<PathBuf> {
-    scan_paths(
-        std::env::var_os("LV2_PATH").as_deref(),
-        std::env::var_os("HOME").as_deref(),
-    )
+    scan_paths(var_os("LV2_PATH").as_deref(), var_os("HOME").as_deref())
 }
 
 fn scan_paths(lv2_path: Option<&OsStr>, home: Option<&OsStr>) -> Vec<PathBuf> {
     let mut paths: Vec<PathBuf> = lv2_path
         .map(|configured| {
-            std::env::split_paths(configured)
+            split_paths(configured)
                 .filter(|path| !path.as_os_str().is_empty())
                 .collect()
         })
@@ -64,11 +64,8 @@ fn scan_paths(lv2_path: Option<&OsStr>, home: Option<&OsStr>) -> Vec<PathBuf> {
         .map(PathBuf::from),
     );
     // Debian-style multiarch installations.
-    paths.push(PathBuf::from(format!(
-        "/usr/lib/{}-linux-gnu/lv2",
-        std::env::consts::ARCH
-    )));
-    let mut seen = std::collections::HashSet::new();
+    paths.push(PathBuf::from(format!("/usr/lib/{}-linux-gnu/lv2", ARCH)));
+    let mut seen = HashSet::new();
     paths.retain(|path| seen.insert(path.clone()));
     paths
 }
@@ -78,7 +75,7 @@ fn scan_paths(lv2_path: Option<&OsStr>, home: Option<&OsStr>) -> Vec<PathBuf> {
 /// A plugin is listed when the host can run every one of its ports, provides its required
 /// features, and it has an audio output. Replaced and incomplete plugins are skipped.
 pub fn probe_bundle(path: &Path) -> Result<Vec<PluginDescriptor>, HostError> {
-    let bundle = std::fs::canonicalize(path)?;
+    let bundle = canonicalize(path)?;
     if !bundle.join("manifest.ttl").is_file() {
         return Ok(Vec::new());
     }
@@ -193,7 +190,7 @@ pub(crate) struct Lv2Bundle {
 impl Lv2Bundle {
     /// Reads the bundle's manifest. Plugin descriptions are read when a plugin is first used.
     pub fn load(path: &Path) -> Result<Rc<Self>, HostError> {
-        let path = std::fs::canonicalize(path)?;
+        let path = canonicalize(path)?;
         if !path.join("manifest.ttl").is_file() {
             return Err(module_error(&path, "bundle has no manifest"));
         }
@@ -241,6 +238,7 @@ impl Lv2Bundle {
 #[allow(clippy::unwrap_used, reason = "test fixtures must be creatable")]
 mod tests {
     use super::*;
+    use std::fs::create_dir;
 
     #[test]
     fn lv2_path_entries_come_first_and_duplicates_are_dropped() {
@@ -273,7 +271,7 @@ mod tests {
     fn a_directory_without_a_manifest_is_an_empty_bundle() {
         let directory = tempfile::tempdir().unwrap();
         let bundle = directory.path().join("Empty.lv2");
-        std::fs::create_dir(&bundle).unwrap();
+        create_dir(&bundle).unwrap();
         assert!(matches!(probe_bundle(&bundle), Ok(plugins) if plugins.is_empty()));
         assert!(probe_bundle(&directory.path().join("Missing.lv2")).is_err());
     }

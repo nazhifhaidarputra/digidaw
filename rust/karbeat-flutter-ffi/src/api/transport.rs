@@ -6,7 +6,7 @@ use flutter_rust_bridge::frb;
 use karbeat_audio::engine::PlaybackMode;
 use karbeat_core_api::transport_api;
 
-use crate::api::context::DawContext;
+use crate::api::{audio_analysis::schedule_source_renders, context::DawContext};
 
 pub enum PlaybackModeDto {
     Song,
@@ -67,7 +67,7 @@ pub fn set_looping(ctx: &DawContext, val: bool) -> Result<(), String> {
 pub fn set_bpm(ctx: &DawContext, val: f32) -> Result<bool, String> {
     let rescaled =
         transport_api::set_bpm(&mut ctx.project_write(), val).map_err(|e| e.to_string())?;
-    crate::api::audio_analysis::schedule_source_renders(ctx, true);
+    schedule_source_renders(ctx, true);
     Ok(rescaled)
 }
 

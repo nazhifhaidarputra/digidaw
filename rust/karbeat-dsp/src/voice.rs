@@ -6,6 +6,7 @@
 use serde::{Deserialize, Serialize};
 
 use crate::envelope::AdsrProcessor;
+use std::f32::consts::TAU;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum MidiChannelAction {
@@ -181,7 +182,7 @@ impl SynthVoice {
         frames: usize,
     ) -> f32 {
         let vibrato_depth = (channel.modulation * 0.5 + self.expressions.vibrato).min(2.0);
-        let vibrato = (self.vibrato_phase * std::f32::consts::TAU).sin() * vibrato_depth;
+        let vibrato = (self.vibrato_phase * TAU).sin() * vibrato_depth;
         self.vibrato_phase =
             (self.vibrato_phase + 5.0 * frames as f32 / sample_rate.max(1.0)).fract();
         2.0_f32.powf(
@@ -214,6 +215,7 @@ impl SynthVoice {
 #[cfg(test)]
 mod tests {
     use super::{MidiChannelAction, MidiChannelState, SynthVoice};
+    use crate::envelope::EnvelopeState;
 
     #[test]
     fn channel_controls_map_to_performance_state() {
@@ -236,14 +238,14 @@ mod tests {
 
         voice.release_key(channel.sustain);
         assert!(voice.key_released);
-        assert_ne!(voice.adsr.state(), crate::envelope::EnvelopeState::Release);
+        assert_ne!(voice.adsr.state(), EnvelopeState::Release);
 
         assert_eq!(
             channel.apply_control_change(64, 0),
             MidiChannelAction::ReleaseSustained
         );
         voice.release();
-        assert_eq!(voice.adsr.state(), crate::envelope::EnvelopeState::Release);
+        assert_eq!(voice.adsr.state(), EnvelopeState::Release);
     }
 
     #[test]

@@ -1,12 +1,12 @@
 use serde::{Deserialize, Serialize};
-use std::ops::Deref;
+use std::{fmt::Debug, ops::Deref};
 
 // ============================================================================
 // SHARED TRAIT: the one piece of clamping logic every bounded type needs.
 // Implemented once per primitive; the macros below never re-implement it.
 // ============================================================================
 
-pub trait BoundedNum: Copy + PartialOrd + PartialEq + std::fmt::Debug {
+pub trait BoundedNum: Copy + PartialOrd + PartialEq + Debug {
     fn clamp_to(self, min: Self, max: Self) -> Self;
 }
 

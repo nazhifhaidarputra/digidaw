@@ -1,9 +1,13 @@
 //! UI-owned CLAP plugin instance: activation, parameters, state, the editor, and the
 //! main-thread services the plugin asked for.
 
+#[cfg(target_os = "linux")]
+use std::ffi::c_ulong;
 use std::{
     cell::{RefCell, RefMut, UnsafeCell},
     ffi::CString,
+    io::Cursor,
+    mem::replace,
     rc::Rc,
     sync::{
         Arc,
@@ -12,6 +16,10 @@ use std::{
     time::Instant,
 };
 
+#[cfg(target_os = "linux")]
+use clack_extensions::posix_fd::FdFlags;
+#[cfg(target_os = "linux")]
+use clack_extensions::posix_fd::PluginPosixFd;
 use clack_extensions::{
     audio_ports::{AudioPortFlags, AudioPortInfoBuffer, PluginAudioPorts},
     gui::PluginGui,
@@ -26,7 +34,7 @@ use clack_host::{
     host::HostInfo, plugin::PluginInstance, process::PluginAudioConfiguration, utils::ClapId,
 };
 use karbeat_host_api::{
-    EDIT_CHANGED, HostError, NativeParentHandle, ParameterExchange, PluginDescriptor,
+    EDIT_CHANGED, HostError, NativeParentHandle, ParameterExchange, PendingWork, PluginDescriptor,
     PluginIdentity, PluginState, ProcessingConfig, ProcessingGate,
     native_host::EditorResizeHandler,
 };
@@ -117,7 +125,7 @@ struct Extensions {
     render: Option<PluginRender>,
     timer: Option<PluginTimer>,
     #[cfg(target_os = "linux")]
-    posix_fd: Option<clack_extensions::posix_fd::PluginPosixFd>,
+    posix_fd: Option<PluginPosixFd>,
 }
 
 /// Rejects envelopes this backend did not write for this plugin.
@@ -177,8 +185,9 @@ impl ClapInstance {
         let info = HostInfo::new("DigiDAW", "DigiDAW", "", env!("CARGO_PKG_VERSION"))
             .map_err(|_| unavailable("host information contains a NUL byte"))?;
         let label = descriptor.name.clone();
+        let pending_work = Arc::new(PendingWork::default());
         let mut plugin = PluginInstance::<ClapHostHandlers>::new(
-            |_| ClapHostSharedHandler::new(&label),
+            |_| ClapHostSharedHandler::new(&label, pending_work.clone()),
             |shared| ClapHostMainThreadHandler::new(shared),
             module.entry(),
             &id,
@@ -235,7 +244,7 @@ impl ClapInstance {
         }
         Ok(Self {
             descriptor,
-            exchange: ParameterExchange::new(&values),
+            exchange: ParameterExchange::with_work(&values, pending_work),
             parameters: Arc::from(list),
             note_input,
             lifecycle: AnyInstanceLifecycle::unprepared(),
@@ -303,7 +312,7 @@ impl ClapInstance {
         )
             -> Result<AnyInstanceLifecycle, (AnyInstanceLifecycle, InvalidState)>,
     ) -> Result<(), HostError> {
-        let current = std::mem::replace(&mut self.lifecycle, AnyInstanceLifecycle::unprepared());
+        let current = replace(&mut self.lifecycle, AnyInstanceLifecycle::unprepared());
         match transition(current) {
             Ok(next) => {
                 self.lifecycle = next;
@@ -516,7 +525,7 @@ impl ClapInstance {
             extension
                 .load(
                     &self.plugin()?.plugin_handle(),
-                    &mut std::io::Cursor::new(&state.component),
+                    &mut Cursor::new(&state.component),
                 )
                 .map_err(|_| plugin_call("clap.state.load"))?;
             self.read_values(false)?;
@@ -806,11 +815,7 @@ impl Drop for ClapInstance {
 
 /// Polls one registered descriptor without blocking and returns the events it is ready for.
 #[cfg(target_os = "linux")]
-fn fd_ready(
-    fd: i32,
-    flags: clack_extensions::posix_fd::FdFlags,
-) -> Option<clack_extensions::posix_fd::FdFlags> {
-    use clack_extensions::posix_fd::FdFlags;
+fn fd_ready(fd: i32, flags: FdFlags) -> Option<FdFlags> {
     const POLLIN: i16 = 0x1;
     const POLLOUT: i16 = 0x4;
     const POLLERR: i16 = 0x8;
@@ -823,7 +828,7 @@ fn fd_ready(
         revents: i16,
     }
     unsafe extern "C" {
-        fn poll(fds: *mut PollFd, count: std::ffi::c_ulong, timeout: i32) -> i32;
+        fn poll(fds: *mut PollFd, count: c_ulong, timeout: i32) -> i32;
     }
     let mut events = 0;
     if flags.contains(FdFlags::READ) {
@@ -861,7 +866,13 @@ fn fd_ready(
 )]
 mod tests {
     use super::*;
+    #[cfg(target_os = "linux")]
+    use clack_extensions::posix_fd::FdFlags;
     use karbeat_host_api::PluginFormat;
+    #[cfg(target_os = "linux")]
+    use std::io::pipe;
+    #[cfg(target_os = "linux")]
+    use std::{io::Write as _, os::fd::AsRawFd as _};
 
     fn config() -> ProcessingConfig {
         ProcessingConfig {
@@ -919,10 +930,7 @@ mod tests {
     #[cfg(target_os = "linux")]
     #[test]
     fn descriptors_report_only_the_events_they_are_ready_for() {
-        use clack_extensions::posix_fd::FdFlags;
-        use std::io::Write as _;
-        use std::os::fd::AsRawFd as _;
-        let (reader, mut writer) = std::io::pipe().unwrap();
+        let (reader, mut writer) = pipe().unwrap();
         assert_eq!(fd_ready(reader.as_raw_fd(), FdFlags::READ), None);
         writer.write_all(b"x").unwrap();
         assert_eq!(

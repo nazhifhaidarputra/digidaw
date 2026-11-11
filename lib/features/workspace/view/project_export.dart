@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:karbeat/app/providers/background_jobs_provider.dart';
 import 'package:karbeat/app/providers/export_project_state.dart';
 import 'package:karbeat/app/providers/telemetry_polling_suppression.dart';
 import 'package:karbeat/app/providers/notification_provider.dart';
@@ -12,6 +13,7 @@ import 'package:karbeat/core/widgets/shortcut_focus_anchor.dart';
 import 'package:karbeat/features/workspace/services/export_service.dart';
 import 'package:karbeat/features/workspace/services/project_file_dialogs.dart';
 import 'package:karbeat/shared/models/export_audio.dart';
+import 'package:karbeat/src/rust/api/jobs.dart';
 import 'package:karbeat/src/rust/api/project.dart';
 import 'package:karbeat/src/rust/api/timeline.dart';
 
@@ -31,6 +33,7 @@ class _ProjectExportPanelState extends ConsumerState<ProjectExportPanel> {
   final FocusNode _panelFocus = FocusNode(debugLabel: 'ProjectExportPanel');
 
   bool _isExporting = false;
+  bool _cancelRequested = false;
   double _exportProgress = 0.0;
 
   @override
@@ -68,6 +71,7 @@ class _ProjectExportPanelState extends ConsumerState<ProjectExportPanel> {
     final outputFile = await pickAudioExportFileToSave(
       fileName: _nameController.text,
       extension: extension,
+      initialDirectory: ref.read(exportDirectoryProvider),
     );
 
     if (outputFile != null) {
@@ -89,10 +93,11 @@ class _ProjectExportPanelState extends ConsumerState<ProjectExportPanel> {
 
   Future<void> _handleExport() async {
     final exportState = ref.read(exportProjectProvider);
+    final exportDirectory = ref.read(exportDirectoryProvider);
 
     final ctx = ref.read(projectProvider.notifier).dawContext;
 
-    if (exportState.exportDirectory == null) {
+    if (exportDirectory == null) {
       ref
           .read(notificationProvider.notifier)
           .warn('Please select an export directory first.');
@@ -114,6 +119,7 @@ class _ProjectExportPanelState extends ConsumerState<ProjectExportPanel> {
 
     setState(() {
       _isExporting = true;
+      _cancelRequested = false;
       _exportProgress = 0.0;
     });
 
@@ -122,7 +128,7 @@ class _ProjectExportPanelState extends ConsumerState<ProjectExportPanel> {
         // Consume the progress stream using values straight from the provider state
         final progressStream = exportProject(
           ctx: ctx,
-          path: exportState.exportDirectory!,
+          path: exportDirectory,
           soundfileName: _nameController.text,
           format: exportState.selectedFormat,
           bitDepth: exportState.selectedBitDepth,
@@ -141,7 +147,12 @@ class _ProjectExportPanelState extends ConsumerState<ProjectExportPanel> {
         ref.read(telemetryPollingSuppressionProvider.notifier),
       )();
     } catch (e) {
-      ref.read(notificationProvider.notifier).error(e, title: 'Export failed');
+      // A cancelled render fails on purpose and leaves no file behind
+      if (!_cancelRequested) {
+        ref
+            .read(notificationProvider.notifier)
+            .error(e, title: 'Export failed');
+      }
     } finally {
       if (mounted) {
         setState(() {
@@ -150,18 +161,32 @@ class _ProjectExportPanelState extends ConsumerState<ProjectExportPanel> {
       }
     }
 
-    if (exportState.openFolderAfterExport && mounted) {
+    // Stay open after a cancel so the export can be adjusted and started again
+    if (_cancelRequested || !mounted) return;
+
+    if (exportState.openFolderAfterExport) {
       // Best effort to open folder
       if (Platform.isWindows) {
-        Process.run('explorer.exe', [exportState.exportDirectory!]);
+        Process.run('explorer.exe', [exportDirectory]);
       } else if (Platform.isMacOS) {
-        Process.run('open', [exportState.exportDirectory!]);
+        Process.run('open', [exportDirectory]);
       } else if (Platform.isLinux) {
-        Process.run('xdg-open', [exportState.exportDirectory!]);
+        Process.run('xdg-open', [exportDirectory]);
       }
     }
 
     widget.onClose();
+  }
+
+  /// Stops the running export. The render deletes its unfinished file.
+  Future<void> _cancelExport() async {
+    final jobs = ref.read(backgroundJobsProvider);
+    final job = jobs.active.values
+        .where((job) => job.kind == UiJobKind.projectExport)
+        .firstOrNull;
+    if (job == null) return;
+    setState(() => _cancelRequested = true);
+    await ref.read(backgroundJobsProvider.notifier).cancel(job.id);
   }
 
   @override
@@ -169,6 +194,7 @@ class _ProjectExportPanelState extends ConsumerState<ProjectExportPanel> {
     final colors = Theme.of(context).colorScheme;
     final size = MediaQuery.of(context).size;
     final exportState = ref.watch(exportProjectProvider);
+    final exportDirectory = ref.watch(exportDirectoryProvider);
     final exportNotifier = ref.read(exportProjectProvider.notifier);
     final hasLoopRegion = ref.watch(loopRegionProvider) != null;
 
@@ -252,7 +278,7 @@ class _ProjectExportPanelState extends ConsumerState<ProjectExportPanel> {
                         TextField(
                           readOnly: true,
                           style: TextStyle(
-                            color: exportState.exportDirectory == null
+                            color: exportDirectory == null
                                 ? colors.onSurfaceVariant
                                 : colors.onSurface,
                           ),
@@ -282,9 +308,9 @@ class _ProjectExportPanelState extends ConsumerState<ProjectExportPanel> {
                             ),
                           ),
                           controller: TextEditingController(
-                            text: exportState.exportDirectory == null
+                            text: exportDirectory == null
                                 ? ""
-                                : "${exportState.exportDirectory}${Platform.pathSeparator}${_nameController.text}.${exportState.selectedFormat.name.toLowerCase()}",
+                                : "$exportDirectory${Platform.pathSeparator}${_nameController.text}.${exportState.selectedFormat.name.toLowerCase()}",
                           ),
                         ),
                         const SizedBox(height: 24),
@@ -489,8 +515,12 @@ class _ProjectExportPanelState extends ConsumerState<ProjectExportPanel> {
                     mainAxisAlignment: MainAxisAlignment.end,
                     children: [
                       TextButton(
-                        onPressed: _isExporting ? null : widget.onClose,
-                        child: const Text("Cancel"),
+                        onPressed: !_isExporting
+                            ? widget.onClose
+                            : _cancelRequested
+                            ? null
+                            : _cancelExport,
+                        child: Text(_isExporting ? "Cancel Export" : "Cancel"),
                       ),
                       const SizedBox(width: 16),
                       ElevatedButton(

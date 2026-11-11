@@ -3,8 +3,13 @@
 #[cfg(test)]
 mod tests {
     use crate::pattern_api;
-    use crate::test::helpers::{make_ctx, make_seeded_ctx};
     use crate::{clip_api, clipboard_api};
+    use crate::{
+        clip_api::add_clip,
+        redo,
+        test::helpers::{make_ctx, make_seeded_ctx},
+        undo,
+    };
     use karbeat_core::core::project::{ClipboardContent, DawSource, clip::ClipSourceType};
     use karbeat_core::shared::id::{GeneratorId, PatternId};
 
@@ -50,7 +55,7 @@ mod tests {
         ctx.app_state
             .rename_clip(custom_clip_id, "Custom clip")
             .expect("clip should exist");
-        let default_clip = crate::clip_api::add_clip(
+        let default_clip = add_clip(
             &mut ctx,
             Some(pattern_id.into()),
             ClipSourceType::Midi,
@@ -118,7 +123,7 @@ mod tests {
         assert_eq!(ctx.history.undo_label(), Some("Delete Pattern"));
 
         for _ in 0..2 {
-            crate::undo(&mut ctx).expect("undo");
+            undo(&mut ctx).expect("undo");
             assert!(ctx.app_state.pattern_pool.contains_key(pattern_id));
             assert_eq!(ctx.app_state.pattern_pool[pattern_id].notes.len(), 3);
             assert_eq!(
@@ -127,7 +132,7 @@ mod tests {
             );
             assert!(ctx.app_state.clips_pool.contains_key(original_clip));
 
-            crate::redo(&mut ctx).expect("redo");
+            redo(&mut ctx).expect("redo");
             assert!(!ctx.app_state.pattern_pool.contains_key(pattern_id));
             assert_eq!(ctx.app_state.tracks[midi_id].clips, [kept_clip.id]);
         }

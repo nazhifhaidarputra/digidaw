@@ -101,11 +101,10 @@ impl AudioWriter for WavAudioWriter {
 
         match self.spec.sample_format {
             SampleFormat::Float => {
-                // For 32-bit float, we can write the f32 samples directly
+                // Float samples are stored as rendered: the format holds peaks above full scale,
+                // so the file keeps exactly what playback produced
                 for &sample in samples {
-                    writer
-                        .write_sample(sample.clamp(-1.0, 1.0))
-                        .map_err(wav_error)?;
+                    writer.write_sample(sample).map_err(wav_error)?;
                 }
             }
             SampleFormat::Int => {

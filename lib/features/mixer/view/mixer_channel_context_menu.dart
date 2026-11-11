@@ -10,6 +10,7 @@ import 'package:karbeat/features/mixer/view/mixer_channel_strip.dart';
 import 'package:karbeat/features/mixer/view/mixer_effect_rack.dart';
 import 'package:karbeat/features/mixer/view/routing_dialog.dart';
 import 'package:karbeat/features/mixer/view/sidechain_target_picker.dart';
+import 'package:karbeat/features/workspace/services/project_file_dialogs.dart';
 import 'package:karbeat/src/rust/api/mixer.dart';
 
 /// Picks a plugin to key from [source] and sends [source] into its sidechain.
@@ -50,7 +51,16 @@ class MixerChannelContextMenu extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final colors = Theme.of(context).colorScheme;
-    final store = ref.watch(projectProvider).value;
+    // Only the mixer and tracks feed the menu; other project changes (clips,
+    // patterns, automation) leave it alone.
+    final store = ref.watch(
+      projectProvider.select(
+        (s) => switch (s.value) {
+          final project? => (mixer: project.mixer, tracks: project.tracks),
+          null => null,
+        },
+      ),
+    );
     final channel = store == null ? null : target.channelIn(store.mixer);
     if (store == null || channel == null) return child;
 
@@ -137,6 +147,25 @@ class MixerChannelContextMenu extends ConsumerWidget {
           icon: Icons.add,
           onTap: () =>
               showAddEffectDialog(context: context, ref: ref, target: target),
+        ),
+        if (effectCount > 0)
+          DawContextAction(
+            title: 'Save channel template…',
+            icon: Icons.save_alt,
+            onTap: () async {
+              final path = await pickChannelTemplateFileToSave(name);
+              if (path == null) return;
+              await mixer.saveChannelTemplate(target: target, path: path);
+            },
+          ),
+        DawContextAction(
+          title: 'Load channel template…',
+          icon: Icons.file_open,
+          onTap: () async {
+            final path = await pickChannelTemplateFileToOpen();
+            if (path == null) return;
+            await mixer.loadChannelTemplate(target: target, path: path);
+          },
         ),
         if (target case UiMixerChannelTarget_Bus(:final field0))
           ...busIdentityActions(

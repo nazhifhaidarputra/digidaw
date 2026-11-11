@@ -4,8 +4,10 @@ use flutter_rust_bridge::frb;
 use karbeat_core_api::jobs::{
     self, JobContext, JobEvent, JobEventSink, JobKind, JobSpec, JobState, JobTarget,
 };
+use tokio::runtime::Handle;
 
-use crate::frb_generated::StreamSink;
+use crate::frb_generated::{FLUTTER_RUST_BRIDGE_HANDLER, StreamSink};
+use std::fmt::Display;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum UiJobKind {
@@ -13,6 +15,8 @@ pub enum UiJobKind {
     Bounce,
     ProjectLoad,
     ProjectSave,
+    ChannelTemplateSave,
+    ChannelTemplateLoad,
     ProjectRestore,
     AudioImport,
     WaveformRender,
@@ -31,6 +35,8 @@ impl From<JobKind> for UiJobKind {
             JobKind::Bounce => Self::Bounce,
             JobKind::ProjectLoad => Self::ProjectLoad,
             JobKind::ProjectSave => Self::ProjectSave,
+            JobKind::ChannelTemplateSave => Self::ChannelTemplateSave,
+            JobKind::ChannelTemplateLoad => Self::ChannelTemplateLoad,
             JobKind::ProjectRestore => Self::ProjectRestore,
             JobKind::AudioImport => Self::AudioImport,
             JobKind::WaveformRender => Self::WaveformRender,
@@ -136,7 +142,7 @@ pub async fn cancel_job(id: u64) -> bool {
 pub(crate) async fn run_job<T, E, F>(spec: JobSpec, work: F) -> Result<T, String>
 where
     T: Send + 'static,
-    E: std::fmt::Display + Send + 'static,
+    E: Display + Send + 'static,
     F: FnOnce(&JobContext) -> Result<T, E> + Send + 'static,
 {
     jobs::global()
@@ -147,8 +153,8 @@ where
 }
 
 /// Runtime handle of Flutter Rust Bridge's async executor, which background jobs share.
-pub(crate) fn frb_runtime_handle() -> tokio::runtime::Handle {
-    crate::frb_generated::FLUTTER_RUST_BRIDGE_HANDLER
+pub(crate) fn frb_runtime_handle() -> Handle {
+    FLUTTER_RUST_BRIDGE_HANDLER
         .async_runtime()
         .0
         .handle()

@@ -6,14 +6,19 @@ use std::{
     collections::HashMap,
     ffi::{CStr, CString, c_void},
     ptr,
+    rc::Rc,
+    slice::from_raw_parts,
     sync::{Arc, atomic::Ordering},
-    thread::ThreadId,
+    thread::{ThreadId, current},
 };
 use vst3::{
     Class, ComWrapper, Interface,
     Steinberg::{Vst::*, *},
 };
 
+use crate::run_loop::RunLoop;
+#[cfg(target_os = "linux")]
+use crate::run_loop::delegate_run_loop;
 pub use karbeat_host_api::ParameterExchange;
 
 pub struct ComponentHandler {
@@ -59,13 +64,13 @@ impl IComponentHandlerTrait for ComponentHandler {
 
 pub struct Vst3HostContext {
     owner: ThreadId,
-    pub run_loop: std::rc::Rc<crate::run_loop::RunLoop>,
+    pub run_loop: Rc<RunLoop>,
 }
 impl Default for Vst3HostContext {
     fn default() -> Self {
         Self {
-            owner: std::thread::current().id(),
-            run_loop: crate::run_loop::RunLoop::new(),
+            owner: current().id(),
+            run_loop: RunLoop::new(),
         }
     }
 }
@@ -101,7 +106,7 @@ impl IHostApplicationTrait for Vst3HostContext {
         }
         // SAFETY: out is a writable output pointer.
         unsafe { *out = ptr::null_mut() };
-        if cid.is_null() || iid.is_null() || self.owner != std::thread::current().id() {
+        if cid.is_null() || iid.is_null() || self.owner != current().id() {
             return kInvalidArgument;
         }
         // SAFETY: Both IDs point to readable fixed arrays supplied by the plugin.
@@ -141,14 +146,14 @@ struct HostAttributes {
 impl Default for HostAttributes {
     fn default() -> Self {
         Self {
-            owner: std::thread::current().id(),
+            owner: current().id(),
             values: RefCell::new(HashMap::new()),
         }
     }
 }
 impl HostAttributes {
     unsafe fn key(&self, id: FIDString) -> Option<Vec<u8>> {
-        if id.is_null() || self.owner != std::thread::current().id() {
+        if id.is_null() || self.owner != current().id() {
             return None;
         }
         // SAFETY: VST3 FIDString is a NUL-terminated string valid for this call.
@@ -263,10 +268,8 @@ impl IAttributeListTrait for HostAttributes {
             Vec::new()
         } else {
             // SAFETY: Plugin provides size readable bytes; upper bound was checked.
-            unsafe {
-                std::slice::from_raw_parts(data.cast::<u8>(), usize::try_from(size).unwrap_or(0))
-            }
-            .to_vec()
+            unsafe { from_raw_parts(data.cast::<u8>(), usize::try_from(size).unwrap_or(0)) }
+                .to_vec()
         };
         self.values
             .borrow_mut()
@@ -302,7 +305,7 @@ impl Default for HostMessage {
     fn default() -> Self {
         let attributes = ComWrapper::new(HostAttributes::default());
         Self {
-            owner: std::thread::current().id(),
+            owner: current().id(),
             id: RefCell::new(CString::default()),
             attributes,
         }
@@ -313,13 +316,13 @@ impl Class for HostMessage {
 }
 impl IMessageTrait for HostMessage {
     unsafe fn getMessageID(&self) -> FIDString {
-        if self.owner != std::thread::current().id() {
+        if self.owner != current().id() {
             return ptr::null();
         }
         self.id.borrow().as_ptr()
     }
     unsafe fn setMessageID(&self, id: FIDString) {
-        if id.is_null() || self.owner != std::thread::current().id() {
+        if id.is_null() || self.owner != current().id() {
             return;
         }
         // SAFETY: Message ID is a NUL-terminated string valid for this call.
@@ -333,7 +336,7 @@ impl IMessageTrait for HostMessage {
 }
 
 #[cfg(target_os = "linux")]
-crate::run_loop::delegate_run_loop!(Vst3HostContext);
+delegate_run_loop!(Vst3HostContext);
 
 #[cfg(test)]
 #[allow(

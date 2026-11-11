@@ -118,7 +118,7 @@ void main() {
     ).ok();
 
     expect(theme.brightness, Brightness.light);
-    expect(theme.surfaceContainerLow, const Color(0xFFFFE7F0));
-    expect(theme.surfaceContainer, const Color(0xFFFFE7F0));
+    expect(theme.surfaceContainerLow, const Color(0xFFFCF1F7));
+    expect(theme.surfaceContainer, const Color(0xFFF8E9F3));
   });
 }

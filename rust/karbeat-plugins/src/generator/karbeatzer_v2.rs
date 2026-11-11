@@ -11,7 +11,7 @@ use karbeat_dsp::prelude::*;
 use karbeat_macros::karbeat_plugin;
 use karbeat_plugin_api::prelude::*;
 use karbeat_plugin_types::*;
-use karbeat_utils::hash::hash_str;
+use karbeat_utils::hash::{FNV_OFFSET, hash_str};
 
 #[derive(Clone)]
 #[karbeat_plugin]
@@ -531,8 +531,7 @@ impl Manifestable for KarbeatzerV2 {
             name: "Karbeatzer V2".to_owned(),
             internal_type: "KarbeatzerV2".to_owned(),
             is_synth: true,
-            parameters: Self::default()
-                .auto_get_parameter_specs(karbeat_utils::hash::FNV_OFFSET, ""),
+            parameters: Self::default().auto_get_parameter_specs(FNV_OFFSET, ""),
         }
     }
 }

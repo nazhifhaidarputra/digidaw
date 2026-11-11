@@ -62,10 +62,12 @@ pub use clips::{
     AudioSourceRemoved, ClipEditRecorder, ClipsChanged, ClipsMadeUnique, PatternRemoved,
 };
 pub use names::{
-    BusRecolored, BusRenamed, PatternRenamed, TrackRecolored, TrackRenamed, TracksReordered,
+    BusRecolored, BusRenamed, GeneratorRenamed, PatternRenamed, TrackRecolored, TrackRenamed,
+    TracksReordered,
 };
 pub use notes::{NoteMove, NotesChanged, NotesMoved, NotesResized};
-pub use sources::{SourceEnvelopeChanged, SourceTempo, SourceTempoChanged};
+pub use sources::{SourceEnvelopeChanged, SourceTempo, SourceTempoChanged, SourceTrimChanged};
+use std::mem::replace;
 pub use structure::{
     EffectBypassed, EffectMoved, EffectToggled, RoutingChanged, RoutingRecorder, StructureChanged,
     StructureRecorder,
@@ -83,7 +85,7 @@ pub(crate) fn swap_slot<K: Key, V>(
     kind: &'static str,
 ) -> Result<(), HistoryError> {
     match (pool.get_mut(key), other.take()) {
-        (Some(current), Some(value)) => *other = Some(std::mem::replace(current, value)),
+        (Some(current), Some(value)) => *other = Some(replace(current, value)),
         (Some(_), None) => *other = pool.detach(key),
         (None, Some(value)) => reattach(pool, key, value, kind)?,
         (None, None) => return Err(HistoryError::missing(kind)),

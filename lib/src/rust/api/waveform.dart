@@ -42,6 +42,13 @@ abstract class WaveformHandle implements RustOpaqueInterface {
   /// Returns the total number of f32 samples in the buffer (frames × channels).
   int getLen();
 
+  /// Returns the number of f32 samples playback reads, inside the trim points.
+  int getPlayableLen();
+
+  /// Returns the address of the first sample playback reads, inside the trim points.
+  /// Returns 0 if the waveform has no loaded buffer.
+  int getPlayablePointer();
+
   /// Returns the raw memory address of the f32 interleaved sample buffer.
   /// Returns 0 if the waveform has no loaded buffer (e.g. not yet mmap-ed).
   int getPointer();

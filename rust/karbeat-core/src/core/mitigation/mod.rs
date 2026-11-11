@@ -13,7 +13,10 @@
 //!     crash-<ns>-<code>.json
 //! ```
 
-use std::path::{Path, PathBuf};
+use std::{
+    io::Error as IoError,
+    path::{Path, PathBuf},
+};
 
 use thiserror::Error;
 
@@ -44,7 +47,7 @@ pub use device::UserDevice;
 pub enum MitigationError {
     /// Filesystem access failed.
     #[error("Mitigation file access failed: {0}")]
-    Io(#[from] std::io::Error),
+    Io(#[from] IoError),
     /// A report or recovery description could not be encoded or decoded.
     #[error("Mitigation file is not valid JSON: {0}")]
     Json(#[from] serde_json::Error),

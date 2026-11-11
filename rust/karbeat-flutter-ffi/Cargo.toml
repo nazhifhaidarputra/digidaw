@@ -19,6 +19,7 @@ karbeat-lv2.workspace = true
 karbeat-host.workspace = true
 karbeat-plugin-api.workspace = true
 karbeat-utils.workspace = true
+karbeat-settings.workspace = true
 
 anyhow.workspace = true
 flutter_rust_bridge = "=2.12.0"

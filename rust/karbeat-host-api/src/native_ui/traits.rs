@@ -3,14 +3,14 @@ use crate::native_ui::{
     NativeWindowId, NativeWindowMetrics, NativeWindowSpec,
 };
 
-use super::{NativeWindowConstraints, NativeWindowSize};
+use super::{NativeSurfaceKind, NativeWindowConstraints, NativeWindowSize};
 
 /// Operations provided by a host-owned platform window used to parent a plugin editor.
 pub trait NativeWindow {
     /// Returns the process-local identifier used to route platform events.
     fn id(&self) -> NativeWindowId;
     /// Returns the raw-handle ABI exposed by this window.
-    fn surface_kind(&self) -> super::NativeSurfaceKind;
+    fn surface_kind(&self) -> NativeSurfaceKind;
     /// Returns borrowed raw parent handles valid only while this window remains alive.
     fn parent_handle(&self) -> Result<NativeParentHandle, NativeUiError>;
     /// Makes the native window visible.

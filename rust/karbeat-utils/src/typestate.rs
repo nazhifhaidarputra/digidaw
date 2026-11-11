@@ -1,7 +1,7 @@
 //! Typestate state machines, checked at compile time where the state is known and at run
 //! time where it is not.
 
-use core::fmt;
+use core::{error::Error, fmt};
 
 /// A run-time transition was requested from a state that does not have it.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -22,7 +22,7 @@ impl fmt::Display for InvalidState {
     }
 }
 
-impl core::error::Error for InvalidState {}
+impl Error for InvalidState {}
 
 /// Why a fallible run-time transition did not happen.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -48,7 +48,7 @@ impl<E: fmt::Display> fmt::Display for TransitionError<E> {
     }
 }
 
-impl<E: fmt::Debug + fmt::Display> core::error::Error for TransitionError<E> {}
+impl<E: fmt::Debug + fmt::Display> Error for TransitionError<E> {}
 
 /// Runs a consuming run-time transition on a machine held in a field.
 ///
@@ -331,7 +331,7 @@ macro_rules! typestate {
 mod tests {
     use super::{InvalidState, TransitionError, transition_in_place};
 
-    crate::typestate! {
+    typestate! {
         #[derive(Debug)]
         machine Door {
             shared: u32,

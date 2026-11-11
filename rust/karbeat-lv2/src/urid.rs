@@ -7,6 +7,7 @@
 use std::{
     collections::HashMap,
     ffi::{CStr, CString, c_char, c_void},
+    ptr::{from_ref, null, null_mut},
     sync::{LazyLock, Mutex, PoisonError},
 };
 
@@ -30,11 +31,11 @@ unsafe impl Sync for Records {}
 
 static RECORDS: Records = Records {
     map: lv2_sys::LV2_URID_Map {
-        handle: std::ptr::null_mut(),
+        handle: null_mut(),
         map: Some(map_uri),
     },
     unmap: lv2_sys::LV2_URID_Unmap {
-        handle: std::ptr::null_mut(),
+        handle: null_mut(),
         unmap: Some(unmap_urid),
     },
 };
@@ -65,12 +66,12 @@ pub(crate) fn map_str(uri: &str) -> u32 {
 
 /// Pointer to the map record, for native calls that take `LV2_URID_Map*`.
 pub(crate) fn map_ptr() -> *mut lv2_sys::LV2_URID_Map {
-    std::ptr::from_ref(&RECORDS.map).cast_mut()
+    from_ref(&RECORDS.map).cast_mut()
 }
 
 /// Pointer to the unmap record, for native calls that take `LV2_URID_Unmap*`.
 pub(crate) fn unmap_ptr() -> *mut lv2_sys::LV2_URID_Unmap {
-    std::ptr::from_ref(&RECORDS.unmap).cast_mut()
+    from_ref(&RECORDS.unmap).cast_mut()
 }
 
 /// The `urid:map` feature record.
@@ -109,7 +110,7 @@ unsafe extern "C" fn unmap_urid(_handle: *mut c_void, urid: u32) -> *const c_cha
     // so the pointer stays valid for the life of the process.
     index
         .and_then(|index| table.uris.get(index))
-        .map_or(std::ptr::null(), |uri| uri.as_ptr())
+        .map_or(null(), |uri| uri.as_ptr())
 }
 
 #[cfg(test)]
@@ -125,17 +126,17 @@ mod tests {
         assert_eq!(map_str("urn:digidaw:test:second"), second);
         assert_eq!(map_str("with\0nul"), 0);
         // SAFETY: The record's callback ignores its handle and returns a process-lifetime string.
-        let unmapped = unsafe { unmap_urid(std::ptr::null_mut(), first) };
+        let unmapped = unsafe { unmap_urid(null_mut(), first) };
         assert!(!unmapped.is_null());
         // SAFETY: A non-null result is a NUL-terminated URI owned by the process table.
         let uri = unsafe { CStr::from_ptr(unmapped) };
         assert_eq!(uri, c"urn:digidaw:test:first");
         // SAFETY: As above; zero and unknown IDs have no URI.
-        assert!(unsafe { unmap_urid(std::ptr::null_mut(), 0) }.is_null());
+        assert!(unsafe { unmap_urid(null_mut(), 0) }.is_null());
         // SAFETY: As above.
-        assert!(unsafe { unmap_urid(std::ptr::null_mut(), u32::MAX) }.is_null());
+        assert!(unsafe { unmap_urid(null_mut(), u32::MAX) }.is_null());
         // SAFETY: The map callback receives a NUL-terminated URI.
-        let mapped = unsafe { map_uri(std::ptr::null_mut(), c"urn:digidaw:test:first".as_ptr()) };
+        let mapped = unsafe { map_uri(null_mut(), c"urn:digidaw:test:first".as_ptr()) };
         assert_eq!(mapped, first);
     }
 }

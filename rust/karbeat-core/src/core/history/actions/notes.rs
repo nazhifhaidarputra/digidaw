@@ -3,6 +3,7 @@ use crate::core::{
     project::{ApplicationState, Note, NoteId, Pattern},
 };
 use crate::shared::id::PatternId;
+use std::mem::{replace, swap};
 
 fn pattern_mut(
     app: &mut ApplicationState,
@@ -88,7 +89,7 @@ impl NotesChanged {
                         .notes
                         .get_mut(index)
                         .ok_or(HistoryError::missing("Note"))?;
-                    *other = Some(std::mem::replace(current, note));
+                    *other = Some(replace(current, note));
                 }
                 (Some(index), None) => *other = Some(pattern.notes.swap_remove(index)),
                 (None, Some(note)) => pattern.notes.push(note),
@@ -145,8 +146,8 @@ impl NotesMoved {
         let pattern = pattern_mut(app, self.pattern_id)?;
         for moved in &mut self.moves {
             let note = note_mut(pattern, moved.id)?;
-            std::mem::swap(&mut note.start_tick, &mut moved.tick);
-            std::mem::swap(&mut note.key, &mut moved.key);
+            swap(&mut note.start_tick, &mut moved.tick);
+            swap(&mut note.key, &mut moved.key);
         }
         pattern.sort_notes_unstable();
         Ok(EngineSync::track_graph())
@@ -187,7 +188,7 @@ impl NotesResized {
         let pattern = pattern_mut(app, self.pattern_id)?;
         for (id, duration) in &mut self.durations {
             let note = note_mut(pattern, *id)?;
-            std::mem::swap(&mut note.duration, duration);
+            swap(&mut note.duration, duration);
         }
         pattern.sort_notes_unstable();
         Ok(EngineSync::track_graph())
@@ -238,9 +239,9 @@ mod tests {
     /// 80-byte clips): a 1,000-note paste kept ~168 KB, now ~48 KB, and a 1,000-note move ~24 KB.
     #[test]
     fn per_note_records_stay_compact() {
-        assert!(std::mem::size_of::<(NoteId, Option<Note>)>() <= 48);
-        assert!(std::mem::size_of::<NoteMove>() <= 24);
-        assert!(std::mem::size_of::<(NoteId, u64)>() <= 16);
+        assert!(size_of::<(NoteId, Option<Note>)>() <= 48);
+        assert!(size_of::<NoteMove>() <= 24);
+        assert!(size_of::<(NoteId, u64)>() <= 16);
     }
 
     #[test]

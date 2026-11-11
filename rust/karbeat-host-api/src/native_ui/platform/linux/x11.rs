@@ -1,6 +1,7 @@
 use std::{
     cell::{Cell, RefCell},
     collections::{HashMap, VecDeque},
+    fmt::Display,
     num::NonZeroU32,
     os::fd::AsRawFd,
     rc::{Rc, Weak},
@@ -530,7 +531,7 @@ fn size_as_i32_pair(size: NativeWindowSize) -> Result<(i32, i32), NativeUiError>
     ))
 }
 
-fn native_error(error: impl std::fmt::Display) -> NativeUiError {
+fn native_error(error: impl Display) -> NativeUiError {
     NativeUiError::NativeOperationFailed(error.to_string())
 }
 

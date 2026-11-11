@@ -13,7 +13,12 @@
 
 use std::{
     cell::UnsafeCell,
+    f32::consts::SQRT_2,
+    mem::take,
+    ops::Range,
     panic::{AssertUnwindSafe, catch_unwind},
+    ptr::null_mut,
+    slice::from_raw_parts_mut,
     time::Instant,
 };
 
@@ -86,9 +91,9 @@ struct PlanEdge {
 struct PlanNode {
     kind: PlanNodeKind,
     /// Incoming connections, in the order the serial renderer pushed them.
-    edges: std::ops::Range<usize>,
+    edges: Range<usize>,
     /// Sidechain buffers this node owns.
-    sidechains: std::ops::Range<usize>,
+    sidechains: Range<usize>,
     /// Whether any connection reads this node before its fader.
     pre_fader_tap: bool,
 }
@@ -105,7 +110,7 @@ impl<T> Clone for SendPtr<T> {
 impl<T> Copy for SendPtr<T> {}
 
 impl<T> SendPtr<T> {
-    const NULL: Self = Self(std::ptr::null_mut());
+    const NULL: Self = Self(null_mut());
 
     pub fn new(pointer: *mut T) -> Self {
         Self(pointer)
@@ -618,7 +623,7 @@ impl RenderPlan {
 }
 
 /// Range of `voices` playing on `track_id`, once voices are grouped by track.
-pub(super) fn voice_range(voices: &[AudioVoice], track_id: TrackId) -> std::ops::Range<usize> {
+pub(super) fn voice_range(voices: &[AudioVoice], track_id: TrackId) -> Range<usize> {
     let Some(start) = voices.iter().position(|voice| voice.track_id == track_id) else {
         return 0..0;
     };
@@ -891,19 +896,40 @@ impl RenderJob<'_> {
     ) -> bool {
         if has_signal {
             *tail = chain_tail;
+            Self::resume(effects);
             return true;
         }
         if *tail == 0 {
+            Self::park(effects);
             return false;
         }
         *tail = tail.saturating_sub(len as u32);
         if *tail == 0 {
             if let Some(effects) = effects {
                 effects.iter_mut().for_each(|effect| effect.plugin.reset());
+                Self::park(Some(effects));
             }
             return false;
         }
+        Self::resume(effects);
         true
+    }
+
+    /// Marks a chain that does not process this block.
+    fn park(effects: Option<&mut Vec<AudioEffectInstance>>) {
+        for effect in effects.into_iter().flatten() {
+            effect.parked = true;
+        }
+    }
+
+    /// Settles the parameters of effects that process again after being parked, so edits made
+    /// while no audio flowed apply at once.
+    fn resume(effects: Option<&mut Vec<AudioEffectInstance>>) {
+        for effect in effects.into_iter().flatten() {
+            if take(&mut effect.parked) {
+                effect.plugin.settle_parameters();
+            }
+        }
     }
 
     fn chain_tail(&self, effects: Option<&Vec<AudioEffectInstance>>) -> u32 {
@@ -959,6 +985,7 @@ impl RenderJob<'_> {
         };
         channel.prepare_smoothing(ctx.sample_rate);
         if channel.mute || (ctx.is_any_solo && !channel.solo) {
+            Self::park(effects);
             return;
         }
         let len = self.output_len;
@@ -968,6 +995,9 @@ impl RenderJob<'_> {
 
         let mut has_signal = false;
         if let (Some(voice), Some(generator)) = (generator_voice, generator) {
+            if voice.parked {
+                generator.plugin.settle_parameters();
+            }
             let aux = self.sidechain(node, SidechainRoute::Generator(voice.id));
             let mut generator_ctx = ctx.base.clone();
             generator_ctx.midi_events = &voice.midi_events;
@@ -988,8 +1018,7 @@ impl RenderJob<'_> {
 
         if refs.oneshot_count > 0 {
             // SAFETY: The track's audio voices are a range only this track renders.
-            let voices =
-                unsafe { std::slice::from_raw_parts_mut(refs.oneshots.0, refs.oneshot_count) };
+            let voices = unsafe { from_raw_parts_mut(refs.oneshots.0, refs.oneshot_count) };
             has_signal |=
                 render_oneshot_voices(voices, ctx.sample_rate, &mut slot.post, channels, ctx.bpm);
         }
@@ -1064,6 +1093,7 @@ impl RenderJob<'_> {
         };
         channel.prepare_smoothing(ctx.sample_rate);
         if channel.mute {
+            Self::park(effects);
             return;
         }
         let len = self.output_len;
@@ -1119,15 +1149,13 @@ impl RenderJob<'_> {
             return;
         }
         // SAFETY: Master is the only node writing the pass's output.
-        let output = unsafe { std::slice::from_raw_parts_mut(self.output.0, self.output_len) };
+        let output = unsafe { from_raw_parts_mut(self.output.0, self.output_len) };
         let mut has_signal = self.pull(node, EdgeTarget::Main, output, scratch);
         self.pull_sidechains(node, self.output_len, scratch);
         // A bounce plays back through one more channel than the audio it replaces, whose
         // centre pan passes 1/sqrt(2) per side, so it is rendered that much louder.
         if ctx.bypass_master {
-            output
-                .iter_mut()
-                .for_each(|sample| *sample *= std::f32::consts::SQRT_2);
+            output.iter_mut().for_each(|sample| *sample *= SQRT_2);
             slot.routed = true;
             return;
         }
@@ -1156,9 +1184,11 @@ impl RenderJob<'_> {
             }
         }
         if !has_signal && *tail == 0 {
+            Self::park(Some(effects));
             output.fill(0.0);
             return;
         }
+        Self::resume(Some(effects));
         channel.prepare_smoothing(ctx.sample_rate);
         if channel.inverted_phase {
             apply_phase_inversion_simd(output);

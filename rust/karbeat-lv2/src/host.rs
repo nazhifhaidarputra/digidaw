@@ -2,10 +2,12 @@
 
 use std::{
     collections::HashMap,
-    path::PathBuf,
+    fs::canonicalize,
+    mem::forget,
+    path::{Path, PathBuf},
     rc::Rc,
     sync::{Arc, atomic::Ordering},
-    thread::ThreadId,
+    thread::{ThreadId, current},
 };
 
 use karbeat_host_api::{
@@ -48,7 +50,7 @@ impl Lv2PluginHost {
     /// Must be constructed on the native UI thread, which owns the host for its entire lifetime.
     pub fn new() -> Self {
         Self {
-            owner: std::thread::current().id(),
+            owner: current().id(),
             instances: HashMap::new(),
             bundles: HashMap::new(),
             closed_editors: Vec::new(),
@@ -56,7 +58,7 @@ impl Lv2PluginHost {
     }
 
     fn check_thread(&self) -> Result<(), HostError> {
-        if self.owner == std::thread::current().id() {
+        if self.owner == current().id() {
             Ok(())
         } else {
             Err(HostError::WrongThread)
@@ -68,6 +70,12 @@ impl Lv2PluginHost {
         self.instances
             .get(&id)
             .ok_or(HostError::UnknownInstance(id))
+    }
+
+    /// Lets tests drive an instance's internals, such as its editor message rings.
+    #[cfg(test)]
+    pub(crate) fn instance_for_test(&mut self, id: HostInstanceId) -> Option<&mut Lv2Instance> {
+        self.instances.get_mut(&id)
     }
 
     fn instance_mut(&mut self, id: HostInstanceId) -> Result<&mut Lv2Instance, HostError> {
@@ -84,8 +92,8 @@ impl Lv2PluginHost {
             .ok_or(HostError::InvalidParameter(parameter))
     }
 
-    fn bundle(&mut self, path: &std::path::Path) -> Result<Rc<Lv2Bundle>, HostError> {
-        let path = std::fs::canonicalize(path)?;
+    fn bundle(&mut self, path: &Path) -> Result<Rc<Lv2Bundle>, HostError> {
+        let path = canonicalize(path)?;
         if let Some(bundle) = self.bundles.get(&path) {
             return Ok(bundle.clone());
         }
@@ -440,7 +448,7 @@ impl Drop for Lv2PluginHost {
                 tracing::error!(
                     "LV2 host dropped before audio endpoint retirement; retaining instance for process lifetime"
                 );
-                std::mem::forget(instance);
+                forget(instance);
             }
         }
     }

@@ -2,7 +2,7 @@
 
 #[cfg(test)]
 mod tests {
-    use crate::{audio_waveform_api, clip_api, clipboard_api};
+    use crate::{audio_waveform_api, clip_api, clipboard_api, redo, undo};
 
     use crate::test::helpers::{add_dc_audio_source, make_ctx, make_seeded_ctx};
     use karbeat_audio::context::DawContext;
@@ -55,12 +55,12 @@ mod tests {
         assert_eq!(ctx.history.undo_label(), Some("Delete Audio Source"));
 
         for _ in 0..2 {
-            crate::undo(&mut ctx).expect("undo");
+            undo(&mut ctx).expect("undo");
             assert!(ctx.app_state.asset_library.source_map.contains_key(source));
             assert_eq!(clips_on(&ctx, audio), [first, kept, second]);
             assert!(ctx.app_state.clips_pool.contains_key(first));
 
-            crate::redo(&mut ctx).expect("redo");
+            redo(&mut ctx).expect("redo");
             assert!(!ctx.app_state.asset_library.source_map.contains_key(source));
             assert_eq!(clips_on(&ctx, audio), [kept]);
         }

@@ -1,6 +1,11 @@
 use std::{
+    backtrace::Backtrace,
+    cmp::Reverse,
+    fs::{copy, create_dir_all, read, read_dir},
+    panic::{PanicHookInfo, set_hook, take_hook},
     path::{Path, PathBuf},
     sync::{Once, OnceLock},
+    thread::current,
 };
 
 use jiff::Timestamp;
@@ -172,7 +177,7 @@ impl CrashStore {
     /// Creates the directory when missing.
     pub fn open(dir: impl Into<PathBuf>) -> Result<Self, MitigationError> {
         let dir = dir.into();
-        std::fs::create_dir_all(&dir)?;
+        create_dir_all(&dir)?;
         Ok(Self { dir })
     }
 
@@ -192,12 +197,12 @@ impl CrashStore {
     /// Lists readable reports, newest first. Unreadable files are logged and skipped.
     pub fn list(&self) -> Result<Vec<StoredCrashReport>, MitigationError> {
         let mut reports = Vec::new();
-        for entry in std::fs::read_dir(&self.dir)? {
+        for entry in read_dir(&self.dir)? {
             let path = entry?.path();
             let Some(id) = Self::report_id(&path) else {
                 continue;
             };
-            match std::fs::read(&path)
+            match read(&path)
                 .map_err(MitigationError::from)
                 .and_then(|bytes| Ok(serde_json::from_slice::<CrashReport>(&bytes)?))
             {
@@ -208,7 +213,7 @@ impl CrashStore {
                 ),
             }
         }
-        reports.sort_by_key(|stored| std::cmp::Reverse(stored.report.when));
+        reports.sort_by_key(|stored| Reverse(stored.report.when));
         Ok(reports)
     }
 
@@ -219,7 +224,7 @@ impl CrashStore {
 
     /// Copies one report's JSON to `destination`.
     pub fn export(&self, id: &str, destination: &Path) -> Result<(), MitigationError> {
-        std::fs::copy(self.report_path(id)?, destination)?;
+        copy(self.report_path(id)?, destination)?;
         Ok(())
     }
 
@@ -308,8 +313,8 @@ pub fn reporter() -> Option<&'static CrashReporter> {
 pub fn install_panic_hook() {
     static INSTALL: Once = Once::new();
     INSTALL.call_once(|| {
-        let previous = std::panic::take_hook();
-        std::panic::set_hook(Box::new(move |info| {
+        let previous = take_hook();
+        set_hook(Box::new(move |info| {
             if let Some(reporter) = reporter() {
                 let _ = reporter.record(CrashSource::Rust(panic_source(info)));
             }
@@ -318,7 +323,7 @@ pub fn install_panic_hook() {
     });
 }
 
-fn panic_source(info: &std::panic::PanicHookInfo<'_>) -> RustCrashSource {
+fn panic_source(info: &PanicHookInfo<'_>) -> RustCrashSource {
     let payload = info.payload();
     let message = payload
         .downcast_ref::<&str>()
@@ -326,13 +331,10 @@ fn panic_source(info: &std::panic::PanicHookInfo<'_>) -> RustCrashSource {
         .or_else(|| payload.downcast_ref::<String>().cloned())
         .unwrap_or_else(|| "non-string panic payload".to_owned());
     RustCrashSource::Panic {
-        thread: std::thread::current()
-            .name()
-            .unwrap_or("<unnamed>")
-            .to_owned(),
+        thread: current().name().unwrap_or("<unnamed>").to_owned(),
         message,
         location: info.location().map(ToString::to_string),
-        backtrace: Some(std::backtrace::Backtrace::force_capture().to_string()),
+        backtrace: Some(Backtrace::force_capture().to_string()),
     }
 }
 

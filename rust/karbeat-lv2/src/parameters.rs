@@ -5,6 +5,7 @@
 //! and the reverse parse here, free of lilv calls so the policy can be tested directly.
 
 use karbeat_plugin_api::prelude::ParameterSpec;
+use std::mem::swap;
 
 /// Largest distance at which a plain value still counts as one of its port's scale points.
 const SCALE_POINT_TOLERANCE: f32 = 1.0e-4;
@@ -42,7 +43,7 @@ impl ControlRange {
         let mut minimum = finite(minimum).unwrap_or(0.0);
         let mut maximum = finite(maximum).unwrap_or(minimum.max(0.0) + 1.0);
         if maximum < minimum {
-            std::mem::swap(&mut minimum, &mut maximum);
+            swap(&mut minimum, &mut maximum);
         }
         if maximum <= minimum {
             maximum = minimum + 1.0;

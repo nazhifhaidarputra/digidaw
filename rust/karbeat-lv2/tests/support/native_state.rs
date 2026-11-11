@@ -3,8 +3,9 @@ use karbeat_host_api::{
 };
 
 fn run<T>(future: impl Future<Output = Result<T, HostError>>) -> Result<T, HostError> {
-    futures_lite::future::block_on(future)
+    block_on(future)
 }
+use futures_lite::future::block_on;
 use karbeat_lv2::native;
 use karbeat_plugin_api::types::{
     AudioBuffers, AudioBusBuffer, MidiEvent, MidiMessage, ProcessContext, ProcessingMode,
@@ -14,12 +15,13 @@ use std::{
         Arc,
         atomic::{AtomicBool, Ordering},
     },
+    thread::{sleep, spawn, yield_now},
     time::{Duration, Instant},
 };
 
 pub fn exercise_state_gateway(descriptor: PluginDescriptor, config: ProcessingConfig) {
     assert!(!native::available());
-    let worker = std::thread::spawn(move || {
+    let worker = spawn(move || {
         let initial_descriptor = descriptor.clone();
         let initial_config = config.clone();
         let prepared = run(native::prepare_instance(
@@ -48,7 +50,7 @@ pub fn exercise_state_gateway(descriptor: PluginDescriptor, config: ProcessingCo
 
         let stop = Arc::new(AtomicBool::new(false));
         let audio_stop = stop.clone();
-        let audio = std::thread::spawn(move || {
+        let audio = spawn(move || {
             let mut processor = prepared.processor.install().unwrap();
             let mut left = [0.0_f32; 128];
             let mut right = [0.0_f32; 128];
@@ -94,7 +96,7 @@ pub fn exercise_state_gateway(descriptor: PluginDescriptor, config: ProcessingCo
                 processor.process(&mut buffers, &context);
                 assert!(left.iter().chain(&right).all(|sample| sample.is_finite()));
                 block += 1;
-                std::thread::yield_now();
+                yield_now();
             }
             processor.retire();
             block
@@ -104,7 +106,7 @@ pub fn exercise_state_gateway(descriptor: PluginDescriptor, config: ProcessingCo
             let state = loop {
                 match run(native::capture_state(id)) {
                     Err(HostError::Busy) if Instant::now() < deadline => {
-                        std::thread::yield_now();
+                        yield_now();
                     }
                     result => break result.unwrap(),
                 }
@@ -258,7 +260,7 @@ pub fn exercise_state_gateway(descriptor: PluginDescriptor, config: ProcessingCo
     while !worker.is_finished() {
         assert!(Instant::now() < deadline, "native state gateway timed out");
         context.iteration(false);
-        std::thread::sleep(Duration::from_millis(1));
+        sleep(Duration::from_millis(1));
     }
     worker.join().unwrap();
     assert!(native::available());

@@ -2,8 +2,11 @@
 
 use std::{
     collections::{HashMap, HashSet, VecDeque},
+    env::current_exe,
     fs,
-    hash::{Hash, Hasher},
+    hash::{DefaultHasher, Hash, Hasher},
+    iter::repeat_with,
+    num::NonZeroUsize,
     ops::ControlFlow,
     path::{Path, PathBuf},
     process::{Command, Stdio},
@@ -11,6 +14,7 @@ use std::{
         atomic::{AtomicBool, Ordering},
         mpsc,
     },
+    thread::{available_parallelism, sleep},
     time::{Duration, Instant, UNIX_EPOCH},
 };
 
@@ -223,7 +227,7 @@ pub struct ScanResult {
 
 /// Resolves the installed helper beside the application, including macOS Contents/MacOS.
 pub fn scanner_executable() -> Result<PathBuf, HostError> {
-    let application = std::env::current_exe()?;
+    let application = current_exe()?;
     let directory = application
         .parent()
         .ok_or_else(|| HostError::Scanner("application directory unavailable".into()))?;
@@ -267,7 +271,7 @@ pub fn discover_modules(
 }
 
 fn available_workers() -> usize {
-    std::thread::available_parallelism().map_or(1, std::num::NonZeroUsize::get)
+    available_parallelism().map_or(1, NonZeroUsize::get)
 }
 
 fn is_module(path: &Path, extension: &str) -> bool {
@@ -416,7 +420,7 @@ fn discover_modules_parallel(
 pub fn module_fingerprint(path: &Path) -> Result<u64, HostError> {
     fn visit(
         path: &Path,
-        hash: &mut std::hash::DefaultHasher,
+        hash: &mut DefaultHasher,
         seen: &mut HashSet<PathBuf>,
     ) -> Result<(), HostError> {
         path.hash(hash);
@@ -444,7 +448,7 @@ pub fn module_fingerprint(path: &Path) -> Result<u64, HostError> {
         }
         Ok(())
     }
-    let mut hash = std::hash::DefaultHasher::new();
+    let mut hash = DefaultHasher::new();
     visit(path, &mut hash, &mut HashSet::new())?;
     Ok(hash.finish())
 }
@@ -496,7 +500,7 @@ pub fn probe_module(
                 }
                 break;
             }
-            Ok(None) => std::thread::sleep(Duration::from_millis(5)),
+            Ok(None) => sleep(Duration::from_millis(5)),
             Err(error) => {
                 drop(child.kill());
                 drop(child.wait());
@@ -828,9 +832,8 @@ fn scan_modules(
                 });
         });
 
-        let mut pending: Vec<Option<ModuleOutcome>> = std::iter::repeat_with(|| None)
-            .take(modules.len())
-            .collect();
+        let mut pending: Vec<Option<ModuleOutcome>> =
+            repeat_with(|| None).take(modules.len()).collect();
         let mut next = 0;
         'merge: for (index, outcome) in &receiver {
             if let Some(slot) = pending.get_mut(index) {
@@ -861,6 +864,11 @@ fn scan_modules(
 )]
 mod tests {
     use super::*;
+    use crate::PluginKind;
+    #[cfg(unix)]
+    use std::os::unix::fs::{PermissionsExt, symlink};
+    #[cfg(unix)]
+    use std::thread::scope as thread_scope;
 
     fn vst3_scanner<'a>(probe: &'a ModuleProbe<'a>) -> ModuleScanner<'a> {
         ModuleScanner {
@@ -880,7 +888,7 @@ mod tests {
             name: format!("Plugin {number}"),
             vendor: "Fixture".into(),
             version: "1".into(),
-            kind: crate::PluginKind::Instrument,
+            kind: PluginKind::Instrument,
         }
     }
 
@@ -980,7 +988,6 @@ mod tests {
     #[cfg(unix)]
     #[test]
     fn fingerprints_follow_linked_binaries_without_following_directory_cycles() {
-        use std::os::unix::fs::symlink;
         let root = tempfile::tempdir().unwrap();
         let binary = root.path().join("binary.so");
         let bundle = root.path().join("Linked.vst3");
@@ -997,7 +1004,6 @@ mod tests {
     #[cfg(unix)]
     #[test]
     fn rescan_failure_retains_metadata_and_explicit_retry_clears_quarantine() {
-        use std::os::unix::fs::PermissionsExt;
         let root = tempfile::tempdir().unwrap();
         let module = root.path().join("Instrument.vst3");
         fs::write(&module, b"module").unwrap();
@@ -1159,7 +1165,7 @@ mod tests {
         let root = tempfile::tempdir().unwrap();
         let roots = nested_module_tree(root.path());
         #[cfg(unix)]
-        std::os::unix::fs::symlink(root.path(), root.path().join("Vendor0/cycle")).unwrap();
+        symlink(root.path(), root.path().join("Vendor0/cycle")).unwrap();
         let cancel = AtomicBool::new(false);
         let sequential = discover_modules_sequential(&roots, "vst3", &cancel).unwrap();
         let parallel = discover_modules_parallel(&roots, "vst3", &cancel).unwrap();
@@ -1263,7 +1269,6 @@ mod tests {
     #[cfg(unix)]
     #[test]
     fn parallel_probing_matches_sequential_scan() {
-        use std::os::unix::fs::PermissionsExt;
         let root = tempfile::tempdir().unwrap();
         let helper = root.path().join("probe");
         fs::write(&helper, "#!/bin/sh\nsleep 0.05\ncat \"$2.json\" > \"$4\"\n").unwrap();
@@ -1318,7 +1323,6 @@ mod tests {
     #[cfg(unix)]
     #[test]
     fn cancelled_parallel_scan_stops_and_keeps_existing_metadata() {
-        use std::os::unix::fs::PermissionsExt;
         let root = tempfile::tempdir().unwrap();
         let helper = root.path().join("probe");
         fs::write(&helper, "#!/bin/sh\nexec sleep 30\n").unwrap();
@@ -1337,9 +1341,9 @@ mod tests {
         let cancel = AtomicBool::new(false);
         let mut cache = ScanCache::default();
         let started = Instant::now();
-        let result = std::thread::scope(|scope| {
+        let result = thread_scope(|scope| {
             scope.spawn(|| {
-                std::thread::sleep(Duration::from_millis(100));
+                sleep(Duration::from_millis(100));
                 cancel.store(true, Ordering::Relaxed);
             });
             scan_modules(
@@ -1385,7 +1389,6 @@ mod tests {
     #[cfg(unix)]
     #[test]
     fn helpers_are_told_the_format_and_clap_ids_need_not_be_class_ids() {
-        use std::os::unix::fs::PermissionsExt;
         let root = tempfile::tempdir().unwrap();
         let module = root.path().join("Synth.clap");
         fs::write(&module, b"module").unwrap();
@@ -1422,7 +1425,6 @@ mod tests {
     #[cfg(unix)]
     #[test]
     fn crashed_hung_and_malformed_helpers_are_contained() {
-        use std::os::unix::fs::PermissionsExt;
         let root = tempfile::tempdir().unwrap();
         let helper = root.path().join("probe");
         for script in [
@@ -1465,7 +1467,7 @@ mod tests {
             name: uri.into(),
             vendor: "Fixture".into(),
             version: "1".into(),
-            kind: crate::PluginKind::Effect,
+            kind: PluginKind::Effect,
         }
     }
 

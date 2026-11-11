@@ -6,6 +6,8 @@ mod tests {
     use crate::{clip_api, note_api};
 
     use crate::test::helpers::{make_ctx, make_seeded_ctx};
+    use karbeat_audio::context::DawContext;
+    use karbeat_core::{core::project::track::note_transform::NoteParams, shared::PatternId};
 
     #[test]
     fn undo_with_empty_history_returns_err() {
@@ -130,10 +132,7 @@ mod tests {
         );
     }
 
-    fn pattern_spans(
-        ctx: &karbeat_audio::context::DawContext,
-        pattern_id: karbeat_core::shared::PatternId,
-    ) -> Vec<(u32, u64, u64, u8)> {
+    fn pattern_spans(ctx: &DawContext, pattern_id: PatternId) -> Vec<(u32, u64, u64, u8)> {
         ctx.app_state.pattern_pool[pattern_id]
             .notes
             .iter()
@@ -175,7 +174,7 @@ mod tests {
             pattern_id,
             &[(
                 note.id,
-                karbeat_core::core::project::track::note_transform::NoteParams {
+                NoteParams {
                     velocity: Some(40),
                     pan: Some(-0.5),
                     pitch: Some(1.0),
@@ -183,7 +182,7 @@ mod tests {
             )],
         )
         .unwrap();
-        let find = |ctx: &karbeat_audio::context::DawContext| {
+        let find = |ctx: &DawContext| {
             ctx.app_state.pattern_pool[pattern_id]
                 .notes
                 .iter()

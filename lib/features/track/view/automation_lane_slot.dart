@@ -352,17 +352,12 @@ class _AutomationLaneSlotState extends ConsumerState<AutomationLaneSlot> {
     });
   }
 
-  /// Direction in which raising tension moves the handle, so dragging up
-  /// always raises the curve: `1` or `-1`. Count-driven curves simply get
-  /// more steps or cycles when dragged up. A Step handle moves toward the
-  /// other endpoint, since its tension picks which side of the segment holds.
-  double _tensionDirection(AutomationPointDto from, double toValue) {
-    final traits = _sampler.traits(from.curveType);
-    final rising = toValue - from.value;
-    if (traits.tensionIsCount || rising == 0) return 1;
-    if (from.curveType == AutomationCurveTypeDto.step) return -rising.sign;
-    return traits.tensionInverted ? -rising.sign : rising.sign;
-  }
+  double _tensionDirection(AutomationPointDto from, double toValue) =>
+      tensionDragDirection(
+        _sampler.traits(from.curveType),
+        from.curveType,
+        toValue - from.value,
+      );
 
   void _startBezierDrag(AutomationBezierHitbox handle) {
     final points = widget.lane.points;
@@ -643,7 +638,7 @@ class _AutomationLaneSlotState extends ConsumerState<AutomationLaneSlot> {
           setState(() => _hoveredTensionPointId = null);
         },
         child: Tooltip(
-          message: 'Drag to bend the curve, double-click to reset',
+          message: tensionHandleTooltip,
           waitDuration: const Duration(milliseconds: 600),
           child: GestureDetector(
             behavior: HitTestBehavior.opaque,
@@ -789,11 +784,22 @@ class _AutomationLaneSlotState extends ConsumerState<AutomationLaneSlot> {
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
-    final state = ref.watch(workspaceStateProvider);
-    final transportState = ref.watch(transportProvider).value;
+    // Select only what the lane draws with; the whole workspace and transport
+    // stores change for unrelated reasons (playback, other panels).
+    final state = ref.watch(
+      workspaceStateProvider.select(
+        (s) => (
+          horizontalZoomLevel: s.horizontalZoomLevel,
+          gridSize: s.gridSize,
+          selectedTool: s.selectedTool,
+        ),
+      ),
+    );
     final zoomLevel = state.horizontalZoomLevel;
     final gridSize = state.gridSize;
-    final tempo = transportState?.state?.bpm ?? 120.0;
+    final tempo =
+        ref.watch(transportProvider.select((s) => s.value?.state?.bpm)) ??
+        120.0;
     final safeSampleRate = widget.sampleRate <= 0 ? 48000 : widget.sampleRate;
 
     final laneId = widget.lane.id;

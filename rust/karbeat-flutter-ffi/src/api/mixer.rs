@@ -1,7 +1,10 @@
 use std::collections::HashMap;
 
 use flutter_rust_bridge::frb;
-use karbeat_audio::{commands::MixerChannelSnapshot, engine::MixerTelemetrySnapshot};
+use karbeat_audio::{
+    commands::{EffectTarget, MixerChannelSnapshot},
+    engine::MixerTelemetrySnapshot,
+};
 use karbeat_core::shared::id::*;
 pub use karbeat_core::{
     core::project::TrackId,
@@ -9,7 +12,11 @@ pub use karbeat_core::{
 };
 
 use crate::api::jobs::run_job;
-use crate::api::{automation::RemovedAutomationDto, context::DawContext, plugin::UiPluginTarget};
+use crate::api::{
+    automation::RemovedAutomationDto,
+    context::{DawContext, project_ctx, read_ctx, runtime_ctx},
+    plugin::UiPluginTarget,
+};
 use karbeat_audio::commands::MixerChannelTarget;
 use karbeat_audio::event::PluginTarget;
 use karbeat_core::core::project::mixer::{
@@ -17,8 +24,12 @@ use karbeat_core::core::project::mixer::{
     RoutingConnection, RoutingNode, RoutingTap, SidechainRoute,
 };
 use karbeat_core_api::{
+    external_plugin_api::{
+        begin_add_effect, begin_delete_bus, begin_remove_effect, bus_targets, commit_install,
+        commit_removal, descriptor, effect_removal_result, execute_install, execute_removal,
+    },
     jobs::{JobClass, JobKind, JobSpec},
-    mixer_api,
+    mixer_api, project_api,
 };
 
 // ======================================
@@ -456,7 +467,7 @@ pub fn set_mixer_channel_param(
     target: UiMixerChannelTarget,
     param: UiMixerChannelParams,
 ) {
-    crate::api::context::runtime_ctx!(ctx);
+    runtime_ctx!(ctx);
     let core_target = MixerChannelTarget::from(&target);
     let core_param = MixerChannelParams::from(&param);
     mixer_api::set_mixer_channel_param(ctx, core_target, core_param);
@@ -466,7 +477,7 @@ pub fn set_mixer_channel_param(
 /// The response arrives asynchronously as `UiAudioFeedback::MixerChannelSnapshot`
 /// via the unified `create_feedback_stream` in `audio.rs`.
 pub fn query_mixer_channel(ctx: &DawContext, target: UiMixerChannelTarget) {
-    crate::api::context::runtime_ctx!(ctx);
+    runtime_ctx!(ctx);
     mixer_api::query_mixer_channel(ctx, MixerChannelTarget::from(&target));
 }
 
@@ -476,13 +487,13 @@ pub fn query_mixer_channel(ctx: &DawContext, target: UiMixerChannelTarget) {
 
 /// **GETTER: Fetch the mixer state**
 pub fn get_mixer_state(ctx: &DawContext) -> UiMixerState {
-    crate::api::context::read_ctx!(ctx);
+    read_ctx!(ctx);
     mixer_api::get_mixer_state(ctx, |mixer_state| UiMixerState::from(mixer_state))
 }
 
 /// **GETTER: Fetch a specific mixer channel**
 pub fn get_mixer_channel(ctx: &DawContext, track_id: u64) -> Result<UiMixerChannel, String> {
-    crate::api::context::read_ctx!(ctx);
+    read_ctx!(ctx);
     mixer_api::get_mixer_channel(ctx, TrackId::from_u64(track_id), |mixer_channel| {
         UiMixerChannel::from(mixer_channel)
     })
@@ -493,7 +504,7 @@ pub fn get_mixer_channel_populated(
     ctx: &DawContext,
     track_id: u64,
 ) -> Result<(UiMixerChannel, Vec<UiEffectInstance>), String> {
-    crate::api::context::read_ctx!(ctx);
+    read_ctx!(ctx);
     mixer_api::get_mixer_channel_populated(
         ctx,
         TrackId::from_u64(track_id),
@@ -505,24 +516,24 @@ pub fn get_mixer_channel_populated(
 
 /// **GETTER: Fetch the master bus**
 pub fn get_master_bus(ctx: &DawContext) -> UiMixerChannel {
-    crate::api::context::read_ctx!(ctx);
+    read_ctx!(ctx);
     mixer_api::get_master_bus(ctx).into()
 }
 
 pub fn get_master_bus_populated(ctx: &DawContext) -> Vec<UiEffectInstance> {
-    crate::api::context::read_ctx!(ctx);
+    read_ctx!(ctx);
     mixer_api::get_master_bus_populated(ctx, |e| UiEffectInstance::from(e))
 }
 
 /// **GETTER: Fetch all buses**
 pub fn get_buses(ctx: &DawContext) -> HashMap<u64, UiBus> {
-    crate::api::context::read_ctx!(ctx);
+    read_ctx!(ctx);
     mixer_api::get_buses(ctx, |id, bus| (id.to_u64(), UiBus::from(bus)))
 }
 
 /// **GETTER: Fetch the routing matrix**
 pub fn get_routing_matrix(ctx: &DawContext) -> Vec<UiRoutingConnection> {
-    crate::api::context::read_ctx!(ctx);
+    read_ctx!(ctx);
     mixer_api::get_routing_matrix(ctx, |conn| UiRoutingConnection::from(conn))
 }
 
@@ -531,7 +542,7 @@ pub fn get_track_mixer_channel_specs(
     ctx: &DawContext,
     track_id: u64,
 ) -> Option<Vec<ParameterSpecDTO>> {
-    crate::api::context::read_ctx!(ctx);
+    read_ctx!(ctx);
     mixer_api::get_track_mixer_channel_specs(ctx, &TrackId::from_u64(track_id), |param_spec| {
         ParameterSpecDTO::from(param_spec)
     })
@@ -539,7 +550,7 @@ pub fn get_track_mixer_channel_specs(
 
 /// Get bus channel's parameter specs
 pub fn get_bus_mixer_channel_specs(ctx: &DawContext, bus_id: u64) -> Option<Vec<ParameterSpecDTO>> {
-    crate::api::context::read_ctx!(ctx);
+    read_ctx!(ctx);
     mixer_api::get_bus_mixer_channel_specs(ctx, &BusId::from_u64(bus_id), |param_spec| {
         ParameterSpecDTO::from(param_spec)
     })
@@ -547,7 +558,7 @@ pub fn get_bus_mixer_channel_specs(ctx: &DawContext, bus_id: u64) -> Option<Vec<
 
 /// get master channel's parameter specs
 pub fn get_master_channel_specs(ctx: &DawContext) -> Vec<ParameterSpecDTO> {
-    crate::api::context::read_ctx!(ctx);
+    read_ctx!(ctx);
     mixer_api::get_master_channel_specs(ctx, |param_spec| ParameterSpecDTO::from(param_spec))
 }
 
@@ -575,7 +586,7 @@ fn add_effect_to_mixer_channel_by_id_blocking(
     registry_id: u32,
 ) -> Result<(), String> {
     let operation = ctx.begin_project_operation();
-    let target = karbeat_audio::commands::EffectTarget::Track(TrackId::from_u64(track_id));
+    let target = EffectTarget::Track(TrackId::from_u64(track_id));
     let external = operation
         .read_core()
         .plugin_catalog
@@ -584,13 +595,11 @@ fn add_effect_to_mixer_channel_by_id_blocking(
     if external {
         let pending = {
             let core = operation.read_core();
-            karbeat_core_api::external_plugin_api::begin_add_effect(&core, target, registry_id)
-                .map_err(|error| error.to_string())?
+            begin_add_effect(&core, target, registry_id).map_err(|error| error.to_string())?
         };
-        let completed = karbeat_core_api::external_plugin_api::execute_install(pending)
-            .map_err(|error| error.to_string())?;
+        let completed = execute_install(pending).map_err(|error| error.to_string())?;
         let mut core = operation.write_core();
-        karbeat_core_api::external_plugin_api::commit_install(&mut core, completed);
+        commit_install(&mut core, completed);
     } else {
         mixer_api::add_effect_to_mixer_channel_by_id(
             &mut operation.write_core(),
@@ -644,7 +653,7 @@ pub fn move_effect_order(
     effect_instance_id: u64,
     new_position: u32,
 ) -> Result<(), String> {
-    crate::api::context::project_ctx!(ctx);
+    project_ctx!(ctx);
     mixer_api::move_effect_order(
         ctx,
         MixerChannelTarget::from(&target),
@@ -661,7 +670,7 @@ pub fn set_effect_bypass(
     effect_instance_id: u64,
     bypass: bool,
 ) -> Result<(), String> {
-    crate::api::context::project_ctx!(ctx);
+    project_ctx!(ctx);
     mixer_api::set_effect_bypass(
         ctx,
         MixerChannelTarget::from(&target),
@@ -669,6 +678,73 @@ pub fn set_effect_bypass(
         bypass,
     )
     .map_err(|error| error.to_string())
+}
+
+/// Saves a channel's effect chain, as it currently sounds, to a `.effch` template file.
+pub async fn save_channel_template(
+    ctx: &DawContext,
+    target: UiMixerChannelTarget,
+    path: String,
+) -> Result<(), String> {
+    let ctx = ctx.clone();
+    run_job(
+        JobSpec::new(JobKind::ChannelTemplateSave, JobClass::Control),
+        move |_| save_channel_template_blocking(&ctx, &target, &path),
+    )
+    .await
+}
+
+fn save_channel_template_blocking(
+    ctx: &DawContext,
+    target: &UiMixerChannelTarget,
+    path: &str,
+) -> Result<(), String> {
+    let operation = ctx.begin_project_operation();
+    let pending = project_api::begin_save_channel_template(
+        &operation.read_core(),
+        MixerChannelTarget::from(target),
+        path,
+    )
+    .map_err(|error| error.to_string())?;
+    project_api::execute_save_channel_template(pending).map_err(|error| format!("{error:#}"))?;
+    tracing::info!("Saved channel template to {}", path);
+    Ok(())
+}
+
+/// Appends a `.effch` template's effects to a channel. Returns the names of the plugins that were
+/// skipped, such as external plugins that are not on this machine.
+pub async fn load_channel_template(
+    ctx: &DawContext,
+    target: UiMixerChannelTarget,
+    path: String,
+) -> Result<Vec<String>, String> {
+    let ctx = ctx.clone();
+    run_job(
+        JobSpec::new(JobKind::ChannelTemplateLoad, JobClass::Control),
+        move |_| load_channel_template_blocking(&ctx, &target, &path),
+    )
+    .await
+}
+
+fn load_channel_template_blocking(
+    ctx: &DawContext,
+    target: &UiMixerChannelTarget,
+    path: &str,
+) -> Result<Vec<String>, String> {
+    let operation = ctx.begin_project_operation();
+    let mut load = mixer_api::begin_load_channel_template(
+        &operation.read_core(),
+        MixerChannelTarget::from(target),
+        path,
+    )
+    .map_err(|error| format!("{error:#}"))?;
+    for saved in load.take_effects() {
+        let pending = mixer_api::begin_template_effect(&operation.read_core(), &load, saved);
+        let completed = mixer_api::execute_template_effect(pending);
+        mixer_api::commit_template_effect(&mut operation.write_core(), &mut load, completed);
+    }
+    let skipped = mixer_api::commit_load_channel_template(&mut operation.write_core(), load);
+    Ok(skipped)
 }
 
 /// Removes an effect and the automation lanes that drive it in one transaction, returning
@@ -694,42 +770,26 @@ fn remove_effect_from_target_mixer_channel_blocking(
     let operation = ctx.begin_project_operation();
     let mixer_target = MixerChannelTarget::from(&target);
     let effect_target = match &mixer_target {
-        MixerChannelTarget::Track(id) => karbeat_audio::commands::EffectTarget::Track(*id),
-        MixerChannelTarget::Bus(id) => karbeat_audio::commands::EffectTarget::Bus(*id),
-        MixerChannelTarget::Master => karbeat_audio::commands::EffectTarget::Master,
+        MixerChannelTarget::Track(id) => EffectTarget::Track(*id),
+        MixerChannelTarget::Bus(id) => EffectTarget::Bus(*id),
+        MixerChannelTarget::Master => EffectTarget::Master,
     };
     let effect_id = EffectId::from_u64(effect_instance_id);
     let plugin_target = match effect_target {
-        karbeat_audio::commands::EffectTarget::Track(id) => {
-            karbeat_audio::event::PluginTarget::TrackEffect(id, effect_id)
-        }
-        karbeat_audio::commands::EffectTarget::Bus(id) => {
-            karbeat_audio::event::PluginTarget::BusEffect(id, effect_id)
-        }
-        karbeat_audio::commands::EffectTarget::Master => {
-            karbeat_audio::event::PluginTarget::MasterEffect(effect_id)
-        }
+        EffectTarget::Track(id) => PluginTarget::TrackEffect(id, effect_id),
+        EffectTarget::Bus(id) => PluginTarget::BusEffect(id, effect_id),
+        EffectTarget::Master => PluginTarget::MasterEffect(effect_id),
     };
-    let external =
-        karbeat_core_api::external_plugin_api::descriptor(&operation.read_core(), plugin_target)
-            .is_some();
+    let external = descriptor(&operation.read_core(), plugin_target).is_some();
     if external {
         let pending = {
             let core = operation.read_core();
-            karbeat_core_api::external_plugin_api::begin_remove_effect(
-                &core,
-                effect_target,
-                effect_id,
-            )
-            .map_err(|error| error.to_string())?
+            begin_remove_effect(&core, effect_target, effect_id)
+                .map_err(|error| error.to_string())?
         };
-        let completed = karbeat_core_api::external_plugin_api::execute_removal(pending)
-            .map_err(|error| error.to_string())?;
-        let removed = karbeat_core_api::external_plugin_api::commit_removal(
-            &mut operation.write_core(),
-            completed,
-        );
-        karbeat_core_api::external_plugin_api::effect_removal_result(removed)
+        let completed = execute_removal(pending).map_err(|error| error.to_string())?;
+        let removed = commit_removal(&mut operation.write_core(), completed);
+        effect_removal_result(removed)
             .map(RemovedAutomationDto::from)
             .map_err(|error| error.to_string())
     } else {
@@ -762,19 +822,11 @@ fn add_effect_to_master_bus_blocking(ctx: &DawContext, registry_id: u32) -> Resu
     if external {
         let pending = {
             let core = operation.read_core();
-            karbeat_core_api::external_plugin_api::begin_add_effect(
-                &core,
-                karbeat_audio::commands::EffectTarget::Master,
-                registry_id,
-            )
-            .map_err(|error| error.to_string())?
+            begin_add_effect(&core, EffectTarget::Master, registry_id)
+                .map_err(|error| error.to_string())?
         };
-        let completed = karbeat_core_api::external_plugin_api::execute_install(pending)
-            .map_err(|error| error.to_string())?;
-        karbeat_core_api::external_plugin_api::commit_install(
-            &mut operation.write_core(),
-            completed,
-        );
+        let completed = execute_install(pending).map_err(|error| error.to_string())?;
+        commit_install(&mut operation.write_core(), completed);
     } else {
         mixer_api::add_effect_to_master_bus(&mut operation.write_core(), registry_id)
             .map_err(|e| e.to_string())?;
@@ -820,7 +872,7 @@ fn remove_effect_from_master_bus_blocking(
 
 /// Create a new mixer bus and return its ID.
 pub fn create_bus(ctx: &DawContext, name: String) -> Result<u64, String> {
-    crate::api::context::project_ctx!(ctx);
+    project_ctx!(ctx);
     // TODO: Refactor this to Core's API
     let bus_id = mixer_api::create_bus(ctx, name);
     Ok(bus_id.to_u64())
@@ -841,24 +893,17 @@ fn delete_bus_blocking(ctx: &DawContext, bus_id: u64) -> Result<(), String> {
     let bus = BusId::from_u64(bus_id);
     let external = {
         let core = operation.read_core();
-        karbeat_core_api::external_plugin_api::bus_targets(&core, bus)
+        bus_targets(&core, bus)
             .iter()
-            .any(|target| {
-                karbeat_core_api::external_plugin_api::descriptor(&core, *target).is_some()
-            })
+            .any(|target| descriptor(&core, *target).is_some())
     };
     if external {
         let pending = {
             let core = operation.read_core();
-            karbeat_core_api::external_plugin_api::begin_delete_bus(&core, bus)
-                .map_err(|error| error.to_string())?
+            begin_delete_bus(&core, bus).map_err(|error| error.to_string())?
         };
-        let completed = karbeat_core_api::external_plugin_api::execute_removal(pending)
-            .map_err(|error| error.to_string())?;
-        karbeat_core_api::external_plugin_api::commit_removal(
-            &mut operation.write_core(),
-            completed,
-        );
+        let completed = execute_removal(pending).map_err(|error| error.to_string())?;
+        commit_removal(&mut operation.write_core(), completed);
         Ok(())
     } else {
         mixer_api::delete_bus(&mut operation.write_core(), bus).map_err(|error| error.to_string())
@@ -898,19 +943,11 @@ fn add_effect_to_bus_blocking(
     if external {
         let pending = {
             let core = operation.read_core();
-            karbeat_core_api::external_plugin_api::begin_add_effect(
-                &core,
-                karbeat_audio::commands::EffectTarget::Bus(bus),
-                registry_id,
-            )
-            .map_err(|error| error.to_string())?
+            begin_add_effect(&core, EffectTarget::Bus(bus), registry_id)
+                .map_err(|error| error.to_string())?
         };
-        let completed = karbeat_core_api::external_plugin_api::execute_install(pending)
-            .map_err(|error| error.to_string())?;
-        karbeat_core_api::external_plugin_api::commit_install(
-            &mut operation.write_core(),
-            completed,
-        );
+        let completed = execute_install(pending).map_err(|error| error.to_string())?;
+        commit_install(&mut operation.write_core(), completed);
     } else {
         mixer_api::add_effect_to_bus(&mut operation.write_core(), bus, registry_id)
             .map_err(|e| e.to_string())?;
@@ -924,13 +961,13 @@ fn add_effect_to_bus_blocking(
 }
 
 pub fn rename_bus(ctx: &DawContext, bus_id: u64, new_name: String) -> Result<(), String> {
-    crate::api::context::project_ctx!(ctx);
+    project_ctx!(ctx);
     mixer_api::rename_bus(ctx, BusId::from_u64(bus_id), &new_name).map_err(|e| e.to_string())
 }
 
 /// Change a bus color to a hex string such as "#RRGGBB" or "#RRGGBBAA".
 pub fn change_bus_color(ctx: &DawContext, bus_id: u64, new_color: String) -> Result<(), String> {
-    crate::api::context::project_ctx!(ctx);
+    project_ctx!(ctx);
     mixer_api::change_bus_color(ctx, BusId::from_u64(bus_id), &new_color).map_err(|e| e.to_string())
 }
 
@@ -943,7 +980,7 @@ pub fn get_channel_destinations(
     is_bus: bool,
     channel_id: u64,
 ) -> Vec<UiRoutingConnection> {
-    crate::api::context::read_ctx!(ctx);
+    read_ctx!(ctx);
     let source_node = if is_bus {
         RoutingNode::Bus(BusId::from_u64(channel_id))
     } else {
@@ -968,7 +1005,7 @@ pub fn set_routing(
     is_send: bool,
     tap: UiRoutingTap,
 ) -> Result<(), String> {
-    crate::api::context::project_ctx!(ctx);
+    project_ctx!(ctx);
     let conn = RoutingConnection {
         source: source.into(),
         destination: destination.into(),
@@ -987,25 +1024,25 @@ pub fn remove_routing(
     destination: UiRoutingNode,
     is_send: bool,
 ) -> Result<(), String> {
-    crate::api::context::project_ctx!(ctx);
+    project_ctx!(ctx);
     mixer_api::remove_routing(ctx, source.into(), destination.into(), is_send)
         .map_err(|e| e.to_string())
 }
 
 pub fn update_routing(ctx: &DawContext, conn: UiRoutingConnection) -> Result<(), String> {
-    crate::api::context::project_ctx!(ctx);
+    project_ctx!(ctx);
     mixer_api::update_routing(ctx, conn.into()).map_err(|e| e.to_string())
 }
 
 /// Get the mixer snapshot telemetry. this uses a triple buffer last snapshot
 #[frb(sync)]
 pub fn get_mixer_telemetry_sync(ctx: &DawContext) -> MixerTelemetrySnapshotDto {
-    crate::api::context::runtime_ctx!(ctx);
+    runtime_ctx!(ctx);
     mixer_api::get_mixer_telemetry_sync(ctx).into()
 }
 
 pub fn set_mixer_telemetry_subs(ctx: &DawContext, active: bool) -> Result<(), String> {
-    crate::api::context::runtime_ctx!(ctx);
+    runtime_ctx!(ctx);
     mixer_api::set_mixer_telemetry_subs(ctx, active).map_err(|e| e.to_string())
 }
 
@@ -1019,7 +1056,7 @@ pub fn get_sidechain_sources(
     ctx: &DawContext,
     sidechain_plugin: UiPluginTarget,
 ) -> Vec<UiSidechainSource> {
-    crate::api::context::read_ctx!(ctx);
+    read_ctx!(ctx);
     mixer_api::get_sidechain_sources(ctx, sidechain_plugin.into())
         .into_iter()
         .map(|source| UiSidechainSource {
@@ -1041,7 +1078,7 @@ pub fn set_sidechain_source(
     send_level: Option<f64>,
     tap: UiRoutingTap,
 ) -> Result<(), String> {
-    crate::api::context::project_ctx!(ctx);
+    project_ctx!(ctx);
     mixer_api::set_sidechain_source(
         ctx,
         plugin.into(),
@@ -1055,12 +1092,14 @@ pub fn set_sidechain_source(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::sync::check_random;
+    use karbeat_audio::context::DawContext as CoreDawContext;
 
     #[test]
     fn mixer_lookup_rejects_a_deleted_track_id() {
-        crate::sync::check_random(
+        check_random(
             || {
-                let mut core = karbeat_audio::context::DawContext::new();
+                let mut core = CoreDawContext::new();
                 let removed = core.app_state.add_new_audio_track().id;
                 core.app_state.remove_track(removed).expect("remove track");
                 let replacement = core.app_state.add_new_audio_track().id;

@@ -536,6 +536,7 @@ impl AudioPluginBuilder for MyRetro {
 #[cfg(test)]
 mod rich_midi_tests {
     use super::MyRetro;
+    use karbeat_dsp::envelope::EnvelopeState;
     use karbeat_plugin_api::types::MidiMessage;
 
     #[test]
@@ -558,20 +559,14 @@ mod rich_midi_tests {
             key: 60,
         });
         assert!(synth.active_voices[0].key_released);
-        assert_ne!(
-            synth.active_voices[0].adsr.state(),
-            karbeat_dsp::envelope::EnvelopeState::Release
-        );
+        assert_ne!(synth.active_voices[0].adsr.state(), EnvelopeState::Release);
 
         synth.handle_midi_message(&MidiMessage::ControlChange {
             channel: 0,
             controller: 64,
             value: 0,
         });
-        assert_eq!(
-            synth.active_voices[0].adsr.state(),
-            karbeat_dsp::envelope::EnvelopeState::Release
-        );
+        assert_eq!(synth.active_voices[0].adsr.state(), EnvelopeState::Release);
     }
 }
 

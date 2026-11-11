@@ -3,6 +3,7 @@ use karbeat_plugins::{
     effect::{pitch_shifter::PitchShifter, sidechain::DigidawSidechainCompressor},
     plugins::*,
 };
+use std::env::var;
 
 /// A declarative macro to export manifests for a variadic list of plugins.
 macro_rules! export_plugins {
@@ -24,7 +25,7 @@ fn main() {
 
     // HOW TO run script from root workspace:
     // PLUGIN_MANIFEST_DIR="../assets/manifests/audio-plugins/" cargo run --bin export_manifest
-    let export_dir = std::env::var("PLUGIN_MANIFEST_DIR").expect("No PLUGIN_MANIFEST_DIR defined");
+    let export_dir = var("PLUGIN_MANIFEST_DIR").expect("No PLUGIN_MANIFEST_DIR defined");
 
     // Call the export function on all plugins
     export_plugins!(

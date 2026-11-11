@@ -28,8 +28,10 @@ mod vital {
     use std::{
         alloc::{GlobalAlloc, Layout, System},
         cell::Cell,
+        env::{args, var_os},
         path::PathBuf,
         sync::atomic::{AtomicUsize, Ordering},
+        thread::spawn,
     };
 
     struct CountingAllocator;
@@ -83,12 +85,10 @@ mod vital {
     }
 
     pub fn main() {
-        if std::env::var_os("VITAL_CLAP_PATH").is_none()
-            && !std::env::args().any(|arg| arg == "--ignored")
-        {
+        if var_os("VITAL_CLAP_PATH").is_none() && !args().any(|arg| arg == "--ignored") {
             return;
         }
-        let path = std::env::var_os("VITAL_CLAP_PATH")
+        let path = var_os("VITAL_CLAP_PATH")
             .map_or_else(|| PathBuf::from("/usr/lib/clap/Vital.clap"), PathBuf::from);
         let descriptor = ClapModule::load(&path)
             .unwrap()
@@ -130,7 +130,7 @@ mod vital {
         assert!(host.take_processor(first).is_err());
         assert!(host.destroy(first).is_err());
         host.resume(first).unwrap();
-        let (mut processor, energy) = std::thread::spawn(move || {
+        let (mut processor, energy) = spawn(move || {
             let note_on = [MidiEvent {
                 sample_offset: 7,
                 data: MidiMessage::NoteOn {
@@ -230,7 +230,7 @@ mod vital {
         assert!((flushed.value - 0.73).abs() < 0.001, "{}", flushed.value);
         host.resume(first).unwrap();
 
-        std::thread::spawn(move || {
+        spawn(move || {
             WATCH.with(|watch| watch.set(true));
             processor.retire();
             WATCH.with(|watch| watch.set(false));

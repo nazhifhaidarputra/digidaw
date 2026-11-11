@@ -1,5 +1,6 @@
 use std::num::NonZeroU64;
 
+use super::NativeEditorLifecycle;
 use raw_window_handle::{RawDisplayHandle, RawWindowHandle};
 
 /// Largest accepted client width or height for a native plugin editor window.
@@ -370,8 +371,8 @@ pub enum NativeUiError {
     #[error("invalid native editor lifecycle transition from {from:?} to {to:?}")]
     InvalidLifecycleTransition {
         /// Lifecycle state before the rejected operation.
-        from: super::NativeEditorLifecycle,
+        from: NativeEditorLifecycle,
         /// Lifecycle state required by the rejected operation.
-        to: super::NativeEditorLifecycle,
+        to: NativeEditorLifecycle,
     },
 }

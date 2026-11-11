@@ -17,6 +17,7 @@ pub mod project;
 pub mod recording;
 pub mod serialization;
 pub mod session;
+pub mod settings;
 pub mod simple;
 pub mod timeline;
 pub mod track;

@@ -5,12 +5,9 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:karbeat/core/utils/result_type.dart';
 import 'package:karbeat/features/workspace/models/browser_panel_state.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import 'package:karbeat/src/rust/api/settings.dart' as settings_api;
 
 class SampleBrowserService {
-  static const String sourceDirectoriesPreferenceKey =
-      'sample_browser.source_directories.v1';
-
   static const Set<String> supportedExtensions = {
     'aac',
     'flac',
@@ -40,22 +37,14 @@ class SampleBrowserService {
   }
 
   Future<Result<List<String>>> loadPersistedDirectoryPaths() {
-    return attemptAsync(() async {
-      final preferences = SharedPreferencesAsync();
-      return await preferences.getStringList(sourceDirectoriesPreferenceKey) ??
-          const <String>[];
-    });
+    return attemptAsync(settings_api.loadSampleFolders);
   }
 
+  /// Saves [paths]; Rust sorts them and keeps each once.
   Future<Result<void>> savePersistedDirectoryPaths(Iterable<String> paths) {
-    return attemptAsync(() async {
-      final uniquePaths = paths.toSet().toList()..sort();
-      final preferences = SharedPreferencesAsync();
-      await preferences.setStringList(
-        sourceDirectoriesPreferenceKey,
-        uniquePaths,
-      );
-    });
+    return attemptAsync(
+      () => settings_api.saveSampleFolders(folders: paths.toList()),
+    );
   }
 
   Future<FileTree> _scan(Directory directory) async {

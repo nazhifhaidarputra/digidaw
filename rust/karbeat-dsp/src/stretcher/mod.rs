@@ -10,7 +10,7 @@
 //! safe, so run it on a background worker. [`stretch_offline_parallel`] splits long input into
 //! chunks stretched in parallel.
 
-use std::fmt;
+use std::{error::Error, fmt};
 
 pub mod backend;
 mod parallel;
@@ -72,7 +72,7 @@ impl fmt::Display for StretchError {
     }
 }
 
-impl std::error::Error for StretchError {}
+impl Error for StretchError {}
 fn validate(request: &OfflineStretch<'_>) -> Result<u32, StretchError> {
     if request.channels == 0 || request.channels > MAX_CHANNELS {
         return Err(StretchError::InvalidInput(
@@ -125,14 +125,15 @@ pub fn stretch_offline(
 )]
 mod tests {
     use super::{OfflineStretch, StretchError, stretch_offline};
+    use std::{f32::consts::TAU, iter::repeat_n};
 
     const RATE: u32 = 48_000;
 
     fn sine(frames: usize, channels: usize) -> Vec<f32> {
         (0..frames)
             .flat_map(|frame| {
-                let value = (frame as f32 * 440.0 * std::f32::consts::TAU / RATE as f32).sin();
-                std::iter::repeat_n(value * 0.5, channels)
+                let value = (frame as f32 * 440.0 * TAU / RATE as f32).sin();
+                repeat_n(value * 0.5, channels)
             })
             .collect()
     }

@@ -2,6 +2,10 @@
 
 use std::collections::HashMap;
 use std::time::Duration;
+use std::{
+    sync::Arc,
+    thread::{Builder, sleep},
+};
 
 use flutter_rust_bridge::frb;
 use karbeat_audio::recording::{TakeFinisher, TakeProgress};
@@ -12,7 +16,7 @@ use karbeat_core_api::{
     recording_api,
 };
 
-use crate::api::context::DawContext;
+use crate::api::context::{DawContext, project_ctx, read_ctx};
 use crate::api::jobs::run_job;
 use crate::api::project::UiTrack;
 use crate::frb_generated::StreamSink;
@@ -63,7 +67,7 @@ impl From<TakeProgress> for UiRecordingProgress {
 
 /// Arms an audio track: its input records once the song plays.
 pub fn start_track_recording(ctx: &DawContext, track_id: u64) -> Result<UiStartedTake, String> {
-    crate::api::context::project_ctx!(ctx);
+    project_ctx!(ctx);
     recording_api::start_track_recording(ctx, TrackId::from_u64(track_id))
         .map(|started| UiStartedTake {
             enabled_input: started.enabled_input,
@@ -73,7 +77,7 @@ pub fn start_track_recording(ctx: &DawContext, track_id: u64) -> Result<UiStarte
 
 /// Tracks with a take waiting for or recording audio.
 pub fn get_recording_tracks(ctx: &DawContext) -> Vec<u64> {
-    crate::api::context::read_ctx!(ctx);
+    read_ctx!(ctx);
     recording_api::recording_tracks(ctx)
         .into_iter()
         .map(|track_id| track_id.to_u64())
@@ -91,7 +95,7 @@ pub async fn stop_track_recording(
         JobSpec::new(JobKind::AudioImport, JobClass::Heavy),
         move |_| -> Result<Option<UiTrack>, String> {
             let finisher = {
-                crate::api::context::project_ctx!(ctx);
+                project_ctx!(ctx);
                 recording_api::end_track_recording(ctx, TrackId::from_u64(track_id))
                     .map_err(|error| format!("{error:#}"))?
             };
@@ -109,7 +113,7 @@ pub async fn stop_all_recordings(ctx: &DawContext) -> Result<Vec<UiTrack>, Strin
         JobSpec::new(JobKind::AudioImport, JobClass::Heavy),
         move |_| -> Result<Vec<UiTrack>, String> {
             let finishers = {
-                crate::api::context::project_ctx!(ctx);
+                project_ctx!(ctx);
                 recording_api::recording_tracks(ctx)
                     .into_iter()
                     .map(|track_id| recording_api::end_track_recording(ctx, track_id))
@@ -155,8 +159,8 @@ pub fn create_recording_stream(
     sink: StreamSink<UiRecordingProgress>,
     ctx: &DawContext,
 ) -> Result<(), String> {
-    let registry = std::sync::Arc::clone(&ctx.read().recordings);
-    std::thread::Builder::new()
+    let registry = Arc::clone(&ctx.read().recordings);
+    Builder::new()
         .name("karbeat-recording-stream".into())
         .spawn(move || {
             // The last frame count and ended flag sent per take; unchanged takes stay quiet.
@@ -179,7 +183,7 @@ pub fn create_recording_stream(
                         return;
                     }
                 }
-                std::thread::sleep(PROGRESS_INTERVAL);
+                sleep(PROGRESS_INTERVAL);
             }
         })
         .map_err(|error| error.to_string())?;

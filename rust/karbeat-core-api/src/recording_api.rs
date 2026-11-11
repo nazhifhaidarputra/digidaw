@@ -19,7 +19,10 @@ use karbeat_core::core::{
 };
 use karbeat_core::shared::id::*;
 
-use crate::audio_waveform_api::{self, CompletedAudioImport, PendingAudioImport};
+use crate::{
+    audio_settings_api::select_input,
+    audio_waveform_api::{self, CompletedAudioImport, PendingAudioImport},
+};
 
 /// Name of a take recorded at `now`: `Recording_` and the local time with its UTC offset, such as
 /// `Recording_2026-10-30T14:05:33+07:00`.
@@ -65,7 +68,7 @@ pub fn start_track_recording(
     let requested_input = ctx.audio_runtime_settings.read().requested_input.clone();
     let enabled_input = !requested_input.enabled;
     if enabled_input {
-        crate::audio_settings_api::select_input(ctx, true, requested_input.device_id)?;
+        select_input(ctx, true, requested_input.device_id)?;
     }
 
     let name = take_name(&jiff::Zoned::now());
@@ -173,6 +176,7 @@ pub fn commit_take(
 )]
 mod tests {
     use super::*;
+    use std::fs::write;
 
     #[test]
     fn take_names_carry_the_local_offset_and_files_drop_colons() {
@@ -188,7 +192,7 @@ mod tests {
     fn take_paths_never_overwrite_an_earlier_take() {
         let dir = tempfile::tempdir().expect("temporary dir");
         let first = unique_take_path(dir.path(), "Recording");
-        std::fs::write(&first, b"").expect("take file");
+        write(&first, b"").expect("take file");
         let second = unique_take_path(dir.path(), "Recording");
         assert_ne!(first, second);
         assert!(second.ends_with("Recording_2.wav"));

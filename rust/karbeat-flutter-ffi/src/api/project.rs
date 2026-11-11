@@ -10,8 +10,8 @@ use karbeat_audio::writer::{
 };
 use karbeat_core::core::file_manager::audio_loader::AudioLoader;
 use karbeat_core::core::project::{
-    ApplicationState, CoverArt, CoverImage, EnvelopeCursor, EnvelopePoint, Fade, GainEnvelope,
-    PluginInstance, audio_waveform::AudioSampleMode,
+    ApplicationState, ClipLoop, ClipModulation, CoverArt, CoverImage, CurvePoint, EnvelopeCursor,
+    EnvelopePoint, Fade, GainEnvelope, PluginInstance, audio_waveform::AudioSampleMode,
 };
 use karbeat_core::core::project::{
     AudioHardwareConfig, DawSource, ProjectMetadata,
@@ -28,10 +28,13 @@ use karbeat_core_api::{
 use karbeat_utils::types::BipolarF64;
 use serde::Serialize;
 
-use crate::api::automation::AutomationCurveTypeDto;
 use crate::api::context::DawSessionInner;
 use crate::api::jobs::run_job;
 use crate::api::waveform::WaveformHandle;
+use crate::api::{
+    audio_analysis::UiBeatGrid, automation::AutomationCurveTypeDto, mixer::UiMixerState,
+    pattern::UiPattern, timeline::UiTimelineState,
+};
 use crate::frb_generated::StreamSink;
 
 /// Shared bridge handle whose inner guards control access to the core DAW state.
@@ -53,10 +56,10 @@ pub struct UiApplicationState {
     pub hardware_config: UiAudioHardwareConfig,
     pub tracks: HashMap<u64, UiTrack>,
     pub generators: HashMap<u64, UiGeneratorInstance>,
-    pub patterns: HashMap<u64, crate::api::pattern::UiPattern>,
-    pub mixer: crate::api::mixer::UiMixerState,
+    pub patterns: HashMap<u64, UiPattern>,
+    pub mixer: UiMixerState,
     pub audio_sources: HashMap<u64, AudioWaveformUiForSourceList>,
-    pub timeline: crate::api::timeline::UiTimelineState,
+    pub timeline: UiTimelineState,
 }
 
 impl From<ApplicationState> for UiApplicationState {
@@ -73,10 +76,10 @@ impl From<ApplicationState> for UiApplicationState {
             .map(|(id, generator)| (id.to_u64(), UiGeneratorInstance::from(generator)))
             .collect();
 
-        let patterns: HashMap<u64, crate::api::pattern::UiPattern> = value
+        let patterns: HashMap<u64, UiPattern> = value
             .pattern_pool
             .iter()
-            .map(|(id, pat)| (id.to_u64(), crate::api::pattern::UiPattern::from(pat)))
+            .map(|(id, pat)| (id.to_u64(), UiPattern::from(pat)))
             .collect();
 
         let audio_sources: HashMap<u64, AudioWaveformUiForSourceList> = value
@@ -98,9 +101,9 @@ impl From<ApplicationState> for UiApplicationState {
             tracks,
             generators,
             patterns,
-            mixer: crate::api::mixer::UiMixerState::from(&value.mixer),
+            mixer: UiMixerState::from(&value.mixer),
             audio_sources,
-            timeline: crate::api::timeline::UiTimelineState::from(&value.timeline),
+            timeline: UiTimelineState::from(&value.timeline),
         }
     }
 }
@@ -353,6 +356,134 @@ pub struct UiClip {
     pub is_sample_based: bool,
     /// Audio clip gain envelope stacked on the waveform envelope; `None` leaves audio untouched.
     pub envelope: Option<UiGainEnvelope>,
+    /// Pan and pitch curves and loop of an audio clip; `None` plays it straight through.
+    pub modulation: Option<UiClipModulation>,
+}
+
+/// One breakpoint of a clip curve.
+#[derive(Clone, Debug)]
+#[frb(dart_metadata=("freezed"))]
+pub struct UiCurvePoint {
+    /// Project-rate samples of the clip content, in the unit of `offset_start`.
+    pub position: u64,
+    /// Pan -1.0 to 1.0, pitch in cents, or loop time in samples.
+    pub value: f64,
+    /// Curve toward the next point.
+    pub curve_type: AutomationCurveTypeDto,
+    /// Bipolar tension of the curve toward the next point.
+    pub tension: f64,
+}
+
+/// Repeating part of an audio clip.
+#[derive(Clone, Debug)]
+#[frb(dart_metadata=("freezed"))]
+pub struct UiClipLoop {
+    pub enabled: bool,
+    /// Repeat length in project samples when `curve` has no points.
+    pub time: u64,
+    /// Repeat length in samples over the clip.
+    pub curve: Vec<UiCurvePoint>,
+}
+
+/// Pan and pitch curves and loop of an audio clip.
+#[derive(Clone, Debug)]
+#[frb(dart_metadata=("freezed"))]
+pub struct UiClipModulation {
+    pub pan: Vec<UiCurvePoint>,
+    pub pitch: Vec<UiCurvePoint>,
+    pub looping: UiClipLoop,
+}
+
+/// A clip curve, for sampling.
+#[derive(Clone, Copy, Debug)]
+pub enum UiClipCurve {
+    Pan,
+    Pitch,
+    LoopTime,
+}
+
+fn curve_points_to_ui(points: &[CurvePoint]) -> Vec<UiCurvePoint> {
+    points
+        .iter()
+        .map(|point| UiCurvePoint {
+            position: point.position,
+            value: point.value,
+            curve_type: point.curve_type.into(),
+            tension: point.tension.get(),
+        })
+        .collect()
+}
+
+fn curve_points_from_ui(points: Vec<UiCurvePoint>) -> Vec<CurvePoint> {
+    points
+        .into_iter()
+        .map(|point| CurvePoint {
+            position: point.position,
+            value: point.value,
+            curve_type: point.curve_type.into(),
+            tension: BipolarF64::new(point.tension),
+        })
+        .collect()
+}
+
+impl From<&ClipModulation> for UiClipModulation {
+    fn from(value: &ClipModulation) -> Self {
+        Self {
+            pan: curve_points_to_ui(&value.pan),
+            pitch: curve_points_to_ui(&value.pitch),
+            looping: UiClipLoop {
+                enabled: value.looping.enabled,
+                time: value.looping.time,
+                curve: curve_points_to_ui(&value.looping.curve),
+            },
+        }
+    }
+}
+
+impl From<UiClipModulation> for ClipModulation {
+    fn from(value: UiClipModulation) -> Self {
+        Self::new(
+            curve_points_from_ui(value.pan),
+            curve_points_from_ui(value.pitch),
+            ClipLoop {
+                enabled: value.looping.enabled,
+                time: value.looping.time,
+                curve: curve_points_from_ui(value.looping.curve),
+            },
+        )
+    }
+}
+
+/// Samples a clip curve at `positions`, with the code the audio engine plays.
+#[frb(sync)]
+pub fn sample_clip_curve(
+    modulation: UiClipModulation,
+    curve: UiClipCurve,
+    positions: Vec<f64>,
+) -> Vec<f64> {
+    let modulation = ClipModulation::from(modulation);
+    positions
+        .into_iter()
+        .map(|position| {
+            let position = envelope_position(position);
+            match curve {
+                UiClipCurve::Pan => modulation.pan_at(position),
+                UiClipCurve::Pitch => modulation.pitch_cents_at(position),
+                UiClipCurve::LoopTime => modulation.loop_time_at(position) as f64,
+            }
+        })
+        .collect()
+}
+
+/// Clip-relative samples where repeats start in a looping clip, at most `limit` of them.
+#[frb(sync)]
+pub fn clip_loop_starts(
+    modulation: UiClipModulation,
+    offset_start: u64,
+    loop_length: u64,
+    limit: u32,
+) -> Vec<u64> {
+    ClipModulation::from(modulation).loop_starts(offset_start, loop_length, limit as usize)
 }
 
 /// A fade at one edge of a waveform or clip.
@@ -381,11 +512,17 @@ pub struct UiEnvelopePoint {
     pub tension: f64,
 }
 
-/// Fades, crossfade, and gain points of a waveform or audio clip.
+/// ADSR fade, crossfade, and gain points of a waveform or audio clip.
 #[derive(Clone, Debug)]
 #[frb(dart_metadata=("freezed"))]
 pub struct UiGainEnvelope {
+    /// Attack: rises from silence to unity.
     pub fade_in: UiFade,
+    /// Decay: falls from unity to the sustain level after the attack.
+    pub decay: UiFade,
+    /// Linear gain held between the decay and the release, 0.0 to 1.0.
+    pub sustain: f32,
+    /// Release: falls from the sustain level to silence at the end.
     pub fade_out: UiFade,
     /// Equal-power crossfade length in samples: the loop crossfade on a waveform, the crossfade
     /// with overlapping neighbours on a clip.
@@ -485,6 +622,8 @@ impl From<&GainEnvelope> for UiGainEnvelope {
     fn from(value: &GainEnvelope) -> Self {
         Self {
             fade_in: UiFade::from(&value.fade_in),
+            decay: UiFade::from(&value.decay),
+            sustain: value.sustain,
             fade_out: UiFade::from(&value.fade_out),
             crossfade: value.crossfade,
             points: value
@@ -505,6 +644,8 @@ impl From<UiGainEnvelope> for GainEnvelope {
     fn from(value: UiGainEnvelope) -> Self {
         Self {
             fade_in: value.fade_in.into(),
+            decay: value.decay.into(),
+            sustain: value.sustain,
             fade_out: value.fade_out.into(),
             crossfade: value.crossfade,
             points: value
@@ -549,6 +690,7 @@ impl From<&Clip> for UiClip {
             loop_length: value.time.loop_length_raw(),
             is_sample_based: value.time.is_samples(),
             envelope: value.envelope.as_deref().map(UiGainEnvelope::from),
+            modulation: value.modulation.as_deref().map(UiClipModulation::from),
         }
     }
 }
@@ -575,6 +717,8 @@ pub struct AudioWaveformUiForAudioProperties {
     pub fine_tune: i16,
     pub trim_start: u32,
     pub trim_end: u32,
+    /// Frames of the original audio, the unit of the trim points.
+    pub original_frames: u32,
     pub is_looping: bool,
     pub normalized: bool,
     pub muted: bool, // this only affects when play stream, not when doing preview sound
@@ -583,7 +727,7 @@ pub struct AudioWaveformUiForAudioProperties {
     /// tempo-following mode was entered. `None` when unknown.
     pub original_bpm: Option<f32>,
     /// Beats found by tempo detection, if it ran.
-    pub beat_grid: Option<crate::api::audio_analysis::UiBeatGrid>,
+    pub beat_grid: Option<UiBeatGrid>,
     /// Whether an offline render stretches the source to the project tempo.
     pub fitted: bool,
     /// Whether the stretch follows each detected beat.
@@ -638,6 +782,7 @@ impl AudioWaveformUiForAudioProperties {
             fine_tune: value.fine_tune,
             trim_start: value.trim_start,
             trim_end: value.trim_end,
+            original_frames: value.original_frames(),
             is_looping: value.is_looping,
             normalized: value
                 .edited
@@ -696,17 +841,24 @@ pub struct UiGeneratorInstance {
 pub struct UiPluginInstance {
     /// Registry ID for plugin lookup (stable identifier)
     pub registry_id: u32,
-    /// Name of the plugin (for display purposes)
+    /// Name of the plugin
     pub name: String,
+    /// Name the user gave this instance, if any.
+    pub display_name: Option<String>,
+    /// Name to show: "Lead 1 (Vital)" when renamed, else "Vital".
+    pub label: String,
     /// Whether this plugin is bypassed
     pub bypass: bool,
 }
 
 impl From<PluginInstance> for UiPluginInstance {
     fn from(value: PluginInstance) -> Self {
+        let label = value.label();
         Self {
             registry_id: value.registry_id,
             name: value.name,
+            display_name: value.display_name,
+            label,
             bypass: value.bypass,
         }
     }

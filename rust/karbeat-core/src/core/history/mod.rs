@@ -6,7 +6,11 @@
 //! state, and after an undo it holds the edited state. Exactly one copy of any value exists,
 //! either in the project or in history, so no `Arc` sharing is needed.
 
-use std::{any::Any, time::Duration, time::Instant};
+use std::{
+    any::Any,
+    fmt::Debug,
+    time::{Duration, Instant},
+};
 
 use thiserror::Error;
 
@@ -75,7 +79,7 @@ impl From<anyhow::Error> for HistoryError {
 /// `undo` and `redo` are both required, and usually swap the same state in opposite
 /// directions. They must leave the project exactly as it was before the matching call, including
 /// entity keys, because later history entries refer to them.
-pub trait HistoryAction: Send + Sync + std::fmt::Debug + 'static {
+pub trait HistoryAction: Send + Sync + Debug + 'static {
     /// Reverts the edit and reports what the audio engine must republish.
     fn undo(&mut self, app: &mut ApplicationState) -> Result<EngineSync, HistoryError>;
 
@@ -245,6 +249,7 @@ impl HistoryManager {
 )]
 mod tests {
     use super::*;
+    use std::mem::{replace, swap};
 
     /// Swaps the project BPM, and merges with later instances of itself.
     #[derive(Debug)]
@@ -255,7 +260,7 @@ mod tests {
 
     impl HistoryAction for SetBpm {
         fn undo(&mut self, app: &mut ApplicationState) -> Result<EngineSync, HistoryError> {
-            std::mem::swap(&mut app.transport.bpm, &mut self.bpm);
+            swap(&mut app.transport.bpm, &mut self.bpm);
             Ok(EngineSync::tempo())
         }
 
@@ -290,7 +295,7 @@ mod tests {
     }
 
     fn set_bpm(app: &mut ApplicationState, bpm: f32, mergeable: bool) -> SetBpm {
-        let previous = std::mem::replace(&mut app.transport.bpm, bpm);
+        let previous = replace(&mut app.transport.bpm, bpm);
         SetBpm {
             bpm: previous,
             mergeable,

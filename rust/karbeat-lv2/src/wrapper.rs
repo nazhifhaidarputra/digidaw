@@ -1,7 +1,9 @@
 //! Exclusive audio endpoint. Instantiation, state, and editor work stay with the UI owner.
 
 use std::{
+    any::Any,
     cell::UnsafeCell,
+    mem::take,
     sync::{
         Arc,
         atomic::{AtomicBool, AtomicU32, Ordering},
@@ -13,9 +15,13 @@ use karbeat_host_api::{
     bypass::BypassDelay,
     channels::{adapt_channels, silence},
 };
-use karbeat_plugin_api::prelude::{
-    AudioBuffers, AudioPlugin, BusConfig, MidiMessage, NoteExpressionType, ParameterSpec,
-    ProcessContext,
+use karbeat_plugin_api::{
+    prelude::{
+        AudioBuffers, AudioPlugin, BusConfig, MidiMessage, NoteExpressionType, ParameterSpec,
+        ProcessContext,
+    },
+    traits::HashMap,
+    types::PluginCategory,
 };
 
 use crate::{
@@ -25,7 +31,7 @@ use crate::{
     },
     parameters::ControlPort,
     plugin::PluginInstance,
-    ports::{AudioRole, PluginModel},
+    ports::{AtomPort, AudioRole, PluginModel},
 };
 
 /// Frames rendered to deliver parameter edits and learn latency while no audio block runs.
@@ -109,7 +115,7 @@ impl Dsp {
                 })
                 .collect::<Vec<_>>()
         };
-        let sequences = |ports: &[crate::ports::AtomPort], instance: &mut PluginInstance| {
+        let sequences = |ports: &[AtomPort], instance: &mut PluginInstance| {
             ports
                 .iter()
                 .map(|port| {
@@ -329,6 +335,8 @@ impl Dsp {
             {
                 exchange.overflow.store(true, Ordering::Relaxed);
             }
+            // Delivered, or dropped for want of room or a port: the message is done either way.
+            exchange.work.finish();
         });
     }
 
@@ -401,7 +409,7 @@ impl Dsp {
         let mut delivered = true;
         if self.recover_notes {
             for (slot, active) in self.active_keys.iter_mut().enumerate() {
-                if std::mem::take(active) {
+                if take(active) {
                     let (channel, key) = slot_key(slot);
                     delivered &=
                         sequence.append(0, midi, [&midi_bytes(0x80, channel, key, 0), &[]]);
@@ -630,11 +638,11 @@ impl AudioPlugin for Lv2Processor {
     fn version(&self) -> &str {
         &self.descriptor.version
     }
-    fn category(&self) -> karbeat_plugin_api::types::PluginCategory {
+    fn category(&self) -> PluginCategory {
         match self.descriptor.kind {
-            PluginKind::Instrument => karbeat_plugin_api::types::PluginCategory::Instrument,
-            PluginKind::Effect => karbeat_plugin_api::types::PluginCategory::Effect,
-            PluginKind::MidiEffect => karbeat_plugin_api::types::PluginCategory::MidiEffect,
+            PluginKind::Instrument => PluginCategory::Instrument,
+            PluginKind::Effect => PluginCategory::Effect,
+            PluginKind::MidiEffect => PluginCategory::MidiEffect,
         }
     }
     fn prepare(&mut self, _sample_rate: f32, _max_buffer_size: usize) {}
@@ -654,7 +662,9 @@ impl AudioPlugin for Lv2Processor {
         if guard.is_some() && !self.bypass {
             // SAFETY: Gate excludes UI reconfiguration and any other processing call.
             let dsp = unsafe { &mut *self.slot.dsp.get() };
-            dsp.recover_notes |= std::mem::take(&mut self.reset_pending);
+            dsp.recover_notes |= take(&mut self.reset_pending);
+            // This block answers every request made before it starts.
+            self.exchange.work.processed();
             dsp.process(buffers, context, &self.exchange, &self.slot);
         } else {
             self.reset_pending |= !context.midi_events.is_empty();
@@ -666,6 +676,9 @@ impl AudioPlugin for Lv2Processor {
     fn set_bypass(&mut self, bypass: bool) {
         self.reset_pending |= self.bypass != bypass;
         self.bypass = bypass;
+    }
+    fn has_pending_work(&self) -> bool {
+        self.exchange.work.is_pending()
     }
     fn latency_samples(&self) -> u32 {
         self.slot.latency.load(Ordering::Acquire)
@@ -703,7 +716,7 @@ impl AudioPlugin for Lv2Processor {
             parameter.clear_user_edited();
         }
     }
-    fn default_parameters(&self) -> karbeat_plugin_api::traits::HashMap<u32, f32> {
+    fn default_parameters(&self) -> HashMap<u32, f32> {
         self.specs
             .iter()
             .map(|spec| (spec.id, single(spec.default_value)))
@@ -715,7 +728,7 @@ impl AudioPlugin for Lv2Processor {
     fn get_parameter_specs(&self) -> Vec<ParameterSpec> {
         self.specs.clone()
     }
-    fn as_any(&self) -> &dyn std::any::Any {
+    fn as_any(&self) -> &dyn Any {
         self
     }
 }

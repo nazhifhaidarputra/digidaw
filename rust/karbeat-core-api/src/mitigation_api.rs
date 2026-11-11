@@ -2,7 +2,10 @@ use std::path::Path;
 
 use jiff::Timestamp;
 
+use super::project_api::{PendingProjectSave, begin_save_project, execute_save_project};
 use karbeat_audio::context::DawContext;
+#[cfg(unix)]
+use karbeat_core::core::mitigation::shutdown_signals::watch;
 use karbeat_core::core::{
     file_manager::project_loader::load_daw_project,
     mitigation::{
@@ -118,7 +121,7 @@ pub fn is_project_saved(ctx: &DawContext) -> bool {
 
 /// Auto save work captured while the project is readable; the slow write happens afterwards.
 pub struct PendingAutoSave {
-    save: super::project_api::PendingProjectSave,
+    save: PendingProjectSave,
     store: RecoveryStore,
     info: RecoveryInfo,
 }
@@ -134,7 +137,7 @@ pub fn begin_auto_save(ctx: &DawContext) -> Option<PendingAutoSave> {
     }
     let project_path = store.project_path();
     Some(PendingAutoSave {
-        save: super::project_api::begin_save_project(ctx, &project_path.to_string_lossy()),
+        save: begin_save_project(ctx, &project_path.to_string_lossy()),
         info: RecoveryInfo {
             project_name: ctx.app_state.metadata.name.clone(),
             original_path: ctx.app_state.session.file_path().map(Path::to_path_buf),
@@ -146,7 +149,7 @@ pub fn begin_auto_save(ctx: &DawContext) -> Option<PendingAutoSave> {
 
 /// Writes the recovery copy and its description. Returns the revision it captured.
 pub fn execute_auto_save(pending: PendingAutoSave) -> anyhow::Result<u64> {
-    let completed = super::project_api::execute_save_project(pending.save)?;
+    let completed = execute_save_project(pending.save)?;
     pending.store.write_info(&RecoveryInfo {
         saved_at: Timestamp::now(),
         ..pending.info
@@ -207,7 +210,7 @@ pub fn set_session_suspended(ctx: &DawContext, suspended: bool) -> Result<(), Mi
 pub fn watch_shutdown_signals(ctx: &DawContext) {
     #[cfg(unix)]
     if let Some(mitigation) = &ctx.mitigation {
-        karbeat_core::core::mitigation::shutdown_signals::watch(mitigation.session_marker.clone());
+        watch(mitigation.session_marker.clone());
     }
     #[cfg(not(unix))]
     let _ = ctx;

@@ -12,9 +12,13 @@
 
 use std::cell::Cell;
 use std::collections::VecDeque;
-use std::fmt::{self, Write as _};
 use std::sync::{Arc, OnceLock};
 use std::time::{SystemTime, UNIX_EPOCH};
+use std::{
+    fmt::{self, Write as _},
+    io::Result as IoResult,
+    mem::take,
+};
 
 use tracing::field::{Field, Visit};
 use tracing_log::NormalizeEvent;
@@ -48,7 +52,7 @@ pub(crate) trait LogBatchSink: Send {
 }
 
 /// Starts the process-wide bridge used by [`LogBridgeLayer`].
-pub(crate) fn install() -> std::io::Result<&'static LogBridge> {
+pub(crate) fn install() -> IoResult<&'static LogBridge> {
     if let Some(bridge) = LOG_BRIDGE.get() {
         return Ok(bridge);
     }
@@ -74,7 +78,7 @@ impl LogBridge {
         queue_capacity: usize,
         backlog_capacity: usize,
         max_batch_len: usize,
-    ) -> std::io::Result<Self> {
+    ) -> IoResult<Self> {
         let (sender, receiver) = mpsc::sync_channel(queue_capacity);
         let dropped = Arc::new(AtomicU64::new(0));
         let shared = Arc::new(Mutex::new(SinkState {
@@ -164,7 +168,7 @@ impl SinkState {
 
     /// Prepends a warning entry describing backlog eviction before it flushes.
     fn take_overflow_notice(&mut self) {
-        let overflowed = std::mem::take(&mut self.overflowed);
+        let overflowed = take(&mut self.overflowed);
         if overflowed > 0 {
             self.backlog
                 .push_front(dropped_notice(overflowed, "backlog"));
@@ -290,6 +294,7 @@ impl Visit for MessageVisitor {
     reason = "log bridge tests fail immediately when the drain thread cannot start"
 )]
 mod tests {
+    use tracing::subscriber::with_default;
     use tracing_log::log;
     use tracing_subscriber::layer::SubscriberExt as _;
 
@@ -340,7 +345,7 @@ mod tests {
         let (sink, receiver, _open) = sink();
         bridge.attach(sink);
         let subscriber = tracing_subscriber::registry().with(OwnedBridgeLayer(Arc::clone(&bridge)));
-        tracing::subscriber::with_default(subscriber, emit);
+        with_default(subscriber, emit);
         drop(bridge);
         receiver.iter().flatten().collect()
     }

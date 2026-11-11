@@ -1,6 +1,6 @@
 //! Format v2: the project state as named JSON in `project.json`.
 
-use std::io::{Read, Seek};
+use std::io::{BufReader, Read, Seek};
 
 use anyhow::Context;
 use zip::ZipArchive;
@@ -19,7 +19,7 @@ impl V2Loader {
         let entry = archive
             .by_name(Self::ENTRY)
             .with_context(|| format!("{} missing from project archive", Self::ENTRY))?;
-        serde_json::from_reader(std::io::BufReader::new(entry))
+        serde_json::from_reader(BufReader::new(entry))
             .with_context(|| format!("Failed to parse {}", Self::ENTRY))
     }
 

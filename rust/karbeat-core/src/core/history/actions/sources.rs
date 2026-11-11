@@ -1,10 +1,10 @@
-use std::sync::Arc;
+use std::{mem::swap, sync::Arc};
 
 use crate::core::{
     history::{EngineSync, HistoryAction, HistoryError},
     project::{
         ApplicationState, ClipTiming, GainEnvelope,
-        track::audio_waveform::{AudioSampleMode, BeatGrid, EditedWaveform},
+        track::audio_waveform::{AudioSampleMode, BeatGrid, EditedWaveform, SourceTrim},
     },
 };
 use crate::shared::id::AudioSourceId;
@@ -31,12 +31,44 @@ impl SourceEnvelopeChanged {
             .source_map
             .get_mut(self.source_id)
             .ok_or(HistoryError::missing("Audio source"))?;
-        std::mem::swap(&mut Arc::make_mut(entry).envelope, &mut self.envelope);
+        swap(&mut Arc::make_mut(entry).envelope, &mut self.envelope);
         Ok(EngineSync::source(self.source_id))
     }
 }
 
 swap_action!(SourceEnvelopeChanged, "Edit Waveform Envelope");
+
+/// An audio source's trim points changed; holds the trim on the other side of the edit.
+#[derive(Debug)]
+pub struct SourceTrimChanged {
+    source_id: AudioSourceId,
+    trim: SourceTrim,
+}
+
+impl SourceTrimChanged {
+    /// Records an edit from the source's previous trim.
+    pub fn new(source_id: AudioSourceId, previous: SourceTrim) -> Self {
+        Self {
+            source_id,
+            trim: previous,
+        }
+    }
+
+    fn swap(&mut self, app: &mut ApplicationState) -> Result<EngineSync, HistoryError> {
+        let entry = app
+            .asset_library
+            .source_map
+            .get_mut(self.source_id)
+            .ok_or(HistoryError::missing("Audio source"))?;
+        let waveform = Arc::make_mut(entry);
+        swap(&mut waveform.trim_start, &mut self.trim.trim_start);
+        swap(&mut waveform.trim_end, &mut self.trim.trim_end);
+        swap(&mut waveform.envelope, &mut self.trim.envelope);
+        Ok(EngineSync::source(self.source_id))
+    }
+}
+
+swap_action!(SourceTrimChanged, "Trim Audio");
 
 /// Tempo-related state of an audio source: detected beats, tempo, sample mode and render.
 #[derive(Debug, Clone)]
@@ -84,10 +116,10 @@ impl SourceTempoChanged {
             .get_mut(self.source_id)
             .ok_or(HistoryError::missing("Audio source"))?;
         let waveform = Arc::make_mut(entry);
-        std::mem::swap(&mut waveform.original_bpm, &mut self.tempo.original_bpm);
-        std::mem::swap(&mut waveform.sample_mode, &mut self.tempo.sample_mode);
-        std::mem::swap(&mut waveform.beat_grid, &mut self.tempo.beat_grid);
-        std::mem::swap(&mut waveform.edited, &mut self.tempo.edited);
+        swap(&mut waveform.original_bpm, &mut self.tempo.original_bpm);
+        swap(&mut waveform.sample_mode, &mut self.tempo.sample_mode);
+        swap(&mut waveform.beat_grid, &mut self.tempo.beat_grid);
+        swap(&mut waveform.edited, &mut self.tempo.edited);
         let sync = EngineSync::source(self.source_id);
         if self.clips.is_empty() {
             return Ok(sync);

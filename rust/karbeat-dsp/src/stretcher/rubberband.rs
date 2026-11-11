@@ -12,6 +12,7 @@
 use karbeat_rb::{MAX_CHANNELS, RbError, Stretcher, StretcherOptions};
 
 use super::{OfflineStretch, StretchError, backend::OfflineTimeStretcher, validate};
+use std::thread::yield_now;
 
 /// Frames handed to Rubber Band per call when rendering offline.
 const BLOCK_FRAMES: usize = 4096;
@@ -125,7 +126,7 @@ impl OfflineTimeStretcher for RubberBandOfflineStretcher {
             written =
                 written.saturating_add(drain(&mut stretcher, &mut output, &mut interleaved, sink)?);
             if stretcher.available() == Some(0) {
-                std::thread::yield_now();
+                yield_now();
             }
         }
         progress(1.0);

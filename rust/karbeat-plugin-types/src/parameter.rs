@@ -1,4 +1,4 @@
-use std::fmt::Debug;
+use std::{any::Any, fmt::Debug};
 
 use karbeat_utils::types::*;
 use num_traits::ToPrimitive;
@@ -178,7 +178,7 @@ mod parameter_spec_tests {
     }
 }
 
-pub trait ParamType: Copy + Clone + Debug + PartialEq + std::any::Any {
+pub trait ParamType: Copy + Clone + Debug + PartialEq + Any {
     type Smoother: Clone + Debug + PartialEq + Serialize + for<'a> Deserialize<'a>;
     fn create_smoother(val: Self) -> Self::Smoother;
     fn update_smoother_target(smoother: &mut Self::Smoother, target: Self);
@@ -226,6 +226,15 @@ impl ParamType for f32 {
     }
 }
 
+/// Rounds `value` to the precision the host exchanges parameters in.
+///
+/// Hosts set, save and restore parameter values as `f32`. An `f64` parameter holding more
+/// precision than that, such as a default of 0.35, would play differently from the same
+/// parameter restored from saved state (a reopened project, or the copy an export renders).
+fn host_precision(value: f64) -> f64 {
+    f64::from(f64_to_f32(value))
+}
+
 impl ParamType for f64 {
     type Smoother = ParameterSmoother;
     fn create_smoother(val: Self) -> Self::Smoother {
@@ -235,10 +244,10 @@ impl ParamType for f64 {
         smoother.set_target(target);
     }
     fn from_f64_clamped(val: f64, bounds: &ParamBounds<Self>) -> Self {
-        match bounds {
+        host_precision(match bounds {
             ParamBounds::Continuous { min, max, .. } => val.clamp(*min, *max),
             _ => val,
-        }
+        })
     }
     fn from_f64(val: f64) -> Self {
         val
@@ -247,10 +256,10 @@ impl ParamType for f64 {
         self
     }
     fn clamp_value(self, bounds: &ParamBounds<Self>) -> Self {
-        match bounds {
+        host_precision(match bounds {
             ParamBounds::Continuous { min, max, .. } => self.clamp(*min, *max),
             _ => self,
-        }
+        })
     }
     fn is_valid(self) -> bool {
         self.is_finite()
@@ -346,7 +355,7 @@ impl ParamType for usize {
 }
 
 /// A trait that allows an enum to be used safely as an automated parameter.
-pub trait EnumParam: Copy + Clone + std::fmt::Debug + PartialEq + std::any::Any {
+pub trait EnumParam: Copy + Clone + Debug + PartialEq + Any {
     /// Convert the enum to a raw usize index
     fn to_index(self) -> usize;
     /// Safely convert a usize index back to the enum (falling back to a default if out of bounds)
@@ -651,7 +660,8 @@ impl Param<f64> {
         max: f64,
         step: f64,
     ) -> Self {
-        let default_clamped = default.clamp(min, max);
+        let bounds = ParamBounds::Continuous { min, max, step };
+        let default_clamped = default.clamp_value(&bounds);
         Self {
             id,
             name: name.to_owned(),
@@ -659,7 +669,7 @@ impl Param<f64> {
             default_value: default_clamped,
             base_value: default_clamped,
             current_value: default_clamped,
-            bounds: ParamBounds::Continuous { min, max, step },
+            bounds,
             is_automated: false,
             manually_overridden: false,
             smoother: f64::create_smoother(default_clamped),
@@ -997,5 +1007,24 @@ mod manual_override_tests {
         pan.clear_manual_override();
         pan.apply_automation_from_f64(0.0);
         assert_eq!(pan.get(), -1.0);
+    }
+}
+
+#[cfg(test)]
+mod host_precision_tests {
+    use super::*;
+
+    #[test]
+    fn f64_parameters_survive_a_save_and_restore_unchanged() {
+        // 0.35 has no exact f32 form; saved state carries f32, so a fresh parameter must
+        // already hold the value a restored one gets.
+        let fresh = Param::new_f64(1, "Feedback", "", 0.35, 0.0, 0.95, 0.01);
+        let mut restored = Param::new_f64(1, "Feedback", "", 0.0, 0.0, 0.95, 0.01);
+        restored.set_base_from_f64(f64::from(f64_to_f32(fresh.get_base())));
+        assert_eq!(fresh.get().to_bits(), restored.get().to_bits());
+
+        let mut edited = Param::new_f64(1, "Feedback", "", 0.0, 0.0, 0.95, 0.01);
+        edited.set_base(0.7);
+        assert_eq!(edited.get(), f64::from(0.7_f32));
     }
 }

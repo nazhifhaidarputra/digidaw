@@ -1,4 +1,4 @@
-use std::any::Any;
+use std::{any::Any, mem::swap};
 
 use slotmap::SlotMap;
 
@@ -38,7 +38,7 @@ impl TempoChanged {
     }
 
     fn swap(&mut self, app: &mut ApplicationState) -> Result<EngineSync, HistoryError> {
-        std::mem::swap(&mut app.transport.bpm, &mut self.bpm);
+        swap(&mut app.transport.bpm, &mut self.bpm);
         if self.clips.is_empty() {
             return Ok(EngineSync::tempo());
         }
@@ -90,7 +90,7 @@ impl MetadataChanged {
     }
 
     fn swap(&mut self, app: &mut ApplicationState) -> Result<EngineSync, HistoryError> {
-        std::mem::swap(&mut app.metadata, &mut *self.metadata);
+        swap(&mut app.metadata, &mut *self.metadata);
         Ok(EngineSync::none())
     }
 }
@@ -113,7 +113,7 @@ impl LoopRegionChanged {
     }
 
     fn swap(&mut self, app: &mut ApplicationState) -> Result<EngineSync, HistoryError> {
-        std::mem::swap(&mut app.timeline.loop_region, &mut self.region);
+        swap(&mut app.timeline.loop_region, &mut self.region);
         Ok(EngineSync::loop_region())
     }
 }
@@ -167,7 +167,7 @@ impl CueMarkersChanged {
     }
 
     fn swap(&mut self, app: &mut ApplicationState) -> Result<EngineSync, HistoryError> {
-        std::mem::swap(&mut app.timeline.markers, &mut self.markers);
+        swap(&mut app.timeline.markers, &mut self.markers);
         Ok(EngineSync::none())
     }
 }

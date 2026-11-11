@@ -1,5 +1,6 @@
 pub mod automation;
 pub mod clip;
+pub mod clip_modulation;
 pub mod clipboard;
 pub mod cover;
 pub mod envelope;
@@ -14,6 +15,7 @@ pub mod transport;
 
 pub use automation::*;
 pub use clip::*;
+pub use clip_modulation::*;
 pub use clipboard::*;
 pub use cover::{CoverArt, CoverArtError, CoverFormat, CoverImage};
 pub use envelope::*;

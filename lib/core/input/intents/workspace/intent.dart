@@ -18,6 +18,11 @@ class ImportAudioIntent extends Intent {
   const ImportAudioIntent();
 }
 
+/// Cancels whatever is selected or being placed, in any view.
+class CancelSelectionIntent extends Intent {
+  const CancelSelectionIntent();
+}
+
 class OpenProjectIntent extends Intent {
   const OpenProjectIntent();
 }
@@ -158,5 +163,12 @@ const workspaceShortcuts = IListConst<DawShortcut>([
     category: 'Workspace',
     intent: NewProjectIntent(),
     defaultKey: SingleActivator(LogicalKeyboardKey.keyN, control: true),
+  ),
+  DawShortcut(
+    id: 'workspace.cancelSelection',
+    title: "Cancel Selection",
+    category: 'Workspace',
+    intent: CancelSelectionIntent(),
+    defaultKey: SingleActivator(LogicalKeyboardKey.escape),
   ),
 ]);

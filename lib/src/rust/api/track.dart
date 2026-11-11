@@ -271,6 +271,17 @@ Future<UiClip> setClipEnvelope({
   envelope: envelope,
 );
 
+/// Replaces an audio clip's pan and pitch curves and loop.
+Future<UiClip> setClipModulation({
+  required DawContext ctx,
+  required int clipId,
+  required UiClipModulation modulation,
+}) => RustLib.instance.api.crateApiTrackSetClipModulation(
+  ctx: ctx,
+  clipId: clipId,
+  modulation: modulation,
+);
+
 /// Result of making clips unique: the changed clips and the content created for them.
 @freezed
 sealed class UiMadeUnique with _$UiMadeUnique {

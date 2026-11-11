@@ -83,12 +83,60 @@ class PlayheadOverlay extends ConsumerStatefulWidget {
 }
 
 class _PlayheadOverlayState extends ConsumerState<PlayheadOverlay> {
-  bool _isDragging = false;
-  int _dragSamples = 0;
-  int _lastKnownSamples = 0;
+  /// Latest engine position. The playhead is painted from these notifiers, so
+  /// playback and scrolling move it without rebuilding or laying out.
+  final _position = ValueNotifier<UiTransportFeedback?>(null);
 
-  int get _dragTarget =>
-      widget.snapPosition?.call(_dragSamples) ?? _dragSamples;
+  /// Unsnapped position of an active handle drag, or null when not dragging.
+  final _dragSamples = ValueNotifier<int?>(null);
+
+  bool get _isDragging => _dragSamples.value != null;
+
+  int get _dragTarget {
+    final samples = _dragSamples.value ?? 0;
+    return widget.snapPosition?.call(samples) ?? samples;
+  }
+
+  /// The position the playhead shows: the drag while dragging, otherwise the
+  /// engine's. Null before the engine reports one.
+  int? get _shownSamples {
+    if (_isDragging) return _dragTarget;
+    final position = _position.value;
+    return position == null ? null : widget.sampleSelector(position);
+  }
+
+  /// Screen x of the playhead line, or null when there is none to show.
+  double? _playheadLeft() {
+    final samples = _shownSamples;
+    if (samples == null) return null;
+    final absoluteX = widget.zoomLevel > 0 ? samples / widget.zoomLevel : 0.0;
+    final scrollOffset = widget.scrollController.hasClients
+        ? widget.scrollController.offset
+        : 0.0;
+    return widget.offsetAdjustment + absoluteX - scrollOffset;
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    final subscription = ref.listenManual(transportPositionStreamProvider, (
+      previous,
+      next,
+    ) {
+      final position = next.value;
+      _position.value = position;
+      if (position == null) return;
+      _followPlayhead(previous?.value, position);
+    });
+    _position.value = subscription.read().value;
+  }
+
+  @override
+  void dispose() {
+    _position.dispose();
+    _dragSamples.dispose();
+    super.dispose();
+  }
 
   /// Page-flips the view when the playhead moves out of it while following.
   void _followPlayhead(
@@ -136,123 +184,96 @@ class _PlayheadOverlayState extends ConsumerState<PlayheadOverlay> {
   @override
   Widget build(BuildContext context) {
     final color = Theme.of(context).colorScheme.tertiary;
-    final positionAsync = ref.watch(transportPositionStreamProvider);
-    ref.listen(transportPositionStreamProvider, (previous, next) {
-      final position = next.value;
-      if (position == null) return;
-      _followPlayhead(previous?.value, position);
-    });
 
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final viewportWidth = constraints.maxWidth;
-
-        return Stack(
-          clipBehavior: Clip.none,
-          children: [
-            if (positionAsync.hasValue && positionAsync.value != null)
-              Builder(
-                builder: (context) {
-                  final pos = positionAsync.value!;
-                  _lastKnownSamples = widget.sampleSelector(pos);
-
-                  // If the user is actively dragging, use their finger position.
-                  // Otherwise, snap to the actual engine position.
-                  final currentSamples = _isDragging
-                      ? _dragTarget
-                      : _lastKnownSamples;
-
-                  double playheadAbsoluteX = 0;
-                  if (widget.zoomLevel > 0) {
-                    playheadAbsoluteX = currentSamples / widget.zoomLevel;
-                  }
-
-                  return AnimatedBuilder(
-                    animation: widget.scrollController,
-                    builder: (context, child) {
-                      double scrollOffset = 0;
-                      if (widget.scrollController.hasClients) {
-                        scrollOffset = widget.scrollController.offset;
-                      }
-
-                      // Calculate Screen X
-                      final double left =
-                          widget.offsetAdjustment +
-                          playheadAbsoluteX -
-                          scrollOffset;
-
-                      // Optimization: Don't render if completely off-screen
-                      if (left > viewportWidth + 50) return const SizedBox();
-
-                      // Hide if it goes behind the header/offset (scrolled too far left)
-                      if (left < widget.offsetAdjustment) {
-                        return const SizedBox();
-                      }
-
-                      return Positioned(
-                        left: left - 10, // Center the 20px wide handle
-                        top: 0,
-                        bottom: 0,
-                        width: 20, // Hitbox
-                        child: Column(
-                          children: [
-                            GestureDetector(
-                              behavior: HitTestBehavior.opaque,
-                              onHorizontalDragStart: (details) {
-                                setState(() {
-                                  _isDragging = true;
-                                  _dragSamples = currentSamples;
-                                });
-                              },
-                              onHorizontalDragUpdate: (details) {
-                                // Update local state instantly for buttery smooth UI
-                                setState(() {
-                                  final deltaSamples =
-                                      (details.delta.dx * widget.zoomLevel)
-                                          .toInt();
-                                  _dragSamples += deltaSamples;
-                                  if (_dragSamples < 0) {
-                                    _dragSamples = 0; // Prevent negative time
-                                  }
-                                });
-                              },
-                              onHorizontalDragEnd: (details) {
-                                widget.onSeek(_dragTarget);
-                                setState(() {
-                                  _isDragging = false;
-                                });
-                              },
-                              onHorizontalDragCancel: () {
-                                setState(() {
-                                  _isDragging = false;
-                                });
-                              },
-                              child: SizedBox(
-                                height: 20,
-                                width: 20,
-                                child: CustomPaint(
-                                  painter: _PlayheadHandlePainter(color),
-                                ),
-                              ),
-                            ),
-                            Expanded(
-                              child: Container(
-                                width: 1.5,
-                                color: color.withValues(
-                                  alpha: widget.isInteracting ? 0.4 : 0.8,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      );
-                    },
-                  );
+    // The playhead moves every frame during playback; keep that repaint off
+    // the content below.
+    return RepaintBoundary(
+      child: Flow(
+        clipBehavior: Clip.none,
+        delegate: _PlayheadFlowDelegate(
+          playheadLeft: _playheadLeft,
+          offsetAdjustment: widget.offsetAdjustment,
+          repaint: Listenable.merge([
+            _position,
+            _dragSamples,
+            widget.scrollController,
+          ]),
+        ),
+        children: [
+          Column(
+            children: [
+              GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onHorizontalDragStart: (_) {
+                  _dragSamples.value = _shownSamples ?? 0;
                 },
+                onHorizontalDragUpdate: (details) {
+                  final deltaSamples = (details.delta.dx * widget.zoomLevel)
+                      .toInt();
+                  final next = (_dragSamples.value ?? 0) + deltaSamples;
+                  _dragSamples.value = next < 0 ? 0 : next; // No negative time
+                },
+                onHorizontalDragEnd: (_) {
+                  widget.onSeek(_dragTarget);
+                  _dragSamples.value = null;
+                },
+                onHorizontalDragCancel: () {
+                  _dragSamples.value = null;
+                },
+                child: SizedBox(
+                  height: 20,
+                  width: 20,
+                  child: CustomPaint(painter: _PlayheadHandlePainter(color)),
+                ),
               ),
-          ],
-        );
-      },
+              Expanded(
+                child: Container(
+                  width: 1.5,
+                  color: color.withValues(
+                    alpha: widget.isInteracting ? 0.4 : 0.8,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
     );
   }
+}
+
+/// Places the 20px-wide playhead (handle and line) at the current position
+/// during paint. A paint-time transform also moves the hit area, and children
+/// that aren't painted aren't hit, so a hidden playhead can't be dragged.
+class _PlayheadFlowDelegate extends FlowDelegate {
+  _PlayheadFlowDelegate({
+    required this.playheadLeft,
+    required this.offsetAdjustment,
+    required super.repaint,
+  });
+
+  final double? Function() playheadLeft;
+  final double offsetAdjustment;
+
+  @override
+  BoxConstraints getConstraintsForChild(int i, BoxConstraints constraints) =>
+      BoxConstraints.tightFor(width: 20, height: constraints.maxHeight);
+
+  @override
+  void paintChildren(FlowPaintingContext context) {
+    final left = playheadLeft();
+    if (left == null) return;
+    // Off the right edge, or behind the header (scrolled too far left).
+    if (left > context.size.width + 50 || left < offsetAdjustment) return;
+    // Center the 20px wide handle on the line.
+    context.paintChild(
+      0,
+      transform: Matrix4.translationValues(left - 10, 0, 0),
+    );
+  }
+
+  // The widget rebuilds only when its inputs change, and the position lives
+  // in the repaint listenables, so a repaint on rebuild is always warranted.
+  @override
+  bool shouldRepaint(_PlayheadFlowDelegate oldDelegate) => true;
 }

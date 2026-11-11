@@ -11,10 +11,14 @@ use crate::{
 };
 use karbeat_core::{
     core::project::{
-        AudioTrack, AutomationTarget, MixerChannelParamTarget, MixerChannelParams,
-        RoutingConnection, RoutingNode, SidechainRoute, TrackAutomationTarget, equal_power,
+        AudioTrack, AutomationTarget, MasterAutomationTarget, MixerChannelParamTarget,
+        MixerChannelParams, RoutingConnection, RoutingNode, SidechainRoute, TrackAutomationTarget,
+        equal_power, plugin::AudioPlugin,
     },
     shared::BusId,
+};
+use std::{
+    array::from_fn, cmp::Reverse, collections::BinaryHeap, io::Cursor, iter::once, mem::swap,
 };
 
 /// Gain of each frame a waveform render produces.
@@ -563,21 +567,6 @@ pub fn sample_waveform_dasp(buffer: &[f32], pos: f64, src_channels: usize) -> [f
     }
 }
 #[inline(always)]
-pub fn calc_fade(current_elapsed: u32, fade_samples: u32, loop_length: u32) -> f32 {
-    if fade_samples == 0 {
-        return 1.0;
-    }
-    if current_elapsed < fade_samples {
-        (current_elapsed as f32) / (fade_samples as f32)
-    } else if current_elapsed + fade_samples > loop_length {
-        let remaining = loop_length.saturating_sub(current_elapsed);
-        (remaining as f32) / (fade_samples as f32)
-    } else {
-        1.0
-    }
-}
-
-#[inline(always)]
 pub fn get_read_pos(
     base_idx: f64,
     offset: f64,
@@ -596,7 +585,7 @@ pub fn get_read_pos(
 
 /// Helper function to decode 16-bit PCM WAV bytes into a flat f32 array
 pub fn load_internal_wav(bytes: &[u8]) -> Vec<f32> {
-    let cursor = std::io::Cursor::new(bytes);
+    let cursor = Cursor::new(bytes);
     let Ok(reader) = hound::WavReader::new(cursor) else {
         return Vec::new();
     };
@@ -625,7 +614,7 @@ pub fn apply_phase_inversion_simd(buffer: &mut [f32]) {
 }
 
 pub fn process_plugin_wrapper(
-    plugin: &mut dyn karbeat_core::core::project::plugin::AudioPlugin,
+    plugin: &mut dyn AudioPlugin,
     interleaved_io: &mut [f32],
     aux_interleaved: Option<&[f32]>,
     channels: usize,
@@ -691,7 +680,7 @@ pub fn prepare_planar_input(
     reason = "the render path passes preallocated channel storage explicitly"
 )]
 pub fn process_plugin_planar(
-    plugin: &mut dyn karbeat_core::core::project::plugin::AudioPlugin,
+    plugin: &mut dyn AudioPlugin,
     aux_interleaved: Option<&[f32]>,
     channels: usize,
     frames: usize,
@@ -720,20 +709,17 @@ pub fn process_plugin_planar(
     }
 
     {
-        let mut in_ptrs: [&mut [f32]; MAX_ENGINE_CHANNELS as usize] =
-            std::array::from_fn(|_| &mut [][..]);
+        let mut in_ptrs: [&mut [f32]; MAX_ENGINE_CHANNELS as usize] = from_fn(|_| &mut [][..]);
         for (i, buffer) in channel_buffers_in.iter_mut().take(channels).enumerate() {
             in_ptrs[i] = &mut buffer[..frames];
         }
 
-        let mut out_ptrs: [&mut [f32]; MAX_ENGINE_CHANNELS as usize] =
-            std::array::from_fn(|_| &mut [][..]);
+        let mut out_ptrs: [&mut [f32]; MAX_ENGINE_CHANNELS as usize] = from_fn(|_| &mut [][..]);
         for (i, buffer) in channel_buffers_out.iter_mut().take(channels).enumerate() {
             out_ptrs[i] = &mut buffer[..frames];
         }
 
-        let mut aux_ptrs: [&mut [f32]; MAX_ENGINE_CHANNELS as usize] =
-            std::array::from_fn(|_| &mut [][..]);
+        let mut aux_ptrs: [&mut [f32]; MAX_ENGINE_CHANNELS as usize] = from_fn(|_| &mut [][..]);
         for (i, buffer) in aux_channel_buffers.iter_mut().take(channels).enumerate() {
             aux_ptrs[i] = &mut buffer[..frames];
         }
@@ -766,7 +752,7 @@ pub fn process_plugin_planar(
         .iter_mut()
         .zip(&mut channel_buffers_out[..channels])
     {
-        std::mem::swap(input, output);
+        swap(input, output);
     }
     true
 }
@@ -867,7 +853,7 @@ pub fn compute_routing_order(
         .iter()
         .map(|track| RoutingNode::Track(track.id))
         .chain(bus_ids.map(RoutingNode::Bus))
-        .chain(std::iter::once(RoutingNode::Master))
+        .chain(once(RoutingNode::Master))
         .collect();
     let index: HashMap<RoutingNode, usize> = nodes
         .iter()
@@ -894,21 +880,21 @@ pub fn compute_routing_order(
         }
     }
 
-    let mut ready: std::collections::BinaryHeap<std::cmp::Reverse<usize>> = in_degree
+    let mut ready: BinaryHeap<Reverse<usize>> = in_degree
         .iter()
         .enumerate()
         .filter(|(_, degree)| **degree == 0)
-        .map(|(index, _)| std::cmp::Reverse(index))
+        .map(|(index, _)| Reverse(index))
         .collect();
     let mut scheduled = vec![false; nodes.len()];
     let mut order = Vec::with_capacity(nodes.len());
-    while let Some(std::cmp::Reverse(index)) = ready.pop() {
+    while let Some(Reverse(index)) = ready.pop() {
         scheduled[index] = true;
         order.push(nodes[index]);
         for &next in &adjacency[index] {
             in_degree[next] -= 1;
             if in_degree[next] == 0 {
-                ready.push(std::cmp::Reverse(next));
+                ready.push(Reverse(next));
             }
         }
     }
@@ -969,9 +955,9 @@ pub fn resolve_target_mixer_param(
             bus_id: *bus_id,
             mix_target: mt,
         },
-        MixerChannelTarget::Master => AutomationTarget::Master(
-            karbeat_core::core::project::MasterAutomationTarget::MixerChannel(mt),
-        ),
+        MixerChannelTarget::Master => {
+            AutomationTarget::Master(MasterAutomationTarget::MixerChannel(mt))
+        }
     });
 
     (automation_target, val)

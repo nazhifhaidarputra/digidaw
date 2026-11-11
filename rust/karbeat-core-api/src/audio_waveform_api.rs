@@ -1,11 +1,14 @@
-use std::{collections::HashSet, path::PathBuf, sync::Arc};
+use std::{collections::HashSet, fs::canonicalize, iter::empty, path::PathBuf, sync::Arc};
 
 use anyhow::Context;
 
+use crate::audio_api::stop_all_previews;
 use karbeat_audio::context::DawContext;
 use karbeat_core::core::{
     file_manager::audio_loader::{AudioLoader, load_audio_file},
-    history::actions::{AudioSourceRemoved, ClipEditRecorder, SourceEnvelopeChanged},
+    history::actions::{
+        AudioSourceRemoved, ClipEditRecorder, SourceEnvelopeChanged, SourceTrimChanged,
+    },
     project::{AudioSourceId, AudioWaveform, ClipId, DawSource, GainEnvelope, TrackId, TrackType},
 };
 
@@ -53,7 +56,7 @@ where
     let track = app.tracks.get(*track_id)?;
 
     let TrackType::Audio = track.track_type else {
-        return Some(std::iter::empty().collect()); // Return empty since it is not a audio track
+        return Some(empty().collect()); // Return empty since it is not a audio track
     };
 
     let return_map = track
@@ -156,7 +159,7 @@ pub enum CompletedAudioImport {
 
 /// Resolves the file and snapshots the existing sources. Only needs a short read of the project.
 pub fn begin_audio_import(ctx: &DawContext, file_path: &str) -> anyhow::Result<PendingAudioImport> {
-    let normalized_path = std::fs::canonicalize(file_path)
+    let normalized_path = canonicalize(file_path)
         .with_context(|| format!("Failed to resolve audio file path: {file_path}"))?;
     Ok(PendingAudioImport {
         file_path: file_path.to_owned(),
@@ -175,7 +178,7 @@ pub fn begin_audio_import(ctx: &DawContext, file_path: &str) -> anyhow::Result<P
 /// Decodes the file unless it is already a source. Holds no project lock.
 pub fn execute_audio_import(pending: PendingAudioImport) -> anyhow::Result<CompletedAudioImport> {
     let duplicate = pending.existing.iter().find_map(|(source_id, path)| {
-        std::fs::canonicalize(path)
+        canonicalize(path)
             .ok()
             .filter(|existing_path| existing_path == &pending.normalized_path)
             .map(|_| *source_id)
@@ -213,7 +216,7 @@ pub fn commit_audio_import(ctx: &mut DawContext, completed: CompletedAudioImport
         .iter()
         .filter(|(source_id, _)| !known.contains(source_id))
         .find_map(|(source_id, existing)| {
-            std::fs::canonicalize(&existing.file_path)
+            canonicalize(&existing.file_path)
                 .ok()
                 .filter(|existing_path| existing_path == &normalized_path)
                 .map(|_| source_id)
@@ -255,7 +258,7 @@ pub fn remove_audio_source(
     let clip_changes = recorder.finish(&mut ctx.app_state);
     ctx.push_history(AudioSourceRemoved::new(clip_changes, source_id, waveform));
 
-    crate::audio_api::stop_all_previews(ctx);
+    stop_all_previews(ctx);
     ctx.broadcast_full_graph();
     tracing::info!(
         "Removed audio source {} with {} clip(s)",
@@ -310,4 +313,28 @@ pub fn set_audio_source_envelope(
         .map(|waveform| waveform.envelope.clone())
         .unwrap_or_default();
     Ok(stored)
+}
+
+/// Sets the part of an audio source that plays, in frames of the original audio, as one
+/// reversible operation and republishes only that source to the audio engine. A `trim_end` of
+/// zero plays to the end.
+pub fn set_audio_source_trim(
+    ctx: &mut DawContext,
+    source_id: AudioSourceId,
+    trim_start: u32,
+    trim_end: u32,
+) -> anyhow::Result<()> {
+    let unchanged = ctx
+        .app_state
+        .get_audio_source(&source_id)
+        .is_some_and(|waveform| waveform.trim_start == trim_start && waveform.trim_end == trim_end);
+    if unchanged {
+        return Ok(());
+    }
+    let previous = ctx
+        .app_state
+        .set_audio_source_trim(source_id, trim_start, trim_end)?;
+    ctx.push_history(SourceTrimChanged::new(source_id, previous));
+    ctx.broadcast_audio_source(source_id);
+    Ok(())
 }

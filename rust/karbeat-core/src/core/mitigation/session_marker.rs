@@ -1,4 +1,6 @@
 use std::{
+    fs::{create_dir_all, read_to_string, write},
+    io::ErrorKind,
     path::Path,
     sync::atomic::{AtomicBool, Ordering},
 };
@@ -36,19 +38,19 @@ fn begin_session_with(
     first_in_process: bool,
 ) -> Result<PreviousSession, MitigationError> {
     let previous = if first_in_process {
-        match std::fs::read_to_string(marker) {
+        match read_to_string(marker) {
             Ok(contents) if contents.trim() == FORCED_SHUTDOWN => PreviousSession::Forced,
             Ok(_) => PreviousSession::Unclean,
-            Err(error) if error.kind() == std::io::ErrorKind::NotFound => PreviousSession::Clean,
+            Err(error) if error.kind() == ErrorKind::NotFound => PreviousSession::Clean,
             Err(error) => return Err(error.into()),
         }
     } else {
         PreviousSession::Clean
     };
     if let Some(parent) = marker.parent() {
-        std::fs::create_dir_all(parent)?;
+        create_dir_all(parent)?;
     }
-    std::fs::write(marker, Timestamp::now().to_string())?;
+    write(marker, Timestamp::now().to_string())?;
     Ok(previous)
 }
 
@@ -57,7 +59,7 @@ fn begin_session_with(
 /// Does nothing when no session is running, such as after a clean shutdown or while suspended.
 pub fn mark_forced_shutdown(marker: &Path) -> Result<(), MitigationError> {
     if marker.exists() {
-        std::fs::write(marker, FORCED_SHUTDOWN)?;
+        write(marker, FORCED_SHUTDOWN)?;
     }
     Ok(())
 }

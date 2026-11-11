@@ -6,8 +6,9 @@ use std::thread::{self, ThreadId};
 
 use crate::native_ui::{
     GlibWakeHandle, NativeParentHandle, NativeSurfaceCapabilities, NativeSurfaceKind,
-    NativeUiError, NativeUiPlatform, NativeWindow, NativeWindowConstraints, NativeWindowEvent,
-    NativeWindowId, NativeWindowMetrics, NativeWindowSize, NativeWindowSpec,
+    NativeSurfacePreference, NativeUiError, NativeUiPlatform, NativeWindow,
+    NativeWindowConstraints, NativeWindowEvent, NativeWindowId, NativeWindowMetrics,
+    NativeWindowSize, NativeWindowSpec,
 };
 
 use self::{
@@ -156,7 +157,7 @@ impl NativeUiPlatform for LinuxNativeUi {
                 .create_window(id, spec)
                 .map(LinuxNativeWindow::Wayland),
             kind => Err(NativeUiError::SurfaceUnsupported(
-                crate::native_ui::NativeSurfacePreference::Require(kind),
+                NativeSurfacePreference::Require(kind),
             )),
         }
     }

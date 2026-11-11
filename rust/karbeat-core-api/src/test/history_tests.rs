@@ -15,18 +15,21 @@ mod tests {
         automation_api, clip_api, mixer_api, note_api, pattern_api, project_api, track_api,
         transport_api,
     };
-    use karbeat_audio::commands::{EffectTarget, MixerChannelTarget};
+    use karbeat_audio::commands::{AudioCommand, EffectTarget, MixerChannelTarget};
     use karbeat_audio::context::DawContext;
     use karbeat_core::core::history::PluginSync;
-    use karbeat_core::core::project::{
-        AutomationLane, ModulationSource,
-        automation::{
-            AutomationTarget, EffectAutomationTarget, MasterAutomationTarget,
-            MixerChannelParamTarget, TrackAutomationTarget,
-        },
-        mixer::{RoutingConnection, RoutingNode},
-    };
     use karbeat_core::shared::id::{BusId, ClipId, EffectId, GeneratorId, GraphNodeId, TrackId};
+    use karbeat_core::{
+        core::project::{
+            AutomationLane, ModulationLinkForOrderedLaneView, ModulationSource,
+            automation::{
+                AutomationTarget, EffectAutomationTarget, MasterAutomationTarget,
+                MixerChannelParamTarget, TrackAutomationTarget,
+            },
+            mixer::{RoutingConnection, RoutingNode},
+        },
+        shared::{AutomationId, ModulationId, ModulationLinkId},
+    };
 
     /// Applies `edit`, then checks that undo restores `observe`'s original value and redo the
     /// edited one, twice, through the public undo/redo API.
@@ -159,7 +162,7 @@ mod tests {
         );
     }
 
-    fn volume_target(track: karbeat_core::shared::TrackId) -> AutomationTarget {
+    fn volume_target(track: TrackId) -> AutomationTarget {
         AutomationTarget::Track {
             track_id: track,
             track_target: TrackAutomationTarget::MixerChannel(MixerChannelParamTarget::Volume),
@@ -193,12 +196,9 @@ mod tests {
     }
 
     type AutomationSnapshot = (
-        Vec<(karbeat_core::shared::AutomationId, AutomationLane)>,
-        Vec<(karbeat_core::shared::ModulationId, ModulationSource)>,
-        Vec<(
-            karbeat_core::shared::ModulationLinkId,
-            karbeat_core::core::project::ModulationLinkForOrderedLaneView,
-        )>,
+        Vec<(AutomationId, AutomationLane)>,
+        Vec<(ModulationId, ModulationSource)>,
+        Vec<(ModulationLinkId, ModulationLinkForOrderedLaneView)>,
     );
 
     #[test]
@@ -710,8 +710,7 @@ mod tests {
     fn effects_round_trip() {
         let (mut ctx, audio, ..) = make_seeded_ctx();
         // Bypass changes are only accepted with an engine queue attached.
-        let (producer, _engine) =
-            rtrb::RingBuffer::<karbeat_audio::commands::AudioCommand>::new(4096);
+        let (producer, _engine) = rtrb::RingBuffer::<AudioCommand>::new(4096);
         *ctx.command_sender.lock() = Some(producer);
         let target = MixerChannelTarget::Track(audio);
         assert_round_trip(

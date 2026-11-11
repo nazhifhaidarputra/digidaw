@@ -6,18 +6,293 @@ mod tests {
     use karbeat_audio::commands::{AudioCommand, MixerChannelTarget};
     use karbeat_audio::context::DawContext;
     use karbeat_audio::event::PluginTarget;
+    use karbeat_core::core::file_manager::channel_template::{
+        ChannelTemplate, save_channel_template as save_channel_template_file,
+    };
     use karbeat_core::core::project::automation::{
         AutomationTarget, EffectAutomationTarget, MixerChannelParamTarget, TrackAutomationTarget,
     };
+    use karbeat_core::core::project::plugin::{ExternalPluginInstance, PluginInstance};
+    use karbeat_host::{PluginDescriptor, PluginFormat, PluginIdentity, PluginKind};
     use karbeat_utils::types::NormalizedF64;
 
-    use crate::test::helpers::{
-        make_ctx, make_seeded_ctx, param_eq_registry_id, sidechain_compressor_registry_id,
+    use crate::{
+        redo,
+        test::helpers::{
+            make_ctx, make_seeded_ctx, param_eq_registry_id, sidechain_compressor_registry_id,
+        },
+        undo,
     };
     use karbeat_core::core::project::mixer::{
         RoutingConnection, RoutingNode, RoutingTap, default_bus_color,
     };
     use karbeat_core::shared::id::{AutomationId, BusId, EffectId, TrackId};
+    use std::{
+        fs::{read, read_dir, write},
+        iter::from_fn,
+        path::Path,
+    };
+
+    fn saved_template(path: &Path) -> ChannelTemplate {
+        serde_json::from_slice(&read(path).unwrap()).unwrap()
+    }
+
+    #[test]
+    fn channel_template_stores_only_the_source_channels_chain_in_order() {
+        let (mut ctx, audio_track, midi_track, _pattern) = make_seeded_ctx();
+        for registry_id in [param_eq_registry_id(), sidechain_compressor_registry_id()] {
+            mixer_api::add_effect_to_mixer_channel_by_id(&mut ctx, audio_track, registry_id)
+                .unwrap();
+        }
+        mixer_api::add_effect_to_mixer_channel_by_id(
+            &mut ctx,
+            midi_track,
+            sidechain_compressor_registry_id(),
+        )
+        .unwrap();
+        let revision = ctx.app_state.session.revision();
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("chain.effch");
+
+        mixer_api::save_channel_template(
+            &ctx,
+            MixerChannelTarget::Track(audio_track),
+            path.to_str().unwrap(),
+        )
+        .unwrap();
+
+        let registry_ids: Vec<_> = saved_template(&path)
+            .effects
+            .iter()
+            .map(|effect| effect.registry_id)
+            .collect();
+        assert_eq!(
+            registry_ids,
+            [param_eq_registry_id(), sidechain_compressor_registry_id()]
+        );
+        assert_eq!(ctx.app_state.session.revision(), revision);
+    }
+
+    #[test]
+    fn channel_template_saves_bus_and_master_chains() {
+        let mut ctx = make_ctx();
+        let bus = mixer_api::create_bus(&mut ctx, "Drums".to_string());
+        mixer_api::add_effect_to_bus(&mut ctx, bus, param_eq_registry_id()).unwrap();
+        mixer_api::add_effect_to_master_bus(&mut ctx, sidechain_compressor_registry_id()).unwrap();
+        let directory = tempfile::tempdir().unwrap();
+
+        for (target, name, registry_id) in [
+            (
+                MixerChannelTarget::Bus(bus),
+                "bus.effch",
+                param_eq_registry_id(),
+            ),
+            (
+                MixerChannelTarget::Master,
+                "master.EFFCH",
+                sidechain_compressor_registry_id(),
+            ),
+        ] {
+            let path = directory.path().join(name);
+            mixer_api::save_channel_template(&ctx, target, path.to_str().unwrap()).unwrap();
+            let template = saved_template(&path);
+            assert_eq!(template.effects.len(), 1);
+            assert_eq!(template.effects[0].registry_id, registry_id);
+        }
+    }
+
+    #[test]
+    fn channel_template_rejects_other_extensions_and_missing_channels() {
+        let ctx = make_ctx();
+        let directory = tempfile::tempdir().unwrap();
+
+        for name in ["chain.json", "chain", "effch"] {
+            let path = directory.path().join(name);
+            assert!(
+                mixer_api::save_channel_template(
+                    &ctx,
+                    MixerChannelTarget::Master,
+                    path.to_str().unwrap(),
+                )
+                .is_err()
+            );
+        }
+
+        let path = directory.path().join("missing.effch");
+        assert!(
+            mixer_api::save_channel_template(
+                &ctx,
+                MixerChannelTarget::Bus(BusId::from(99)),
+                path.to_str().unwrap(),
+            )
+            .is_err()
+        );
+        assert_eq!(read_dir(directory.path()).unwrap().count(), 0);
+    }
+
+    /// Writes a template of a renamed, bypassed EQ with saved state, a missing external plugin,
+    /// a plugin this build does not have, and a compressor.
+    fn write_mixed_template(path: &Path) -> Vec<u8> {
+        let state = vec![1, 2, 3];
+        let mut eq = PluginInstance::new_with_id(param_eq_registry_id(), "EQ");
+        eq.plugin_state = state.clone();
+        eq.bypass = true;
+        eq.display_name = Some("Vocal EQ".into());
+        let identity = PluginIdentity {
+            format: PluginFormat::Vst3,
+            native_id: "0123456789ABCDEF0123456789ABCDEF".into(),
+        };
+        let mut missing = PluginInstance::new_with_id(1, "Missing VST");
+        missing.external = Some(ExternalPluginInstance {
+            descriptor: PluginDescriptor {
+                identity,
+                path: "/missing/Fixture.vst3".into(),
+                name: "Missing VST".into(),
+                vendor: "Fixture".into(),
+                version: "1".into(),
+                kind: PluginKind::Effect,
+            },
+            state: None,
+        });
+        let unknown = PluginInstance::new_with_id(1, "Future Plugin");
+        let compressor =
+            PluginInstance::new_with_id(sidechain_compressor_registry_id(), "Compressor");
+        save_channel_template_file(
+            path,
+            &ChannelTemplate::new(vec![eq, missing, unknown, compressor]),
+        )
+        .unwrap();
+        state
+    }
+
+    #[test]
+    fn loading_a_template_appends_its_effects_and_skips_unavailable_plugins() {
+        let (mut ctx, track, _midi_track, _pattern) = make_seeded_ctx();
+        mixer_api::add_effect_to_mixer_channel_by_id(
+            &mut ctx,
+            track,
+            sidechain_compressor_registry_id(),
+        )
+        .unwrap();
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("chain.effch");
+        let state = write_mixed_template(&path);
+
+        let skipped = mixer_api::load_channel_template(
+            &mut ctx,
+            MixerChannelTarget::Track(track),
+            path.to_str().unwrap(),
+        )
+        .unwrap();
+
+        assert_eq!(skipped, ["Missing VST", "Future Plugin"]);
+        let effects = ctx.app_state.mixer.channels[track].channel.effects.to_vec();
+        let registry_ids: Vec<_> = effects.iter().map(|e| e.instance.registry_id).collect();
+        assert_eq!(
+            registry_ids,
+            [
+                sidechain_compressor_registry_id(),
+                param_eq_registry_id(),
+                sidechain_compressor_registry_id(),
+            ]
+        );
+        assert_eq!(effects[1].instance.plugin_state, state);
+        assert!(effects[1].instance.bypass);
+        assert_eq!(
+            effects[1].instance.display_name.as_deref(),
+            Some("Vocal EQ")
+        );
+    }
+
+    #[test]
+    fn a_loaded_template_undoes_as_one_step_and_redoes_with_its_state() {
+        let mut ctx = make_ctx();
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("chain.effch");
+        let state = write_mixed_template(&path);
+
+        mixer_api::load_channel_template(
+            &mut ctx,
+            MixerChannelTarget::Master,
+            path.to_str().unwrap(),
+        )
+        .unwrap();
+        assert_eq!(ctx.app_state.mixer.master_bus.effects.to_vec().len(), 2);
+        assert!(!ctx.app_state.session.is_saved());
+
+        undo(&mut ctx).unwrap();
+        assert!(ctx.app_state.mixer.master_bus.effects.is_empty());
+
+        redo(&mut ctx).unwrap();
+        let effects = ctx.app_state.mixer.master_bus.effects.to_vec();
+        assert_eq!(effects.len(), 2);
+        assert_eq!(effects[0].instance.plugin_state, state);
+        assert_eq!(
+            effects[1].instance.registry_id,
+            sidechain_compressor_registry_id()
+        );
+    }
+
+    #[test]
+    fn saved_chain_loads_into_another_channel() {
+        let mut ctx = make_ctx();
+        let bus = mixer_api::create_bus(&mut ctx, "Drums".to_string());
+        mixer_api::add_effect_to_bus(&mut ctx, bus, param_eq_registry_id()).unwrap();
+        mixer_api::add_effect_to_bus(&mut ctx, bus, sidechain_compressor_registry_id()).unwrap();
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("drums.effch");
+        mixer_api::save_channel_template(
+            &ctx,
+            MixerChannelTarget::Bus(bus),
+            path.to_str().unwrap(),
+        )
+        .unwrap();
+
+        let skipped = mixer_api::load_channel_template(
+            &mut ctx,
+            MixerChannelTarget::Master,
+            path.to_str().unwrap(),
+        )
+        .unwrap();
+
+        assert!(skipped.is_empty());
+        let source = ctx.app_state.mixer.buses[bus].channel.effects.to_vec();
+        let loaded = ctx.app_state.mixer.master_bus.effects.to_vec();
+        assert_eq!(loaded.len(), source.len());
+        for (loaded, source) in loaded.iter().zip(&source) {
+            assert_eq!(loaded.instance, source.instance);
+        }
+    }
+
+    #[test]
+    fn loading_a_template_fails_without_changes_for_bad_files_and_channels() {
+        let mut ctx = make_ctx();
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("chain.effch");
+        write_mixed_template(&path);
+
+        assert!(
+            mixer_api::load_channel_template(
+                &mut ctx,
+                MixerChannelTarget::Bus(BusId::from(99)),
+                path.to_str().unwrap(),
+            )
+            .is_err()
+        );
+        let garbage = directory.path().join("garbage.effch");
+        write(&garbage, b"not json").unwrap();
+        for bad in [garbage, directory.path().join("absent.effch")] {
+            assert!(
+                mixer_api::load_channel_template(
+                    &mut ctx,
+                    MixerChannelTarget::Master,
+                    bad.to_str().unwrap(),
+                )
+                .is_err()
+            );
+        }
+        assert!(ctx.app_state.mixer.master_bus.effects.is_empty());
+    }
 
     #[test]
     fn get_mixer_state_returns_default_on_empty() {
@@ -514,7 +789,7 @@ mod tests {
 
         mixer_api::remove_effect_from_mixer_channel(&mut ctx, audio_id, effect_id).unwrap();
 
-        let removals = std::iter::from_fn(|| consumer.pop().ok())
+        let removals = from_fn(|| consumer.pop().ok())
             .filter(|command| !matches!(command, AudioCommand::QueryPluginState { .. }))
             .collect::<Vec<_>>();
         assert!(matches!(

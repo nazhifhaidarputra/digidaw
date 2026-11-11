@@ -3,10 +3,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:karbeat/app/providers/blocking_task_provider.dart';
 import 'package:karbeat/app/providers/project_provider.dart';
 import 'package:karbeat/app/providers/workspace_state.dart';
+import 'package:karbeat/features/setting/services/general_settings_provider.dart';
 import 'package:karbeat/features/setting/view/setting_screen.dart';
 import 'package:karbeat/features/source/services/audio_source_import.dart';
 import 'package:karbeat/features/workspace/services/project_file_actions.dart';
 import 'package:karbeat/features/workspace/services/project_file_dialogs.dart';
+import 'package:karbeat/features/workspace/view/recent_projects_menu.dart';
 import 'package:karbeat/features/workspace/view/unsaved_changes_guard.dart';
 import 'package:karbeat/shared/enums/global.dart';
 
@@ -41,15 +43,31 @@ class DawToolbarMenuAction {
   /// Define the callback when this action is executed
   final DawToolbarMenuActionCallback? callback;
 
+  /// Whether the action is listed; listed always when null.
+  final bool Function(WidgetRef ref)? isVisible;
+
+  /// Items of a submenu that opens beside the action, as in a desktop menu
+  /// bar, instead of running [callback].
+  final DawToolbarSubmenuBuilder? submenu;
+
   DawToolbarMenuAction(
     this.title, {
     this.shortcutId,
     this.isDestructive = false,
     this.callback,
+    this.isVisible,
+    this.submenu,
   });
 }
 
 typedef DawToolbarMenuActionCallback = void Function(BuildContext, WidgetRef);
+
+/// Builds the items of a submenu; [run] closes every menu and runs a
+/// callback, as choosing a plain action does.
+typedef DawToolbarSubmenuBuilder =
+    List<Widget> Function(
+      void Function(DawToolbarMenuActionCallback callback) run,
+    );
 
 /// Factory for toolbar menu group
 ///
@@ -73,6 +91,13 @@ class DawToolbarMenuGroupFactory {
         callback: (context, ref) async {
           await openProject(context, ref);
         },
+      ),
+      DawToolbarMenuAction(
+        'Open recent',
+        isVisible: (ref) => ref.watch(
+          generalSettingsProvider.select((state) => state.showRecentProjects),
+        ),
+        submenu: (run) => [RecentProjectsMenuItems(run: run)],
       ),
       DawToolbarMenuAction(
         'Save Project',

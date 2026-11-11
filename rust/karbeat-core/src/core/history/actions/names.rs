@@ -4,7 +4,8 @@ use crate::core::{
     history::{EngineSync, HistoryAction, HistoryError},
     project::{ApplicationState, AudioTrack, mixer::BusMixerChannel},
 };
-use crate::shared::id::{BusId, ClipId, PatternId, TrackId};
+use crate::shared::id::{BusId, ClipId, GeneratorId, PatternId, TrackId};
+use std::mem::swap;
 
 fn track_mut(app: &mut ApplicationState, id: TrackId) -> Result<&mut AudioTrack, HistoryError> {
     app.tracks.get_mut(id).ok_or(HistoryError::missing("Track"))
@@ -34,7 +35,7 @@ impl TrackRenamed {
     }
 
     fn swap(&mut self, app: &mut ApplicationState) -> Result<EngineSync, HistoryError> {
-        std::mem::swap(&mut track_mut(app, self.track_id)?.name, &mut self.name);
+        swap(&mut track_mut(app, self.track_id)?.name, &mut self.name);
         Ok(EngineSync::none())
     }
 }
@@ -58,7 +59,7 @@ impl TrackRecolored {
     }
 
     fn swap(&mut self, app: &mut ApplicationState) -> Result<EngineSync, HistoryError> {
-        std::mem::swap(&mut track_mut(app, self.track_id)?.color, &mut self.color);
+        swap(&mut track_mut(app, self.track_id)?.color, &mut self.color);
         Ok(EngineSync::none())
     }
 }
@@ -85,7 +86,7 @@ impl TracksReordered {
 
     fn swap(&mut self, app: &mut ApplicationState) -> Result<EngineSync, HistoryError> {
         for (id, order) in &mut self.orders {
-            std::mem::swap(&mut track_mut(app, *id)?.order_idx, order);
+            swap(&mut track_mut(app, *id)?.order_idx, order);
         }
         Ok(EngineSync::track_graph())
     }
@@ -121,19 +122,47 @@ impl PatternRenamed {
             .pattern_pool
             .get_mut(self.pattern_id)
             .ok_or(HistoryError::missing("Pattern"))?;
-        std::mem::swap(&mut pattern.name, &mut self.name);
+        swap(&mut pattern.name, &mut self.name);
         for (clip_id, name) in &mut self.clip_names {
             let clip = app
                 .clips_pool
                 .get_mut(*clip_id)
                 .ok_or(HistoryError::missing("Clip"))?;
-            std::mem::swap(&mut clip.name, name);
+            swap(&mut clip.name, name);
         }
         Ok(EngineSync::track_graph())
     }
 }
 
 swap_action!(PatternRenamed, "Rename Pattern");
+
+/// A generator renamed; holds the display name on the other side of the edit.
+#[derive(Debug)]
+pub struct GeneratorRenamed {
+    generator_id: GeneratorId,
+    display_name: Option<String>,
+}
+
+impl GeneratorRenamed {
+    /// Records a rename from the generator's previous display name.
+    pub fn new(generator_id: GeneratorId, previous: Option<String>) -> Self {
+        Self {
+            generator_id,
+            display_name: previous,
+        }
+    }
+
+    fn swap(&mut self, app: &mut ApplicationState) -> Result<EngineSync, HistoryError> {
+        if !app.generator_pool.contains_key(self.generator_id) {
+            return Err(HistoryError::missing("Generator"));
+        }
+        self.display_name =
+            app.set_generator_display_name(self.generator_id, self.display_name.take());
+        Ok(EngineSync::none())
+    }
+}
+
+swap_action!(GeneratorRenamed, "Rename Generator");
 
 /// A bus renamed; holds the name on the other side of the edit.
 #[derive(Debug)]
@@ -152,7 +181,7 @@ impl BusRenamed {
     }
 
     fn swap(&mut self, app: &mut ApplicationState) -> Result<EngineSync, HistoryError> {
-        std::mem::swap(&mut bus_mut(app, self.bus_id)?.name, &mut self.name);
+        swap(&mut bus_mut(app, self.bus_id)?.name, &mut self.name);
         Ok(EngineSync::none())
     }
 }
@@ -176,7 +205,7 @@ impl BusRecolored {
     }
 
     fn swap(&mut self, app: &mut ApplicationState) -> Result<EngineSync, HistoryError> {
-        std::mem::swap(&mut bus_mut(app, self.bus_id)?.color, &mut self.color);
+        swap(&mut bus_mut(app, self.bus_id)?.color, &mut self.color);
         Ok(EngineSync::none())
     }
 }

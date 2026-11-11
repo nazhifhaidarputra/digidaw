@@ -8,6 +8,7 @@
 
 use std::{
     collections::VecDeque,
+    hint::spin_loop,
     sync::{
         Arc,
         atomic::{AtomicBool, AtomicU32, AtomicU64, Ordering, fence},
@@ -145,7 +146,7 @@ impl CallbackRecord {
         loop {
             let before = self.sequence.load(Ordering::Acquire);
             if before % 2 == 1 {
-                std::hint::spin_loop();
+                spin_loop();
                 continue;
             }
             let values = (

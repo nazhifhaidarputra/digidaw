@@ -5,7 +5,7 @@
 use hashbrown::HashMap;
 use karbeat_utils::audio_utils::resample_interleaved_stream;
 use std::{
-    fs::File,
+    fs::{File, create_dir_all},
     io::{BufReader, BufWriter, Write},
     path::Path,
     sync::Arc,
@@ -173,7 +173,7 @@ impl CachedSamplesWriter {
 /// pressure; the system temporary directory is often RAM-backed tmpfs.
 fn decoded_cache_file() -> Result<File> {
     if let Some(directory) = app_cache_dir().map(|cache| cache.join("decoded-audio")) {
-        match std::fs::create_dir_all(&directory).and_then(|()| tempfile_in(&directory)) {
+        match create_dir_all(&directory).and_then(|()| tempfile_in(&directory)) {
             Ok(file) => return Ok(file),
             Err(error) => tracing::warn!(
                 "Decoded audio cache unavailable in {}, using the temporary directory: {error}",

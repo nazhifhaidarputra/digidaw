@@ -82,6 +82,10 @@ impl AudioPlugin for DigidawDelay {
         self.scratch_buffers = vec![vec![0.0; scratch_capacity]; num_channels];
     }
 
+    fn settle_parameters(&mut self) {
+        self.delay_dsp_instance.settle_parameters();
+    }
+
     fn reset(&mut self) {
         self.delay_dsp_instance.reset();
         for buf in &mut self.scratch_buffers {

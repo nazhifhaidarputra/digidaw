@@ -75,7 +75,7 @@ class SourceListScreen extends ConsumerWidget {
               final gen = generators.values.elementAt(index);
               final instanceType = gen.instanceType;
               final name = switch (instanceType) {
-                UiGeneratorInstanceType_Plugin(:final field0) => field0.name,
+                UiGeneratorInstanceType_Plugin(:final field0) => field0.label,
                 _ => "Sampler",
               };
 
@@ -102,6 +102,15 @@ class SourceListScreen extends ConsumerWidget {
                   );
                 },
                 onPlace: null,
+                renameIcon: genInstance != null,
+                onRename: genInstance == null
+                    ? null
+                    : () => renameGeneratorWithDialog(
+                        context,
+                        ref,
+                        id,
+                        genInstance,
+                      ),
               );
             }, childCount: generators.length),
           ),
@@ -293,6 +302,9 @@ class _SourceTile extends StatelessWidget {
   /// Deletes the item; the menu entry is hidden when it cannot be deleted.
   final VoidCallback? onDelete;
 
+  /// Shows [onRename] as a pencil beside the menu button.
+  final bool renameIcon;
+
   const _SourceTile({
     required this.title,
     required this.subtitle,
@@ -302,6 +314,7 @@ class _SourceTile extends StatelessWidget {
     this.onPlace,
     this.onRename,
     this.onDelete,
+    this.renameIcon = false,
   });
 
   @override
@@ -317,47 +330,58 @@ class _SourceTile extends StatelessWidget {
       // Items without any action get no menu button.
       trailing: onPlace == null && onRename == null && onDelete == null
           ? null
-          : PopupMenuButton<String>(
-              icon: Icon(Icons.more_vert, color: colors.onSurfaceVariant),
-              onSelected: (value) {
-                if (value == 'place') onPlace?.call();
-                if (value == 'rename') onRename?.call();
-                if (value == 'delete') onDelete?.call();
-              },
-              itemBuilder: (context) => [
-                if (onPlace != null)
-                  const PopupMenuItem(
-                    value: 'place',
-                    child: Row(
-                      children: [
-                        Icon(Icons.input),
-                        SizedBox(width: 8),
-                        Text("Put in timeline"),
-                      ],
-                    ),
+          : Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (renameIcon)
+                  IconButton(
+                    tooltip: 'Rename',
+                    onPressed: onRename,
+                    icon: Icon(Icons.edit, color: colors.onSurfaceVariant),
                   ),
-                if (onRename != null)
-                  const PopupMenuItem(
-                    value: 'rename',
-                    child: Row(
-                      children: [
-                        Icon(Icons.edit),
-                        SizedBox(width: 8),
-                        Text("Rename"),
-                      ],
-                    ),
-                  ),
-                if (onDelete != null)
-                  const PopupMenuItem(
-                    value: 'delete',
-                    child: Row(
-                      children: [
-                        Icon(Icons.delete),
-                        SizedBox(width: 8),
-                        Text("Delete"),
-                      ],
-                    ),
-                  ),
+                PopupMenuButton<String>(
+                  icon: Icon(Icons.more_vert, color: colors.onSurfaceVariant),
+                  onSelected: (value) {
+                    if (value == 'place') onPlace?.call();
+                    if (value == 'rename') onRename?.call();
+                    if (value == 'delete') onDelete?.call();
+                  },
+                  itemBuilder: (context) => [
+                    if (onPlace != null)
+                      const PopupMenuItem(
+                        value: 'place',
+                        child: Row(
+                          children: [
+                            Icon(Icons.input),
+                            SizedBox(width: 8),
+                            Text("Put in timeline"),
+                          ],
+                        ),
+                      ),
+                    if (onRename != null)
+                      const PopupMenuItem(
+                        value: 'rename',
+                        child: Row(
+                          children: [
+                            Icon(Icons.edit),
+                            SizedBox(width: 8),
+                            Text("Rename"),
+                          ],
+                        ),
+                      ),
+                    if (onDelete != null)
+                      const PopupMenuItem(
+                        value: 'delete',
+                        child: Row(
+                          children: [
+                            Icon(Icons.delete),
+                            SizedBox(width: 8),
+                            Text("Delete"),
+                          ],
+                        ),
+                      ),
+                  ],
+                ),
               ],
             ),
       onTap: onTap,

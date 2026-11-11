@@ -25,6 +25,20 @@ Float32List createZeroCopyWaveformView(WaveformHandle handle) {
   return ptr.asTypedList(len);
 }
 
+/// View of the samples playback reads, inside the source's trim points. Clip
+/// content starts at the first of them.
+Float32List createPlayableWaveformView(WaveformHandle handle) {
+  final ptrAddress = handle.getPlayablePointer();
+  final len = handle.getPlayableLen();
+
+  if (ptrAddress == 0 || len == 0) {
+    return Float32List(0);
+  }
+
+  final ptr = ffi.Pointer<ffi.Float>.fromAddress(ptrAddress);
+  return ptr.asTypedList(len);
+}
+
 // =============================================================================
 // 1. StereoWaveformPainter  (Overview — Audio Properties screen)
 // =============================================================================

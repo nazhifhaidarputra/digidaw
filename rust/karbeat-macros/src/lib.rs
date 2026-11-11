@@ -8,12 +8,12 @@
     reason = "shared macro parsing structures contain fields used by different macro expansions"
 )]
 
-use std::{collections::HashMap, fs, path::PathBuf};
+use std::{collections::HashMap, env::var, fs, path::PathBuf};
 
 use heck::ToShoutySnakeCase;
 use proc_macro::TokenStream;
 use quote::{format_ident, quote};
-use syn::{Data, DeriveInput, Fields, Lit, LitStr, Type, parse_macro_input};
+use syn::{Data, DeriveInput, Fields, Lit, LitStr, Type, meta::parser, parse_macro_input};
 
 #[proc_macro_derive(EnumParam)]
 pub fn derive_enum_param(input: TokenStream) -> TokenStream {
@@ -1032,7 +1032,7 @@ pub fn build_dynamic_registry(input: TokenStream) -> TokenStream {
     let dir_lit = parse_macro_input!(input as LitStr);
     let rel_dir = dir_lit.value();
 
-    let manifest_dir = std::env::var("CARGO_MANIFEST_DIR").expect("CARGO_MANIFEST_DIR not set");
+    let manifest_dir = var("CARGO_MANIFEST_DIR").expect("CARGO_MANIFEST_DIR not set");
     let base_path = PathBuf::from(manifest_dir).join(&rel_dir);
 
     let synths_path = base_path.join("synths");
@@ -1170,7 +1170,7 @@ pub fn auto_param(args: TokenStream, item: TokenStream) -> TokenStream {
     let mut on_change_expr: Option<proc_macro2::TokenStream> = None;
 
     if !args.is_empty() {
-        let meta_parser = syn::meta::parser(|meta| {
+        let meta_parser = parser(|meta| {
             if meta.path.is_ident("on_change") {
                 let lit: syn::LitStr = meta.value()?.parse()?;
                 let expr: syn::Expr = lit.parse()?;

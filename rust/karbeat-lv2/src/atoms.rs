@@ -4,6 +4,8 @@
 //! `process`. Layouts follow the LV2 atom specification: every atom is a `{size, type}` header
 //! followed by its body, padded to eight bytes inside a container.
 
+use std::{ptr::copy_nonoverlapping, slice::from_raw_parts};
+
 /// `LV2_Atom` header size.
 const ATOM_HEADER: usize = 8;
 /// `LV2_Atom_Sequence` header: the atom header plus the sequence body (`unit`, `pad`).
@@ -124,7 +126,7 @@ unsafe fn read_from_sequence(
             return;
         };
         // SAFETY: `body..next` was just checked to lie inside the written sequence.
-        let data = unsafe { std::slice::from_raw_parts(buffer.wrapping_add(body), size) };
+        let data = unsafe { from_raw_parts(buffer.wrapping_add(body), size) };
         if !visit(word(offset + 12), data) {
             return;
         }
@@ -189,7 +191,7 @@ unsafe fn append_to_sequence(
         let target = cursor.wrapping_add(offset);
         // SAFETY: Both parts together are `payload` bytes inside the checked range, and the
         // caller guarantees they do not alias the sequence buffer.
-        unsafe { std::ptr::copy_nonoverlapping(part.as_ptr(), target, part.len()) };
+        unsafe { copy_nonoverlapping(part.as_ptr(), target, part.len()) };
         offset += part.len();
     }
     for index in EVENT_HEADER + payload..event {

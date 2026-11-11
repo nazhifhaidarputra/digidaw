@@ -1,7 +1,10 @@
 //! Platform VST3 loop services. Steinberg `IRunLoop` is exposed only on Linux.
 #![allow(non_snake_case, reason = "VST3 interface method names are ABI-defined")]
 
-use std::{rc::Rc, thread::ThreadId};
+use std::{
+    rc::Rc,
+    thread::{ThreadId, current},
+};
 
 #[cfg(target_os = "linux")]
 use std::{
@@ -40,7 +43,7 @@ pub struct RunLoop {
 impl RunLoop {
     pub fn new() -> Rc<Self> {
         Rc::new(Self {
-            owner: std::thread::current().id(),
+            owner: current().id(),
             #[cfg(target_os = "linux")]
             events: RefCell::new(Vec::new()),
             #[cfg(target_os = "linux")]
@@ -49,7 +52,7 @@ impl RunLoop {
     }
 
     fn on_thread(&self) -> bool {
-        self.owner == std::thread::current().id()
+        self.owner == current().id()
     }
 
     pub fn pump(&self) {

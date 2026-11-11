@@ -1,7 +1,10 @@
 pub use hashbrown::HashMap;
 use karbeat_plugin_types::ParameterSpec;
 pub use serde_json::Value;
-use std::{any::Any, fmt::Debug};
+use std::{
+    any::Any,
+    fmt::{Debug, Formatter, Result as FmtResult},
+};
 
 // Import the newly defined types for non-interleaved audio and IO configuration
 use crate::types::{AudioBuffers, BusConfig, PluginCategory, ProcessContext, ZeroCopyBuffer};
@@ -113,6 +116,26 @@ pub trait AudioPlugin: Any + Send {
     fn needs_continuous_processing(&self) -> bool {
         false
     }
+
+    /// Whether the plugin has work that only its process callback completes: messages from its
+    /// editor (such as a sample file to load), results of background jobs it takes back while
+    /// processing, or a processing call it asked for.
+    ///
+    /// The engine processes the plugin while this holds, even when it is parked with no notes
+    /// or input, so that work finishes without waiting for the next note. Called on the audio
+    /// thread every block; it must be real-time safe.
+    fn has_pending_work(&self) -> bool {
+        false
+    }
+
+    /// Moves every smoothed parameter straight to its target value.
+    ///
+    /// Smoothing keeps parameter changes free of zipper noise while audio flows through the
+    /// plugin. The engine calls this before a parked plugin processes again, so changes made
+    /// while no audio flowed take effect at once instead of gliding in as playback starts. The
+    /// first block then plays as it does from a freshly restored instance, which is what an
+    /// export renders. Called on the audio thread; it must be real-time safe.
+    fn settle_parameters(&mut self) {}
 
     fn set_parameter(&mut self, id: u32, value: f32);
     fn get_parameter(&self, id: u32) -> f32;
@@ -253,7 +276,7 @@ pub trait AudioPlugin: Any + Send {
 }
 
 impl Debug for dyn AudioPlugin + Send + Sync {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
         f.debug_struct("KarbeatPlugin")
             .field("name", &self.name())
             .field("category", &self.category())

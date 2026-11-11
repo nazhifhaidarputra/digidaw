@@ -9,6 +9,8 @@ use karbeat_host_api::{
     HostError, NativeParentHandle, NativeSurfaceKind, native_host::EditorResizeHandler,
 };
 use raw_window_handle::RawWindowHandle;
+#[cfg(target_os = "windows")]
+use std::ptr::with_exposed_provenance_mut;
 
 /// Largest client dimension accepted from a plugin.
 const MAX_DIMENSION: u32 = 16_384;
@@ -99,7 +101,7 @@ impl ClapEditor {
                 let hwnd = usize::try_from(handle.hwnd.get())
                     .map_err(|_| HostError::InvalidConfiguration)?;
                 // SAFETY: The handle names the live host window the editor is parented to.
-                unsafe { Window::from_win32_hwnd(std::ptr::with_exposed_provenance_mut(hwnd)) }
+                unsafe { Window::from_win32_hwnd(with_exposed_provenance_mut(hwnd)) }
             }
             _ => {
                 return Err(HostError::Unsupported(

@@ -71,7 +71,7 @@ String automationSourceName(
   return switch (target) {
     AutomationTargetDto_Generator(:final generatorId) =>
       switch (project.generators[generatorId]?.instanceType) {
-        UiGeneratorInstanceType_Plugin(:final field0) => field0.name,
+        UiGeneratorInstanceType_Plugin(:final field0) => field0.label,
         UiGeneratorInstanceType_Sampler() => 'Sampler',
         null => 'Missing instrument',
       },
@@ -687,204 +687,120 @@ final busAutomationExpandedProvider = Provider.family<bool, int>((ref, busId) {
   return !collapsed.contains(busId);
 });
 
+/// Every automation lane in the project, grouped by the channel it automates
+/// and sorted by UI order.
+typedef AutomationLaneIndex = ({
+  IMap<int, IList<ChannelAutomationEntry>> tracks,
+  IMap<int, IList<ChannelAutomationEntry>> buses,
+  IList<ChannelAutomationEntry> master,
+});
+
+/// Groups all automation lanes in one pass over the modulation links, so the
+/// per-channel providers below are lookups instead of a scan each. The groups
+/// are immutable collections with value equality: a project publish that
+/// leaves a channel's lanes as they were doesn't notify that channel.
+final automationLaneIndexProvider = Provider<AutomationLaneIndex>((ref) {
+  final projectData = ref.watch(projectProvider).value;
+  const empty = (
+    tracks: IMapConst<int, IList<ChannelAutomationEntry>>({}),
+    buses: IMapConst<int, IList<ChannelAutomationEntry>>({}),
+    master: IListConst<ChannelAutomationEntry>([]),
+  );
+  if (projectData == null) return empty;
+
+  final trackByGenerator = <int, int>{
+    for (final track in projectData.tracks.values) ?track.generatorId: track.id,
+  };
+  final tracks = <int, List<(int, ChannelAutomationEntry)>>{};
+  final buses = <int, List<(int, ChannelAutomationEntry)>>{};
+  final master = <(int, ChannelAutomationEntry)>[];
+
+  for (final link in projectData.modulationLinks.values) {
+    final source = projectData.modulationSources[link.sourceId];
+    if (source is! ModulationSourceDto_Automation) continue;
+    final lane = projectData.automationPool[source.laneId];
+    if (lane == null) continue;
+
+    final target = link.target;
+    final List<(int, ChannelAutomationEntry)>? group = switch (target) {
+      AutomationTargetDto_Generator(:final generatorId) =>
+        switch (trackByGenerator[generatorId]) {
+          final trackId? => tracks.putIfAbsent(trackId, () => []),
+          null => null,
+        },
+      AutomationTargetDto_Track(:final trackId) => tracks.putIfAbsent(
+        trackId,
+        () => [],
+      ),
+      AutomationTargetDto_Bus(:final busId) => buses.putIfAbsent(
+        busId,
+        () => [],
+      ),
+      AutomationTargetDto_Master() => master,
+    };
+    group?.add((
+      link.orderIdx,
+      (
+        laneId: source.laneId,
+        linkId: link.id,
+        target: target,
+        lane: lane,
+        sourceName: automationSourceName(projectData, target),
+      ),
+    ));
+  }
+
+  IList<ChannelAutomationEntry> sorted(
+    List<(int, ChannelAutomationEntry)> entries,
+  ) {
+    entries.sort((a, b) => a.$1.compareTo(b.$1));
+    return entries.map((entry) => entry.$2).toIList();
+  }
+
+  return (
+    tracks: tracks.map((id, entries) => MapEntry(id, sorted(entries))).lock,
+    buses: buses.map((id, entries) => MapEntry(id, sorted(entries))).lock,
+    master: sorted(master),
+  );
+});
+
 /// Provider to get all automation lanes for a specific Bus ID.
 /// Usage in Widget: `final lanes = ref.watch(busAutomationProvider(busId));`
 final busAutomationProvider =
-    Provider.family<List<ChannelAutomationEntry>, int>((ref, busId) {
-      final projectData = ref.watch(projectProvider).value;
-      if (projectData == null) return const [];
+    Provider.family<IList<ChannelAutomationEntry>, int>(
+      (ref, busId) => ref.watch(
+        automationLaneIndexProvider.select(
+          (index) =>
+              index.buses[busId] ??
+              const IListConst<ChannelAutomationEntry>([]),
+        ),
+      ),
+    );
 
-      final lanes = <ChannelAutomationEntry>[];
-
-      for (final link in projectData.modulationLinks.values) {
-        final target = link.target;
-
-        if (target is AutomationTargetDto_Bus && target.busId == busId) {
-          final source = projectData.modulationSources[link.sourceId];
-
-          if (source is ModulationSourceDto_Automation) {
-            final laneId = source.laneId;
-            final lane = projectData.automationPool[laneId];
-
-            if (lane != null) {
-              lanes.add((
-                laneId: laneId,
-                linkId: link.id,
-                target: target,
-                lane: lane,
-                sourceName: automationSourceName(projectData, target),
-              ));
-            }
-          }
-        }
-      }
-
-      // Sort visually based on the UI order index
-      lanes.sort((a, b) {
-        final linkA = projectData.modulationLinks[a.linkId]!;
-        final linkB = projectData.modulationLinks[b.linkId]!;
-        return linkA.orderIdx.compareTo(linkB.orderIdx);
-      });
-
-      return lanes;
-    });
-
-/// Provider to get all automation lanes for a specific Track ID.
+/// Provider to get all automation lanes for a specific Track ID, including
+/// the lanes of the track's generator.
 /// Usage in Widget: `final lanes = ref.watch(trackAutomationProvider(trackId));`
 final trackAutomationProvider =
-    Provider.family<List<ChannelAutomationEntry>, int>((ref, trackId) {
-      final projectData = ref.watch(projectProvider).value;
-      if (projectData == null) return const [];
-
-      final lanes = <ChannelAutomationEntry>[];
-
-      for (final link in projectData.modulationLinks.values) {
-        final target = link.target;
-        target.when(
-          generator: (generatorId, paramId) {
-            // find the track associated with this generator
-            final findTrackRes = attempt(() {
-              return projectData.tracks.toValueIList().firstWhere((track) {
-                return track.generatorId != null &&
-                    track.generatorId == generatorId;
-              });
-            });
-
-            if (findTrackRes.isOk()) {
-              if (findTrackRes.ok().id == trackId) {
-                final source = projectData.modulationSources[link.sourceId];
-                if (source is ModulationSourceDto_Automation) {
-                  final laneId = source.laneId;
-                  final lane = projectData.automationPool[laneId];
-
-                  if (lane != null) {
-                    lanes.add((
-                      laneId: laneId,
-                      linkId: link.id,
-                      target: target,
-                      lane: lane,
-                      sourceName: automationSourceName(projectData, target),
-                    ));
-                  }
-                }
-              }
-            }
-          },
-          track: (trackTargetId, trackTarget) {
-            if (trackTargetId == trackId) {
-              final source = projectData.modulationSources[link.sourceId];
-              if (source is ModulationSourceDto_Automation) {
-                final laneId = source.laneId;
-                final lane = projectData.automationPool[laneId];
-
-                if (lane != null) {
-                  lanes.add((
-                    laneId: laneId,
-                    linkId: link.id,
-                    target: target,
-                    lane: lane,
-                    sourceName: automationSourceName(projectData, target),
-                  ));
-                }
-              }
-            }
-          },
-          bus: (_, _) {},
-          master: (_) {},
-        );
-      }
-
-      // Sort visually based on the UI order index
-      lanes.sort((a, b) {
-        final linkA = projectData.modulationLinks[a.linkId]!;
-        final linkB = projectData.modulationLinks[b.linkId]!;
-        return linkA.orderIdx.compareTo(linkB.orderIdx);
-      });
-
-      return lanes;
-    });
+    Provider.family<IList<ChannelAutomationEntry>, int>(
+      (ref, trackId) => ref.watch(
+        automationLaneIndexProvider.select(
+          (index) =>
+              index.tracks[trackId] ??
+              const IListConst<ChannelAutomationEntry>([]),
+        ),
+      ),
+    );
 
 /// Fetch all Automation lanes for all buses, grouped by Bus ID.
 /// Call this when you want to render the whole mixer's automation state at once.
 final allBusesAutomationProvider =
-    Provider<Map<int, List<ChannelAutomationEntry>>>((ref) {
-      final projectData = ref.watch(projectProvider).value;
-      if (projectData == null) return const {};
+    Provider<IMap<int, IList<ChannelAutomationEntry>>>(
+      (ref) => ref.watch(automationLaneIndexProvider.select((i) => i.buses)),
+    );
 
-      final map = <int, List<ChannelAutomationEntry>>{};
-
-      for (final link in projectData.modulationLinks.values) {
-        final target = link.target;
-
-        if (target is AutomationTargetDto_Bus) {
-          final busId = target.busId;
-          final source = projectData.modulationSources[link.sourceId];
-
-          if (source is ModulationSourceDto_Automation) {
-            final laneId = source.laneId;
-            final lane = projectData.automationPool[laneId];
-
-            if (lane != null) {
-              map.putIfAbsent(busId, () => []).add((
-                laneId: laneId,
-                linkId: link.id,
-                target: target,
-                lane: lane,
-                sourceName: automationSourceName(projectData, target),
-              ));
-            }
-          }
-        }
-      }
-
-      for (final busLanes in map.values) {
-        busLanes.sort((a, b) {
-          final linkA = projectData.modulationLinks[a.linkId]!;
-          final linkB = projectData.modulationLinks[b.linkId]!;
-          return linkA.orderIdx.compareTo(linkB.orderIdx);
-        });
-      }
-
-      return map;
-    });
-
-final masterAutomationProvider = Provider<List<ChannelAutomationEntry>>((ref) {
-  final projectData = ref.watch(projectProvider).value;
-  if (projectData == null) return const [];
-
-  final lanes = <ChannelAutomationEntry>[];
-
-  for (final link in projectData.modulationLinks.values) {
-    final target = link.target;
-
-    if (target is AutomationTargetDto_Master) {
-      final source = projectData.modulationSources[link.sourceId];
-
-      if (source is ModulationSourceDto_Automation) {
-        final laneId = source.laneId;
-        final lane = projectData.automationPool[laneId];
-
-        if (lane != null) {
-          lanes.add((
-            laneId: laneId,
-            linkId: link.id,
-            target: target,
-            lane: lane,
-            sourceName: automationSourceName(projectData, target),
-          ));
-        }
-      }
-    }
-  }
-
-  lanes.sort((a, b) {
-    final linkA = projectData.modulationLinks[a.linkId]!;
-    final linkB = projectData.modulationLinks[b.linkId]!;
-    return linkA.orderIdx.compareTo(linkB.orderIdx);
-  });
-
-  return lanes;
-});
+final masterAutomationProvider = Provider<IList<ChannelAutomationEntry>>(
+  (ref) => ref.watch(automationLaneIndexProvider.select((i) => i.master)),
+);
 
 /// Loads a plugin's automatable parameters and marks those that already have
 /// an automation lane.

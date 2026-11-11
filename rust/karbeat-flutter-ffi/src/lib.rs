@@ -1,9 +1,12 @@
-use std::io::IsTerminal as _;
+use std::{
+    fmt::Result as FmtResult,
+    io::{IsTerminal as _, stdout as io_stdout},
+};
 
 use tracing_subscriber::EnvFilter;
 use tracing_subscriber::filter::LevelFilter;
-use tracing_subscriber::fmt::format::Writer;
 use tracing_subscriber::fmt::time::FormatTime;
+use tracing_subscriber::fmt::{format::Writer, layer};
 use tracing_subscriber::layer::SubscriberExt as _;
 use tracing_subscriber::util::SubscriberInitExt as _;
 
@@ -40,7 +43,7 @@ mod sync;
 struct MillisTimer;
 
 impl FormatTime for MillisTimer {
-    fn format_time(&self, writer: &mut Writer<'_>) -> std::fmt::Result {
+    fn format_time(&self, writer: &mut Writer<'_>) -> FmtResult {
         write!(writer, "{:.3}", jiff::Timestamp::now())
     }
 }
@@ -60,10 +63,10 @@ pub fn init_logger() {
         let filter = EnvFilter::builder()
             .with_default_directive(default_level.into())
             .from_env_lossy();
-        let stdout = tracing_subscriber::fmt::layer()
+        let stdout = layer()
             .with_timer(MillisTimer)
-            .with_ansi(std::io::stdout().is_terminal())
-            .with_writer(std::io::stdout);
+            .with_ansi(io_stdout().is_terminal())
+            .with_writer(io_stdout);
         let bridge = log_bridge::install();
         let bridge_layer = bridge.as_ref().ok().copied().map(LogBridgeLayer::new);
         let installed = tracing_subscriber::registry()

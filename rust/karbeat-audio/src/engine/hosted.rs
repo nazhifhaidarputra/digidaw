@@ -1,10 +1,17 @@
 use super::AudioEngine;
 use crate::{
-    commands::EffectTarget,
+    commands::{AudioCommand, EffectTarget},
+    engine::AudioExportSnapshotError,
     event::PluginTarget,
-    hosted_plugin::{HostedInstallResult, HostedPluginInstall, HostedPluginReconfiguration},
+    hosted_plugin::{
+        HostedInstallResult, HostedPluginInstall, HostedPluginReconfiguration, HostedPluginRemoval,
+        HostedRemovalResult,
+    },
+    missing_plugin::MissingPlugin,
     render_state::{AudioEffectInstance, AudioGeneratorInstance},
 };
+use karbeat_plugin_api::{traits::AudioPlugin, types::ProcessingMode};
+use std::mem::replace;
 
 impl AudioEngine {
     pub(super) fn reconfigure_hosted_plugins(
@@ -48,7 +55,7 @@ impl AudioEngine {
         for replacement in &mut reconfiguration.replacements {
             let Some(endpoint) = replacement.endpoint.take() else {
                 for endpoint in prepared {
-                    karbeat_plugin_api::traits::AudioPlugin::retire(endpoint);
+                    AudioPlugin::retire(endpoint);
                 }
                 reconfiguration.complete(HostedInstallResult::InvalidConfiguration);
                 return;
@@ -60,7 +67,7 @@ impl AudioEngine {
                 }
                 Err(_) => {
                     for endpoint in prepared {
-                        karbeat_plugin_api::traits::AudioPlugin::retire(endpoint);
+                        AudioPlugin::retire(endpoint);
                     }
                     reconfiguration.complete(HostedInstallResult::InvalidConfiguration);
                     return;
@@ -68,7 +75,7 @@ impl AudioEngine {
             }
         }
 
-        self.process_command(crate::commands::AudioCommand::UpdateAudioConfig {
+        self.process_command(AudioCommand::UpdateAudioConfig {
             sample_rate: Some(reconfiguration.sample_rate),
             buffer_size: Some(reconfiguration.block_size),
         });
@@ -78,23 +85,23 @@ impl AudioEngine {
                 PluginTarget::Generator(id) => self
                     .plugin_state
                     .get_generator_mut(id)
-                    .map(|generator| std::mem::replace(&mut generator.plugin, endpoint)),
+                    .map(|generator| replace(&mut generator.plugin, endpoint)),
                 PluginTarget::TrackEffect(track, effect) => self
                     .plugin_state
                     .get_track_effects_mut(track.to_u32() as usize)
                     .and_then(|chain| chain.iter_mut().find(|item| item.id == effect))
-                    .map(|item| std::mem::replace(&mut item.plugin, endpoint)),
+                    .map(|item| replace(&mut item.plugin, endpoint)),
                 PluginTarget::BusEffect(bus, effect) => self
                     .plugin_state
                     .get_bus_effects_mut(bus.to_u32() as usize)
                     .and_then(|chain| chain.iter_mut().find(|item| item.id == effect))
-                    .map(|item| std::mem::replace(&mut item.plugin, endpoint)),
+                    .map(|item| replace(&mut item.plugin, endpoint)),
                 PluginTarget::MasterEffect(effect) => self
                     .plugin_state
                     .master_effects
                     .iter_mut()
                     .find(|item| item.id == effect)
-                    .map(|item| std::mem::replace(&mut item.plugin, endpoint)),
+                    .map(|item| replace(&mut item.plugin, endpoint)),
             };
             if let Some(plugin) = plugin {
                 self.plugin_state.retire_plugin(plugin);
@@ -106,9 +113,8 @@ impl AudioEngine {
 
     pub(super) fn remove_hosted_plugins(
         &mut self,
-        mut transfer: karbeat_host::ControlTransfer<crate::hosted_plugin::HostedPluginRemoval>,
+        mut transfer: karbeat_host::ControlTransfer<HostedPluginRemoval>,
     ) {
-        use crate::{commands::AudioCommand, hosted_plugin::HostedRemovalResult};
         let Some(removal) = transfer.get_mut() else {
             return;
         };
@@ -173,9 +179,7 @@ impl AudioEngine {
     }
 
     /// Check sticky backend failures from an offline/control worker after rendering a block.
-    pub fn validate_hosted_processing(
-        &self,
-    ) -> Result<(), crate::engine::AudioExportSnapshotError> {
+    pub fn validate_hosted_processing(&self) -> Result<(), AudioExportSnapshotError> {
         let plugins = self
             .plugin_state
             .generators
@@ -207,7 +211,7 @@ impl AudioEngine {
                 .downcast_ref::<karbeat_host::HostedProcessor>()
             {
                 if let Some(source) = hosted.processing_error() {
-                    return Err(crate::engine::AudioExportSnapshotError::HostedPlugin {
+                    return Err(AudioExportSnapshotError::HostedPlugin {
                         instance: hosted.instance,
                         source,
                     });
@@ -229,11 +233,7 @@ impl AudioEngine {
             || config.sample_rate != f64::from(self.config.sample_rate)
             || config.main_output_channels != usize::from(self.config.num_channels)
             || config.max_block_size < self.current_state.graph.buffer_size.max(512)
-            || config.offline
-                != matches!(
-                    self.processing_mode,
-                    karbeat_plugin_api::types::ProcessingMode::Offline
-                )
+            || config.offline != matches!(self.processing_mode, ProcessingMode::Offline)
         {
             install.complete(HostedInstallResult::InvalidConfiguration);
             return;
@@ -254,12 +254,9 @@ impl AudioEngine {
                 }
                 let existing = self.plugin_state.get_generator(id);
                 if install.replace_missing {
-                    if !existing.is_some_and(|generator| {
-                        generator
-                            .plugin
-                            .as_any()
-                            .is::<crate::missing_plugin::MissingPlugin>()
-                    }) {
+                    if !existing
+                        .is_some_and(|generator| generator.plugin.as_any().is::<MissingPlugin>())
+                    {
                         install.complete(HostedInstallResult::MissingTarget);
                         return;
                     }
@@ -277,12 +274,12 @@ impl AudioEngine {
                 };
                 plugin.set_bypass(install.bypass);
                 if let Some(graph) = install.graph.take() {
-                    self.process_command(crate::commands::AudioCommand::UpdateTrackGraph {
+                    self.process_command(AudioCommand::UpdateTrackGraph {
                         tracks: graph.tracks,
                         clips: graph.clips,
                         patterns: graph.patterns,
                     });
-                    self.process_command(crate::commands::AudioCommand::UpdateRouting {
+                    self.process_command(AudioCommand::UpdateRouting {
                         routing: graph.routing,
                     });
                 }
@@ -292,6 +289,10 @@ impl AudioEngine {
                     registry_id: install.registry_id,
                     plugin,
                 });
+                // Restored state, such as a sampler's sample file, loads from process calls, so
+                // the new instrument renders until that is done rather than parking until its
+                // first note, which would then find it still loading.
+                self.wake_generators_where(|generator| generator.id == id);
                 if let Some(input) = install.telemetry.take() {
                     self.telemetry
                         .param_telemetry_producers
@@ -326,12 +327,7 @@ impl AudioEngine {
             .get_effect_list_mut(&effect_target)
             .and_then(|chain| chain.iter().find(|effect| effect.id == effect_id));
         if install.replace_missing {
-            if !existing.is_some_and(|effect| {
-                effect
-                    .plugin
-                    .as_any()
-                    .is::<crate::missing_plugin::MissingPlugin>()
-            }) {
+            if !existing.is_some_and(|effect| effect.plugin.as_any().is::<MissingPlugin>()) {
                 install.complete(HostedInstallResult::MissingTarget);
                 return;
             }
@@ -349,6 +345,7 @@ impl AudioEngine {
         };
         plugin.set_bypass(install.bypass);
         let effect = AudioEffectInstance {
+            parked: true,
             id: effect_id,
             registry_id: install.registry_id,
             plugin,
@@ -358,7 +355,7 @@ impl AudioEngine {
             let retired = self
                 .get_effect_list_mut(&effect_target)
                 .and_then(|chain| chain.iter_mut().find(|item| item.id == effect_id))
-                .map(|existing| std::mem::replace(existing, effect).plugin);
+                .map(|existing| replace(existing, effect).plugin);
             if let Some(plugin) = retired {
                 self.plugin_state.retire_plugin(plugin);
             }
@@ -392,14 +389,24 @@ mod tests {
     use super::*;
     use crate::{
         commands::{AudioCommand, AudioFeedback, TelemetryRegistration},
-        engine::AudioEngineTelemetry,
+        engine::{AudioEngineTelemetry, AudioExportSnapshot},
         event::TransportFeedback,
-        hosted_plugin::HostedInstallReceipt,
+        hosted_plugin::{
+            HostedInstallReceipt, HostedPluginRemoval, HostedPluginReplacement,
+            HostedProjectInstall, HostedRemovalResult, hosted_processing_config,
+        },
+        render_state::EffectPluginSnapshot,
     };
+    use futures_lite::future::block_on;
     use karbeat_core::shared::EffectId;
     use karbeat_host::{HostInstanceId, HostedProcessor, ProcessingConfig, ProcessorRetirement};
-    use karbeat_plugin_api::traits::AudioPluginBuilder;
-    use karbeat_plugins::effect::delay::DigidawDelay;
+    use karbeat_plugin_api::traits::{AudioPlugin, AudioPluginBuilder};
+    use karbeat_plugins::{effect::delay::DigidawDelay, registry::PluginRegistry};
+    use std::sync::{
+        Arc,
+        atomic::{AtomicI32, Ordering},
+        mpsc::sync_channel,
+    };
 
     fn process_install(engine: &mut AudioEngine, install: HostedPluginInstall) {
         let (command, mut retirement) = karbeat_host::ControlTransfer::new(install);
@@ -411,7 +418,7 @@ mod tests {
         let (_, commands) = rtrb::RingBuffer::<AudioCommand>::new(8);
         let (position, _) = rtrb::RingBuffer::<TransportFeedback>::new(8);
         let (feedback, _) = rtrb::RingBuffer::<AudioFeedback>::new(8);
-        let (telemetry, _) = std::sync::mpsc::sync_channel::<TelemetryRegistration>(8);
+        let (telemetry, _) = sync_channel::<TelemetryRegistration>(8);
         AudioEngine::new(
             commands,
             position,
@@ -438,8 +445,7 @@ mod tests {
         ));
         let (endpoint, retirement) = endpoint.prepare_transfer().unwrap();
         // The production layout, including its stereo sidechain request.
-        let config =
-            crate::hosted_plugin::hosted_processing_config(karbeat_host::PluginKind::Effect, rate);
+        let config = hosted_processing_config(karbeat_host::PluginKind::Effect, rate);
         assert_eq!(config.sidechain_channels, 2);
         let (command, receipt) = HostedPluginInstall::new(
             PluginTarget::MasterEffect(EffectId::from(11)),
@@ -457,7 +463,7 @@ mod tests {
         let (install, mut receipt, mut old_retirement) = install(48_000.0);
         process_install(&mut engine, install);
         assert_eq!(
-            futures_lite::future::block_on(receipt.wait()).unwrap(),
+            block_on(receipt.wait()).unwrap(),
             HostedInstallResult::Installed
         );
 
@@ -477,22 +483,17 @@ mod tests {
             offline: false,
         };
         let target = PluginTarget::MasterEffect(EffectId::from(11));
-        let replacement = crate::hosted_plugin::HostedPluginReplacement::new(
-            target,
-            HostInstanceId(1),
-            config,
-            endpoint,
-            false,
-        );
+        let replacement =
+            HostedPluginReplacement::new(target, HostInstanceId(1), config, endpoint, false);
         let (reconfiguration, mut reconfiguration_receipt) =
-            crate::hosted_plugin::HostedPluginReconfiguration::new(vec![replacement], 96_000, 256);
+            HostedPluginReconfiguration::new(vec![replacement], 96_000, 256);
         let (command, mut control_retirement) = karbeat_host::ControlTransfer::new(reconfiguration);
 
         engine.process_command(AudioCommand::ReconfigureHostedPlugins(command));
 
         assert!(control_retirement.collect());
         assert_eq!(
-            futures_lite::future::block_on(reconfiguration_receipt.wait()).unwrap(),
+            block_on(reconfiguration_receipt.wait()).unwrap(),
             HostedInstallResult::Installed
         );
         assert_eq!(engine.config.sample_rate, 96_000);
@@ -516,7 +517,7 @@ mod tests {
         let (install, mut receipt, mut old_retirement) = install(48_000.0);
         process_install(&mut engine, install);
         assert_eq!(
-            futures_lite::future::block_on(receipt.wait()).unwrap(),
+            block_on(receipt.wait()).unwrap(),
             HostedInstallResult::Installed
         );
 
@@ -536,22 +537,17 @@ mod tests {
             offline: false,
         };
         let target = PluginTarget::MasterEffect(EffectId::from(11));
-        let replacement = crate::hosted_plugin::HostedPluginReplacement::new(
-            target,
-            HostInstanceId(99),
-            config,
-            endpoint,
-            false,
-        );
+        let replacement =
+            HostedPluginReplacement::new(target, HostInstanceId(99), config, endpoint, false);
         let (reconfiguration, mut reconfiguration_receipt) =
-            crate::hosted_plugin::HostedPluginReconfiguration::new(vec![replacement], 96_000, 256);
+            HostedPluginReconfiguration::new(vec![replacement], 96_000, 256);
         let (command, mut control_retirement) = karbeat_host::ControlTransfer::new(reconfiguration);
 
         engine.process_command(AudioCommand::ReconfigureHostedPlugins(command));
 
         assert!(control_retirement.collect());
         assert_eq!(
-            futures_lite::future::block_on(reconfiguration_receipt.wait()).unwrap(),
+            block_on(reconfiguration_receipt.wait()).unwrap(),
             HostedInstallResult::MissingTarget
         );
         assert_eq!(engine.config.sample_rate, 48_000);
@@ -574,7 +570,7 @@ mod tests {
         let (command, mut receipt, mut retirement) = install(48_000.0);
         process_install(&mut engine, command);
         assert_eq!(
-            futures_lite::future::block_on(receipt.wait()).unwrap(),
+            block_on(receipt.wait()).unwrap(),
             HostedInstallResult::Installed
         );
         let target = PluginTarget::MasterEffect(EffectId::from(11));
@@ -597,7 +593,7 @@ mod tests {
         let (command, mut receipt, mut retirement) = install(48_000.0);
         process_install(&mut engine, command);
         assert_eq!(
-            futures_lite::future::block_on(receipt.wait()).unwrap(),
+            block_on(receipt.wait()).unwrap(),
             HostedInstallResult::Installed
         );
         assert_eq!(engine.plugin_state.master_effects.len(), 1);
@@ -615,12 +611,12 @@ mod tests {
         let mut engine = engine();
         let (command, mut receipt, mut retirement) = install(48_000.0);
         drop(command);
-        assert!(futures_lite::future::block_on(receipt.wait()).is_err());
+        assert!(block_on(receipt.wait()).is_err());
         assert!(retirement.take().is_some());
         let (command, mut receipt, mut retirement) = install(44_100.0);
         process_install(&mut engine, command);
         assert_eq!(
-            futures_lite::future::block_on(receipt.wait()).unwrap(),
+            block_on(receipt.wait()).unwrap(),
             HostedInstallResult::InvalidConfiguration
         );
         assert!(retirement.take().is_some());
@@ -633,13 +629,13 @@ mod tests {
         let (command, mut receipt, mut original) = install(48_000.0);
         process_install(&mut engine, command);
         assert_eq!(
-            futures_lite::future::block_on(receipt.wait()).unwrap(),
+            block_on(receipt.wait()).unwrap(),
             HostedInstallResult::Installed
         );
         let (duplicate, mut receipt, mut rejected) = install(48_000.0);
         process_install(&mut engine, duplicate);
         assert_eq!(
-            futures_lite::future::block_on(receipt.wait()).unwrap(),
+            block_on(receipt.wait()).unwrap(),
             HostedInstallResult::OccupiedTarget
         );
         assert!(rejected.take().is_some());
@@ -658,13 +654,12 @@ mod tests {
         assert!(rejected.is_err());
         drop(rejected);
         assert!(control.collect());
-        assert!(futures_lite::future::block_on(receipt.wait()).is_err());
+        assert!(block_on(receipt.wait()).is_err());
         assert!(retirement.take().is_some());
     }
 
     #[test]
     fn removal_rejects_stale_handles_without_partial_changes() {
-        use crate::hosted_plugin::{HostedPluginRemoval, HostedRemovalResult};
         let mut engine = engine();
         let (install, _, mut returned) = install(48_000.0);
         process_install(&mut engine, install);
@@ -676,7 +671,7 @@ mod tests {
             engine.process_command(AudioCommand::RemoveHostedPlugins(command));
             assert!(control.collect());
             assert_eq!(
-                futures_lite::future::block_on(receipt.wait()).unwrap(),
+                block_on(receipt.wait()).unwrap(),
                 HostedRemovalResult::StaleTarget
             );
             assert_eq!(engine.plugin_state.master_effects.len(), 1);
@@ -687,7 +682,7 @@ mod tests {
         let (command, mut control) = karbeat_host::ControlTransfer::new(removal);
         engine.process_command(AudioCommand::RemoveHostedPlugins(command));
         assert_eq!(
-            futures_lite::future::block_on(receipt.wait()).unwrap(),
+            block_on(receipt.wait()).unwrap(),
             HostedRemovalResult::Removed
         );
         assert!(engine.plugin_state.master_effects.is_empty());
@@ -732,7 +727,6 @@ mod tests {
 
     #[test]
     fn project_replacement_checks_configuration_before_mutation() {
-        use crate::hosted_plugin::HostedProjectInstall;
         let mut engine = engine();
         let (install, _, mut returned) = install(48_000.0);
         process_install(&mut engine, install);
@@ -750,10 +744,7 @@ mod tests {
             let (command, mut control) = karbeat_host::ControlTransfer::new(project);
             engine.process_command(AudioCommand::InstallHostedProject(command));
             assert!(control.collect());
-            assert_eq!(
-                futures_lite::future::block_on(receipt.wait()).unwrap(),
-                expected
-            );
+            assert_eq!(block_on(receipt.wait()).unwrap(), expected);
             if expected == HostedInstallResult::Installed {
                 assert!(engine.plugin_state.master_effects.is_empty());
                 assert!(returned.take().is_some());
@@ -764,15 +755,13 @@ mod tests {
         }
     }
 
-    fn offline(
-        snapshot: crate::engine::AudioExportSnapshot,
-    ) -> Result<AudioEngine, crate::engine::AudioExportSnapshotError> {
+    fn offline(snapshot: AudioExportSnapshot) -> Result<AudioEngine, AudioExportSnapshotError> {
         let (_, commands) = rtrb::RingBuffer::new(8);
         let (position, _) = rtrb::RingBuffer::new(8);
         let (feedback, _) = rtrb::RingBuffer::new(8);
         AudioEngine::from_export_snapshot(
             snapshot,
-            &karbeat_plugins::registry::PluginRegistry::new_with_defaults(),
+            &PluginRegistry::new_with_defaults(),
             2,
             commands,
             position,
@@ -782,7 +771,6 @@ mod tests {
 
     #[test]
     fn hosted_export_requires_control_capture_and_restores_an_independent_endpoint() {
-        use karbeat_plugin_api::traits::AudioPlugin;
         let mut engine = engine();
         let (command, _, mut live_retirement) = install(48_000.0);
         process_install(&mut engine, command);
@@ -791,13 +779,12 @@ mod tests {
         live.set_parameter(parameter, 0.37);
         live.set_bypass(true);
         let state = live.get_state();
-        let captured =
-            crate::render_state::EffectPluginSnapshot::from(&engine.plugin_state.master_effects[0]);
+        let captured = EffectPluginSnapshot::from(&engine.plugin_state.master_effects[0]);
         assert_eq!(captured.host_instance, Some(HostInstanceId(1)));
         assert!(captured.serialized_state.is_empty());
         assert!(matches!(
             offline(engine.export_snapshot()),
-            Err(crate::engine::AudioExportSnapshotError::HostedPlugin { .. })
+            Err(AudioExportSnapshotError::HostedPlugin { .. })
         ));
 
         let mut snapshot = engine.export_snapshot();
@@ -852,6 +839,7 @@ mod tests {
             .plugin_state
             .master_effects
             .push(AudioEffectInstance {
+                parked: true,
                 id: EffectId::from(12),
                 registry_id: 124,
                 plugin: second.install().unwrap(),
@@ -890,6 +878,7 @@ mod tests {
             .plugin_state
             .master_effects
             .push(AudioEffectInstance {
+                parked: true,
                 id: EffectId::from(12),
                 registry_id: u32::MAX,
                 plugin: Box::new(DigidawDelay::build()),
@@ -910,7 +899,7 @@ mod tests {
             .unwrap();
         assert!(matches!(
             offline(snapshot),
-            Err(crate::engine::AudioExportSnapshotError::PluginNotFound { .. })
+            Err(AudioExportSnapshotError::PluginNotFound { .. })
         ));
         assert!(retired.as_ref().unwrap().is_abandoned());
         drop(engine);
@@ -919,10 +908,6 @@ mod tests {
 
     #[test]
     fn native_processing_failures_remain_visible_until_acknowledged() {
-        use std::sync::{
-            Arc,
-            atomic::{AtomicI32, Ordering},
-        };
         let mut engine = engine();
         let status = Arc::new(AtomicI32::new(0));
         let mut endpoint =
@@ -932,6 +917,7 @@ mod tests {
             .plugin_state
             .master_effects
             .push(AudioEffectInstance {
+                parked: true,
                 id: EffectId::from(1),
                 registry_id: 123,
                 plugin: Box::new(endpoint),
@@ -942,7 +928,7 @@ mod tests {
         for _ in 0..2 {
             assert!(matches!(
                 engine.validate_hosted_processing(),
-                Err(crate::engine::AudioExportSnapshotError::HostedPlugin {
+                Err(AudioExportSnapshotError::HostedPlugin {
                     instance: HostInstanceId(10),
                     source: karbeat_host::HostError::PluginCall { code: -1, .. }
                 })

@@ -1,3 +1,9 @@
+use std::{
+    mem::forget,
+    thread::sleep,
+    time::{Duration, Instant},
+};
+
 /// A prepared control payload borrowed by DSP and returned for destruction off the audio thread.
 pub struct ControlTransfer<T: Send> {
     payload: Option<Box<T>>,
@@ -32,7 +38,7 @@ impl<T: Send> Drop for ControlTransfer<T> {
     fn drop(&mut self) {
         if let Some(payload) = self.payload.take() {
             if let Err(rtrb::PushError::Full(payload)) = self.sender.push(payload) {
-                std::mem::forget(payload);
+                forget(payload);
             }
         }
     }
@@ -68,13 +74,13 @@ impl<T: Send> ControlRetirement<T> {
     /// DSP publishes a command's result before it drops the transfer, so a single `collect()`
     /// right after the acknowledgement usually races that release. Blocks the calling control
     /// worker; never call it from the audio thread.
-    pub fn collect_within(&mut self, timeout: std::time::Duration) -> bool {
-        let started = std::time::Instant::now();
+    pub fn collect_within(&mut self, timeout: Duration) -> bool {
+        let started = Instant::now();
         while !self.collect() {
             if started.elapsed() >= timeout {
                 return false;
             }
-            std::thread::sleep(std::time::Duration::from_micros(100));
+            sleep(Duration::from_micros(100));
         }
         true
     }
@@ -85,7 +91,7 @@ impl<T: Send> Drop for ControlRetirement<T> {
         if let Some(receiver) = self.receiver.take() {
             if !receiver.is_abandoned() {
                 tracing::error!("Plugin control owner shut down before command retirement");
-                std::mem::forget(receiver);
+                forget(receiver);
             }
         }
     }
@@ -102,6 +108,7 @@ mod tests {
         sync::{Arc, Mutex},
         thread,
     };
+    use std::thread::spawn;
 
     struct Payload(Arc<Mutex<Option<thread::ThreadId>>>);
     impl Drop for Payload {
@@ -141,11 +148,11 @@ mod tests {
     #[test]
     fn collect_within_waits_for_a_release_after_acknowledgement() {
         let (transfer, mut retirement) = ControlTransfer::new(Box::new([0.0_f32; 64]));
-        let dsp = std::thread::spawn(move || {
-            std::thread::sleep(std::time::Duration::from_millis(20));
+        let dsp = spawn(move || {
+            sleep(Duration::from_millis(20));
             drop(transfer);
         });
-        assert!(retirement.collect_within(std::time::Duration::from_secs(5)));
+        assert!(retirement.collect_within(Duration::from_secs(5)));
         dsp.join().unwrap();
     }
 }

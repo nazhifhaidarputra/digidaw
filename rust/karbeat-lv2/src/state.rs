@@ -9,7 +9,10 @@
 //! The lilv calls below bypass the `lilv` crate's world mutex. A bundle's world is owned and
 //! used by the native UI thread alone, which is also where state work runs.
 
-use std::ffi::{CStr, CString, c_char, c_void};
+use std::{
+    ffi::{CStr, CString, c_char, c_void},
+    ptr::{from_ref, null},
+};
 
 use karbeat_host_api::{HostError, PluginIdentity, PluginState};
 use lilv_sys as sys;
@@ -62,7 +65,7 @@ unsafe extern "C" fn port_value(
     value_type: *mut u32,
 ) -> *const c_void {
     if symbol.is_null() || user_data.is_null() || size.is_null() || value_type.is_null() {
-        return std::ptr::null();
+        return null();
     }
     // SAFETY: `user_data` is the context `capture` passes for this synchronous call.
     let context = unsafe { &*user_data.cast::<CaptureContext>() };
@@ -73,13 +76,13 @@ unsafe extern "C" fn port_value(
         .iter()
         .find(|port| port.symbol.as_c_str() == symbol)
     else {
-        return std::ptr::null();
+        return null();
     };
     // SAFETY: lilv supplies a writable size output, checked for null above.
     unsafe { size.write(4) };
     // SAFETY: lilv supplies a writable type output, checked for null above.
     unsafe { value_type.write(context.float) };
-    std::ptr::from_ref(&port.value).cast()
+    from_ref(&port.value).cast()
 }
 
 /// Captures the plugin's state and `ports` as a Turtle description.
@@ -99,11 +102,7 @@ pub(crate) fn capture(
     let features = [urid::map_feature(), urid::unmap_feature()];
     // State save must not overlap a worker job.
     let _worker = instance.exclude_worker();
-    let feature_list = [
-        std::ptr::from_ref(&features[0]),
-        std::ptr::from_ref(&features[1]),
-        std::ptr::null(),
-    ];
+    let feature_list = [from_ref(&features[0]), from_ref(&features[1]), null()];
     let flags = lv2_sys::LV2_State_Flags::LV2_STATE_IS_POD.0
         | lv2_sys::LV2_State_Flags::LV2_STATE_IS_PORTABLE.0;
     // SAFETY: Runs on the UI owner with processing suspended. Every pointer outlives this
@@ -113,12 +112,12 @@ pub(crate) fn capture(
             plugin,
             instance.raw(),
             urid::map_ptr().cast(),
-            std::ptr::null(),
-            std::ptr::null(),
-            std::ptr::null(),
-            std::ptr::null(),
+            null(),
+            null(),
+            null(),
+            null(),
             Some(port_value),
-            std::ptr::from_ref(&context).cast_mut().cast(),
+            from_ref(&context).cast_mut().cast(),
             flags,
             feature_list.as_ptr().cast(),
         )
@@ -134,7 +133,7 @@ pub(crate) fn capture(
             urid::unmap_ptr().cast(),
             state,
             STATE_URI.as_ptr(),
-            std::ptr::null(),
+            null(),
         )
     };
     // SAFETY: The state is owned here and not used again.
@@ -253,11 +252,7 @@ pub(crate) fn restore(
         let features = [urid::map_feature(), urid::unmap_feature()];
         // State restore must not overlap a worker job.
         let _worker = instance.exclude_worker();
-        let feature_list = [
-            std::ptr::from_ref(&features[0]),
-            std::ptr::from_ref(&features[1]),
-            std::ptr::null(),
-        ];
+        let feature_list = [from_ref(&features[0]), from_ref(&features[1]), null()];
         // SAFETY: Runs on the UI owner with processing suspended; every pointer outlives this
         // synchronous call.
         unsafe {

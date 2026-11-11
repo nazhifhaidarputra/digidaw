@@ -69,9 +69,14 @@ const _channel = UiMixerChannel(
 );
 
 class _ProjectNotifier extends ProjectNotifier {
-  _ProjectNotifier({this.patterns = const IMapConst<int, UiPattern>({})});
+  _ProjectNotifier({
+    this.patterns = const IMapConst<int, UiPattern>({}),
+    this.generators = const IMapConst<int, UiGeneratorInstance>({}),
+  });
 
   final IMap<int, UiPattern> patterns;
+  final IMap<int, UiGeneratorInstance> generators;
+  final List<(int, String)> renames = [];
   final List<int> removedSources = [];
   final List<int> removedPatterns = [];
 
@@ -94,7 +99,7 @@ class _ProjectNotifier extends ProjectNotifier {
       cpuLoad: 0,
     ),
     tracks: _tracks.lock,
-    generators: const IMapConst({}),
+    generators: generators,
     patterns: patterns,
     mixer: UiMixerState.raw(
       channels: {},
@@ -106,6 +111,11 @@ class _ProjectNotifier extends ProjectNotifier {
     automationPool: const IMapConst<int, AutomationLaneDto>({}),
     modulationSources: const IMapConst<int, ModulationSourceDto>({}),
   );
+
+  @override
+  Future<void> renameGenerator(int generatorId, String displayName) async {
+    renames.add((generatorId, displayName));
+  }
 
   @override
   Future<Result<void>> removeAudioSource(int sourceId) async {
@@ -130,6 +140,54 @@ void main() {
   test('only clips of the pattern are counted', () {
     expect(patternClipCount(_tracks.values, _sourceId), 1);
     expect(patternClipCount(_tracks.values, 99), 0);
+  });
+
+  testWidgets('a renamed generator shows both names and the pencil renames', (
+    tester,
+  ) async {
+    final project = _ProjectNotifier(
+      generators: IMap({
+        3: const UiGeneratorInstance(
+          id: 3,
+          instanceType: UiGeneratorInstanceType.plugin(
+            UiPluginInstance(
+              registryId: 42,
+              name: 'Vital',
+              displayName: 'Lead 1',
+              label: 'Lead 1 (Vital)',
+              bypass: false,
+            ),
+          ),
+        ),
+      }),
+    );
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          projectProvider.overrideWith(() => project),
+          audioSourcesProvider.overrideWith((ref) async => const {}),
+        ],
+        child: const MaterialApp(home: SourceListScreen()),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('Lead 1 (Vital)'), findsOneWidget);
+
+    await tester.tap(find.byIcon(Icons.edit));
+    await tester.pumpAndSettle();
+    expect(find.text('Rename Vital'), findsOneWidget);
+    await tester.enterText(find.byType(TextFormField), 'Bass 2');
+    await tester.tap(find.widgetWithText(ElevatedButton, 'Rename'));
+    await tester.pumpAndSettle();
+    expect(project.renames, [(3, 'Bass 2')]);
+
+    // Emptying the field goes back to the plugin's own name.
+    await tester.tap(find.byIcon(Icons.edit));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextFormField), '   ');
+    await tester.tap(find.widgetWithText(ElevatedButton, 'Rename'));
+    await tester.pumpAndSettle();
+    expect(project.renames.last, (3, ''));
   });
 
   testWidgets('Delete asks first, then removes the audio source', (

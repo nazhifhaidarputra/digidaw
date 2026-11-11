@@ -3,6 +3,7 @@ use karbeat_plugin_api::{
     traits::{AudioPlugin, HashMap},
     types::{AudioBuffers, BusConfig, PluginCategory, ProcessContext},
 };
+use std::any::Any;
 
 /// Keeps a missing instrument silent or passes through a missing effect's main input.
 pub struct MissingPlugin {
@@ -60,7 +61,7 @@ impl AudioPlugin for MissingPlugin {
     fn get_parameter_specs(&self) -> Vec<ParameterSpec> {
         Vec::new()
     }
-    fn as_any(&self) -> &dyn std::any::Any {
+    fn as_any(&self) -> &dyn Any {
         self
     }
 }

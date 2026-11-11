@@ -39,10 +39,12 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
 
   // Local state for ghost clip
   Offset? _mousePos;
-  Offset? _lastRightClickPos;
 
   // LocalState for width
-  double _timelineWidth = 2000.0;
+  /// Pixel width of the scrollable timeline. A notifier so zooming and
+  /// scroll expansion resize the timeline without rebuilding the split view
+  /// (track headers, panels, every row).
+  final _timelineWidth = ValueNotifier<double>(2000.0);
 
   // ignore:unused_field
   StreamSubscription? _posSub;
@@ -152,6 +154,7 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
     _trackOrderController.dispose();
     _trackSplitViewController.dispose();
     _trackContentController.removeListener(_handleScrollExpansion);
+    _timelineWidth.dispose();
     _headerController.dispose();
     _timelineController.dispose();
     _rulerController.dispose();
@@ -185,9 +188,7 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
     final currentScroll = _trackContentController.offset;
 
     if (currentScroll >= maxScroll - 500) {
-      setState(() {
-        _timelineWidth += 2000.0;
-      });
+      _timelineWidth.value += 2000.0;
     }
   }
 
@@ -241,9 +242,7 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
 
     // Update the state immediately
     ref.read(workspaceStateProvider.notifier).setHorizontalZoom(clampedZoom);
-    setState(() {
-      _timelineWidth = newTimelineWidth;
-    });
+    _timelineWidth.value = newTimelineWidth;
 
     // Synchronous Jump
     // Because we are using UnclampedNeverScrollableScrollPhysics, this jump will
@@ -278,9 +277,17 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
   }
 
   /// Helper method to build the cut helper line
-  Widget _buildCutHelperLine(BuildContext context) {
+  Widget _buildCutHelperLine(BuildContext context, WidgetRef ref) {
     final colors = Theme.of(context).colorScheme;
-    final state = ref.watch(workspaceStateProvider);
+    final state = ref.watch(
+      workspaceStateProvider.select(
+        (state) => (
+          selectedTool: state.selectedTool,
+          horizontalZoomLevel: state.horizontalZoomLevel,
+          horizontalClipShiftSizeDenom: state.horizontalClipShiftSizeDenom,
+        ),
+      ),
+    );
     if (_mousePos == null || state.selectedTool != ToolSelection.slice) {
       return const SizedBox();
     }
@@ -355,7 +362,16 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
   }
 
   Widget _buildToolbar() {
-    final workspaceState = ref.watch(workspaceStateProvider);
+    final workspaceState = ref.watch(
+      workspaceStateProvider.select(
+        (state) => (
+          gridSize: state.gridSize,
+          isRightPanelExpanded: state.isRightPanelExpanded,
+          resizeStretches: state.resizeStretches,
+          horizontalClipShiftSizeDenom: state.horizontalClipShiftSizeDenom,
+        ),
+      ),
+    );
     final colors = Theme.of(context).colorScheme;
     return Container(
       height: 36,
@@ -437,21 +453,6 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
         ),
       ),
     );
-  }
-
-  /// Maps a Y offset (scroll offset included) to the index of the track
-  /// occupying it, taking per-track heights into account.
-  int _trackIndexAtY(double y) {
-    final trackListState = ref.read(trackListStateProvider);
-    final trackIds = _trackOrderController.value;
-    if (trackIds.isEmpty) return 0;
-    double top = 0;
-    for (var i = 0; i < trackIds.length; i++) {
-      final h = _trackHeightOf(trackListState, trackIds[i]);
-      if (y < top + h) return i;
-      top += h;
-    }
-    return trackIds.length - 1;
   }
 
   /// Effective arranger row height of a track, honoring shrunk tracks.
@@ -749,7 +750,7 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
     return Consumer(
       builder: (context, ref, _) {
         final colors = Theme.of(context).colorScheme;
-        final lanes = ref.watch(masterAutomationProvider).toIList();
+        final lanes = ref.watch(masterAutomationProvider);
         final isExpanded = ref
             .watch(automationProvider)
             .isMasterAutomationDrawerOpened;
@@ -804,12 +805,13 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
     final isPlacing = ref.watch(
       clipPlacementProvider.select((s) => s.isPlacing),
     );
-    final workspaceState = ref.watch(workspaceStateProvider);
-    final selectedTool = workspaceState.selectedTool;
-    final horizontalZoom = workspaceState.horizontalZoomLevel;
-    final selectedClipIds = ref.watch(
-      trackListStateProvider.select((s) => s.selectedClipIds),
+    final selectedTool = ref.watch(
+      workspaceStateProvider.select((state) => state.selectedTool),
     );
+    // Read at event time rather than watched: watching zoom here rebuilt the
+    // whole split view on every zoom step.
+    double currentZoom() =>
+        ref.read(workspaceStateProvider).horizontalZoomLevel;
     final bool isZooming = _isCtrlPressed || selectedTool == ToolSelection.zoom;
 
     MouseCursor handleCursor() {
@@ -826,19 +828,21 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
       children: [
         Column(
           children: [
-            _TimelineRulerBar(
-              scrollController: _rulerController,
-              timelineWidth: _timelineWidth,
-              physics: isZooming
-                  ? const UnclampedNeverScrollableScrollPhysics()
-                  : const ClampingScrollPhysics(),
-              onSeekTicks: _seekToTicks,
+            ValueListenableBuilder<double>(
+              valueListenable: _timelineWidth,
+              builder: (context, timelineWidth, _) => _TimelineRulerBar(
+                scrollController: _rulerController,
+                timelineWidth: timelineWidth,
+                physics: isZooming
+                    ? const UnclampedNeverScrollableScrollPhysics()
+                    : const ClampingScrollPhysics(),
+                onSeekTicks: _seekToTicks,
+              ),
             ),
             Expanded(
               child: MouseRegion(
                 cursor: handleCursor(),
                 onHover: (event) {
-                  _lastRightClickPos = event.localPosition;
                   if (selectedTool == ToolSelection.slice ||
                       selectedTool == ToolSelection.draw) {
                     setState(() => _mousePos = event.localPosition);
@@ -850,10 +854,8 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
                 },
                 child: Listener(
                   onPointerDown: (event) {
-                    _lastRightClickPos = event.localPosition;
                     _mousePos = event.localPosition;
                     if (event.buttons == kSecondaryButton) {
-                      _lastRightClickPos = event.localPosition;
                       ref
                           .read(trackListStateProvider.notifier)
                           .deselectAllClips();
@@ -863,14 +865,11 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
                   child: DawInputDetector(
                     onCtrlScroll: (delta, localPosition) {
                       final double multiplier = delta > 0 ? 0.9 : 1.1;
-                      _updateZoom(
-                        horizontalZoom * multiplier,
-                        localPosition.dx,
-                      );
+                      _updateZoom(currentZoom() * multiplier, localPosition.dx);
                     },
                     onPinchZoom: (details) {
                       _updateZoom(
-                        horizontalZoom * details.scale,
+                        currentZoom() * details.scale,
                         details.focalPoint.dx,
                       );
                     },
@@ -885,7 +884,7 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
                               ? 0.9
                               : 1.1;
                           _updateZoom(
-                            horizontalZoom * multiplier,
+                            currentZoom() * multiplier,
                             details.localPosition.dx,
                           );
                           return;
@@ -929,71 +928,30 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
                             physics: isZooming
                                 ? const UnclampedNeverScrollableScrollPhysics()
                                 : const ClampingScrollPhysics(),
-                            child: SizedBox(
-                              width: _timelineWidth,
+                            child: ValueListenableBuilder<double>(
+                              valueListenable: _timelineWidth,
+                              // The content is built once and passed through,
+                              // so a width change only relayouts it.
+                              builder: (context, width, content) =>
+                                  SizedBox(width: width, child: content),
                               child: ContextMenuWrapper(
                                 title: "Track Options",
                                 actions: [
                                   DawContextAction(
                                     title: "Paste",
                                     icon: Icons.paste,
+                                    // The track slot under the pointer
+                                    // records its own track and tick on
+                                    // pointer down (right click included).
+                                    // Deriving the track from the click's y
+                                    // missed automation rows and picked the
+                                    // wrong track.
                                     onTap: () async {
-                                      final targetPos = _lastRightClickPos;
-                                      if (targetPos == null) return;
-
-                                      double scrollY =
-                                          _timelineController.hasClients
-                                          ? _timelineController.offset
-                                          : 0;
-                                      double absoluteY = targetPos.dy + scrollY;
-
-                                      final trackIds =
-                                          _trackOrderController.value;
-                                      if (trackIds.isEmpty) return;
-                                      final trackIndex = _trackIndexAtY(
-                                        absoluteY,
-                                      );
-                                      final targetTrackId =
-                                          trackIds[trackIndex];
-                                      final track = ref
-                                          .read(projectProvider)
-                                          .value
-                                          ?.tracks[targetTrackId];
-                                      if (track == null) return;
-
-                                      double scrollX =
-                                          _trackContentController.hasClients
-                                          ? _trackContentController.offset
-                                          : 0;
-                                      double absoluteX =
-                                          (targetPos.dx + scrollX).clamp(
-                                            0,
-                                            double.infinity,
-                                          );
-                                      double ticks = absoluteX * horizontalZoom;
-
-                                      if (workspaceState.snapToGrid) {
-                                        ticks = _snapTick(
-                                          ticks.toInt(),
-                                          workspaceState,
-                                        ).toDouble();
-                                      }
-
-                                      final pasteStartTime = ticks.toInt();
-
                                       final result = await ref
                                           .read(trackListStateProvider.notifier)
-                                          .pasteClips(
-                                            targetTrackId: targetTrackId,
-                                            pasteStartTime: pasteStartTime,
-                                            trackType: track.trackType,
-                                          );
-
+                                          .pasteClipsAtLastClick();
                                       if (result.isOk()) {
                                         AppLogger.info("Paste clip");
-                                        setState(
-                                          () => _lastRightClickPos = null,
-                                        );
                                       }
                                     },
                                   ),
@@ -1036,76 +994,94 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
             scrollController: _trackContentController,
           ),
         ),
-        _buildCutHelperLine(context),
+        // Zoom-dependent overlays watch zoom themselves, so a zoom step
+        // rebuilds them and not the whole split view.
+        Consumer(
+          builder: (context, ref, _) => _buildCutHelperLine(context, ref),
+        ),
 
         Positioned.fill(
           child: IgnorePointer(
             ignoring: false,
-            child: PlayheadOverlay(
-              offsetAdjustment: 0.0,
-              scrollController: _trackContentController,
-              zoomLevel: horizontalZoom,
-              sampleSelector: (pos) => pos.ticks,
-              snapPosition: (ticks) => _snapTick(ticks, workspaceState),
-              onSeek: _seekToTicks,
+            child: Consumer(
+              builder: (context, ref, _) => PlayheadOverlay(
+                offsetAdjustment: 0.0,
+                scrollController: _trackContentController,
+                zoomLevel: ref.watch(
+                  workspaceStateProvider.select((s) => s.horizontalZoomLevel),
+                ),
+                sampleSelector: (pos) => pos.ticks,
+                snapPosition: (ticks) =>
+                    _snapTick(ticks, ref.read(workspaceStateProvider)),
+                onSeek: _seekToTicks,
+              ),
             ),
           ),
         ),
-
-        if (selectedClipIds.isNotEmpty)
-          FloatingContextPanel(
-            actions: [
-              DawContextAction(
-                title: "Copy",
-                icon: Icons.copy,
-                onTap: () async {
-                  final trackId = ref
-                      .read(trackListStateProvider)
-                      .selectedTrackId;
-                  if (trackId == null) return;
-                  await ref
-                      .read(trackListStateProvider.notifier)
-                      .copySelectedClips(
-                        trackId: trackId,
-                        clipIds: selectedClipIds.toList(),
-                      );
-                },
-              ),
-              DawContextAction(
-                title: "Cut",
-                icon: Icons.cut,
-                onTap: () async {
-                  final trackId = ref
-                      .read(trackListStateProvider)
-                      .selectedTrackId;
-                  if (trackId == null) return;
-                  await ref
-                      .read(trackListStateProvider.notifier)
-                      .cutSelectedClips(
-                        trackId: trackId,
-                        clipIds: selectedClipIds.toList(),
-                      );
-                  ref.read(trackListStateProvider.notifier).deselectAllClips();
-                },
-              ),
-              DawContextAction(
-                title: "Delete",
-                icon: Icons.delete,
-                isDestructive: true,
-                onTap: () async {
-                  ref
-                      .read(trackListStateProvider.notifier)
-                      .deleteSelectedClips();
-                  ref.read(trackListStateProvider.notifier).deselectAllClips();
-                },
-              ),
-            ],
-            onClose: () =>
-                ref.read(trackListStateProvider.notifier).deselectAllClips(),
-            title:
-                "${selectedClipIds.length} Clip${selectedClipIds.length == 1 ? '' : 's'}",
-          ),
       ],
+    );
+  }
+
+  /// Actions for the selected clips. It floats over the whole track list, so
+  /// resizing the split areas does not move it.
+  Widget _buildSelectionPanel() {
+    return Consumer(
+      builder: (context, ref, _) {
+        final selectedClipIds = ref.watch(
+          trackListStateProvider.select((s) => s.selectedClipIds),
+        );
+        if (selectedClipIds.isEmpty) return const SizedBox.shrink();
+        return FloatingContextPanel(
+          actions: [
+            DawContextAction(
+              title: "Copy",
+              icon: Icons.copy,
+              onTap: () async {
+                final trackId = ref
+                    .read(trackListStateProvider)
+                    .selectedTrackId;
+                if (trackId == null) return;
+                await ref
+                    .read(trackListStateProvider.notifier)
+                    .copySelectedClips(
+                      trackId: trackId,
+                      clipIds: selectedClipIds.toList(),
+                    );
+              },
+            ),
+            DawContextAction(
+              title: "Cut",
+              icon: Icons.cut,
+              onTap: () async {
+                final trackId = ref
+                    .read(trackListStateProvider)
+                    .selectedTrackId;
+                if (trackId == null) return;
+                await ref
+                    .read(trackListStateProvider.notifier)
+                    .cutSelectedClips(
+                      trackId: trackId,
+                      clipIds: selectedClipIds.toList(),
+                    );
+                ref.read(trackListStateProvider.notifier).deselectAllClips();
+              },
+            ),
+            DawContextAction(
+              title: "Delete",
+              icon: Icons.delete,
+              isDestructive: true,
+              onTap: () async {
+                ref.read(trackListStateProvider.notifier).deleteSelectedClips();
+                ref.read(trackListStateProvider.notifier).deselectAllClips();
+              },
+            ),
+          ],
+          onClose: () =>
+              ref.read(trackListStateProvider.notifier).deselectAllClips(),
+          title:
+              "${selectedClipIds.length} Clip${selectedClipIds.length == 1 ? '' : 's'}",
+        );
+      },
     );
   }
 
@@ -1183,7 +1159,7 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
   Widget _buildMasterTimelineAutomationLanes() {
     return Consumer(
       builder: (context, ref, _) {
-        final lanes = ref.watch(masterAutomationProvider).toIList();
+        final lanes = ref.watch(masterAutomationProvider);
         final isExpanded = ref
             .watch(automationProvider)
             .isMasterAutomationDrawerOpened;
@@ -1294,8 +1270,10 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
   Widget _buildBusAutomationHeaderSection() {
     return Consumer(
       builder: (context, ref, _) {
+        // Lock to an IMap so the select compares bus contents; a plain Map is
+        // compared by identity and is replaced on every mixer publish.
         final buses = ref.watch(
-          projectProvider.select((s) => s.value?.mixer.buses),
+          projectProvider.select((s) => s.value?.mixer.buses.lock),
         );
         if (buses == null || buses.isEmpty) {
           return const SliverToBoxAdapter(child: SizedBox.shrink());
@@ -1311,7 +1289,7 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
 
             return Consumer(
               builder: (context, ref, _) {
-                final lanes = ref.watch(busAutomationProvider(busId)).toIList();
+                final lanes = ref.watch(busAutomationProvider(busId));
                 final isExpanded = ref.watch(
                   busAutomationExpandedProvider(busId),
                 );
@@ -1362,8 +1340,10 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
   Widget _buildBusAutomationTimelineSection() {
     return Consumer(
       builder: (context, ref, _) {
+        // Lock to an IMap so the select compares bus contents; a plain Map is
+        // compared by identity and is replaced on every mixer publish.
         final buses = ref.watch(
-          projectProvider.select((s) => s.value?.mixer.buses),
+          projectProvider.select((s) => s.value?.mixer.buses.lock),
         );
         if (buses == null || buses.isEmpty) {
           return const SliverToBoxAdapter(child: SizedBox.shrink());
@@ -1380,7 +1360,7 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
 
             return Consumer(
               builder: (context, ref, _) {
-                final lanes = ref.watch(busAutomationProvider(busId)).toIList();
+                final lanes = ref.watch(busAutomationProvider(busId));
                 final isExpanded = ref.watch(
                   busAutomationExpandedProvider(busId),
                 );
@@ -1427,37 +1407,43 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
       children: [
         _buildToolbar(),
         Expanded(
-          child: MultiSplitViewTheme(
-            data: MultiSplitViewThemeData(
-              dividerPainter: DividerPainters.grooved1(
-                color: colors.outlineVariant,
-                highlightedColor: colors.primary,
-                thickness: 1,
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              MultiSplitViewTheme(
+                data: MultiSplitViewThemeData(
+                  dividerPainter: DividerPainters.grooved1(
+                    color: colors.outlineVariant,
+                    highlightedColor: colors.primary,
+                    thickness: 1,
+                  ),
+                ),
+                child: MultiSplitView(
+                  controller: _trackSplitViewController,
+                  areaClipBehavior: Clip.none,
+                  builder: (context, area) {
+                    switch (area.data) {
+                      case 'mixerPanel':
+                        return const MixerChannelSidePanel();
+                      case 'header':
+                        return _buildHeaderArea();
+                      case 'timeline':
+                        // Areas paint in reverse order, so without a clip the
+                        // playhead and cut line overflow onto the browser panel.
+                        return ClipRect(child: _buildTimelineArea(context));
+                      case 'rightPanel':
+                        return RightSidePanel(
+                          browserScrollController: _browserPanelController,
+                          sourceScrollController: _sourcePanelController,
+                        );
+                      default:
+                        return const SizedBox();
+                    }
+                  },
+                ),
               ),
-            ),
-            child: MultiSplitView(
-              controller: _trackSplitViewController,
-              areaClipBehavior: Clip.none,
-              builder: (context, area) {
-                switch (area.data) {
-                  case 'mixerPanel':
-                    return const MixerChannelSidePanel();
-                  case 'header':
-                    return _buildHeaderArea();
-                  case 'timeline':
-                    // Areas paint in reverse order, so without a clip the
-                    // playhead and cut line overflow onto the browser panel.
-                    return ClipRect(child: _buildTimelineArea(context));
-                  case 'rightPanel':
-                    return RightSidePanel(
-                      browserScrollController: _browserPanelController,
-                      sourceScrollController: _sourcePanelController,
-                    );
-                  default:
-                    return const SizedBox();
-                }
-              },
-            ),
+              _buildSelectionPanel(),
+            ],
           ),
         ),
       ],

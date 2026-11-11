@@ -74,15 +74,22 @@ class _ClipRenderer extends ConsumerWidget {
               padding: const EdgeInsets.symmetric(horizontal: 4),
               alignment: Alignment.centerLeft,
               color: headerColor,
-              child: Text(
-                clip.name,
-                style: TextStyle(
-                  color: headerForeground,
-                  fontSize: 10,
-                  fontWeight: FontWeight.w500,
-                ),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      clip.name,
+                      style: TextStyle(
+                        color: headerForeground,
+                        fontSize: 10,
+                        fontWeight: FontWeight.w500,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  if (_isLooping) _loopTag(headerForeground),
+                ],
               ),
             ),
 
@@ -106,18 +113,37 @@ class _ClipRenderer extends ConsumerWidget {
         borderRadius: BorderRadius.circular(3),
         border: isSelected ? Border.all(color: colors.primary, width: 2) : null,
       ),
-      child: Text(
-        clip.name,
-        style: TextStyle(
-          color: foreground,
-          fontSize: 10,
-          fontWeight: FontWeight.w600,
-        ),
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              clip.name,
+              style: TextStyle(
+                color: foreground,
+                fontSize: 10,
+                fontWeight: FontWeight.w600,
+              ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+          if (_isLooping) _loopTag(foreground),
+        ],
       ),
     );
   }
+
+  bool get _isLooping => clip.modulation?.looping.enabled ?? false;
+
+  /// Marks a clip that repeats, at the right end of its header.
+  Widget _loopTag(Color color) => Padding(
+    padding: const EdgeInsets.only(left: 4),
+    child: Text(
+      'loop',
+      maxLines: 1,
+      style: TextStyle(color: color, fontSize: 9, fontWeight: FontWeight.w700),
+    ),
+  );
 
   /// The clip's own envelope, in clip content samples at the project rate.
   Widget _buildClipEnvelope(
@@ -164,7 +190,7 @@ class _ClipRenderer extends ConsumerWidget {
     final envelope = ref.watch(
       projectProvider.select((s) => s.value?.sourceEnvelopes[sourceId]),
     );
-    final frames = handle.getLen() ~/ math.max(1, handle.getChannels());
+    final frames = handle.getPlayableLen() ~/ math.max(1, handle.getChannels());
     return GainEnvelopeEditor(
       envelope: envelope ?? identityEnvelope,
       axis: EnvelopeAxis(
@@ -176,6 +202,7 @@ class _ClipRenderer extends ConsumerWidget {
       maxCrossfade: frames ~/ 2,
       color: Colors.amber,
       interactive: envelopeInteractive,
+      canAddPoints: false,
       onCommit: (envelope) => ref
           .read(projectProvider.notifier)
           .setSourceEnvelope(sourceId, envelope),
@@ -183,10 +210,12 @@ class _ClipRenderer extends ConsumerWidget {
   }
 
   Widget _buildContent(BuildContext context, WidgetRef ref) {
-    final transportState = ref.watch(transportProvider).value?.state;
-    final projectState = ref.watch(projectProvider).value;
-    if (transportState == null || projectState == null) return const SizedBox();
-    final tempo = transportState.bpm;
+    // Select only the tempo: the whole transport store also carries playback
+    // state, so watching it would rebuild every clip on each transport change.
+    final tempo = ref.watch(
+      transportProvider.select((s) => s.value?.state?.bpm),
+    );
+    if (tempo == null) return const SizedBox();
 
     switch (clip.source) {
       case UiClipSource_Audio(:final sourceId):
@@ -219,7 +248,7 @@ class _ClipRenderer extends ConsumerWidget {
             size: Size.infinite,
             painter: StereoWaveformClipPainter(
               // Zero-copy: Float32List view directly into Rust-owned Mmap memory
-              samples: createZeroCopyWaveformView(handle),
+              samples: createPlayableWaveformView(handle),
               color: waveformColor,
               zoomLevel: zoomLevel,
               offsetTicks: effectiveOffsetTicks,
@@ -260,7 +289,9 @@ class _ClipRenderer extends ConsumerWidget {
           ],
         );
       case UiClipSource_Midi(:final patternId):
-        final pattern = projectState.patterns[patternId];
+        final pattern = ref.watch(
+          projectProvider.select((s) => s.value?.patterns[patternId]),
+        );
 
         if (pattern == null) {
           return Center(

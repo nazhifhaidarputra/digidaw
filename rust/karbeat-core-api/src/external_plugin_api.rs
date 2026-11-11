@@ -7,17 +7,24 @@ use karbeat_host::{
 
 use karbeat_audio::{
     commands::{AudioCommand, EffectTarget},
-    context::{ControlHandles, DawContext},
+    context::{ControlHandles, DawContext, HostedTargetState},
+    engine::PluginTelemetrySnapshot,
     event::PluginTarget,
     hosted_plugin::{
-        HostedInstallResult, HostedPluginInstall, HostedPluginReconfiguration,
-        HostedPluginReplacement, HostedTrackGraph, retire_control_transfer,
+        HostedInstallReceipt, HostedInstallResult, HostedPluginInstall,
+        HostedPluginReconfiguration, HostedPluginRemoval, HostedPluginReplacement,
+        HostedRemovalResult, HostedTrackGraph, retire_control_transfer,
     },
 };
-use karbeat_core::core::project::{
-    ApplicationState, AudioTrack, GeneratorInstanceType, TrackType,
-    mixer::{EffectInstance, MixerChannel},
-    plugin::{ExternalPluginInstance, PluginInstance},
+use karbeat_core::{
+    core::project::{
+        ApplicationState, AudioTrack, GeneratorInstanceType, RemovedModulations, TrackType,
+        mixer::{EffectInstance, MixerChannel},
+        plugin::{ExternalPluginInstance, PluginInstance},
+        track::RemovedTrackType,
+    },
+    heap::schedule_release_to_os,
+    shared::{BusId, EffectId, GeneratorId, TrackId},
 };
 
 pub enum HostedTargetLookup {
@@ -50,16 +57,14 @@ pub fn prepare_hosted_target(
         "External plugin is unavailable; retry loading it first"
     );
     match ctx.hosted_targets.get(&target) {
-        Some(karbeat_audio::context::HostedTargetState::Active(active)) => {
-            Ok(HostedTargetLookup::Resolved {
-                client: ctx.external_plugins.clone(),
-                instance: active.state().instance,
-            })
-        }
-        Some(karbeat_audio::context::HostedTargetState::Transitioning(_)) => {
+        Some(HostedTargetState::Active(active)) => Ok(HostedTargetLookup::Resolved {
+            client: ctx.external_plugins.clone(),
+            instance: active.state().instance,
+        }),
+        Some(HostedTargetState::Transitioning(_)) => {
             anyhow::bail!("External plugin lifecycle operation is in progress")
         }
-        Some(karbeat_audio::context::HostedTargetState::Failed(failed)) => {
+        Some(HostedTargetState::Failed(failed)) => {
             anyhow::bail!("External plugin is unavailable: {}", failed.state().reason)
         }
         None => Ok(HostedTargetLookup::Query {
@@ -85,7 +90,7 @@ pub fn resolve_hosted_target(lookup: HostedTargetLookup) -> anyhow::Result<Hoste
         } => Ok(HostedTargetAccess {
             instance: ExternalPluginInstanceHandle {
                 format,
-                id: super::project_api::hosted_instance_with_handles(&handles, target)?,
+                id: hosted_instance_with_handles(&handles, target)?,
             },
             client: handles.external_plugins,
         }),
@@ -93,24 +98,18 @@ pub fn resolve_hosted_target(lookup: HostedTargetLookup) -> anyhow::Result<Hoste
 }
 
 pub fn capabilities_for(access: HostedTargetAccess) -> anyhow::Result<HostCapabilities> {
-    Ok(futures_lite::future::block_on(
-        access.client.capabilities(access.instance),
-    )?)
+    Ok(block_on(access.client.capabilities(access.instance))?)
 }
 
 pub fn open_editor_for(access: HostedTargetAccess, context: String) -> anyhow::Result<()> {
-    Ok(futures_lite::future::block_on(access.client.open_editor(
-        OpenEditorRequest {
-            instance: access.instance,
-            context,
-        },
-    ))?)
+    Ok(block_on(access.client.open_editor(OpenEditorRequest {
+        instance: access.instance,
+        context,
+    }))?)
 }
 
 pub fn close_editor_for(access: HostedTargetAccess) -> anyhow::Result<()> {
-    Ok(futures_lite::future::block_on(
-        access.client.close_editor(access.instance),
-    )?)
+    Ok(block_on(access.client.close_editor(access.instance))?)
 }
 
 pub fn set_parameter_for(
@@ -118,13 +117,13 @@ pub fn set_parameter_for(
     parameter: u32,
     value: f64,
 ) -> anyhow::Result<()> {
-    Ok(futures_lite::future::block_on(
-        access.client.set_parameter(SetParameterRequest {
+    Ok(block_on(access.client.set_parameter(
+        SetParameterRequest {
             instance: access.instance,
             parameter,
             value,
-        }),
-    )?)
+        },
+    ))?)
 }
 
 pub fn parameter_text_for(
@@ -132,13 +131,13 @@ pub fn parameter_text_for(
     parameter: u32,
     value: f64,
 ) -> anyhow::Result<String> {
-    Ok(futures_lite::future::block_on(
-        access.client.parameter_text(ParameterTextRequest {
+    Ok(block_on(access.client.parameter_text(
+        ParameterTextRequest {
             instance: access.instance,
             parameter,
             value,
-        }),
-    )?)
+        },
+    ))?)
 }
 
 pub fn parse_parameter_for(
@@ -146,13 +145,13 @@ pub fn parse_parameter_for(
     parameter: u32,
     text: String,
 ) -> anyhow::Result<f64> {
-    Ok(futures_lite::future::block_on(
-        access.client.parse_parameter(ParseParameterRequest {
+    Ok(block_on(access.client.parse_parameter(
+        ParseParameterRequest {
             instance: access.instance,
             parameter,
             text,
-        }),
-    )?)
+        },
+    ))?)
 }
 
 pub fn convert_parameter_for(
@@ -161,14 +160,14 @@ pub fn convert_parameter_for(
     value: f64,
     to_normalized: bool,
 ) -> anyhow::Result<f64> {
-    Ok(futures_lite::future::block_on(
-        access.client.convert_parameter(ConvertParameterRequest {
+    Ok(block_on(access.client.convert_parameter(
+        ConvertParameterRequest {
             instance: access.instance,
             parameter,
             value,
             to_normalized,
-        }),
-    )?)
+        },
+    ))?)
 }
 
 fn channel_mut<'a>(
@@ -200,8 +199,16 @@ pub enum InstalledPlugin {
 enum PendingInstallTarget {
     Instrument,
     /// Replaces the built-in generator of an existing MIDI track, if it has one.
-    ReplaceInstrument(karbeat_core::shared::TrackId),
+    ReplaceInstrument(TrackId),
     Effect(EffectTarget),
+}
+
+/// Saved settings an install starts from. The default is a fresh plugin.
+#[derive(Default)]
+struct InstallPreset {
+    state: Option<karbeat_host::PluginState>,
+    bypass: bool,
+    display_name: Option<String>,
 }
 
 pub struct PendingPluginInstall {
@@ -211,19 +218,23 @@ pub struct PendingPluginInstall {
     config: ProcessingConfig,
     target: PendingInstallTarget,
     handles: ControlHandles,
+    preset: InstallPreset,
 }
 
 pub struct CompletedPluginInstall {
     staged: ApplicationState,
     target: PluginTarget,
-    telemetry: Option<triple_buffer::Output<karbeat_audio::engine::PluginTelemetrySnapshot>>,
+    telemetry: Option<triple_buffer::Output<PluginTelemetrySnapshot>>,
     installed: InstalledPlugin,
     instance: ExternalPluginInstanceHandle,
     /// Built-in generator the install replaced, retired from the audio thread on commit.
-    replaced_generator: Option<karbeat_core::shared::GeneratorId>,
+    replaced_generator: Option<GeneratorId>,
 }
 
+use super::project_api::hosted_instance_with_handles;
+use futures_lite::future::block_on;
 pub(crate) use karbeat_audio::hosted_plugin::hosted_processing_config;
+use std::mem::take;
 
 fn begin_install(
     ctx: &DawContext,
@@ -263,6 +274,7 @@ fn begin_install(
         config,
         target,
         handles: ctx.control_handles(),
+        preset: InstallPreset::default(),
     })
 }
 
@@ -284,7 +296,7 @@ pub fn begin_add_instrument(
 /// [`begin_remove_generator`]; a built-in one is retired when the install commits.
 pub fn begin_replace_instrument(
     ctx: &DawContext,
-    track: karbeat_core::shared::TrackId,
+    track: TrackId,
     registry_id: u32,
 ) -> anyhow::Result<PendingPluginInstall> {
     let current = ctx
@@ -320,10 +332,37 @@ pub fn begin_add_effect(
     )
 }
 
+/// Prepares to append an external effect saved in a channel template, with its saved state.
+///
+/// The plugin is found by its identity, because catalog IDs are local to one machine. Fails when
+/// it is not installed here.
+pub fn begin_add_template_effect(
+    ctx: &DawContext,
+    target: EffectTarget,
+    saved: &PluginInstance,
+) -> anyhow::Result<PendingPluginInstall> {
+    let external = saved
+        .external
+        .as_ref()
+        .context("Saved effect is not an external plugin")?;
+    let registry_id = ctx
+        .plugin_catalog
+        .resolve(&external.descriptor.identity)
+        .with_context(|| format!("{} is not installed on this computer", saved.name))?
+        .id;
+    let mut pending = begin_add_effect(ctx, target, registry_id)?;
+    pending.preset = InstallPreset {
+        state: external.state.clone(),
+        bypass: saved.bypass,
+        display_name: saved.display_name.clone(),
+    };
+    Ok(pending)
+}
+
 fn wait_for_install(
-    mut receipt: karbeat_audio::hosted_plugin::HostedInstallReceipt,
-) -> anyhow::Result<Option<triple_buffer::Output<karbeat_audio::engine::PluginTelemetrySnapshot>>> {
-    match futures_lite::future::block_on(receipt.wait())? {
+    mut receipt: HostedInstallReceipt,
+) -> anyhow::Result<Option<triple_buffer::Output<PluginTelemetrySnapshot>>> {
+    match block_on(receipt.wait())? {
         HostedInstallResult::Installed => Ok(receipt.take_telemetry()),
         result => anyhow::bail!("Audio engine rejected plugin installation: {result:?}"),
     }
@@ -332,23 +371,24 @@ fn wait_for_install(
 pub fn execute_install(
     mut pending: PendingPluginInstall,
 ) -> anyhow::Result<CompletedPluginInstall> {
-    let prepared =
-        futures_lite::future::block_on(pending.handles.external_plugins.prepare(PrepareRequest {
-            descriptor: pending.descriptor.clone(),
-            config: pending.config.clone(),
-            state: None,
-        }))?;
+    let prepared = block_on(pending.handles.external_plugins.prepare(PrepareRequest {
+        descriptor: pending.descriptor.clone(),
+        config: pending.config.clone(),
+        state: pending.preset.state.take(),
+    }))?;
     let instance = prepared.instance;
+    let bypass = pending.preset.bypass;
     let plugin = PluginInstance {
         registry_id: pending.registry_id,
         name: pending.descriptor.name.clone(),
-        bypass: false,
+        bypass,
         parameter_specs: prepared.parameters.clone(),
         plugin_state: Vec::new(),
         external: Some(ExternalPluginInstance {
             descriptor: pending.descriptor,
             state: Some(prepared.state.clone()),
         }),
+        display_name: pending.preset.display_name.take(),
     };
 
     let mut replaced_generator = None;
@@ -433,11 +473,15 @@ pub fn execute_install(
                 pending.config,
                 prepared.processor,
             );
-            (InstalledPlugin::Effect(effect), install, receipt)
+            (
+                InstalledPlugin::Effect(effect),
+                install.with_bypass(bypass),
+                receipt,
+            )
         }
     };
 
-    futures_lite::future::block_on(pending.handles.external_plugins.resume(instance))?;
+    block_on(pending.handles.external_plugins.resume(instance))?;
     let target = install.target;
     let (command, mut control_retirement) = karbeat_host::ControlTransfer::new(install);
     {
@@ -466,7 +510,7 @@ pub fn commit_install(ctx: &mut DawContext, completed: CompletedPluginInstall) -
     {
         registry.insert_plugin_consumer(completed.target, output);
     }
-    let session = std::mem::take(&mut ctx.app_state.session);
+    let session = take(&mut ctx.app_state.session);
     ctx.app_state = completed.staged;
     ctx.app_state.session = session;
     ctx.mark_project_modified();
@@ -514,8 +558,8 @@ pub fn add_effect(
 
 pub enum RemovedProjectItem {
     /// Automation that was removed with the effect in the same staged project.
-    Effect(karbeat_core::core::project::RemovedModulations),
-    Track(karbeat_core::core::project::track::RemovedTrackType),
+    Effect(RemovedModulations),
+    Track(RemovedTrackType),
     /// A generator taken off a track that stays in the project.
     Generator,
     Bus,
@@ -525,7 +569,7 @@ pub struct PendingPluginRemoval {
     staged: ApplicationState,
     targets: Vec<(PluginTarget, bool)>,
     graph: Option<HostedTrackGraph>,
-    bus: Option<karbeat_core::shared::BusId>,
+    bus: Option<BusId>,
     handles: ControlHandles,
     removed: RemovedProjectItem,
 }
@@ -541,7 +585,7 @@ fn begin_removal(
     staged: ApplicationState,
     targets: Vec<PluginTarget>,
     changes_graph: bool,
-    bus: Option<karbeat_core::shared::BusId>,
+    bus: Option<BusId>,
     removed: RemovedProjectItem,
 ) -> PendingPluginRemoval {
     let targets = targets
@@ -566,7 +610,7 @@ fn begin_removal(
 pub fn begin_remove_effect(
     ctx: &DawContext,
     target: EffectTarget,
-    effect: karbeat_core::shared::EffectId,
+    effect: EffectId,
 ) -> anyhow::Result<PendingPluginRemoval> {
     let mut staged = ctx.app_state.clone();
     channel_mut(&mut staged, &target)?
@@ -593,7 +637,7 @@ pub fn begin_remove_effect(
 
 pub fn begin_delete_track(
     ctx: &DawContext,
-    track: karbeat_core::shared::TrackId,
+    track: TrackId,
 ) -> anyhow::Result<PendingPluginRemoval> {
     let targets = track_targets(ctx, track);
     let mut staged = ctx.app_state.clone();
@@ -612,7 +656,7 @@ pub fn begin_delete_track(
 /// another generator can replace it.
 pub fn begin_remove_generator(
     ctx: &DawContext,
-    track: karbeat_core::shared::TrackId,
+    track: TrackId,
 ) -> anyhow::Result<PendingPluginRemoval> {
     let mut staged = ctx.app_state.clone();
     let generator = staged
@@ -628,10 +672,7 @@ pub fn begin_remove_generator(
     ))
 }
 
-pub fn begin_delete_bus(
-    ctx: &DawContext,
-    bus: karbeat_core::shared::BusId,
-) -> anyhow::Result<PendingPluginRemoval> {
+pub fn begin_delete_bus(ctx: &DawContext, bus: BusId) -> anyhow::Result<PendingPluginRemoval> {
     let targets = bus_targets(ctx, bus);
     let mut staged = ctx.app_state.clone();
     staged.mixer.remove_bus(bus)?;
@@ -646,15 +687,10 @@ pub fn begin_delete_bus(
 }
 
 pub fn execute_removal(pending: PendingPluginRemoval) -> anyhow::Result<CompletedPluginRemoval> {
-    use karbeat_audio::hosted_plugin::{HostedPluginRemoval, HostedRemovalResult};
-
     let mut expected = Vec::with_capacity(pending.targets.len());
     for (target, active) in &pending.targets {
         let instance = if *active {
-            Some(super::project_api::hosted_instance_with_handles(
-                &pending.handles,
-                *target,
-            )?)
+            Some(hosted_instance_with_handles(&pending.handles, *target)?)
         } else {
             None
         };
@@ -672,7 +708,7 @@ pub fn execute_removal(pending: PendingPluginRemoval) -> anyhow::Result<Complete
             .push(AudioCommand::RemoveHostedPlugins(transfer))
             .map_err(|_| anyhow::anyhow!("Audio command queue is full"))?;
     }
-    let result = futures_lite::future::block_on(receipt.wait());
+    let result = block_on(receipt.wait());
     retire_control_transfer(&mut control_retirement, "Hosted removal");
     match result? {
         HostedRemovalResult::Removed => {}
@@ -698,14 +734,14 @@ pub fn commit_removal(
         ctx.external_plugin_failures.remove(&target);
         ctx.hosted_targets.remove(&target);
     }
-    let session = std::mem::take(&mut ctx.app_state.session);
+    let session = take(&mut ctx.app_state.session);
     ctx.app_state = completed.staged;
     ctx.app_state.session = session;
     ctx.mark_project_modified();
     // Not undoable: hosted native instances cannot be rebuilt from history.
     ctx.clear_history();
     // Removed native plugin instances are torn down shortly after their endpoints retire.
-    karbeat_core::heap::schedule_release_to_os();
+    schedule_release_to_os();
     completed.removed
 }
 
@@ -867,17 +903,15 @@ pub fn set_parameter(
 pub fn remove_effect(
     ctx: &mut DawContext,
     target: EffectTarget,
-    effect: karbeat_core::shared::EffectId,
-) -> anyhow::Result<karbeat_core::core::project::RemovedModulations> {
+    effect: EffectId,
+) -> anyhow::Result<RemovedModulations> {
     let pending = begin_remove_effect(ctx, target, effect)?;
     let completed = execute_removal(pending)?;
     effect_removal_result(commit_removal(ctx, completed))
 }
 
 /// Extracts the removed automation from a committed effect removal.
-pub fn effect_removal_result(
-    removed: RemovedProjectItem,
-) -> anyhow::Result<karbeat_core::core::project::RemovedModulations> {
+pub fn effect_removal_result(removed: RemovedProjectItem) -> anyhow::Result<RemovedModulations> {
     match removed {
         RemovedProjectItem::Effect(modulations) => Ok(modulations),
         RemovedProjectItem::Track(_) | RemovedProjectItem::Generator | RemovedProjectItem::Bus => {
@@ -886,7 +920,7 @@ pub fn effect_removal_result(
     }
 }
 
-pub fn track_targets(ctx: &DawContext, track: karbeat_core::shared::TrackId) -> Vec<PluginTarget> {
+pub fn track_targets(ctx: &DawContext, track: TrackId) -> Vec<PluginTarget> {
     let mut targets = Vec::new();
     if let Some(generator) = ctx
         .app_state
@@ -909,10 +943,7 @@ pub fn track_targets(ctx: &DawContext, track: karbeat_core::shared::TrackId) -> 
 }
 
 /// Removes a track and all hosted plugins owned by it as one staged lifecycle operation.
-pub fn delete_track(
-    ctx: &mut DawContext,
-    track: karbeat_core::shared::TrackId,
-) -> anyhow::Result<karbeat_core::core::project::track::RemovedTrackType> {
+pub fn delete_track(ctx: &mut DawContext, track: TrackId) -> anyhow::Result<RemovedTrackType> {
     let pending = begin_delete_track(ctx, track)?;
     let completed = execute_removal(pending)?;
     match commit_removal(ctx, completed) {
@@ -977,7 +1008,7 @@ pub fn failure(ctx: &DawContext, target: PluginTarget) -> Option<String> {
 
 pub struct PendingPluginRetry {
     target: PluginTarget,
-    track: Option<karbeat_core::shared::TrackId>,
+    track: Option<TrackId>,
     registry_id: u32,
     bypass: bool,
     descriptor: karbeat_host::PluginDescriptor,
@@ -989,7 +1020,7 @@ pub struct PendingPluginRetry {
 pub struct CompletedPluginRetry {
     target: PluginTarget,
     instance: ExternalPluginInstanceHandle,
-    telemetry: Option<triple_buffer::Output<karbeat_audio::engine::PluginTelemetrySnapshot>>,
+    telemetry: Option<triple_buffer::Output<PluginTelemetrySnapshot>>,
 }
 
 pub fn begin_retry(ctx: &DawContext, target: PluginTarget) -> anyhow::Result<PendingPluginRetry> {
@@ -1041,12 +1072,11 @@ pub fn begin_retry(ctx: &DawContext, target: PluginTarget) -> anyhow::Result<Pen
 }
 
 pub fn execute_retry(pending: PendingPluginRetry) -> anyhow::Result<CompletedPluginRetry> {
-    let prepared =
-        futures_lite::future::block_on(pending.handles.external_plugins.prepare(PrepareRequest {
-            descriptor: pending.descriptor,
-            config: pending.config.clone(),
-            state: pending.state,
-        }))?;
+    let prepared = block_on(pending.handles.external_plugins.prepare(PrepareRequest {
+        descriptor: pending.descriptor,
+        config: pending.config.clone(),
+        state: pending.state,
+    }))?;
     let instance = prepared.instance;
     let (install, receipt) = HostedPluginInstall::new(
         pending.target,
@@ -1055,7 +1085,7 @@ pub fn execute_retry(pending: PendingPluginRetry) -> anyhow::Result<CompletedPlu
         pending.config,
         prepared.processor,
     );
-    futures_lite::future::block_on(pending.handles.external_plugins.resume(instance))?;
+    block_on(pending.handles.external_plugins.resume(instance))?;
     let (command, mut control_retirement) =
         karbeat_host::ControlTransfer::new(install.replacing_missing().with_bypass(pending.bypass));
     {
@@ -1211,22 +1241,20 @@ pub fn execute_reconfiguration(
     let mut replacements = Vec::with_capacity(pending.targets.len());
     let mut states = Vec::with_capacity(pending.targets.len());
     for item in pending.targets {
-        let current =
-            super::project_api::hosted_instance_with_handles(&pending.handles, item.target)?;
+        let current = hosted_instance_with_handles(&pending.handles, item.target)?;
         let current_handle = ExternalPluginInstanceHandle {
             format: item.format,
             id: current,
         };
-        let prepared =
-            futures_lite::future::block_on(pending.handles.external_plugins.reconfigure(
-                ReconfigureRequest {
-                    instance: current_handle,
-                    sample_rate: pending.sample_rate,
-                    max_block_size: pending.block_size.max(512),
-                },
-            ))?;
+        let prepared = block_on(pending.handles.external_plugins.reconfigure(
+            ReconfigureRequest {
+                instance: current_handle,
+                sample_rate: pending.sample_rate,
+                max_block_size: pending.block_size.max(512),
+            },
+        ))?;
         let instance = prepared.instance;
-        futures_lite::future::block_on(pending.handles.external_plugins.resume(instance))?;
+        block_on(pending.handles.external_plugins.resume(instance))?;
         let mut config = hosted_processing_config(item.kind, f64::from(pending.sample_rate));
         config.max_block_size = config.max_block_size.max(pending.block_size);
         states.push((item.target, prepared.state.clone(), instance));
@@ -1279,7 +1307,7 @@ pub(crate) fn reconfigure_for_audio_config(
     Ok(())
 }
 
-pub fn bus_targets(ctx: &DawContext, bus: karbeat_core::shared::BusId) -> Vec<PluginTarget> {
+pub fn bus_targets(ctx: &DawContext, bus: BusId) -> Vec<PluginTarget> {
     ctx.app_state
         .mixer
         .buses
@@ -1296,7 +1324,7 @@ pub fn bus_targets(ctx: &DawContext, bus: karbeat_core::shared::BusId) -> Vec<Pl
 }
 
 /// Removes a mixer bus and retires every external effect hosted by that bus before committing state.
-pub fn delete_bus(ctx: &mut DawContext, bus: karbeat_core::shared::BusId) -> anyhow::Result<()> {
+pub fn delete_bus(ctx: &mut DawContext, bus: BusId) -> anyhow::Result<()> {
     let pending = begin_delete_bus(ctx, bus)?;
     let completed = execute_removal(pending)?;
     let _ = commit_removal(ctx, completed);

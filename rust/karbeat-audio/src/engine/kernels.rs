@@ -2,6 +2,7 @@
 
 use karbeat_plugin_types::{Param, SmoothableParam};
 use rodio::math::db_to_linear;
+use std::f32::consts::LN_10;
 use wide::f32x8;
 
 /// Adds `src * gain` to `dst`.
@@ -78,7 +79,7 @@ pub fn apply_fader(
     }
 
     /// Natural logarithm of ten over twenty: decibels to the exponent of `e`.
-    const DB_TO_NEPER: f32 = std::f32::consts::LN_10 / 20.0;
+    const DB_TO_NEPER: f32 = LN_10 / 20.0;
     let (chunks, rest) = buffer.as_chunks_mut::<16>();
     let mut peak = 0.0_f32;
     for chunk in chunks {

@@ -2,6 +2,7 @@ use anyhow::Context;
 use karbeat_plugin_types::{ParameterSpec, ParameterValueType};
 use karbeat_utils::types::{BipolarF64, NormalizedF64};
 
+use crate::plugin_api::get_plugin_parameter_specs;
 use karbeat_audio::{commands::AudioCommand, context::DawContext, engine::AudioMixerChannelValues};
 use karbeat_core::{
     core::{
@@ -16,6 +17,7 @@ use karbeat_core::{
     },
     shared::{AutomationId, BusId, ModulationId, ModulationLinkId, TrackId},
 };
+use std::{collections::HashMap, hash::Hash};
 
 /// Get all automations lane for all types
 pub fn get_automations_lanes_all<C, U, M>(ctx: &DawContext, mapper: M) -> C
@@ -361,7 +363,7 @@ fn plugin_parameter_spec(
     let plugin = target
         .as_plugin_target()
         .ok_or_else(|| anyhow::anyhow!("{target:?} is not a plugin parameter"))?;
-    crate::plugin_api::get_plugin_parameter_specs(ctx, &plugin, |spec, _| spec)?
+    get_plugin_parameter_specs(ctx, &plugin, |spec, _| spec)?
         .into_iter()
         .find(|spec| spec.id == param_id)
         .ok_or_else(|| anyhow::anyhow!("Parameter {param_id} not found for {target:?}"))
@@ -493,16 +495,10 @@ pub fn get_automation_lane<Id: Into<AutomationId>>(
 
 /// Get all modulations in the project
 /// Maps every modulation link whose source matches the supplied modulation identifier.
-pub fn get_all_linked_modulation_params<Id, T, F>(
-    ctx: &DawContext,
-    f: F,
-) -> std::collections::HashMap<Id, T>
+pub fn get_all_linked_modulation_params<Id, T, F>(ctx: &DawContext, f: F) -> HashMap<Id, T>
 where
-    Id: std::hash::Hash + std::cmp::Eq,
-    F: Fn(
-        &ModulationLinkId,
-        &karbeat_core::core::project::ModulationLinkForOrderedLaneView,
-    ) -> (Id, T),
+    Id: Hash + Eq,
+    F: Fn(&ModulationLinkId, &ModulationLinkForOrderedLaneView) -> (Id, T),
 {
     let app = &ctx.app_state;
     app.modulation_links

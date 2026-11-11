@@ -6,6 +6,7 @@ use karbeat_core::{
     core::project::{AudioTrack, Clip, ClipTimeUnit, TickScale},
     shared::ClipId,
 };
+use std::ops::Range;
 
 /// Clip spans of every track in project samples at one tempo.
 ///
@@ -67,12 +68,7 @@ impl ClipSchedule {
     /// Indices into the clip list of track `track_index` that can overlap the samples
     /// `start_time..=end_time`. Clips before the range all end before `start_time`; the range
     /// stops at the first clip that starts after `end_time`.
-    pub fn candidates(
-        &self,
-        track_index: usize,
-        start_time: u32,
-        end_time: u32,
-    ) -> std::ops::Range<usize> {
+    pub fn candidates(&self, track_index: usize, start_time: u32, end_time: u32) -> Range<usize> {
         let Some(spans) = self.tracks.get(track_index) else {
             return 0..0;
         };
@@ -156,6 +152,7 @@ mod tests {
                         offset_start: 0,
                     },
                     envelope: None,
+                    modulation: None,
                 })
             })
             .collect();

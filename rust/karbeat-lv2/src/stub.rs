@@ -5,7 +5,9 @@ use karbeat_host_api::{
     HostError, OfflinePrepareRequest, OpenEditorRequest, ParameterTextRequest,
     ParseParameterRequest, PluginFormat, PluginFormatExecutor, PluginState, PrepareRequest,
     PreparedExternalPlugin, ReconfigureRequest, ScanRequest, SetParameterRequest,
+    scanner::ScanResult,
 };
+use std::path::PathBuf;
 
 /// Statically dispatched LV2 executor.
 #[derive(Clone, Copy, Debug, Default)]
@@ -23,13 +25,10 @@ impl PluginFormatExecutor for Lv2Executor {
     fn format(&self) -> PluginFormat {
         PluginFormat::Lv2
     }
-    fn default_scan_paths(&self) -> Vec<std::path::PathBuf> {
+    fn default_scan_paths(&self) -> Vec<PathBuf> {
         Vec::new()
     }
-    async fn scan(
-        &self,
-        _: ScanRequest,
-    ) -> Result<karbeat_host_api::scanner::ScanResult, HostError> {
+    async fn scan(&self, _: ScanRequest) -> Result<ScanResult, HostError> {
         Self::unsupported()
     }
     async fn prepare(&self, _: PrepareRequest) -> Result<PreparedExternalPlugin, HostError> {

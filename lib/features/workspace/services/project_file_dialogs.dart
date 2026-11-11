@@ -20,6 +20,15 @@ const karbeatProjectTypeGroup = XTypeGroup(
   extensions: <String>[karbeatProjectExtension],
 );
 
+/// File extension for mixer channel templates.
+const channelTemplateExtension = 'effch';
+
+/// Channel template save filter.
+const channelTemplateTypeGroup = XTypeGroup(
+  label: 'Channel Template (.effch)',
+  extensions: <String>[channelTemplateExtension],
+);
+
 const _projectOpenTypeGroups = <XTypeGroup>[
   dgdawProjectTypeGroup,
   karbeatProjectTypeGroup,
@@ -44,12 +53,14 @@ bool isSupportedProjectFile(String path) {
       lower.endsWith('.$karbeatProjectExtension');
 }
 
-/// Opens the project chooser, restricted to supported project files.
+/// Opens the project chooser, restricted to supported project files and
+/// starting in [initialDirectory] when given.
 ///
 /// Returns `null` when the user cancels.
-Future<String?> pickProjectFileToOpen() async {
+Future<String?> pickProjectFileToOpen({String? initialDirectory}) async {
   if (!_usesDesktopTypeLabels) {
     final result = await picker.FilePicker.pickFiles(
+      initialDirectory: initialDirectory,
       type: picker.FileType.custom,
       allowedExtensions: <String>[
         dgdawProjectExtension,
@@ -63,6 +74,7 @@ Future<String?> pickProjectFileToOpen() async {
 
   final file = await openFile(
     acceptedTypeGroups: _projectOpenTypeGroups,
+    initialDirectory: initialDirectory,
     confirmButtonText: 'Open',
   );
   if (file == null) return null;
@@ -70,12 +82,14 @@ Future<String?> pickProjectFileToOpen() async {
   return isSupportedProjectFile(path) ? path : null;
 }
 
-/// Opens the save chooser and returns a path ending in `.dgdaw`.
+/// Opens the save chooser, starting in [initialDirectory] when given, and
+/// returns a path ending in `.dgdaw`.
 ///
 /// Returns `null` when the user cancels.
-Future<String?> pickProjectFileToSave() async {
+Future<String?> pickProjectFileToSave({String? initialDirectory}) async {
   if (!_usesDesktopTypeLabels) {
     final path = await picker.FilePicker.saveFile(
+      initialDirectory: initialDirectory,
       fileName: 'untitled.$dgdawProjectExtension',
       type: picker.FileType.custom,
       allowedExtensions: const <String>[dgdawProjectExtension],
@@ -85,6 +99,7 @@ Future<String?> pickProjectFileToSave() async {
 
   final location = await getSaveLocation(
     acceptedTypeGroups: const <XTypeGroup>[dgdawProjectTypeGroup],
+    initialDirectory: initialDirectory,
     suggestedName: 'untitled.$dgdawProjectExtension',
     confirmButtonText: 'Save',
   );
@@ -103,18 +118,20 @@ XTypeGroup audioExportTypeGroup(String extension) {
   );
 }
 
-/// Opens the export save chooser locked to [extension] and returns a matching
-/// path.
+/// Opens the export save chooser locked to [extension], starting in
+/// [initialDirectory] when given, and returns a matching path.
 ///
 /// Returns `null` when the user cancels.
 Future<String?> pickAudioExportFileToSave({
   required String fileName,
   required String extension,
+  String? initialDirectory,
 }) async {
   final normalizedExtension = extension.toLowerCase();
   final suggestedName = withFileExtension(fileName, normalizedExtension);
   if (!_usesDesktopTypeLabels) {
     final path = await picker.FilePicker.saveFile(
+      initialDirectory: initialDirectory,
       fileName: suggestedName,
       type: picker.FileType.custom,
       allowedExtensions: <String>[normalizedExtension],
@@ -124,11 +141,65 @@ Future<String?> pickAudioExportFileToSave({
 
   final location = await getSaveLocation(
     acceptedTypeGroups: <XTypeGroup>[audioExportTypeGroup(normalizedExtension)],
+    initialDirectory: initialDirectory,
     suggestedName: suggestedName,
     confirmButtonText: 'Export',
   );
   if (location == null) return null;
   return withFileExtension(location.path, normalizedExtension);
+}
+
+/// Suggested file name for a template of the channel called [channelName].
+///
+/// Characters that file systems reject in a name are replaced.
+String channelTemplateFileName(String channelName) {
+  final name = channelName.replaceAll(RegExp(r'[/\\:*?"<>|]'), '_');
+  return '$name.$channelTemplateExtension';
+}
+
+/// Opens the save chooser for a channel template and returns a path ending in
+/// `.effch`.
+///
+/// Returns `null` when the user cancels.
+Future<String?> pickChannelTemplateFileToSave(String channelName) async {
+  final suggestedName = channelTemplateFileName(channelName);
+  if (!_usesDesktopTypeLabels) {
+    final path = await picker.FilePicker.saveFile(
+      fileName: suggestedName,
+      type: picker.FileType.custom,
+      allowedExtensions: const <String>[channelTemplateExtension],
+    );
+    return path == null
+        ? null
+        : withFileExtension(path, channelTemplateExtension);
+  }
+
+  final location = await getSaveLocation(
+    acceptedTypeGroups: const <XTypeGroup>[channelTemplateTypeGroup],
+    suggestedName: suggestedName,
+    confirmButtonText: 'Save',
+  );
+  if (location == null) return null;
+  return withFileExtension(location.path, channelTemplateExtension);
+}
+
+/// Opens the chooser for a channel template to load.
+///
+/// Returns `null` when the user cancels.
+Future<String?> pickChannelTemplateFileToOpen() async {
+  if (!_usesDesktopTypeLabels) {
+    final result = await picker.FilePicker.pickFiles(
+      type: picker.FileType.custom,
+      allowedExtensions: const <String>[channelTemplateExtension],
+    );
+    return result?.files.single.path;
+  }
+
+  final file = await openFile(
+    acceptedTypeGroups: const <XTypeGroup>[channelTemplateTypeGroup],
+    confirmButtonText: 'Open',
+  );
+  return file?.path;
 }
 
 /// [path] with exactly [extension] as its final extension.
