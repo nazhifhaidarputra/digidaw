@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use crate::api::context::DawContext;
+use crate::api::context::{DawContext, project_ctx, read_ctx};
 use crate::api::project::UiApplicationState;
 use flutter_rust_bridge::frb;
 use karbeat_core::core::project::{
@@ -107,7 +107,7 @@ impl From<&Pattern> for UiPattern {
 }
 
 pub fn get_pattern(ctx: &DawContext, pattern_id: u64) -> Result<UiPattern, String> {
-    crate::api::context::read_ctx!(ctx);
+    read_ctx!(ctx);
     let pattern_id = PatternId::from_u64(pattern_id);
     let pattern = pattern_api::get_pattern(ctx, &pattern_id).map_err(|e| e.to_string())?;
     let pattern_ui = UiPattern::from(&pattern);
@@ -115,14 +115,14 @@ pub fn get_pattern(ctx: &DawContext, pattern_id: u64) -> Result<UiPattern, Strin
 }
 
 pub fn get_patterns(ctx: &DawContext) -> Result<HashMap<u64, UiPattern>, String> {
-    crate::api::context::read_ctx!(ctx);
+    read_ctx!(ctx);
     let patterns = pattern_api::get_patterns(ctx, |id, pattern| (id, UiPattern::from(pattern)))
         .map_err(|e| e.to_string())?;
     Ok(patterns)
 }
 
 pub fn rename_pattern(ctx: &DawContext, pattern_id: u64, new_name: &str) -> Result<(), String> {
-    crate::api::context::project_ctx!(ctx);
+    project_ctx!(ctx);
     pattern_api::rename_pattern(ctx, PatternId::from_u64(pattern_id), new_name)
         .map_err(|error| error.to_string())
 }
@@ -143,7 +143,7 @@ pub fn add_note(
     start_tick: u64,
     duration: Option<u64>,
 ) -> Result<UiNote, String> {
-    crate::api::context::project_ctx!(ctx);
+    project_ctx!(ctx);
     let note = note_api::add_note(
         ctx,
         PatternId::from_u64(pattern_id),
@@ -159,7 +159,7 @@ pub fn add_note(
 }
 
 pub fn delete_note(ctx: &DawContext, pattern_id: u64, note_id: u32) -> Result<UiNote, String> {
-    crate::api::context::project_ctx!(ctx);
+    project_ctx!(ctx);
     let note = note_api::delete_note(ctx, PatternId::from_u64(pattern_id), NoteId::from(note_id))
         .map_err(|e| format!("{}", e))?;
 
@@ -174,7 +174,7 @@ pub fn resize_note(
     note_id: u32,
     new_duration: u64,
 ) -> Result<UiNote, String> {
-    crate::api::context::project_ctx!(ctx);
+    project_ctx!(ctx);
     let note = note_api::resize_note(
         ctx,
         PatternId::from_u64(pattern_id),
@@ -194,7 +194,7 @@ pub fn move_note(
     new_start_tick: u64,
     new_key: u32,
 ) -> Result<UiNote, String> {
-    crate::api::context::project_ctx!(ctx);
+    project_ctx!(ctx);
     let note = note_api::move_note(
         ctx,
         PatternId::from_u64(pattern_id),
@@ -217,7 +217,7 @@ pub fn change_note_params(
     micro_offset: Option<i64>,
     mute: Option<bool>,
 ) -> Result<UiNote, String> {
-    crate::api::context::project_ctx!(ctx);
+    project_ctx!(ctx);
     // validate inputs
     let velocity = velocity.and_then(|v| u8::try_from(v).ok());
     let micro_offset = micro_offset.and_then(|m| i8::try_from(m).ok());
@@ -252,7 +252,7 @@ pub fn add_notes_batch(
     pattern_id: u64,
     notes: Vec<(u8, u64, Option<u64>)>,
 ) -> Result<Vec<UiNote>, String> {
-    crate::api::context::project_ctx!(ctx);
+    project_ctx!(ctx);
     let added_notes = note_api::add_notes_batch(ctx, PatternId::from_u64(pattern_id), notes)
         .map_err(|e| e.to_string())?
         .iter()
@@ -272,7 +272,7 @@ pub fn delete_notes_batch(
     pattern_id: u64,
     note_ids: Vec<u32>,
 ) -> Result<(), String> {
-    crate::api::context::project_ctx!(ctx);
+    project_ctx!(ctx);
     note_api::delete_notes_batch(
         ctx,
         PatternId::from_u64(pattern_id),
@@ -291,7 +291,7 @@ pub fn move_notes_batch(
     pattern_id: u64,
     updates: Vec<(u32, u64, u8)>,
 ) -> Result<Vec<UiNote>, String> {
-    crate::api::context::project_ctx!(ctx);
+    project_ctx!(ctx);
     let moved_notes = note_api::move_notes_batch(
         ctx,
         PatternId::from_u64(pattern_id),
@@ -311,7 +311,7 @@ pub fn resize_notes_batch(
     pattern_id: u64,
     updates: Vec<(u32, u64)>,
 ) -> Result<Vec<UiNote>, String> {
-    crate::api::context::project_ctx!(ctx);
+    project_ctx!(ctx);
     let pattern_id_typed = PatternId::from_u64(pattern_id);
     let updates_proper = updates.into_iter().map(|u| (u.0.into(), u.1)).collect();
     let resized_notes = note_api::resize_notes_batch(ctx, pattern_id_typed, updates_proper)
@@ -329,7 +329,7 @@ pub fn play_pattern_preview(
     pattern_id: u64,
     generator_id: u64,
 ) -> Result<(), String> {
-    crate::api::context::project_ctx!(ctx);
+    project_ctx!(ctx);
     let pattern_id = PatternId::from_u64(pattern_id);
     let generator_id = GeneratorId::from_u64(generator_id);
     pattern_api::play_pattern_preview(ctx, pattern_id, generator_id).map_err(|e| e.to_string())
@@ -341,7 +341,7 @@ pub fn stop_pattern_preview_local(
     pattern_id: u64,
     generator_id: u64,
 ) -> Result<(), String> {
-    crate::api::context::project_ctx!(ctx);
+    project_ctx!(ctx);
     pattern_api::stop_pattern_preview_local(
         ctx,
         PatternId::from_u64(pattern_id),
@@ -352,7 +352,7 @@ pub fn stop_pattern_preview_local(
 
 /// Stop pattern preview and return to Song mode.
 pub fn stop_pattern_preview(ctx: &DawContext) -> Result<(), String> {
-    crate::api::context::project_ctx!(ctx);
+    project_ctx!(ctx);
     pattern_api::stop_pattern_preview(ctx).map_err(|e| e.to_string())
 }
 
@@ -374,7 +374,7 @@ pub fn quantize_notes(
     note_ids: Vec<u32>,
     step_ticks: u64,
 ) -> Result<UiPattern, String> {
-    crate::api::context::project_ctx!(ctx);
+    project_ctx!(ctx);
     note_api::quantize_notes(
         ctx,
         PatternId::from_u64(pattern_id),
@@ -392,7 +392,7 @@ pub fn quantize_note_starts(
     note_ids: Vec<u32>,
     step_ticks: u64,
 ) -> Result<UiPattern, String> {
-    crate::api::context::project_ctx!(ctx);
+    project_ctx!(ctx);
     note_api::quantize_note_starts(
         ctx,
         PatternId::from_u64(pattern_id),
@@ -409,7 +409,7 @@ pub fn legato_notes(
     pattern_id: u64,
     note_ids: Vec<u32>,
 ) -> Result<UiPattern, String> {
-    crate::api::context::project_ctx!(ctx);
+    project_ctx!(ctx);
     note_api::legato_notes(
         ctx,
         PatternId::from_u64(pattern_id),
@@ -428,7 +428,7 @@ pub fn humanize_notes(
     velocity_amount: u8,
     seed: u64,
 ) -> Result<UiPattern, String> {
-    crate::api::context::project_ctx!(ctx);
+    project_ctx!(ctx);
     note_api::humanize_notes(
         ctx,
         PatternId::from_u64(pattern_id),
@@ -448,7 +448,7 @@ pub fn chop_notes(
     note_ids: Vec<u32>,
     step_ticks: u64,
 ) -> Result<UiPattern, String> {
-    crate::api::context::project_ctx!(ctx);
+    project_ctx!(ctx);
     note_api::chop_notes(
         ctx,
         PatternId::from_u64(pattern_id),
@@ -466,7 +466,7 @@ pub fn slice_note(
     note_id: u32,
     at_tick: u64,
 ) -> Result<UiPattern, String> {
-    crate::api::context::project_ctx!(ctx);
+    project_ctx!(ctx);
     note_api::slice_note(
         ctx,
         PatternId::from_u64(pattern_id),
@@ -484,7 +484,7 @@ pub fn transpose_notes(
     note_ids: Vec<u32>,
     semitones: i32,
 ) -> Result<UiPattern, String> {
-    crate::api::context::project_ctx!(ctx);
+    project_ctx!(ctx);
     note_api::transpose_notes(
         ctx,
         PatternId::from_u64(pattern_id),
@@ -503,7 +503,7 @@ pub fn stretch_notes(
     note_ids: Vec<u32>,
     factor: f64,
 ) -> Result<UiPattern, String> {
-    crate::api::context::project_ctx!(ctx);
+    project_ctx!(ctx);
     note_api::stretch_notes(
         ctx,
         PatternId::from_u64(pattern_id),
@@ -521,7 +521,7 @@ pub fn shift_notes(
     note_ids: Vec<u32>,
     delta_ticks: i64,
 ) -> Result<UiPattern, String> {
-    crate::api::context::project_ctx!(ctx);
+    project_ctx!(ctx);
     note_api::shift_notes(
         ctx,
         PatternId::from_u64(pattern_id),
@@ -538,7 +538,7 @@ pub fn set_note_params_batch(
     pattern_id: u64,
     updates: Vec<UiNoteParamUpdate>,
 ) -> Result<UiPattern, String> {
-    crate::api::context::project_ctx!(ctx);
+    project_ctx!(ctx);
     let updates: Vec<_> = updates
         .into_iter()
         .map(|update| {
@@ -563,7 +563,7 @@ pub fn add_note_copies(
     pattern_id: u64,
     notes: Vec<UiNoteDraft>,
 ) -> Result<UiPattern, String> {
-    crate::api::context::project_ctx!(ctx);
+    project_ctx!(ctx);
     note_api::add_note_copies(
         ctx,
         PatternId::from_u64(pattern_id),
@@ -581,7 +581,7 @@ pub fn duplicate_pattern_notes(
     note_ids: Vec<u32>,
     start_tick: u64,
 ) -> Result<UiPattern, String> {
-    crate::api::context::project_ctx!(ctx);
+    project_ctx!(ctx);
     let note_ids: Vec<NoteId> = note_ids.into_iter().map(NoteId::from).collect();
     note_api::duplicate_notes(ctx, PatternId::from_u64(pattern_id), &note_ids, start_tick)
         .map(|pattern| UiPattern::from(&pattern))

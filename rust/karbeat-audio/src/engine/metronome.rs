@@ -1,4 +1,5 @@
 use crate::{DOWNBEAT_BYTES, OFFBEAT_BYTES, engine::helper::load_internal_wav};
+use std::mem::replace;
 
 /// A user-supplied click that replaces both built-in metronome sounds.
 ///
@@ -38,7 +39,7 @@ impl MetronomeState {
         click: Option<MetronomeClick>,
     ) -> Option<MetronomeClick> {
         self.is_playing = false;
-        std::mem::replace(&mut self.custom_click, click)
+        replace(&mut self.custom_click, click)
     }
 
     pub(super) fn render(

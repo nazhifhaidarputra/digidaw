@@ -1,4 +1,4 @@
-use std::{collections::HashSet, sync::Arc};
+use std::{collections::HashSet, mem::swap, sync::Arc};
 
 use super::{pools::PoolSwap, swap_slot};
 use crate::core::{
@@ -30,7 +30,7 @@ impl ClipsChanged {
                 .tracks
                 .get_mut(*track_id)
                 .ok_or(HistoryError::missing("Track"))?;
-            std::mem::swap(&mut track.clips, list);
+            swap(&mut track.clips, list);
         }
         Ok(EngineSync::track_graph())
     }
@@ -243,6 +243,8 @@ impl ClipEditRecorder {
 mod tests {
     use super::*;
     use crate::core::project::clip::ClipSourceType;
+    use karbeat_plugins::registry::PluginRegistry;
+    use karbeat_utils::hash::hash_str;
 
     fn state(app: &ApplicationState, track: TrackId) -> Vec<(ClipId, u64, String)> {
         app.tracks[track]
@@ -260,8 +262,8 @@ mod tests {
         let mut app = ApplicationState::default();
         let midi = app
             .add_new_midi_track_with_generator_id(
-                &mut karbeat_plugins::registry::PluginRegistry::new_with_defaults(),
-                karbeat_utils::hash::hash_str("synth_karbeatzer_v2"),
+                &mut PluginRegistry::new_with_defaults(),
+                hash_str("synth_karbeatzer_v2"),
             )
             .expect("midi track")
             .0
@@ -296,8 +298,8 @@ mod tests {
         let mut app = ApplicationState::default();
         let midi = app
             .add_new_midi_track_with_generator_id(
-                &mut karbeat_plugins::registry::PluginRegistry::new_with_defaults(),
-                karbeat_utils::hash::hash_str("synth_karbeatzer_v2"),
+                &mut PluginRegistry::new_with_defaults(),
+                hash_str("synth_karbeatzer_v2"),
             )
             .expect("midi track")
             .0

@@ -3,10 +3,13 @@
 //! This module replaces scattered lazy static globals with a single `KarbeatContext` struct
 //! for improved testability and explicit dependencies.
 
-use std::sync::{
-    Arc, Once,
-    atomic::{AtomicU64, Ordering},
-    mpsc,
+use std::{
+    slice::from_ref,
+    sync::{
+        Arc, Once,
+        atomic::{AtomicU64, Ordering},
+        mpsc,
+    },
 };
 
 use hashbrown::HashMap;
@@ -17,19 +20,28 @@ use rtrb::{Consumer, Producer};
 
 use crate::{
     backend::{AudioDeviceConfig, AudioRuntimeSettings},
-    commands::{AudioCommand, AudioFeedback, TelemetryRegistration},
-    event::TransportFeedback,
+    builtin_plugin::prepare_builtin_plugin,
+    commands::{AudioCommand, AudioFeedback, PreparedPluginTelemetry, TelemetryRegistration},
+    event::{PluginTarget, TransportFeedback},
     message::TelemetryRegistry,
+    playback_sync::{InputClock, OutputClock},
+    plugin_catalog::PluginCatalog,
+    project_state::ProjectStateFeedback,
+    recording::RecordingRegistry,
     render_state::{AudioAutomationLane, AudioGraphState},
 };
 use karbeat_core::{
     core::{
         history::{EngineSync, HistoryAction, HistoryManager, PluginSync},
         mitigation::{MitigationState, SessionSettings},
-        project::{ApplicationState, AudioTrack, AutomationLane, Clip, LoopRegion, Pattern},
+        project::{
+            ApplicationState, AudioTrack, AutomationLane, Clip, GeneratorInstanceType, LoopRegion,
+            Pattern, PluginInstance,
+        },
     },
     shared::{AudioSourceId, AutomationId, ClipId, PatternId},
 };
+use karbeat_plugin_api::{traits::AudioPlugin, types::BusConfig};
 
 /// Application-owned coordination point for project state, history, audio queues, and telemetry.
 ///
@@ -57,7 +69,7 @@ pub struct DawContext {
     /// Parameter feedback consumer (Audio → UI)
     pub feedback_consumer: Arc<Mutex<Option<rtrb::Consumer<AudioFeedback>>>>,
     /// Save replies intercepted by the control worker that owns the feedback consumer.
-    pub project_state_feedback: Arc<Mutex<crate::project_state::ProjectStateFeedback>>,
+    pub project_state_feedback: Arc<Mutex<ProjectStateFeedback>>,
 
     /// Audio stream handle
     pub stream_guard: Option<cpal::Stream>,
@@ -65,22 +77,22 @@ pub struct DawContext {
     /// Playback position ring buffer consumer
     pub position_consumer: Arc<Mutex<Option<rtrb::Consumer<TransportFeedback>>>>,
     /// Device playback clock that delays position feedback until its audio is heard.
-    pub output_clock: Arc<crate::playback_sync::OutputClock>,
+    pub output_clock: Arc<OutputClock>,
     /// When device input was captured, for placing recordings on the timeline.
-    pub input_clock: Arc<crate::playback_sync::InputClock>,
+    pub input_clock: Arc<InputClock>,
     /// Takes being recorded and their file writers.
-    pub recordings: Arc<Mutex<crate::recording::RecordingRegistry>>,
+    pub recordings: Arc<Mutex<RecordingRegistry>>,
 
     /// Plugin factory registry
     pub plugin_registry: PluginRegistry,
 
     /// External discovery descriptors and UI IDs, separate from first-party factories.
-    pub external_plugin_failures: HashMap<crate::event::PluginTarget, String>,
+    pub external_plugin_failures: HashMap<PluginTarget, String>,
 
-    pub hosted_targets: HashMap<crate::event::PluginTarget, HostedTargetState>,
+    pub hosted_targets: HashMap<PluginTarget, HostedTargetState>,
 
     /// Combined first-party and externally discovered plugin metadata.
-    pub plugin_catalog: crate::plugin_catalog::PluginCatalog,
+    pub plugin_catalog: PluginCatalog,
 
     /// Format-independent control-side access to live hosted plug-in state.
     pub host_state_capture: Arc<dyn HostStateCapture>,
@@ -159,7 +171,7 @@ impl HostedTargetState {
 pub struct ControlHandles {
     pub command_sender: Arc<Mutex<Option<Producer<AudioCommand>>>>,
     pub feedback_consumer: Arc<Mutex<Option<Consumer<AudioFeedback>>>>,
-    pub project_state_feedback: Arc<Mutex<crate::project_state::ProjectStateFeedback>>,
+    pub project_state_feedback: Arc<Mutex<ProjectStateFeedback>>,
     pub external_plugins: HostClient,
 }
 
@@ -172,7 +184,7 @@ impl DawContext {
     /// Marks `target` as backed by `instance`, whatever state it was in or if it is new.
     pub fn activate_hosted_target(
         &mut self,
-        target: crate::event::PluginTarget,
+        target: PluginTarget,
         instance: ExternalPluginInstanceHandle,
     ) {
         let active = match self.hosted_targets.remove(&target) {
@@ -192,7 +204,7 @@ impl DawContext {
     /// Creates a context with an injected format-independent external plugin host.
     pub fn with_external_plugins(external_plugins: HostClient) -> Self {
         let plugin_registry = PluginRegistry::new_with_defaults();
-        let plugin_catalog = crate::plugin_catalog::PluginCatalog::new(&plugin_registry);
+        let plugin_catalog = PluginCatalog::new(&plugin_registry);
         static NEXT_INSTANCE: AtomicU64 = AtomicU64::new(1);
         Self {
             instance_id: NEXT_INSTANCE.fetch_add(1, Ordering::Relaxed),
@@ -205,8 +217,8 @@ impl DawContext {
             project_state_feedback: Arc::new(Mutex::new(Default::default())),
             stream_guard: None,
             position_consumer: Arc::new(Mutex::new(None)),
-            output_clock: Arc::new(crate::playback_sync::OutputClock::new()),
-            input_clock: Arc::new(crate::playback_sync::InputClock::new()),
+            output_clock: Arc::new(OutputClock::new()),
+            input_clock: Arc::new(InputClock::new()),
             recordings: Arc::default(),
             plugin_registry,
             plugin_catalog,
@@ -279,20 +291,17 @@ impl DawContext {
     pub fn prepare_plugin_install(
         &self,
         factory: PluginFactory,
-    ) -> (
-        Box<dyn karbeat_plugin_api::traits::AudioPlugin>,
-        crate::commands::PreparedPluginTelemetry,
-    ) {
+    ) -> (Box<dyn AudioPlugin>, PreparedPluginTelemetry) {
         let config = self.audio_runtime_settings.read().requested_dsp;
         let mut plugin = factory();
         plugin.prepare(config.sample_rate as f32, config.block_size as usize);
-        let bus = karbeat_plugin_api::types::BusConfig {
+        let bus = BusConfig {
             name: "Main".into(),
             channel_count: 2,
             is_optional: false,
         };
-        plugin.set_io_layout(std::slice::from_ref(&bus), std::slice::from_ref(&bus));
-        let telemetry = crate::commands::PreparedPluginTelemetry::new(plugin.as_ref());
+        plugin.set_io_layout(from_ref(&bus), from_ref(&bus));
+        let telemetry = PreparedPluginTelemetry::new(plugin.as_ref());
         (plugin, telemetry)
     }
 
@@ -446,11 +455,11 @@ impl DawContext {
                 generator_id,
                 track_id,
             } => {
-                let Some(karbeat_core::core::project::GeneratorInstanceType::Plugin(instance)) =
-                    self.app_state
-                        .generator_pool
-                        .get(generator_id)
-                        .map(|generator| generator.instance_type.clone())
+                let Some(GeneratorInstanceType::Plugin(instance)) = self
+                    .app_state
+                    .generator_pool
+                    .get(generator_id)
+                    .map(|generator| generator.instance_type.clone())
                 else {
                     return;
                 };
@@ -545,11 +554,8 @@ impl DawContext {
     /// configuration. Returns `None` when the plugin is no longer registered.
     fn prepare_restored_plugin(
         &self,
-        instance: &karbeat_core::core::project::PluginInstance,
-    ) -> Option<(
-        Box<dyn karbeat_plugin_api::traits::AudioPlugin>,
-        crate::commands::PreparedPluginTelemetry,
-    )> {
+        instance: &PluginInstance,
+    ) -> Option<(Box<dyn AudioPlugin>, PreparedPluginTelemetry)> {
         let Some(factory) = self.get_plugin_factory(instance.registry_id) else {
             tracing::warn!(
                 "Cannot restore plugin {}: registry id {} is not available",
@@ -559,7 +565,7 @@ impl DawContext {
             return None;
         };
         let dsp = self.audio_runtime_settings.read().requested_dsp;
-        Some(crate::builtin_plugin::prepare_builtin_plugin(
+        Some(prepare_builtin_plugin(
             factory,
             instance,
             dsp.sample_rate,

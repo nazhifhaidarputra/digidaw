@@ -23,7 +23,11 @@ mod lsp {
     use karbeat_plugin_api::prelude::AudioPlugin;
     use karbeat_plugin_api::types::{AudioBuffers, AudioBusBuffer, ProcessContext, ProcessingMode};
     use karbeat_vst3::{Vst3PluginHost, module::Vst3Module};
-    use std::path::PathBuf;
+    use std::{
+        env::{args, var_os},
+        f64::consts::TAU,
+        path::PathBuf,
+    };
 
     const BLOCK: usize = 256;
     const BLOCKS: usize = 64;
@@ -47,7 +51,7 @@ mod lsp {
             let phase = |index: usize| {
                 let sample = f64::from(u32::try_from(block * BLOCK + index).unwrap());
                 #[allow(clippy::cast_possible_truncation, reason = "test tone")]
-                let value = (sample * 440.0 * std::f64::consts::TAU / 48_000.0).sin() as f32;
+                let value = (sample * 440.0 * TAU / 48_000.0).sin() as f32;
                 value * 0.25
             };
             let mut in_l: Vec<f32> = (0..BLOCK).map(phase).collect();
@@ -182,12 +186,10 @@ mod lsp {
     }
 
     pub(super) fn main() {
-        if std::env::var_os("LSP_VST3_PATH").is_none()
-            && !std::env::args().any(|arg| arg == "--ignored")
-        {
+        if var_os("LSP_VST3_PATH").is_none() && !args().any(|arg| arg == "--ignored") {
             return;
         }
-        let path = std::env::var_os("LSP_VST3_PATH").map_or_else(
+        let path = var_os("LSP_VST3_PATH").map_or_else(
             || PathBuf::from("/usr/lib64/vst3/lsp-plugins.vst3"),
             PathBuf::from,
         );

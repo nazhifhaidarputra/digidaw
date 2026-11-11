@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:karbeat/app/providers/background_jobs_provider.dart';
 import 'package:karbeat/app/providers/export_project_state.dart';
 import 'package:karbeat/app/providers/telemetry_polling_suppression.dart';
 import 'package:karbeat/app/providers/notification_provider.dart';
@@ -12,6 +13,7 @@ import 'package:karbeat/core/widgets/shortcut_focus_anchor.dart';
 import 'package:karbeat/features/workspace/services/export_service.dart';
 import 'package:karbeat/features/workspace/services/project_file_dialogs.dart';
 import 'package:karbeat/shared/models/export_audio.dart';
+import 'package:karbeat/src/rust/api/jobs.dart';
 import 'package:karbeat/src/rust/api/project.dart';
 import 'package:karbeat/src/rust/api/timeline.dart';
 
@@ -31,6 +33,7 @@ class _ProjectExportPanelState extends ConsumerState<ProjectExportPanel> {
   final FocusNode _panelFocus = FocusNode(debugLabel: 'ProjectExportPanel');
 
   bool _isExporting = false;
+  bool _cancelRequested = false;
   double _exportProgress = 0.0;
 
   @override
@@ -114,6 +117,7 @@ class _ProjectExportPanelState extends ConsumerState<ProjectExportPanel> {
 
     setState(() {
       _isExporting = true;
+      _cancelRequested = false;
       _exportProgress = 0.0;
     });
 
@@ -141,7 +145,12 @@ class _ProjectExportPanelState extends ConsumerState<ProjectExportPanel> {
         ref.read(telemetryPollingSuppressionProvider.notifier),
       )();
     } catch (e) {
-      ref.read(notificationProvider.notifier).error(e, title: 'Export failed');
+      // A cancelled render fails on purpose and leaves no file behind
+      if (!_cancelRequested) {
+        ref
+            .read(notificationProvider.notifier)
+            .error(e, title: 'Export failed');
+      }
     } finally {
       if (mounted) {
         setState(() {
@@ -150,7 +159,10 @@ class _ProjectExportPanelState extends ConsumerState<ProjectExportPanel> {
       }
     }
 
-    if (exportState.openFolderAfterExport && mounted) {
+    // Stay open after a cancel so the export can be adjusted and started again
+    if (_cancelRequested || !mounted) return;
+
+    if (exportState.openFolderAfterExport) {
       // Best effort to open folder
       if (Platform.isWindows) {
         Process.run('explorer.exe', [exportState.exportDirectory!]);
@@ -162,6 +174,17 @@ class _ProjectExportPanelState extends ConsumerState<ProjectExportPanel> {
     }
 
     widget.onClose();
+  }
+
+  /// Stops the running export. The render deletes its unfinished file.
+  Future<void> _cancelExport() async {
+    final jobs = ref.read(backgroundJobsProvider);
+    final job = jobs.active.values
+        .where((job) => job.kind == UiJobKind.projectExport)
+        .firstOrNull;
+    if (job == null) return;
+    setState(() => _cancelRequested = true);
+    await ref.read(backgroundJobsProvider.notifier).cancel(job.id);
   }
 
   @override
@@ -489,8 +512,12 @@ class _ProjectExportPanelState extends ConsumerState<ProjectExportPanel> {
                     mainAxisAlignment: MainAxisAlignment.end,
                     children: [
                       TextButton(
-                        onPressed: _isExporting ? null : widget.onClose,
-                        child: const Text("Cancel"),
+                        onPressed: !_isExporting
+                            ? widget.onClose
+                            : _cancelRequested
+                            ? null
+                            : _cancelExport,
+                        child: Text(_isExporting ? "Cancel Export" : "Cancel"),
                       ),
                       const SizedBox(width: 16),
                       ElevatedButton(

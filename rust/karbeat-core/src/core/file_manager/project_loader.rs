@@ -1,7 +1,13 @@
+#[cfg(not(any(unix, windows)))]
+use std::io::ErrorKind;
+#[cfg(unix)]
+use std::os::unix::fs::symlink;
+#[cfg(windows)]
+use std::os::windows::fs::symlink_file;
 use std::{
     collections::HashMap,
-    fs::File,
-    io::{BufReader, Read, Seek, Write},
+    fs::{File, canonicalize, create_dir_all},
+    io::{BufReader, Read, Result as IoResult, Seek, Write, copy},
     path::{Path, PathBuf},
     sync::Arc,
 };
@@ -83,7 +89,7 @@ pub fn save_daw_project(save_path: &Path, app_state: &ApplicationState) -> anyho
     for (id, audio_arc) in app_state.asset_library.source_map.iter() {
         let path = &audio_arc.file_path;
         if !path.as_os_str().is_empty() && path.is_file() {
-            let canonical = std::fs::canonicalize(path).unwrap_or_else(|_| path.clone());
+            let canonical = canonicalize(path).unwrap_or_else(|_| path.clone());
             if let Some(internal_name) = embedded_by_path.get(&canonical) {
                 shared_sources.push((id, internal_name.clone()));
                 continue;
@@ -107,7 +113,7 @@ pub fn save_daw_project(save_path: &Path, app_state: &ApplicationState) -> anyho
 
         // Use a BufReader with a 128KB chunk size for much faster sequential disk reads
         let mut reader = BufReader::with_capacity(128 * 1024, source_audio_file);
-        std::io::copy(&mut reader, &mut zip)?;
+        copy(&mut reader, &mut zip)?;
 
         // Rewrite the file path in the cloned state to use the zip-internal path
         if let Some(entry) = library.source_map.get_mut(id) {
@@ -171,7 +177,7 @@ pub fn load_daw_project(path: &Path, sample_rate: u32) -> anyhow::Result<Applica
         }
 
         let audio_folder = cache_dir.join(id.to_string());
-        std::fs::create_dir_all(&audio_folder)?;
+        create_dir_all(&audio_folder)?;
 
         let dest_path = audio_folder.join(&file_name);
 
@@ -182,7 +188,7 @@ pub fn load_daw_project(path: &Path, sample_rate: u32) -> anyhow::Result<Applica
             )
         })?;
 
-        std::io::copy(&mut entry, &mut dest_file).with_context(|| {
+        copy(&mut entry, &mut dest_file).with_context(|| {
             format!("Failed to extract embedded audio from archive entry {name}")
         })?;
 
@@ -257,7 +263,7 @@ fn resolve_cover<R: Read + Seek>(
     let file_name = cover.path.file_name()?;
     let cover_dir = session_dir.join(COVER_ARCHIVE_DIR);
     let local_path = cover_dir.join(file_name);
-    if let Err(error) = std::fs::create_dir_all(&cover_dir) {
+    if let Err(error) = create_dir_all(&cover_dir) {
         tracing::warn!("Project cover dropped, session folder unavailable: {error}");
         return None;
     }
@@ -286,7 +292,7 @@ fn resolve_cover<R: Read + Seek>(
         .map_err(anyhow::Error::from)
         .and_then(|mut entry| {
             let mut file = File::create(&local_path)?;
-            std::io::copy(&mut entry, &mut file)?;
+            copy(&mut entry, &mut file)?;
             Ok(())
         });
     match extracted {
@@ -302,18 +308,18 @@ fn resolve_cover<R: Read + Seek>(
 }
 
 #[cfg(unix)]
-fn link_file(target: &Path, link: &Path) -> std::io::Result<()> {
-    std::os::unix::fs::symlink(target, link)
+fn link_file(target: &Path, link: &Path) -> IoResult<()> {
+    symlink(target, link)
 }
 
 #[cfg(windows)]
-fn link_file(target: &Path, link: &Path) -> std::io::Result<()> {
-    std::os::windows::fs::symlink_file(target, link)
+fn link_file(target: &Path, link: &Path) -> IoResult<()> {
+    symlink_file(target, link)
 }
 
 #[cfg(not(any(unix, windows)))]
-fn link_file(_target: &Path, _link: &Path) -> std::io::Result<()> {
-    Err(std::io::ErrorKind::Unsupported.into())
+fn link_file(_target: &Path, _link: &Path) -> IoResult<()> {
+    Err(ErrorKind::Unsupported.into())
 }
 
 /// Creates the directory that holds one loaded project's extracted audio files.
@@ -324,7 +330,7 @@ pub(crate) fn extraction_session_dir() -> anyhow::Result<tempfile::TempDir> {
     let mut builder = tempfile::Builder::new();
     builder.prefix("session_");
     if let Some(directory) = app_cache_dir().map(|cache| cache.join("sessions")) {
-        match std::fs::create_dir_all(&directory).and_then(|()| builder.tempdir_in(&directory)) {
+        match create_dir_all(&directory).and_then(|()| builder.tempdir_in(&directory)) {
             Ok(session) => return Ok(session),
             Err(error) => tracing::warn!(
                 "Project session cache unavailable in {}, using the temporary directory: {error}",
@@ -386,7 +392,25 @@ fn parse_embedded_audio_path(zip_name: &str) -> Option<(u64, String)> {
 )]
 mod test {
     use super::*;
-    use std::io::{Read, Write};
+    use crate::{
+        core::{
+            file_manager::{
+                audio_loader::AudioLoader,
+                format::{ProjectFormatVersion, ProjectMigrator},
+            },
+            project::{
+                Clip, ClipTimeUnit, CoverArt, DawSource, EnvelopePoint, Fade, GainEnvelope,
+                PluginInstance,
+                audio_waveform::{AudioSampleMode, BeatGrid, EditedWaveform, WaveformEdits},
+                clip::ClipSourceType,
+            },
+        },
+        shared::id::ClipId,
+    };
+    use std::{
+        fs::{create_dir, read, read_dir, remove_file, write},
+        io::{Read, Write},
+    };
     use tempfile::tempdir;
 
     const SAMPLE_RATE: u32 = 48000;
@@ -414,13 +438,11 @@ mod test {
         for sample in samples {
             bytes.extend_from_slice(&sample.to_le_bytes());
         }
-        std::fs::write(path, bytes).unwrap();
+        write(path, bytes).unwrap();
     }
 
     #[test]
     fn extracted_audio_is_deleted_with_the_last_project_state() {
-        use crate::core::file_manager::audio_loader::AudioLoader;
-
         let dir = tempdir().unwrap();
         let wav = dir.path().join("tone.wav");
         write_mono_wav(&wav);
@@ -457,12 +479,12 @@ mod test {
     fn failed_replacement_cleans_temporary_archive_and_preserves_destination() {
         let dir = tempdir().unwrap();
         let destination = dir.path().join("existing.karbeat");
-        std::fs::create_dir(&destination).unwrap();
+        create_dir(&destination).unwrap();
         let previous = destination.join("previous");
-        std::fs::write(&previous, b"keep").unwrap();
+        write(&previous, b"keep").unwrap();
         assert!(save_daw_project(&destination, &ApplicationState::default()).is_err());
-        assert_eq!(std::fs::read(previous).unwrap(), b"keep");
-        assert_eq!(std::fs::read_dir(dir.path()).unwrap().count(), 1);
+        assert_eq!(read(previous).unwrap(), b"keep");
+        assert_eq!(read_dir(dir.path()).unwrap().count(), 1);
     }
 
     #[test]
@@ -588,9 +610,6 @@ mod test {
 
     #[test]
     fn v1_projects_load_and_resave_as_v2() {
-        use crate::core::file_manager::format::{ProjectFormatVersion, ProjectMigrator};
-        use crate::core::project::PluginInstance;
-
         let mut state = ApplicationState::default();
         state.transport.bpm = 132.0;
         state.metadata.name = "Old project".into();
@@ -650,14 +669,14 @@ mod test {
         let dir = tempdir().unwrap();
         let project = dir.path().join("keep.dgdaw");
         save_daw_project(&project, &ApplicationState::default()).unwrap();
-        let before = std::fs::read(&project).unwrap();
+        let before = read(&project).unwrap();
 
         let mut broken = ApplicationState::default();
         broken.transport.bpm = f32::NAN;
         let error = save_daw_project(&project, &broken).unwrap_err();
         assert!(error.to_string().contains("not finite"), "{error}");
-        assert_eq!(std::fs::read(&project).unwrap(), before);
-        assert_eq!(std::fs::read_dir(dir.path()).unwrap().count(), 1);
+        assert_eq!(read(&project).unwrap(), before);
+        assert_eq!(read_dir(dir.path()).unwrap().count(), 1);
     }
 
     #[test]
@@ -679,9 +698,8 @@ mod test {
     }
 
     fn state_with_cover(cover_path: &Path) -> ApplicationState {
-        let art = crate::core::project::CoverArt::encode_rgba(8, &[10_u8, 20, 30, 255].repeat(64))
-            .unwrap();
-        std::fs::write(cover_path, art.bytes()).unwrap();
+        let art = CoverArt::encode_rgba(8, &[10_u8, 20, 30, 255].repeat(64)).unwrap();
+        write(cover_path, art.bytes()).unwrap();
         let mut state = ApplicationState::default();
         state.metadata.cover = Some(CoverImage::new(cover_path));
         state
@@ -705,7 +723,7 @@ mod test {
         save_daw_project(&project, &state_with_cover(&cover_path)).unwrap();
 
         let embedded = archive_entry(&project, "cover/cover.jpg").expect("embedded cover");
-        assert_eq!(embedded, std::fs::read(&cover_path).unwrap());
+        assert_eq!(embedded, read(&cover_path).unwrap());
         let toml = String::from_utf8(archive_entry(&project, "metadata.toml").unwrap()).unwrap();
         assert!(toml.contains("path = \"cover/cover.jpg\""), "{toml}");
 
@@ -714,8 +732,8 @@ mod test {
         assert_eq!(cover.linked_path.as_deref(), Some(cover_path.as_path()));
         // The session path leads to the original file on this machine
         assert_eq!(
-            std::fs::canonicalize(&cover.path).unwrap(),
-            std::fs::canonicalize(&cover_path).unwrap()
+            canonicalize(&cover.path).unwrap(),
+            canonicalize(&cover_path).unwrap()
         );
     }
 
@@ -725,13 +743,13 @@ mod test {
         let cover_path = dir.path().join("crop.jpg");
         let project = dir.path().join("moved.dgdaw");
         save_daw_project(&project, &state_with_cover(&cover_path)).unwrap();
-        let original = std::fs::read(&cover_path).unwrap();
-        std::fs::remove_file(&cover_path).unwrap();
+        let original = read(&cover_path).unwrap();
+        remove_file(&cover_path).unwrap();
 
         let loaded = load_daw_project(&project, 48_000).unwrap();
         let cover = loaded.metadata.cover.expect("extracted cover");
         assert_ne!(cover.path, cover_path);
-        assert_eq!(std::fs::read(&cover.path).unwrap(), original);
+        assert_eq!(read(&cover.path).unwrap(), original);
         // The original link is kept for machines where it still exists
         assert_eq!(cover.linked_path.as_deref(), Some(cover_path.as_path()));
     }
@@ -764,13 +782,6 @@ mod test {
 
     #[test]
     fn envelopes_edits_and_hard_copies_survive_save_and_load() {
-        use crate::core::file_manager::audio_loader::AudioLoader;
-        use crate::core::project::{
-            EnvelopePoint, Fade, GainEnvelope,
-            audio_waveform::{AudioSampleMode, BeatGrid, EditedWaveform, WaveformEdits},
-            clip::ClipSourceType,
-        };
-
         let dir = tempdir().unwrap();
         let wav = dir.path().join("tone.wav");
         write_mono_wav(&wav);
@@ -870,9 +881,6 @@ mod test {
 
     #[test]
     fn clips_saved_before_envelopes_still_load() {
-        use crate::core::project::{Clip, ClipTimeUnit, DawSource};
-        use crate::shared::id::ClipId;
-
         /// The clip layout projects were saved with before clip envelopes existed.
         #[derive(serde::Serialize)]
         struct LegacyClip {

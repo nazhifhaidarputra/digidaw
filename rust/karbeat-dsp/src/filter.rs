@@ -33,6 +33,7 @@ use karbeat_macros::{EnumParam, karbeat_plugin};
 use karbeat_plugin_types::EnumParam;
 use serde::{Deserialize, Serialize};
 use smallvec::{SmallVec, smallvec};
+use std::f32::consts::{LN_10, TAU};
 use wide::{f32x4, f32x8};
 
 const DEFAULT_CASCADES: usize = 8;
@@ -114,7 +115,7 @@ impl FilterMode for SimpleFilterMode {
         if self.is_off() {
             return BiquadCoefficients::BYPASS;
         }
-        let w0 = std::f32::consts::TAU * freq / sr;
+        let w0 = TAU * freq / sr;
         let alpha = w0.sin() / (2.0 * q);
         let cos_w = w0.cos();
         let (b0, b1, b2, a0, a1, a2) = match self {
@@ -152,7 +153,7 @@ impl FilterMode for BiquadFilterType {
             return BiquadCoefficients::BYPASS;
         }
         let a = (10.0f32).powf(gain / 40.0);
-        let w0 = std::f32::consts::TAU * freq / sr;
+        let w0 = TAU * freq / sr;
         let alpha = w0.sin() / (2.0 * q);
         let cos_w = w0.cos();
         let sq_a = a.sqrt();
@@ -254,7 +255,7 @@ impl BiquadCoefficients {
 
     /// Scalar magnitude response at one frequency.
     pub fn magnitude_db_at(&self, freq: f32, sample_rate: f32, num_stages: usize) -> f32 {
-        let w = std::f32::consts::TAU * freq / sample_rate;
+        let w = TAU * freq / sample_rate;
         let (sin_w, cos_w) = w.sin_cos();
         let cos_2w = 2.0 * cos_w * cos_w - 1.0; // double-angle, avoids second sin/cos
         let sin_2w = 2.0 * sin_w * cos_w;
@@ -286,7 +287,7 @@ impl BiquadCoefficients {
         out: &mut [f32],
     ) {
         assert_eq!(freqs.len(), out.len());
-        let scale = std::f32::consts::TAU / sample_rate;
+        let scale = TAU / sample_rate;
         let ns = num_stages as f32;
 
         let b0 = f32x8::splat(self.b0);
@@ -326,7 +327,7 @@ impl BiquadCoefficients {
             // Avoid div-by-zero: clamp denominator
             let ratio = num_sq / den_sq.max(eps);
             // log10(x) = ln(x) / ln(10); wide has ln
-            let db_vec = ten * (ratio.max(eps).ln() / f32x8::splat(std::f32::consts::LN_10));
+            let db_vec = ten * (ratio.max(eps).ln() / f32x8::splat(LN_10));
             let db_scaled: [f32; 8] = (db_vec * f32x8::splat(ns)).into();
 
             out[i..i + 8].copy_from_slice(&db_scaled);
@@ -802,6 +803,7 @@ impl<T: FilterMode + 'static> BiquadFilter<T> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::iter::{once, repeat};
 
     #[test]
     fn test_biquad_coefficient_math() {
@@ -846,7 +848,7 @@ mod tests {
             y1: 0.0,
             y2: 0.0,
         };
-        let impulse = std::iter::once(1.0f32).chain(std::iter::repeat(0.0f32));
+        let impulse = once(1.0f32).chain(repeat(0.0f32));
         for x in impulse.take(64) {
             let y_df1 = c.b0 * x + c.b1 * df1.x1 + c.b2 * df1.x2 - c.a1 * df1.y1 - c.a2 * df1.y2;
             df1.x2 = df1.x1;

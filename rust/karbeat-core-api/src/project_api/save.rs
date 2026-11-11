@@ -1,7 +1,11 @@
 use std::{
     collections::HashMap,
+    mem::take,
     path::{Path, PathBuf},
-    sync::atomic::{AtomicU32, Ordering},
+    sync::{
+        Arc,
+        atomic::{AtomicU32, Ordering},
+    },
     time::{Duration, Instant},
 };
 
@@ -13,10 +17,12 @@ use shuttle::thread::sleep;
 #[cfg(not(test))]
 use std::thread::sleep;
 
+use crate::external_plugin_api::plugin_instance;
 use karbeat_audio::{
     commands::{AudioCommand, AudioFeedback, MixerChannelSnapshot, MixerChannelTarget},
-    context::DawContext,
+    context::{ControlHandles, DawContext},
     event::PluginTarget,
+    project_state::ProjectStateFeedback,
 };
 use karbeat_core::core::{
     file_manager::{
@@ -117,7 +123,7 @@ struct CapturedPlugin {
 }
 
 fn collect(
-    handles: &karbeat_audio::context::ControlHandles,
+    handles: &ControlHandles,
     timeout: Duration,
     targets: Vec<PendingTarget>,
 ) -> anyhow::Result<(Vec<CapturedPlugin>, Vec<MixerChannelSnapshot>)> {
@@ -138,10 +144,8 @@ fn collect(
         pending.insert(id, target);
         commands.push(command);
     }
-    let inbox = karbeat_audio::project_state::ProjectStateFeedback::register(
-        &handles.project_state_feedback,
-        pending.keys().copied(),
-    )?;
+    let inbox =
+        ProjectStateFeedback::register(&handles.project_state_feedback, pending.keys().copied())?;
     {
         let mut sender = handles.command_sender.lock();
         let sender = sender.as_mut().context("Audio engine is unavailable")?;
@@ -218,9 +222,17 @@ fn collect(
     reason = "save fixtures fail on unexpected queue and persistence results"
 )]
 mod tests {
+    use super::super::save_project as project_api_save_project;
     use super::*;
-    use karbeat_core::core::project::plugin::ExternalPluginInstance;
+    use karbeat_core::core::{
+        file_manager::project_loader::load_daw_project, project::plugin::ExternalPluginInstance,
+    };
     use karbeat_host::{PluginDescriptor, PluginFormat, PluginIdentity, PluginKind};
+    use shuttle::{
+        scheduler::RandomScheduler,
+        thread::{JoinHandle, spawn, yield_now},
+    };
+    use std::fs::{read, write};
 
     fn external(ctx: &mut DawContext) -> PluginState {
         let state = PluginState {
@@ -255,11 +267,10 @@ mod tests {
     fn check_random(test: impl Fn() + Send + Sync + 'static, iterations: usize) {
         let mut config = shuttle::Config::new();
         config.stack_size = 1 << 21;
-        shuttle::Runner::new(shuttle::scheduler::RandomScheduler::new(iterations), config)
-            .run(test);
+        shuttle::Runner::new(RandomScheduler::new(iterations), config).run(test);
     }
 
-    fn respond(ctx: &mut DawContext, stale_only: bool) -> shuttle::thread::JoinHandle<()> {
+    fn respond(ctx: &mut DawContext, stale_only: bool) -> JoinHandle<()> {
         respond_with_stream(ctx, stale_only, false)
     }
 
@@ -267,7 +278,7 @@ mod tests {
         ctx: &mut DawContext,
         stale_only: bool,
         stream_active: bool,
-    ) -> shuttle::thread::JoinHandle<()> {
+    ) -> JoinHandle<()> {
         let (sender, mut commands) = rtrb::RingBuffer::new(16);
         let (mut feedback, consumer) = rtrb::RingBuffer::new(16);
         *ctx.command_sender.lock() = Some(sender);
@@ -278,13 +289,13 @@ mod tests {
             None
         };
         let router = ctx.project_state_feedback.clone();
-        shuttle::thread::spawn(move || {
+        spawn(move || {
             for _ in 0..2 {
                 let command = loop {
                     if let Ok(command) = commands.pop() {
                         break command;
                     }
-                    shuttle::thread::yield_now();
+                    yield_now();
                 };
                 let response = match command {
                     AudioCommand::QueryPluginState { target, request_id } => {
@@ -330,7 +341,7 @@ mod tests {
                     fresh.component = vec![3, 4];
                     let feedback_lock = ctx.feedback_consumer.clone();
                     let captured = fresh.clone();
-                    ctx.host_state_capture = std::sync::Arc::new(
+                    ctx.host_state_capture = Arc::new(
                         move |identity: &karbeat_host::PluginIdentity, id: HostInstanceId| {
                             assert_eq!(identity, &captured.identity);
                             assert_eq!(id, HostInstanceId(7));
@@ -341,13 +352,9 @@ mod tests {
                     let responder = respond_with_stream(&mut ctx, false, stream_active);
                     let directory = tempfile::tempdir().unwrap();
                     let path = directory.path().join("saved.karbeat");
-                    super::super::save_project(&mut ctx, path.to_str().unwrap()).unwrap();
+                    project_api_save_project(&mut ctx, path.to_str().unwrap()).unwrap();
                     responder.join().unwrap();
-                    let loaded =
-                        karbeat_core::core::file_manager::project_loader::load_daw_project(
-                            &path, 48_000,
-                        )
-                        .unwrap();
+                    let loaded = load_daw_project(&path, 48_000).unwrap();
                     let generator = loaded.generator_pool.values().next().unwrap();
                     let GeneratorInstanceType::Plugin(plugin) = &generator.instance_type else {
                         panic!("expected plugin");
@@ -373,7 +380,7 @@ mod tests {
                     let responder = respond(&mut ctx, stale_only);
                     let directory = tempfile::tempdir().unwrap();
                     let path = directory.path().join("previous.karbeat");
-                    std::fs::write(&path, b"previous project").unwrap();
+                    write(&path, b"previous project").unwrap();
                     // Shuttle's sleep does not advance the wall clock this deadline reads, so
                     // keep it short enough to expire within the scheduler's step bound.
                     let result = save_project(&mut ctx, &path, Duration::from_millis(5), |_, _| {
@@ -381,7 +388,7 @@ mod tests {
                     });
                     assert!(result.is_err());
                     responder.join().unwrap();
-                    assert_eq!(std::fs::read(&path).unwrap(), b"previous project");
+                    assert_eq!(read(&path).unwrap(), b"previous project");
                     let GeneratorInstanceType::Plugin(plugin) = &ctx
                         .app_state
                         .generator_pool
@@ -412,7 +419,7 @@ mod tests {
         *ctx.feedback_consumer.lock() = Some(consumer);
         let directory = tempfile::tempdir().unwrap();
         let path = directory.path().join("previous.karbeat");
-        std::fs::write(&path, b"previous project").unwrap();
+        write(&path, b"previous project").unwrap();
         assert!(
             save_project(&mut ctx, &path, Duration::ZERO, |_, _| panic!(
                 "must not dispatch native work"
@@ -420,7 +427,7 @@ mod tests {
             .is_err()
         );
         assert!(commands.pop().is_err());
-        assert_eq!(std::fs::read(&path).unwrap(), b"previous project");
+        assert_eq!(read(&path).unwrap(), b"previous project");
     }
 
     /// A master chain of a built-in plugin and an external one, with this external state stored.
@@ -469,18 +476,18 @@ mod tests {
         ctx: &mut DawContext,
         expected: Vec<PluginTarget>,
         external: Option<PluginTarget>,
-    ) -> shuttle::thread::JoinHandle<()> {
+    ) -> JoinHandle<()> {
         let (sender, mut commands) = rtrb::RingBuffer::new(16);
         let (mut feedback, consumer) = rtrb::RingBuffer::new(16);
         *ctx.command_sender.lock() = Some(sender);
         *ctx.feedback_consumer.lock() = Some(consumer);
-        shuttle::thread::spawn(move || {
+        spawn(move || {
             for wanted in expected {
                 let command = loop {
                     if let Ok(command) = commands.pop() {
                         break command;
                     }
-                    shuttle::thread::yield_now();
+                    yield_now();
                 };
                 let AudioCommand::QueryPluginState { target, request_id } = command else {
                     panic!("templates only ask for plugin state");
@@ -499,7 +506,7 @@ mod tests {
     }
 
     fn read_template(path: &Path) -> ChannelTemplate {
-        serde_json::from_slice(&std::fs::read(path).unwrap()).unwrap()
+        serde_json::from_slice(&read(path).unwrap()).unwrap()
     }
 
     fn master_template_pending(ctx: &DawContext, path: &Path) -> PendingChannelTemplateSave {
@@ -612,7 +619,7 @@ mod tests {
         *ctx.feedback_consumer.lock() = Some(consumer);
         let directory = tempfile::tempdir().unwrap();
         let path = directory.path().join("chain.effch");
-        std::fs::write(&path, b"previous template").unwrap();
+        write(&path, b"previous template").unwrap();
 
         // The two plugin queries do not fit the queue, so nothing is captured.
         assert!(
@@ -623,7 +630,7 @@ mod tests {
             )
             .is_err()
         );
-        assert_eq!(std::fs::read(&path).unwrap(), b"previous template");
+        assert_eq!(read(&path).unwrap(), b"previous template");
     }
 
     #[test]
@@ -636,9 +643,7 @@ mod tests {
             panic!("no live instance to capture")
         })
         .unwrap();
-        let loaded =
-            karbeat_core::core::file_manager::project_loader::load_daw_project(&path, 48_000)
-                .unwrap();
+        let loaded = load_daw_project(&path, 48_000).unwrap();
         let GeneratorInstanceType::Plugin(plugin) =
             &loaded.generator_pool.values().next().unwrap().instance_type
         else {
@@ -654,10 +659,10 @@ mod tests {
 pub struct PendingProjectSave {
     path: PathBuf,
     saved: ApplicationState,
-    handles: karbeat_audio::context::ControlHandles,
+    handles: ControlHandles,
     plugin_registry: PluginRegistry,
     external_plugin_failures: hashbrown::HashMap<PluginTarget, String>,
-    host_state_capture: std::sync::Arc<dyn HostStateCapture>,
+    host_state_capture: Arc<dyn HostStateCapture>,
     has_engine: bool,
 }
 
@@ -774,7 +779,7 @@ fn execute_save_with(
 /// `begin_save`, so edits that landed while the save ran keep the project unsaved.
 pub(super) fn commit_save(ctx: &mut DawContext, completed: CompletedProjectSave) {
     let revision = completed.revision();
-    let mut session = std::mem::take(&mut ctx.app_state.session);
+    let mut session = take(&mut ctx.app_state.session);
     session.mark_saved_at(revision);
     session.set_file_path(Some(completed.path));
     ctx.app_state = completed.saved;
@@ -928,8 +933,7 @@ pub(crate) fn capture_live_state(
         .iter()
         .filter(|target| {
             !ctx.external_plugin_failures.contains_key(*target)
-                && crate::external_plugin_api::plugin_instance(ctx, **target)
-                    .is_some_and(|plugin| plugin.external.is_none())
+                && plugin_instance(ctx, **target).is_some_and(|plugin| plugin.external.is_none())
         })
         .map(|target| PendingTarget::Plugin(*target))
         .chain(mixers.iter().cloned().map(PendingTarget::Mixer))
@@ -955,7 +959,7 @@ pub(crate) fn capture_live_state(
 }
 
 pub(crate) fn hosted_instance_with_handles(
-    handles: &karbeat_audio::context::ControlHandles,
+    handles: &ControlHandles,
     target: PluginTarget,
 ) -> anyhow::Result<HostInstanceId> {
     let (plugins, _) = collect(

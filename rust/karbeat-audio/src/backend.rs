@@ -1,9 +1,12 @@
 use std::{
+    mem::replace,
     str::FromStr,
     sync::{
         Arc,
         atomic::{AtomicU64, Ordering},
+        mpsc::{SyncSender, TryRecvError, sync_channel},
     },
+    thread::{sleep, spawn},
     time::{Duration, Instant},
 };
 
@@ -12,12 +15,13 @@ use cpal::{
     DeviceId, FromSample, OutputCallbackInfo, SizedSample,
     traits::{DeviceTrait, HostTrait, StreamTrait},
 };
+use karbeat_utils::typestate::InvalidState;
 use parking_lot::Mutex;
 use rtrb::{Consumer, Producer, RingBuffer};
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    commands::{AudioCommand, TelemetryRegistration},
+    commands::{AudioCommand, AudioFeedback, TelemetryRegistration},
     context::DawContext,
     dsp_engine::{REALTIME_SLICE, RealtimeSlice, auto_worker_count, promote_current_thread},
     engine::{
@@ -618,12 +622,9 @@ impl AudioRuntimeSettings {
         &mut self,
         transition: impl FnOnce(
             AnyOutputStream,
-        ) -> Result<
-            AnyOutputStream,
-            (AnyOutputStream, karbeat_utils::typestate::InvalidState),
-        >,
+        ) -> Result<AnyOutputStream, (AnyOutputStream, InvalidState)>,
     ) {
-        let current = std::mem::replace(&mut self.stream_status, DeviceStreamStatus::Starting);
+        let current = replace(&mut self.stream_status, DeviceStreamStatus::Starting);
         self.stream_status = match transition(current.into()) {
             Ok(next) => next.into(),
             Err((unchanged, invalid)) => {
@@ -691,7 +692,7 @@ enum DspControl {
     Attach {
         dsp_config: RequestedDspConfig,
         device_sample_rate: u32,
-        ready_tx: std::sync::mpsc::SyncSender<Result<Consumer<OutputFrame>, String>>,
+        ready_tx: SyncSender<Result<Consumer<OutputFrame>, String>>,
         input: Option<InputAttach>,
     },
     Detach,
@@ -999,24 +1000,22 @@ pub fn start_audio_stream(
     let output_clock = Arc::clone(&ctx.output_clock);
     let input_clock = Arc::clone(&ctx.input_clock);
 
-    let (feedback_producer, feedback_consumer) =
-        RingBuffer::<crate::commands::AudioFeedback>::new(512);
+    let (feedback_producer, feedback_consumer) = RingBuffer::<AudioFeedback>::new(512);
     ctx.feedback_consumer = Arc::new(Mutex::new(Some(feedback_consumer)));
 
     let initial_bpm = ctx.app_state.transport.bpm;
 
     let (engine_telemetry, mixer_consumer) = AudioEngineTelemetry::new();
-    let (telemetry_reg_sender, telemetry_reg_receiver) =
-        std::sync::mpsc::sync_channel::<TelemetryRegistration>(64);
+    let (telemetry_reg_sender, telemetry_reg_receiver) = sync_channel::<TelemetryRegistration>(64);
 
     let telemetry_registry = TelemetryRegistry::new(mixer_consumer);
     ctx.update_telemetry_reg(telemetry_registry);
     ctx.telemetry_reg_receiver = Some(Mutex::new(telemetry_reg_receiver));
 
-    let (dsp_control_tx, dsp_control_rx) = std::sync::mpsc::sync_channel::<DspControl>(1);
+    let (dsp_control_tx, dsp_control_rx) = sync_channel::<DspControl>(1);
 
     // Persistent DSP thread. AudioEngine is constructed, used, and dropped only here.
-    std::thread::spawn(move || {
+    spawn(move || {
         let mut engine = AudioEngine::new(
             command_consumer,
             pos_producer,
@@ -1126,10 +1125,10 @@ pub fn start_audio_stream(
                         ));
                         break;
                     }
-                    Err(std::sync::mpsc::TryRecvError::Disconnected) => {
+                    Err(TryRecvError::Disconnected) => {
                         break 'dsp_lifetime;
                     }
-                    Err(std::sync::mpsc::TryRecvError::Empty) => {}
+                    Err(TryRecvError::Empty) => {}
                 }
 
                 // With an input stream, a block waits for its input unless the output is
@@ -1158,7 +1157,7 @@ pub fn start_audio_stream(
                         dsp_config.sample_rate,
                     );
                 } else {
-                    std::thread::sleep(Duration::from_millis(1));
+                    sleep(Duration::from_millis(1));
                     realtime_slice.blocked();
                 }
             }
@@ -1177,7 +1176,7 @@ pub fn start_audio_stream(
     });
 
     // Spawn the device monitor thread. This thread never contains AudioEngine.
-    std::thread::spawn(move || {
+    spawn(move || {
         let mut retry_delay = INITIAL_RETRY_DELAY;
 
         loop {
@@ -1196,7 +1195,7 @@ pub fn start_audio_stream(
                         e,
                         retry_delay
                     );
-                    std::thread::sleep(retry_delay);
+                    sleep(retry_delay);
                     retry_delay = next_retry_delay(retry_delay);
                     continue;
                 }
@@ -1244,8 +1243,7 @@ pub fn start_audio_stream(
 
             // Ask the DSP thread to create the rate bridge + output ring. The returned
             // Consumer is the only DSP-owned data path that crosses into the monitor.
-            let (ready_tx, ready_rx) =
-                std::sync::mpsc::sync_channel::<Result<Consumer<OutputFrame>, String>>(1);
+            let (ready_tx, ready_rx) = sync_channel::<Result<Consumer<OutputFrame>, String>>(1);
 
             if dsp_control_tx
                 .send(DspControl::Attach {
@@ -1267,7 +1265,7 @@ pub fn start_audio_stream(
                         .write()
                         .stream_unavailable(error.clone());
                     tracing::error!("Could not configure DSP output path: {error}");
-                    std::thread::sleep(retry_delay);
+                    sleep(retry_delay);
                     retry_delay = next_retry_delay(retry_delay);
                     continue;
                 }
@@ -1277,7 +1275,7 @@ pub fn start_audio_stream(
                 }
             };
 
-            let (restart_tx, restart_rx) = std::sync::mpsc::sync_channel::<()>(1);
+            let (restart_tx, restart_rx) = sync_channel::<()>(1);
             let tx_clone = restart_tx.clone();
             let err_config_arc = Arc::clone(&active_config_arc);
 
@@ -1389,7 +1387,7 @@ pub fn start_audio_stream(
                         e,
                         retry_delay
                     );
-                    std::thread::sleep(retry_delay);
+                    sleep(retry_delay);
                     retry_delay = next_retry_delay(retry_delay);
                     continue;
                 }
@@ -1405,7 +1403,7 @@ pub fn start_audio_stream(
                     e,
                     retry_delay
                 );
-                std::thread::sleep(retry_delay);
+                sleep(retry_delay);
                 retry_delay = next_retry_delay(retry_delay);
                 continue;
             }
@@ -1459,7 +1457,7 @@ pub fn start_audio_stream(
                     }
                 }
 
-                std::thread::sleep(Duration::from_millis(100));
+                sleep(Duration::from_millis(100));
             };
 
             // Stop the callback first so it no longer consumes from this ring, then
@@ -1479,12 +1477,12 @@ pub fn start_audio_stream(
                         "Audio stream failed shortly after startup. Retrying in {:?}...",
                         retry_delay
                     );
-                    std::thread::sleep(retry_delay);
+                    sleep(retry_delay);
                     retry_delay = next_retry_delay(retry_delay);
                 }
                 _ => {
                     retry_delay = INITIAL_RETRY_DELAY;
-                    std::thread::sleep(Duration::from_millis(500));
+                    sleep(Duration::from_millis(500));
                 }
             }
         }

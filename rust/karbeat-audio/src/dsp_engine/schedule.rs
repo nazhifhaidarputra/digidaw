@@ -5,6 +5,8 @@
 //! move when a level becomes clearly unbalanced, so a plugin stays on one thread otherwise.
 //! Every vector is sized when the schedule is built; reassigning never allocates.
 
+use std::ops::Range;
+
 /// Smoothing of measured node costs: the share a new measurement takes.
 const COST_SMOOTHING: f32 = 0.05;
 /// A level is rebalanced once its busiest worker exceeds the mean by this fraction...
@@ -114,7 +116,7 @@ impl LevelSchedule {
         moved
     }
 
-    fn level_nodes(&self, level: usize) -> std::ops::Range<usize> {
+    fn level_nodes(&self, level: usize) -> Range<usize> {
         let start = self.level_bounds.get(level).copied().unwrap_or(0) as usize;
         let end = self.level_bounds.get(level + 1).copied().unwrap_or(0) as usize;
         start..end

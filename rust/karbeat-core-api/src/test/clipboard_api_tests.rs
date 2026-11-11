@@ -7,7 +7,10 @@ mod tests {
 
     use crate::test::helpers::{add_dc_audio_source, make_ctx, make_seeded_ctx};
     use karbeat_core::core::project::ClipboardContent;
-    use karbeat_core::core::project::clip::ClipSourceType;
+    use karbeat_core::core::project::{
+        DawSource,
+        clip::{ClipSourceType, ClipTimeUnit},
+    };
     use karbeat_core::shared::id::PatternId;
 
     #[test]
@@ -179,7 +182,7 @@ mod tests {
     fn paste_clips_empty_clipboard_returns_err() {
         let (mut ctx, _audio_id, midi_id, _pat_id) = make_seeded_ctx();
         // Clipboard is empty
-        let paste_pos = karbeat_core::core::project::clip::ClipTimeUnit::Ticks {
+        let paste_pos = ClipTimeUnit::Ticks {
             start_time: 0,
             loop_length: 0,
             offset_start: 0,
@@ -200,7 +203,7 @@ mod tests {
             .collect();
         clipboard_api::copy_clips(&mut ctx, midi_id, &clip_ids);
 
-        let paste_pos = karbeat_core::core::project::clip::ClipTimeUnit::Ticks {
+        let paste_pos = ClipTimeUnit::Ticks {
             start_time: 9600,
             loop_length: 0,
             offset_start: 0,
@@ -229,7 +232,7 @@ mod tests {
             .collect();
         clipboard_api::copy_clips(&mut ctx, audio_id, &audio_clip_ids);
 
-        let paste_pos = karbeat_core::core::project::clip::ClipTimeUnit::Ticks {
+        let paste_pos = ClipTimeUnit::Ticks {
             start_time: 9600,
             loop_length: 0,
             offset_start: 0,
@@ -245,13 +248,13 @@ mod tests {
                 .iter()
                 .all(|clip_id| !matches!(
                     ctx.app_state.clips_pool[*clip_id].source,
-                    Some(karbeat_core::core::project::DawSource::Audio(id))
+                    Some(DawSource::Audio(id))
                         if id == source_id
                 )),
             "rejected paste must not leave audio clips on the MIDI track"
         );
 
-        let audio_paste_pos = karbeat_core::core::project::clip::ClipTimeUnit::Audio {
+        let audio_paste_pos = ClipTimeUnit::Audio {
             start_tick: 9600,
             loop_length: 0,
             offset_start: 0,

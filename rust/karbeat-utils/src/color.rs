@@ -1,4 +1,5 @@
 use serde::{Deserialize, Deserializer, Serialize, Serializer, de};
+use std::fmt::{Display, Formatter, Result as FmtResult};
 use thiserror::Error;
 
 /// Just your average color data structure
@@ -89,8 +90,8 @@ impl Color {
     }
 }
 
-impl std::fmt::Display for Color {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl Display for Color {
+    fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
         write!(
             f,
             "#{:02X}{:02X}{:02X}{:02X}",

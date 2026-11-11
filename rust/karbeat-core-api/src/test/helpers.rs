@@ -10,18 +10,25 @@ use crate::{clip_api, note_api, track_api};
 use karbeat_audio::context::DawContext;
 use karbeat_core::{
     core::project::{
-        DawSource,
+        AudioWaveform, DawSource,
         clip::{Clip, ClipSourceType, ClipTimeUnit},
     },
-    shared::id::{ClipId, PatternId, TrackId},
+    shared::{
+        AudioSourceId,
+        id::{ClipId, PatternId, TrackId},
+    },
+};
+use std::{
+    path::PathBuf,
+    sync::{Arc, OnceLock},
 };
 
 /// Returns a per-test mitigation root inside one directory that lives for the whole test process.
 ///
 /// Crash reporting is configured once per process, so the first test to configure it keeps using
 /// its directory; that directory must outlive every other test.
-pub fn mitigation_root(name: &str) -> std::path::PathBuf {
-    static ROOT: std::sync::OnceLock<tempfile::TempDir> = std::sync::OnceLock::new();
+pub fn mitigation_root(name: &str) -> PathBuf {
+    static ROOT: OnceLock<tempfile::TempDir> = OnceLock::new();
     ROOT.get_or_init(|| tempfile::tempdir().expect("mitigation test root"))
         .path()
         .join(name)
@@ -107,9 +114,7 @@ pub fn make_midi_clip_at(start_ticks: u32, length_ticks: u32, pattern_id: Patter
 }
 
 /// Adds a one-second stereo audio source of constant samples to the project's asset library.
-pub fn add_dc_audio_source(ctx: &mut DawContext) -> karbeat_core::shared::AudioSourceId {
-    use std::sync::Arc;
-
+pub fn add_dc_audio_source(ctx: &mut DawContext) -> AudioSourceId {
     let samples = vec![0.5_f32; 48_000 * 2];
     let bytes: &[u8] = bytemuck::cast_slice(&samples);
     let mut map = memmap2::MmapOptions::new()
@@ -122,7 +127,7 @@ pub fn add_dc_audio_source(ctx: &mut DawContext) -> karbeat_core::shared::AudioS
         .asset_library
         .source_map
         .insert_with_key(|id| {
-            Arc::new(karbeat_core::core::project::AudioWaveform {
+            Arc::new(AudioWaveform {
                 id: Some(id),
                 name: "dc".into(),
                 buffer: Some(buffer),

@@ -5,6 +5,7 @@
 //! work can run as a background job.
 
 use std::{
+    ops::RangeInclusive,
     path::PathBuf,
     sync::{
         Arc,
@@ -42,7 +43,7 @@ use parking_lot::Mutex;
 use crate::jobs;
 
 /// Tempo range a source may be fitted from or to.
-const BPM_RANGE: std::ops::RangeInclusive<f32> = 20.0..=400.0;
+const BPM_RANGE: RangeInclusive<f32> = 20.0..=400.0;
 
 /// Tempo state of a source, compared at commit to detect edits made while a job ran.
 #[derive(Clone, Debug, PartialEq)]

@@ -1,3 +1,5 @@
+use super::telemetry::PDC_LATENCY_SAMPLES;
+use crate::render_state::{AudioGeneratorInstance, EffectPluginSnapshot};
 use crate::{
     apply_mix_param,
     commands::{AudioCommand, AudioFeedback, EffectTarget, TelemetryRegistration},
@@ -30,11 +32,20 @@ use crate::{
 };
 use hashbrown::{HashMap, HashSet};
 use karbeat_core::{core::project::*, shared::constants::f64::PPQ};
-use karbeat_host::{HostError, HostInstanceId, PreparedProcessor};
+use karbeat_dsp::interpolation::lerp;
+use karbeat_host::{HostError, HostInstanceId, HostedProcessor, PreparedProcessor};
+use karbeat_plugin_api::prelude::ZeroCopyBuffer;
 use karbeat_plugins::registry::PluginRegistry;
 use rtrb::{Consumer, Producer};
 use smallvec::SmallVec;
-use std::sync::mpsc;
+use std::{
+    any::Any,
+    mem::{forget, replace, take as mem_take},
+    slice::from_ref,
+    sync::{Arc, atomic::Ordering, mpsc},
+    thread::{sleep, spawn},
+    time::Duration,
+};
 use thiserror::Error;
 
 pub struct AudioEngine {
@@ -97,7 +108,7 @@ pub(super) enum RetiredGraphState {
     Routing(Box<[RoutingConnection]>),
     Automation(AudioAutomationLane),
     AudioBuffer(Vec<f32>),
-    AudioSource(std::sync::Arc<AudioWaveform>),
+    AudioSource(Arc<AudioWaveform>),
     TelemetryProducer(triple_buffer::Input<PluginTelemetrySnapshot>),
     TelemetrySubscription(HashSet<String>),
     RenderPlan(Box<RenderPlan>),
@@ -108,13 +119,13 @@ pub(super) enum RetiredGraphState {
 /// the audio thread.
 fn push_retired(queue: &mut Producer<RetiredGraphState>, retired: RetiredGraphState) {
     if let Err(rtrb::PushError::Full(retired)) = queue.push(retired) {
-        std::mem::forget(retired);
+        forget(retired);
     }
 }
 
 fn graph_retirement_queue() -> Producer<RetiredGraphState> {
     let (producer, mut consumer) = rtrb::RingBuffer::new(128);
-    std::thread::spawn(move || {
+    spawn(move || {
         loop {
             // Checked before pop: once abandoned no push can follow, so empty is final.
             let abandoned = consumer.is_abandoned();
@@ -137,7 +148,7 @@ fn graph_retirement_queue() -> Producer<RetiredGraphState> {
                 },
                 Err(rtrb::PopError::Empty) if abandoned => break,
                 Err(rtrb::PopError::Empty) => {
-                    std::thread::sleep(std::time::Duration::from_millis(10));
+                    sleep(Duration::from_millis(10));
                 }
             }
         }
@@ -422,7 +433,7 @@ impl AudioEngine {
                 buffer_size,
                 channels,
             )?;
-            plugin_state.insert_generator(crate::render_state::AudioGeneratorInstance {
+            plugin_state.insert_generator(AudioGeneratorInstance {
                 id: generator.id,
                 track_id: generator.track_id,
                 registry_id: generator.registry_id,
@@ -489,7 +500,7 @@ impl AudioEngine {
     }
 
     fn effects_from_snapshot(
-        chains: Vec<Vec<crate::render_state::EffectPluginSnapshot>>,
+        chains: Vec<Vec<EffectPluginSnapshot>>,
         hosted_processors: &mut HashMap<HostInstanceId, PreparedProcessor>,
         plugin_registry: &PluginRegistry,
         sample_rate: f32,
@@ -512,7 +523,7 @@ impl AudioEngine {
     }
 
     fn effect_chain_from_snapshot(
-        chain: Vec<crate::render_state::EffectPluginSnapshot>,
+        chain: Vec<EffectPluginSnapshot>,
         hosted_processors: &mut HashMap<HostInstanceId, PreparedProcessor>,
         plugin_registry: &PluginRegistry,
         sample_rate: f32,
@@ -534,6 +545,7 @@ impl AudioEngine {
                     channels,
                 )?;
                 Ok(AudioEffectInstance {
+                    parked: true,
                     id: effect.id,
                     registry_id: effect.registry_id,
                     plugin,
@@ -580,7 +592,7 @@ impl AudioEngine {
             channel_count: channels,
             is_optional: false,
         };
-        plugin.set_io_layout(std::slice::from_ref(&bus), std::slice::from_ref(&bus));
+        plugin.set_io_layout(from_ref(&bus), from_ref(&bus));
         Ok(plugin)
     }
 
@@ -1052,7 +1064,7 @@ impl AudioEngine {
     pub(super) fn get_plugin_mut<'a>(
         &'a mut self,
         target: &PluginTarget,
-    ) -> Option<&'a mut Box<dyn karbeat_core::core::project::plugin::AudioPlugin>> {
+    ) -> Option<&'a mut Box<dyn AudioPlugin>> {
         match target {
             PluginTarget::Generator(id) => self
                 .plugin_state
@@ -1076,10 +1088,7 @@ impl AudioEngine {
         }
     }
 
-    pub(super) fn get_plugin<'a>(
-        &'a self,
-        target: &PluginTarget,
-    ) -> Option<&'a dyn karbeat_core::core::project::plugin::AudioPlugin> {
+    pub(super) fn get_plugin<'a>(&'a self, target: &PluginTarget) -> Option<&'a dyn AudioPlugin> {
         self.plugin_state.plugin(target)
     }
 
@@ -1161,8 +1170,24 @@ impl AudioEngine {
     /// editor asked them to load, though they play no notes: parked, they would not receive it
     /// until the next note. A generator that never played gets its voice here.
     fn wake_generators_with_pending_work(&mut self) {
+        self.wake_generators_where(|generator| generator.plugin.has_pending_work());
+    }
+
+    /// Renders every hosted generator in the next block, playing or not.
+    ///
+    /// Hosted instruments apply restored state from their process callback, often on a worker
+    /// thread: LSP's samplers load their sample files this way, and report the load as pending
+    /// work only once a process call has started it. A parked instrument gets no such call, so
+    /// it would still be loading when its first note arrives and drop that note.
+    pub fn wake_hosted_generators(&mut self) {
+        self.wake_generators_where(|generator| generator.plugin.as_any().is::<HostedProcessor>());
+    }
+
+    /// Gives each generator `wake` selects an active voice, creating one for a generator that
+    /// never played.
+    pub(super) fn wake_generators_where(&mut self, wake: impl Fn(&AudioGeneratorInstance) -> bool) {
         for (_, generator) in self.plugin_state.generators.iter() {
-            if !generator.plugin.has_pending_work() {
+            if !wake(generator) {
                 continue;
             }
             let voices = &mut self.voices.active_generators;
@@ -1532,7 +1557,7 @@ impl AudioEngine {
                 1.0 + effects.map_or(0, Vec::len) as f32
             },
         );
-        let retired = std::mem::replace(&mut self.render_plan, plan);
+        let retired = replace(&mut self.render_plan, plan);
         self.retire_graph_state(RetiredGraphState::RenderPlan(Box::new(retired)));
     }
 
@@ -1540,7 +1565,7 @@ impl AudioEngine {
         let start_time = self.transport.song.playhead_samples;
         let end_time = start_time + (buffer_size as u32);
 
-        let tracks = std::mem::take(&mut self.current_state.graph.tracks);
+        let tracks = mem_take(&mut self.current_state.graph.tracks);
         let scale = TickScale::new(self.transport.bpm, self.config.sample_rate);
         self.clip_schedule
             .ensure(&tracks, &self.current_state.graph.clips, scale);
@@ -1683,7 +1708,7 @@ impl AudioEngine {
     fn schedule_pattern_notes_raw(
         events: &mut SmallVec<[MidiEvent; 4]>,
         pattern_id: PatternId,
-        notes: &[karbeat_core::core::project::Note],
+        notes: &[Note],
         scale: TickScale,
         buffer_start: u32,
         buffer_end: u32,
@@ -1729,8 +1754,7 @@ impl AudioEngine {
 
         // Offline renders compensate their own graph and leave the monitor reading alone.
         if matches!(self.processing_mode, ProcessingMode::Realtime) {
-            super::telemetry::PDC_LATENCY_SAMPLES
-                .store(max_system_latency, std::sync::atomic::Ordering::Relaxed);
+            PDC_LATENCY_SAMPLES.store(max_system_latency, Ordering::Relaxed);
         }
 
         tracing::info!(
@@ -1797,13 +1821,13 @@ impl AudioEngine {
     }
 
     pub(super) fn evaluate_pre_block_modulations(&mut self, buffer_size: usize) {
-        let mut peak_updates = std::mem::take(&mut self.modulation.peak_updates);
+        let mut peak_updates = mem_take(&mut self.modulation.peak_updates);
         peak_updates.clear();
         for (id, (source, _)) in self.modulation.active_sources.iter() {
             if let LiveModulationSource::PeakController { source: p_tgt } = source {
-                if let Some(karbeat_plugin_api::prelude::ZeroCopyBuffer::Float32(control_buf)) =
-                    self.get_plugin(p_tgt)
-                        .and_then(|p| p.get_zero_copy_buffer("control"))
+                if let Some(ZeroCopyBuffer::Float32(control_buf)) = self
+                    .get_plugin(p_tgt)
+                    .and_then(|p| p.get_zero_copy_buffer("control"))
                 {
                     peak_updates.push((*id, control_buf.first().copied().unwrap_or(0.0)));
                 }
@@ -1814,7 +1838,7 @@ impl AudioEngine {
         }
         self.modulation.peak_updates = peak_updates;
 
-        let mut parameter_changes = std::mem::take(&mut self.modulation.target_accumulators);
+        let mut parameter_changes = mem_take(&mut self.modulation.target_accumulators);
         self.modulation.evaluate(
             buffer_size,
             self.transport.bpm,
@@ -1878,7 +1902,7 @@ impl AudioEngine {
                 }
                 MasterAutomationTarget::TempoBpm => {
                     // Lanes are normalized; tempo owns the mapping to beats per minute.
-                    self.transport.bpm = karbeat_dsp::interpolation::lerp(
+                    self.transport.bpm = lerp(
                         final_value,
                         TEMPO_AUTOMATION_MIN_BPM,
                         TEMPO_AUTOMATION_MAX_BPM,
@@ -1983,6 +2007,36 @@ impl AudioEngine {
         .any(AudioEffectInstance::keeps_processing)
     }
 
+    /// Whether any generator or effect is a hosted (VST3, CLAP or LV2) plugin.
+    pub fn has_hosted_plugins(&self) -> bool {
+        let hosted = |plugin: &dyn Any| plugin.is::<HostedProcessor>();
+        self.plugin_state
+            .generators
+            .iter()
+            .any(|(_, generator)| hosted(generator.plugin.as_any()))
+            || itertools::chain!(
+                self.plugin_state.track_effects.iter().flatten(),
+                self.plugin_state.bus_effects.iter().flatten(),
+                self.plugin_state.master_effects.iter(),
+            )
+            .any(|effect| hosted(effect.plugin.as_any()))
+    }
+
+    /// Whether any generator or effect still has work only further process calls complete,
+    /// such as loading a sample file.
+    pub fn has_pending_plugin_work(&self) -> bool {
+        self.plugin_state
+            .generators
+            .iter()
+            .any(|(_, generator)| generator.plugin.has_pending_work())
+            || itertools::chain!(
+                self.plugin_state.track_effects.iter().flatten(),
+                self.plugin_state.bus_effects.iter().flatten(),
+                self.plugin_state.master_effects.iter(),
+            )
+            .any(|effect| effect.plugin.has_pending_work())
+    }
+
     /// Frames by which delay compensation holds back the master output: output frame `n` plays
     /// the timeline at frame `n - system_latency()`.
     pub fn system_latency(&self) -> u32 {
@@ -2061,7 +2115,7 @@ impl AudioEngine {
                 channel_count: channels,
                 is_optional: false,
             };
-            plugin.set_io_layout(std::slice::from_ref(&bus.clone()), &[bus]);
+            plugin.set_io_layout(from_ref(&bus.clone()), &[bus]);
         }
 
         // Clear delay lines to avoid playing back garbage/pitch-shifted audio
@@ -2110,7 +2164,7 @@ impl AudioEngine {
             return;
         }
 
-        let mut producers = std::mem::take(&mut self.telemetry.param_telemetry_producers);
+        let mut producers = mem_take(&mut self.telemetry.param_telemetry_producers);
         for (target, producer) in &mut producers {
             let Some(buffer_names) = self.telemetry.active_telemetry_subscriptions.get(target)
             else {

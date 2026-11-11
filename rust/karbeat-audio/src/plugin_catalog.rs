@@ -2,6 +2,7 @@ use std::collections::{HashMap, HashSet};
 
 use karbeat_host::{PluginDescriptor, PluginIdentity, PluginKind};
 use karbeat_plugins::registry::{PluginInfo, PluginRegistry};
+use karbeat_utils::hash::hash_str;
 
 /// External discovery entry. The numeric ID is local to this catalog; projects persist identity.
 #[derive(Clone, Debug)]
@@ -110,7 +111,7 @@ impl PluginCatalog {
     }
 
     fn allocate_id(&self, identity: &PluginIdentity) -> u32 {
-        let mut id = karbeat_utils::hash::hash_str(&format!(
+        let mut id = hash_str(&format!(
             "external:{:?}:{}",
             identity.format, identity.native_id
         ));

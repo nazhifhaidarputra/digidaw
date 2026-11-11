@@ -3,8 +3,13 @@
 //! glibc keeps freed pages in its per-thread arenas instead of unmapping them, so memory
 //! released by a project load or a plugin teardown stays resident even though nothing uses it.
 
-use std::sync::atomic::{AtomicBool, Ordering};
+#[cfg(all(target_os = "linux", target_env = "gnu"))]
+use std::ffi::c_int;
 use std::time::Duration;
+use std::{
+    sync::atomic::{AtomicBool, Ordering},
+    thread::{Builder, sleep},
+};
 
 /// Lets asynchronous retirement (engine cleanup queues, native plugin teardown) finish first.
 const RELEASE_DELAY: Duration = Duration::from_secs(2);
@@ -25,10 +30,10 @@ fn schedule_release_after(delay: Duration) -> bool {
     if RELEASE_PENDING.swap(true, Ordering::AcqRel) {
         return false;
     }
-    let spawned = std::thread::Builder::new()
+    let spawned = Builder::new()
         .name("karbeat-heap-release".to_owned())
         .spawn(move || {
-            std::thread::sleep(delay);
+            sleep(delay);
             // Cleared first so frees that land during the release can schedule another pass.
             RELEASE_PENDING.store(false, Ordering::Release);
             release_to_os();
@@ -44,7 +49,7 @@ fn schedule_release_after(delay: Duration) -> bool {
 #[cfg(all(target_os = "linux", target_env = "gnu"))]
 fn release_to_os() {
     unsafe extern "C" {
-        fn malloc_trim(pad: usize) -> std::ffi::c_int;
+        fn malloc_trim(pad: usize) -> c_int;
     }
     // SAFETY: `malloc_trim` only returns unused pages of glibc's own arenas and takes each
     // arena's lock itself, so it is safe to call concurrently with other allocating threads.
@@ -58,13 +63,15 @@ fn release_to_os() {}
 #[cfg(all(test, target_os = "linux", target_env = "gnu"))]
 mod tests {
     use super::*;
+    #[cfg(test)]
+    use std::thread::yield_now;
 
     #[test]
     fn pending_release_coalesces_requests_until_it_runs() {
         assert!(schedule_release_after(Duration::from_millis(50)));
         assert!(!schedule_release_after(Duration::from_millis(50)));
         while RELEASE_PENDING.load(Ordering::Acquire) {
-            std::thread::yield_now();
+            yield_now();
         }
         assert!(schedule_release_after(Duration::ZERO));
     }

@@ -12,6 +12,7 @@ use crate::shared::{
     GeneratorId,
     id::{AutomationId, AutomationPointId, BusId, EffectId, TrackId},
 };
+use std::f64::consts::PI;
 
 // ============================================================================
 // AUTOMATION TARGET
@@ -771,7 +772,7 @@ pub fn shape_segment(shape: SegmentShape, v1: f64, v2: f64, t: f64) -> f64 {
         }
         AutomationCurveType::Wave => {
             let (half, phase) = half_cycle(t, tension);
-            let rising = 0.5 - 0.5 * (phase * std::f64::consts::PI).cos();
+            let rising = 0.5 - 0.5 * (phase * PI).cos();
             lerp(
                 if half.is_multiple_of(2) {
                     rising
@@ -795,7 +796,7 @@ pub fn shape_segment(shape: SegmentShape, v1: f64, v2: f64, t: f64) -> f64 {
             )
         }
         AutomationCurveType::HalfSine => {
-            let arch = (apply_tension_to_t(t, tension) * std::f64::consts::PI).sin();
+            let arch = (apply_tension_to_t(t, tension) * PI).sin();
             lerp(arch, v1, v2)
         }
     }

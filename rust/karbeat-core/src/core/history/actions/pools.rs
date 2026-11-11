@@ -3,6 +3,7 @@ use slotmap::{Key, SlotMap};
 
 use super::swap_slot;
 use crate::core::history::HistoryError;
+use std::hash::Hash;
 
 /// Changed entries of one slot map, as they are on the other side of an edit.
 ///
@@ -70,7 +71,7 @@ pub(crate) struct PoolBefore<K: Key, V> {
     entries: HashMap<K, V>,
 }
 
-impl<K: Key + std::hash::Hash, V: Clone + PartialEq> PoolBefore<K, V> {
+impl<K: Key + Hash, V: Clone + PartialEq> PoolBefore<K, V> {
     pub(crate) fn capture(pool: &SlotMap<K, V>) -> Self {
         Self {
             entries: pool

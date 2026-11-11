@@ -16,7 +16,11 @@ use karbeat_core::{
     },
     shared::id::*,
 };
+use karbeat_utils::hash::hash_str;
 
+use super::external_plugin_api::{
+    descriptor, plugin_instance as external_plugin_api_plugin_instance,
+};
 use std::sync::atomic::{AtomicU32, Ordering};
 
 // ============================================================================
@@ -38,13 +42,13 @@ impl IntoParamId for u32 {
 
 impl IntoParamId for &str {
     fn into_id(self) -> u32 {
-        karbeat_utils::hash::hash_str(self)
+        hash_str(self)
     }
 }
 
 impl IntoParamId for String {
     fn into_id(self) -> u32 {
-        karbeat_utils::hash::hash_str(&self)
+        hash_str(&self)
     }
 }
 
@@ -189,7 +193,7 @@ where
     F: Fn(ParameterSpec, f32) -> T,
 {
     let target = PluginTarget::Generator(*generator_id);
-    if super::external_plugin_api::descriptor(ctx, target).is_some() {
+    if descriptor(ctx, target).is_some() {
         return get_plugin_parameter_specs(ctx, &target, mapper).map_err(|error| error.to_string());
     }
     let generator_arc = ctx
@@ -243,7 +247,7 @@ where
         EffectTarget::Bus(id) => PluginTarget::BusEffect(*id, *effect_id),
         EffectTarget::Master => PluginTarget::MasterEffect(*effect_id),
     };
-    if super::external_plugin_api::descriptor(ctx, plugin_target).is_some() {
+    if descriptor(ctx, plugin_target).is_some() {
         return get_plugin_parameter_specs(ctx, &plugin_target, mapper)
             .map_err(|error| error.to_string());
     }
@@ -325,8 +329,8 @@ pub fn get_plugin_parameter_specs<F, T>(
 where
     F: Fn(ParameterSpec, f32) -> T,
 {
-    if let Some(plugin) = super::external_plugin_api::plugin_instance(ctx, *target)
-        .filter(|plugin| plugin.external.is_some())
+    if let Some(plugin) =
+        external_plugin_api_plugin_instance(ctx, *target).filter(|plugin| plugin.external.is_some())
     {
         return Ok(plugin
             .parameter_specs

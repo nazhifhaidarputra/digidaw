@@ -3,15 +3,22 @@
     reason = "integration test setup failures should fail the test"
 )]
 
+use futures_lite::future::block_on;
 use karbeat_host_api::{
     HostInstanceId, NativeEditorBinding, NativeEditorEvent, NativeSurfaceKind, NativeUiPlatform,
     NativeWindow, NativeWindowIdAllocator, NativeWindowSize, NativeWindowSpec, PluginEditorManager,
-    SystemNativeUi,
+    PluginInstanceManager as _, SystemNativeUi,
 };
-use karbeat_lv2::Lv2PluginHost;
+use karbeat_lv2::{Lv2PluginHost, native};
+use karbeat_plugin_api::types::{AudioBuffers, AudioBusBuffer, ProcessContext, ProcessingMode};
 use std::{
     cell::RefCell,
     rc::Rc,
+    sync::{
+        Arc,
+        atomic::{AtomicBool, Ordering},
+    },
+    thread::{sleep, spawn},
     time::{Duration, Instant},
 };
 
@@ -85,7 +92,7 @@ pub fn exercise_editor(
                 .unwrap();
             native_ui.pump().unwrap();
             host.pump().unwrap();
-            std::thread::sleep(Duration::from_millis(8));
+            sleep(Duration::from_millis(8));
         }
 
         assert!(binding.borrow_mut().begin_close());
@@ -103,28 +110,20 @@ pub fn exercise_native_editor(
     descriptor: karbeat_host_api::PluginDescriptor,
     config: karbeat_host_api::ProcessingConfig,
 ) {
-    use karbeat_host_api::PluginInstanceManager as _;
-    use karbeat_lv2::native;
-    use karbeat_plugin_api::types::{AudioBuffers, AudioBusBuffer, ProcessContext, ProcessingMode};
-    use std::sync::{
-        Arc,
-        atomic::{AtomicBool, Ordering},
-    };
-
     fn run<T>(
         future: impl Future<Output = Result<T, karbeat_host_api::HostError>>,
     ) -> Result<T, karbeat_host_api::HostError> {
-        futures_lite::future::block_on(future)
+        block_on(future)
     }
 
-    let worker = std::thread::spawn(move || {
+    let worker = spawn(move || {
         let prepared = run(native::prepare_instance(descriptor, config, None)).unwrap();
         let id = prepared.instance;
         assert!(prepared.capabilities.editor);
         run(native::call(move |owner| owner.host.resume(id))).unwrap();
         let stop = Arc::new(AtomicBool::new(false));
         let audio_stop = stop.clone();
-        let audio = std::thread::spawn(move || {
+        let audio = spawn(move || {
             let mut processor = prepared.processor.install().unwrap();
             let mut block = 0_u64;
             while !audio_stop.load(Ordering::Acquire) {
@@ -166,7 +165,7 @@ pub fn exercise_native_editor(
                 );
                 assert!(out_l.iter().chain(&out_r).all(|sample| sample.is_finite()));
                 block += 1;
-                std::thread::sleep(Duration::from_millis(2));
+                sleep(Duration::from_millis(2));
             }
             processor.retire();
         });
@@ -178,7 +177,7 @@ pub fn exercise_native_editor(
             .unwrap();
             // Opening an editor that is already open only focuses its window.
             run(native::call(move |owner| owner.open_editor(id))).unwrap();
-            std::thread::sleep(Duration::from_secs(2));
+            sleep(Duration::from_secs(2));
             let size = run(native::call(move |owner| owner.host.editor_size(id))).unwrap();
             assert!(
                 size.width > 1 && size.height > 1,
@@ -202,7 +201,7 @@ pub fn exercise_native_editor(
     while !worker.is_finished() {
         assert!(Instant::now() < deadline, "native editor run timed out");
         context.iteration(false);
-        std::thread::sleep(Duration::from_millis(1));
+        sleep(Duration::from_millis(1));
     }
     worker.join().unwrap();
 }

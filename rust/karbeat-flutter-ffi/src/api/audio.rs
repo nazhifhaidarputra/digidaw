@@ -1,11 +1,18 @@
 use std::collections::HashMap;
 use std::sync::Arc;
-use std::time::{Duration, Instant};
+use std::{
+    thread::{sleep, spawn},
+    time::{Duration, Instant},
+};
 
 use crate::api::context::DawContext;
 use crate::api::plugins::opaque::ZeroCopyHandle;
-use crate::api::project::{
-    AudioWaveformUiForAudioProperties, UiApplicationState, UiAudioHardwareConfig, UiGainEnvelope,
+use crate::api::{
+    context::{project_ctx, read_ctx},
+    project::{
+        AudioWaveformUiForAudioProperties, UiApplicationState, UiAudioHardwareConfig,
+        UiGainEnvelope,
+    },
 };
 use crate::frb_generated::StreamSink;
 use flutter_rust_bridge::frb;
@@ -320,7 +327,7 @@ pub fn create_feedback_stream(
         .take()
         .ok_or("AudioFeedback consumer is already running in another stream!")?;
 
-    std::thread::spawn(move || {
+    spawn(move || {
         loop {
             while let Ok(feedback) = consumer.pop() {
                 let Some(feedback) = project_state.lock().route(feedback) else {
@@ -335,7 +342,7 @@ pub fn create_feedback_stream(
                 }
             }
             // ~60 fps poll interval — matches the transport position stream
-            std::thread::sleep(Duration::from_millis(16));
+            sleep(Duration::from_millis(16));
         }
     });
 
@@ -363,7 +370,7 @@ pub fn create_position_stream(
         .ok_or("Position consumer is already running in another stream!")?;
 
     // Spawn a thread that forwards each position once the device plays it
-    std::thread::spawn(move || {
+    spawn(move || {
         let mut sync = PlayheadSync::new(consumer, output_clock);
         loop {
             if let Some(feedback) = sync.poll(Instant::now()) {
@@ -379,7 +386,7 @@ pub fn create_position_stream(
 
             // Sleep to prevent high CPU usage on this polling thread
             // 16ms ~= 60fps
-            std::thread::sleep(Duration::from_millis(16));
+            sleep(Duration::from_millis(16));
         }
     });
     Ok(())
@@ -411,7 +418,7 @@ pub fn remove_audio_source(ctx: &DawContext, source_id: u64) -> Result<UiApplica
 
 /// Waveform envelopes of every audio source, keyed by source ID.
 pub fn get_audio_source_envelopes(ctx: &DawContext) -> HashMap<u64, UiGainEnvelope> {
-    crate::api::context::read_ctx!(ctx);
+    read_ctx!(ctx);
     audio_waveform_api::get_audio_source_envelopes(ctx, |id, envelope| {
         (id, UiGainEnvelope::from(envelope))
     })
@@ -424,7 +431,7 @@ pub fn set_audio_source_envelope(
     source_id: u64,
     envelope: UiGainEnvelope,
 ) -> Result<UiGainEnvelope, String> {
-    crate::api::context::project_ctx!(ctx);
+    project_ctx!(ctx);
     let stored = audio_waveform_api::set_audio_source_envelope(
         ctx,
         AudioSourceId::from_u64(source_id),
@@ -442,7 +449,7 @@ pub fn set_audio_source_trim(
     trim_start: u32,
     trim_end: u32,
 ) -> Result<(), String> {
-    crate::api::context::project_ctx!(ctx);
+    project_ctx!(ctx);
     audio_waveform_api::set_audio_source_trim(
         ctx,
         AudioSourceId::from_u64(source_id),

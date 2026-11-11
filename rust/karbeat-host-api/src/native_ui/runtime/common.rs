@@ -4,9 +4,10 @@ use std::{
 };
 
 use async_executor::LocalExecutor;
+use mpsc::error::{TryRecvError, TrySendError};
 use tokio::sync::{mpsc, oneshot};
 
-use super::super::NativeUiError;
+use super::{super::NativeUiError, initialize_dispatcher, wake_ui_owner};
 
 pub(super) const REQUEST_QUEUE_CAPACITY: usize = 128;
 pub(super) const MAX_UI_TASKS_PER_TICK: usize = 4;
@@ -39,7 +40,7 @@ impl NativeUiDispatcher {
     /// Ensures the bounded process queue exists and connects it to the OS event-loop adapter.
     pub fn initialize() -> Result<Self, NativeUiError> {
         ensure_queue()?;
-        super::initialize_dispatcher()?;
+        initialize_dispatcher()?;
         Ok(Self)
     }
 
@@ -82,9 +83,9 @@ impl NativeUiDispatcher {
                 .detach();
         });
         match sender.try_send(task) {
-            Ok(()) => super::wake_ui_owner()?,
-            Err(mpsc::error::TrySendError::Full(_)) => return Err(NativeUiError::QueueFull),
-            Err(mpsc::error::TrySendError::Closed(_)) => {
+            Ok(()) => wake_ui_owner()?,
+            Err(TrySendError::Full(_)) => return Err(NativeUiError::QueueFull),
+            Err(TrySendError::Closed(_)) => {
                 return Err(NativeUiError::RuntimeUnavailable);
             }
         }
@@ -135,7 +136,7 @@ pub(super) fn drain_owner_tasks() -> bool {
                     processed = processed.saturating_add(1);
                     UI_EXECUTOR.with(|executor| task(executor));
                 }
-                Err(mpsc::error::TryRecvError::Empty | mpsc::error::TryRecvError::Disconnected) => {
+                Err(TryRecvError::Empty | TryRecvError::Disconnected) => {
                     break;
                 }
             }
@@ -158,5 +159,5 @@ pub fn spawn_ui_local(future: impl Future<Output = ()> + 'static) -> Result<(), 
         return Err(NativeUiError::WrongThread);
     }
     UI_EXECUTOR.with(|executor| executor.spawn(future).detach());
-    super::wake_ui_owner()
+    wake_ui_owner()
 }

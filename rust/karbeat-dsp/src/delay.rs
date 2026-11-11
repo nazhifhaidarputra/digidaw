@@ -303,6 +303,11 @@ impl<T: DelayMode + 'static> DelayDsp<T> {
         mode.process_block(self, buffers);
     }
 
+    /// Moves every smoothed parameter straight to its target value.
+    pub fn settle_parameters(&mut self) {
+        self.reset_smoothers();
+    }
+
     fn configure_smoothers(&mut self) {
         let sample_rate = f64::from(self.sample_rate);
         self.delay_ms
@@ -503,6 +508,7 @@ impl MultiTapDelayDsp {
 mod tests {
     use super::*;
     use karbeat_plugin_types::parameter::AutoParams;
+    use karbeat_utils::hash::FNV_OFFSET;
 
     const EPSILON: f64 = 1.0e-10;
 
@@ -736,7 +742,7 @@ mod tests {
     fn multi_tap_exposes_shared_and_specific_parameters() {
         let delay = DelayDsp::<SimpleDelayMode>::default();
         let paths: Vec<_> = delay
-            .auto_get_parameter_specs(karbeat_utils::hash::FNV_OFFSET, "")
+            .auto_get_parameter_specs(FNV_OFFSET, "")
             .into_iter()
             .map(|spec| spec.path)
             .collect();

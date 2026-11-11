@@ -15,7 +15,13 @@ use realfft::{RealFftPlanner, RealToComplex};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use smallvec::{SmallVec, smallvec};
-use std::sync::Arc;
+use std::{
+    cmp::min,
+    collections::hash_map::DefaultHasher,
+    f32::consts::TAU,
+    hash::{Hash, Hasher},
+    sync::Arc,
+};
 
 const FFT_SIZE: usize = 4096;
 /// 20.0 / ln(10.0) — used for fast dB conversion: dB = FAST_DB_SCALE * ln(x)
@@ -158,9 +164,9 @@ impl DigiParametricEQFilterNode {
             sample_rate.to_bits(),
         );
 
-        let mut hasher = std::collections::hash_map::DefaultHasher::new();
-        std::hash::Hash::hash(&current_state, &mut hasher);
-        let current_hash = std::hash::Hasher::finish(&hasher);
+        let mut hasher = DefaultHasher::new();
+        Hash::hash(&current_state, &mut hasher);
+        let current_hash = Hasher::finish(&hasher);
 
         if self.last_computed_hash == current_hash {
             return; // Skip expensive math, nothing changed!
@@ -230,9 +236,7 @@ impl AnalyzerTables {
     fn build(num_points: usize, sample_rate: f32) -> Self {
         // ── Hann window: w[i] = 0.5 * (1 - cos(2π·i / (N-1))) ──────────────
         let hann: Box<[f32]> = (0..FFT_SIZE)
-            .map(|i| {
-                0.5 * (1.0 - ((std::f32::consts::TAU * (i as f32)) / ((FFT_SIZE - 1) as f32)).cos())
-            })
+            .map(|i| 0.5 * (1.0 - ((TAU * (i as f32)) / ((FFT_SIZE - 1) as f32)).cos()))
             .collect::<Vec<_>>()
             .into_boxed_slice();
 
@@ -630,7 +634,7 @@ impl DigiParametricEQ {
         let inputs = &buffers.main_inputs[0].channel_data;
         let outputs = &mut buffers.main_outputs[0].channel_data;
 
-        let channels = std::cmp::min(inputs.len(), outputs.len());
+        let channels = min(inputs.len(), outputs.len());
         if channels == 0 {
             return;
         }
@@ -830,7 +834,7 @@ impl AudioPlugin for DigiParametricEQ {
     }
 
     fn value_to_string(&self, id: u32, normalized: f32) -> String {
-        std::format!("{:.2}", self.normalized_to_plain(id, normalized))
+        format!("{:.2}", self.normalized_to_plain(id, normalized))
     }
 
     fn string_to_value(&self, id: u32, text: &str) -> Option<f32> {

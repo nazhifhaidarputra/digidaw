@@ -1,4 +1,4 @@
-use std::{cmp::Ordering, sync::Arc};
+use std::{cmp::Ordering, mem::replace, path::PathBuf, sync::Arc};
 
 use anyhow::anyhow;
 use jiff::Timestamp;
@@ -15,10 +15,13 @@ pub use super::track::{AudioTrack, audio_waveform::AudioWaveform, midi::Pattern}
 pub use super::transport::TransportState;
 
 use crate::core::project::{
-    CoverArtError, CoverImage, GainEnvelope, ModulationLinkForOrderedLaneView, ModulationSource,
-};
-use crate::core::project::{
     automation::AutomationLane, mixer::MixerState, session::SessionState, timeline::TimelineState,
+};
+use crate::core::{
+    file_manager::project_loader::extraction_session_dir,
+    project::{
+        CoverArtError, CoverImage, GainEnvelope, ModulationLinkForOrderedLaneView, ModulationSource,
+    },
 };
 
 pub use crate::shared::*;
@@ -345,12 +348,11 @@ pub struct AssetLibrary {
 impl AssetLibrary {
     /// The directory holding this project's session audio files, created when the project has
     /// none yet, such as a new project that was never saved or loaded.
-    pub fn ensure_session_dir(&mut self) -> anyhow::Result<std::path::PathBuf> {
+    pub fn ensure_session_dir(&mut self) -> anyhow::Result<PathBuf> {
         if let Some(session) = &self.session_dir {
             return Ok(session.path().to_path_buf());
         }
-        let session =
-            Arc::new(crate::core::file_manager::project_loader::extraction_session_dir()?);
+        let session = Arc::new(extraction_session_dir()?);
         let path = session.path().to_path_buf();
         self.session_dir = Some(session);
         Ok(path)
@@ -490,7 +492,7 @@ impl ApplicationState {
             .source_map
             .get_mut(source_id)
             .ok_or_else(|| anyhow!("Audio source {source_id} not found"))?;
-        Ok(std::mem::replace(
+        Ok(replace(
             &mut Arc::make_mut(entry).envelope,
             envelope.normalized(),
         ))

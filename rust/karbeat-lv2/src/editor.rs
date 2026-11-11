@@ -8,8 +8,13 @@
 use std::{
     cell::{Cell, RefCell},
     ffi::{CStr, CString, c_char, c_int, c_void},
+    fmt::Display,
+    mem::replace,
     path::PathBuf,
+    ptr::{copy_nonoverlapping, from_mut, from_ref, null, null_mut, without_provenance_mut},
+    slice::from_raw_parts,
     sync::{Arc, atomic::Ordering},
+    thread::{ThreadId, current},
     time::{Duration, Instant},
 };
 
@@ -17,9 +22,16 @@ use karbeat_host_api::{
     EDIT_BEGIN, EDIT_CHANGED, EDIT_END, HostError, NativeParentHandle, NativeSurfaceKind,
     ParameterExchange, native_host::EditorResizeHandler,
 };
-use libloading::Library;
+use libloading::{
+    Library,
+    os::unix::{Library as UnixLibrary, RTLD_LOCAL, RTLD_NOW},
+};
 use lilv::{World, plugin::Plugin};
 use raw_window_handle::RawWindowHandle;
+use x11rb::{
+    connection::Connection as _,
+    protocol::xproto::{ConfigureWindowAux, ConnectionExt as _},
+};
 
 use crate::{
     atoms::{AtomReceiver, AtomSender},
@@ -142,7 +154,7 @@ pub(crate) struct EditorSetup<'a> {
 /// A UI may call back from a thread of its own. Parameter values and gestures only touch
 /// atomics, so they are accepted from any thread; everything else is limited to the owner.
 struct EditorController {
-    owner: std::thread::ThreadId,
+    owner: ThreadId,
     exchange: Arc<ParameterExchange>,
     controls: Arc<[ControlPort]>,
     symbols: Vec<CString>,
@@ -154,7 +166,7 @@ struct EditorController {
 
 impl EditorController {
     fn on_owner(&self) -> bool {
-        self.owner == std::thread::current().id()
+        self.owner == current().id()
     }
 
     fn control(&self, port: u32) -> Option<(&ControlPort, &karbeat_host_api::ParameterValue)> {
@@ -190,7 +202,7 @@ const fn empty_option() -> lv2_sys::LV2_Options_Option {
         key: 0,
         size: 0,
         type_: 0,
-        value: std::ptr::null(),
+        value: null(),
     }
 }
 
@@ -226,7 +238,7 @@ impl FeatureStorage {
             key: urid::map(key),
             size: 4,
             type_: float,
-            value: std::ptr::from_ref(value).cast(),
+            value: from_ref(value).cast(),
             ..empty_option()
         };
         let sample_rate_key = c_string(PARAMETERS_SAMPLE_RATE);
@@ -239,24 +251,12 @@ impl FeatureStorage {
         let records: [(String, *mut c_void); 8] = [
             (URID_MAP.to_owned(), urid::map_ptr().cast()),
             (URID_UNMAP.to_owned(), urid::unmap_ptr().cast()),
-            (
-                OPTIONS.to_owned(),
-                std::ptr::from_mut(&mut storage.options).cast(),
-            ),
+            (OPTIONS.to_owned(), from_mut(&mut storage.options).cast()),
             (INSTANCE_ACCESS.to_owned(), setup.instance),
             (ui_uri("parent"), parent),
-            (
-                ui_uri("resize"),
-                std::ptr::from_mut(&mut storage.resize).cast(),
-            ),
-            (
-                ui_uri("touch"),
-                std::ptr::from_mut(&mut storage.touch).cast(),
-            ),
-            (
-                ui_uri("portMap"),
-                std::ptr::from_mut(&mut storage.port_map).cast(),
-            ),
+            (ui_uri("resize"), from_mut(&mut storage.resize).cast()),
+            (ui_uri("touch"), from_mut(&mut storage.touch).cast()),
+            (ui_uri("portMap"), from_mut(&mut storage.port_map).cast()),
         ];
         storage.uris = records
             .iter()
@@ -266,12 +266,7 @@ impl FeatureStorage {
         storage.features = storage
             .uris
             .iter()
-            .zip(
-                records
-                    .iter()
-                    .map(|(_, data)| *data)
-                    .chain([std::ptr::null_mut()]),
-            )
+            .zip(records.iter().map(|(_, data)| *data).chain([null_mut()]))
             .map(|(uri, data)| lv2_sys::LV2_Feature {
                 URI: uri.as_ptr(),
                 data,
@@ -280,8 +275,8 @@ impl FeatureStorage {
         storage.pointers = storage
             .features
             .iter()
-            .map(std::ptr::from_ref)
-            .chain([std::ptr::null()])
+            .map(from_ref)
+            .chain([null()])
             .collect();
         storage
     }
@@ -330,8 +325,7 @@ unsafe extern "C" fn write_port(
         return;
     }
     // SAFETY: The body follows the eight-byte header and lies inside the `size` bytes passed.
-    let body =
-        unsafe { std::slice::from_raw_parts(buffer.cast::<u8>().wrapping_add(8), body_size) };
+    let body = unsafe { from_raw_parts(buffer.cast::<u8>().wrapping_add(8), body_size) };
     if let Ok(mut link) = controller.link.try_borrow_mut()
         && let Some(ends) = link.as_mut()
     {
@@ -438,7 +432,7 @@ impl Lv2Editor {
                 "LV2 editor does not support the supplied native parent surface",
             ));
         };
-        let parent_window = std::ptr::without_provenance_mut::<c_void>(
+        let parent_window = without_provenance_mut::<c_void>(
             usize::try_from(handle.window.get()).map_err(|_| HostError::InvalidConfiguration)?,
         );
         let library = load_library(plan)?;
@@ -447,7 +441,7 @@ impl Lv2Editor {
             .instantiate
             .ok_or(editor_error("LV2 editor has no instantiate function"))?;
         let mut controller = Box::new(EditorController {
-            owner: std::thread::current().id(),
+            owner: current().id(),
             exchange: setup.exchange.clone(),
             controls: setup.model.controls.clone(),
             symbols: setup
@@ -461,14 +455,14 @@ impl Lv2Editor {
             resize: RefCell::new(setup.resize.clone()),
             size: Cell::new(None),
         });
-        let controller_handle = std::ptr::from_mut::<EditorController>(controller.as_mut()).cast();
+        let controller_handle = from_mut::<EditorController>(controller.as_mut()).cast();
         let features = FeatureStorage::new(
             setup,
             controller_handle,
             parent_window,
             single(setup.sample_rate),
         );
-        let mut widget: lv2_sys::LV2UI_Widget = std::ptr::null_mut();
+        let mut widget: lv2_sys::LV2UI_Widget = null_mut();
         // SAFETY: Runs on the UI owner. The descriptor comes from the loaded UI library, the
         // strings and feature records outlive the UI instance, and the parent window stays
         // alive until this editor is closed.
@@ -488,7 +482,7 @@ impl Lv2Editor {
             return Err(editor_error("LV2 editor could not be created"));
         }
         let extension = |uri: &[u8]| {
-            descriptor.extension_data.map_or(std::ptr::null(), |data| {
+            descriptor.extension_data.map_or(null(), |data| {
                 // SAFETY: The UI's own lookup receives a NUL-terminated extension URI.
                 unsafe { data(uri.as_ptr().cast()) }
             })
@@ -578,13 +572,7 @@ impl Lv2Editor {
                 if sent.replace(plain) != Some(plain) {
                     // SAFETY: The float protocol passes one `f32` to the live UI instance.
                     unsafe {
-                        port_event(
-                            self.handle,
-                            control.index,
-                            4,
-                            0,
-                            std::ptr::from_ref(&plain).cast(),
-                        );
+                        port_event(self.handle, control.index, 4, 0, from_ref(&plain).cast());
                     };
                 }
             }
@@ -598,7 +586,7 @@ impl Lv2Editor {
                 if sent.replace(value) != Some(value) {
                     // SAFETY: As above.
                     unsafe {
-                        port_event(self.handle, *port, 4, 0, std::ptr::from_ref(&value).cast());
+                        port_event(self.handle, *port, 4, 0, from_ref(&value).cast());
                     };
                 }
             }
@@ -624,7 +612,7 @@ impl Lv2Editor {
                     for part in parts {
                         // SAFETY: Both parts together are `body` bytes after the header.
                         unsafe {
-                            std::ptr::copy_nonoverlapping(
+                            copy_nonoverlapping(
                                 part.as_ptr(),
                                 bytes.wrapping_add(offset),
                                 part.len(),
@@ -658,7 +646,7 @@ impl Lv2Editor {
     }
 
     fn cleanup(&mut self) {
-        let handle = std::mem::replace(&mut self.handle, std::ptr::null_mut());
+        let handle = replace(&mut self.handle, null_mut());
         if !handle.is_null()
             && let Some(cleanup) = self.descriptor.cleanup
         {
@@ -675,7 +663,6 @@ impl Drop for Lv2Editor {
 }
 
 fn load_library(plan: &EditorPlan) -> Result<Library, HostError> {
-    use libloading::os::unix::{Library as UnixLibrary, RTLD_LOCAL, RTLD_NOW};
     // UI toolkits start threads and register static destructors, so their code stays resident
     // until process shutdown, as the VST3 backend does for plugin modules.
     const RTLD_NODELETE: i32 = 0x1000;
@@ -724,7 +711,6 @@ fn find_descriptor(
 
 /// Reads the size of an editor window that never asked the host for one.
 fn window_size(window: u32) -> Option<(u32, u32)> {
-    use x11rb::{connection::Connection as _, protocol::xproto::ConnectionExt as _};
     let (connection, _) = x11rb::connect(None).ok()?;
     let geometry = connection.get_geometry(window).ok()?.reply().ok()?;
     drop(connection.flush());
@@ -734,11 +720,7 @@ fn window_size(window: u32) -> Option<(u32, u32)> {
 
 /// Resizes the window of an editor that has no resize interface of its own.
 fn resize_window(window: u32, width: u32, height: u32) -> Result<(), HostError> {
-    use x11rb::{
-        connection::Connection as _,
-        protocol::xproto::{ConfigureWindowAux, ConnectionExt as _},
-    };
-    let failed = |error: &dyn std::fmt::Display| HostError::NativeDispatch(error.to_string());
+    let failed = |error: &dyn Display| HostError::NativeDispatch(error.to_string());
     let (connection, _) = x11rb::connect(None).map_err(|error| failed(&error))?;
     connection
         .configure_window(

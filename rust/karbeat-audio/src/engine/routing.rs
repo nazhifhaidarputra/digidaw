@@ -5,6 +5,7 @@ use karbeat_core::{
     core::project::{RoutingConnection, RoutingNode, SidechainRoute},
     shared::{BusId, EffectId, TrackId},
 };
+use std::{hash::Hash, mem::swap};
 
 /// Ring buffer used to align paths for plugin delay compensation.
 #[derive(Clone, Default)]
@@ -37,7 +38,7 @@ impl DelayLine {
             for frame in buffer.chunks_mut(channels.max(1)) {
                 let delayed_frame = &mut self.buffer[self.write_pos..self.write_pos + frame.len()];
                 for (sample, delayed_sample) in frame.iter_mut().zip(delayed_frame) {
-                    std::mem::swap(sample, delayed_sample);
+                    swap(sample, delayed_sample);
                 }
                 self.write_pos = (self.write_pos + channels) % buffer_len;
             }
@@ -160,7 +161,7 @@ fn chain_latency(effects: Option<&Vec<AudioEffectInstance>>) -> u32 {
     })
 }
 
-fn sync_delay_lines<K: Copy + Eq + std::hash::Hash>(
+fn sync_delay_lines<K: Copy + Eq + Hash>(
     lines: &mut HashMap<K, DelayLine>,
     delays: &HashMap<K, u32>,
     channels: usize,
@@ -277,6 +278,7 @@ mod tests {
         core::project::{RoutingConnection, RoutingNode, SidechainRoute},
         shared::{BusId, EffectId, TrackId},
     };
+    use std::iter::repeat_n;
 
     fn track(id: u32) -> RoutingNode {
         RoutingNode::Track(TrackId::from(id))
@@ -393,7 +395,7 @@ mod tests {
                 for block in rendered.chunks_mut(block_frames * 2) {
                     delay.process_block(block, 2);
                 }
-                let expected: Vec<f32> = std::iter::repeat_n(0.0, delay_frames * 2)
+                let expected: Vec<f32> = repeat_n(0.0, delay_frames * 2)
                     .chain(signal.iter().copied())
                     .take(signal.len())
                     .collect();

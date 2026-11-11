@@ -1,3 +1,11 @@
+use super::{
+    external_plugin_api::{
+        CompletedPluginInstall, PendingPluginInstall, add_effect, begin_add_template_effect,
+        bus_targets, commit_install, delete_bus as external_plugin_api_delete_bus, descriptor,
+        execute_install, remove_effect,
+    },
+    project_api::{begin_save_channel_template, capture_live_state, execute_save_channel_template},
+};
 use anyhow::Context;
 use karbeat_audio::{
     commands::{AudioCommand, EffectTarget, MixerChannelTarget},
@@ -29,6 +37,7 @@ use karbeat_core::{
 };
 use karbeat_plugin_types::ParameterSpec;
 use karbeat_utils::color::Color;
+use std::{mem::take, path::Path};
 
 #[derive(Clone, Debug)]
 /// A track or bus that can feed a plugin's sidechain input.
@@ -289,12 +298,7 @@ pub fn add_effect_to_mixer_channel_by_id(
     registry_id: u32,
 ) -> anyhow::Result<()> {
     if ctx.plugin_catalog.external(registry_id).is_some() {
-        return super::external_plugin_api::add_effect(
-            ctx,
-            EffectTarget::Track(track_id),
-            registry_id,
-        )
-        .map(|_| ());
+        return add_effect(ctx, EffectTarget::Track(track_id), registry_id).map(|_| ());
     }
     let app = &mut ctx.app_state;
     app.mixer
@@ -343,8 +347,7 @@ pub fn remove_effect_from_mixer_channel(
 /// Appends an effect to the master bus and installs its processor on the audio thread.
 pub fn add_effect_to_master_bus(ctx: &mut DawContext, registry_id: u32) -> anyhow::Result<()> {
     if ctx.plugin_catalog.external(registry_id).is_some() {
-        return super::external_plugin_api::add_effect(ctx, EffectTarget::Master, registry_id)
-            .map(|_| ());
+        return add_effect(ctx, EffectTarget::Master, registry_id).map(|_| ());
     }
     let app = &mut ctx.app_state;
     app.mixer
@@ -461,11 +464,11 @@ pub fn remove_effect_from_target_mixer_channel(
         MixerChannelTarget::Master => PluginTarget::MasterEffect(effect_instance_id),
     };
     let effect_target = effect_target_from_mixer_target(&mixer_channel_target);
-    if super::external_plugin_api::descriptor(ctx, plugin_target).is_some() {
-        return super::external_plugin_api::remove_effect(ctx, effect_target, effect_instance_id);
+    if descriptor(ctx, plugin_target).is_some() {
+        return remove_effect(ctx, effect_target, effect_instance_id);
     }
 
-    if let Err(error) = super::project_api::capture_live_state(ctx, &[plugin_target], &[]) {
+    if let Err(error) = capture_live_state(ctx, &[plugin_target], &[]) {
         tracing::warn!("Removing effect without its live state: {error:#}");
     }
     let automation_before = AutomationRecorder::begin(&ctx.app_state);
@@ -551,17 +554,15 @@ pub fn create_bus(ctx: &mut DawContext, name: String) -> BusId {
 
 /// Deletes a bus, using hosted lifecycle cleanup when it contains external effects.
 pub fn delete_bus(ctx: &mut DawContext, bus_id: BusId) -> anyhow::Result<()> {
-    if super::external_plugin_api::bus_targets(ctx, bus_id)
+    if bus_targets(ctx, bus_id)
         .iter()
-        .any(|target| super::external_plugin_api::descriptor(ctx, *target).is_some())
+        .any(|target| descriptor(ctx, *target).is_some())
     {
-        return super::external_plugin_api::delete_bus(ctx, bus_id);
+        return external_plugin_api_delete_bus(ctx, bus_id);
     }
 
-    let plugins = super::external_plugin_api::bus_targets(ctx, bus_id);
-    if let Err(error) =
-        super::project_api::capture_live_state(ctx, &plugins, &[MixerChannelTarget::Bus(bus_id)])
-    {
+    let plugins = bus_targets(ctx, bus_id);
+    if let Err(error) = capture_live_state(ctx, &plugins, &[MixerChannelTarget::Bus(bus_id)]) {
         tracing::warn!("Deleting bus without its live plugin state: {error:#}");
     }
     let structure_before = StructureRecorder::begin(&ctx.app_state, &[], &[bus_id]);
@@ -582,8 +583,7 @@ pub fn add_effect_to_bus(
     registry_id: u32,
 ) -> anyhow::Result<()> {
     if ctx.plugin_catalog.external(registry_id).is_some() {
-        return super::external_plugin_api::add_effect(ctx, EffectTarget::Bus(bus_id), registry_id)
-            .map(|_| ());
+        return add_effect(ctx, EffectTarget::Bus(bus_id), registry_id).map(|_| ());
     }
     let app = &mut ctx.app_state;
     app.mixer
@@ -867,9 +867,8 @@ pub fn save_channel_template(
     source_channel: MixerChannelTarget,
     path: impl Into<String>,
 ) -> anyhow::Result<()> {
-    let pending =
-        super::project_api::begin_save_channel_template(ctx, source_channel, &path.into())?;
-    super::project_api::execute_save_channel_template(pending)
+    let pending = begin_save_channel_template(ctx, source_channel, &path.into())?;
+    execute_save_channel_template(pending)
 }
 
 /// Appends a channel template's effects to the target channel, after any effects it already has.
@@ -907,7 +906,7 @@ pub struct PendingChannelTemplateLoad {
 impl PendingChannelTemplateLoad {
     /// Hands over the effects for the caller to run through the per-effect steps.
     pub fn take_effects(&mut self) -> Vec<PluginInstance> {
-        std::mem::take(&mut self.effects)
+        take(&mut self.effects)
     }
 }
 
@@ -917,7 +916,7 @@ pub struct PendingTemplateEffect {
 }
 
 enum PendingTemplateInstall {
-    External(Box<super::external_plugin_api::PendingPluginInstall>),
+    External(Box<PendingPluginInstall>),
     BuiltIn(Box<PluginInstance>),
 }
 
@@ -927,7 +926,7 @@ pub struct CompletedTemplateEffect {
 }
 
 enum CompletedTemplateInstall {
-    External(Box<super::external_plugin_api::CompletedPluginInstall>),
+    External(Box<CompletedPluginInstall>),
     BuiltIn(Box<PluginInstance>),
 }
 
@@ -937,7 +936,7 @@ pub fn begin_load_channel_template(
     target_channel: MixerChannelTarget,
     path: &str,
 ) -> anyhow::Result<PendingChannelTemplateLoad> {
-    let template = load_channel_template_file(std::path::Path::new(path))?;
+    let template = load_channel_template_file(Path::new(path))?;
     anyhow::ensure!(
         ctx.app_state
             .get_mixer_channel_from_target(target_channel)
@@ -961,7 +960,7 @@ pub fn begin_template_effect(
 ) -> PendingTemplateEffect {
     let name = saved.name.clone();
     let install = if saved.external.is_some() {
-        super::external_plugin_api::begin_add_template_effect(ctx, load.target, &saved)
+        begin_add_template_effect(ctx, load.target, &saved)
             .map(|pending| PendingTemplateInstall::External(Box::new(pending)))
     } else {
         Ok(PendingTemplateInstall::BuiltIn(Box::new(saved)))
@@ -973,10 +972,8 @@ pub fn begin_template_effect(
 pub fn execute_template_effect(pending: PendingTemplateEffect) -> CompletedTemplateEffect {
     let PendingTemplateEffect { name, install } = pending;
     let install = install.and_then(|install| match install {
-        PendingTemplateInstall::External(pending) => {
-            super::external_plugin_api::execute_install(*pending)
-                .map(|completed| CompletedTemplateInstall::External(Box::new(completed)))
-        }
+        PendingTemplateInstall::External(pending) => execute_install(*pending)
+            .map(|completed| CompletedTemplateInstall::External(Box::new(completed))),
         PendingTemplateInstall::BuiltIn(saved) => Ok(CompletedTemplateInstall::BuiltIn(saved)),
     });
     CompletedTemplateEffect { name, install }
@@ -991,7 +988,7 @@ pub fn commit_template_effect(
     let CompletedTemplateEffect { name, install } = completed;
     let added = install.and_then(|install| match install {
         CompletedTemplateInstall::External(completed) => {
-            super::external_plugin_api::commit_install(ctx, *completed);
+            commit_install(ctx, *completed);
             // Committing an external install clears the history, including this template's
             // earlier effects.
             load.undoable.clear();

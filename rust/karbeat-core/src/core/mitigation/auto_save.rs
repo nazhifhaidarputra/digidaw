@@ -1,4 +1,5 @@
 use std::{
+    fs::{create_dir_all, read, remove_file, rename, write},
     io::ErrorKind,
     path::{Path, PathBuf},
     time::Duration,
@@ -101,7 +102,7 @@ impl RecoveryStore {
     /// Creates the directory when missing.
     pub fn open(dir: impl Into<PathBuf>) -> Result<Self, MitigationError> {
         let dir = dir.into();
-        std::fs::create_dir_all(&dir)?;
+        create_dir_all(&dir)?;
         Ok(Self { dir })
     }
 
@@ -124,7 +125,7 @@ impl RecoveryStore {
         if !self.project_path().is_file() {
             return Ok(None);
         }
-        match std::fs::read(self.info_path()) {
+        match read(self.info_path()) {
             Ok(bytes) => Ok(Some(serde_json::from_slice(&bytes)?)),
             Err(error) if error.kind() == ErrorKind::NotFound => Ok(None),
             Err(error) => Err(error.into()),
@@ -145,13 +146,13 @@ pub(super) fn write_json_atomically<T: Serialize>(
 ) -> Result<(), MitigationError> {
     let bytes = serde_json::to_vec_pretty(value)?;
     let temporary = path.with_extension("json.tmp");
-    std::fs::write(&temporary, bytes)?;
-    std::fs::rename(&temporary, path)?;
+    write(&temporary, bytes)?;
+    rename(&temporary, path)?;
     Ok(())
 }
 
 pub(super) fn remove_if_exists(path: &Path) -> Result<(), MitigationError> {
-    match std::fs::remove_file(path) {
+    match remove_file(path) {
         Ok(()) => Ok(()),
         Err(error) if error.kind() == ErrorKind::NotFound => Ok(()),
         Err(error) => Err(error.into()),
@@ -200,7 +201,7 @@ mod tests {
         store.write_info(&info).expect("write info");
         assert_eq!(store.read_info().expect("read info"), None);
 
-        std::fs::write(store.project_path(), b"project").expect("write copy");
+        write(store.project_path(), b"project").expect("write copy");
         assert_eq!(store.read_info().expect("read info"), Some(info));
 
         store.clear().expect("clear");

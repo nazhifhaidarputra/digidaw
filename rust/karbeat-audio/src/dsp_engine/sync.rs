@@ -180,7 +180,10 @@ impl<W: SyncWord> LevelBarrier<W> {
 )]
 mod model {
     use super::{Backoff, BlockClock, LevelBarrier, SHUTDOWN, SyncWord};
-    use shuttle::sync::{Arc, atomic::AtomicU32};
+    use shuttle::{
+        sync::{Arc, atomic::AtomicU32},
+        thread::{spawn, yield_now},
+    };
     use std::sync::atomic::Ordering;
 
     impl SyncWord for AtomicU32 {
@@ -205,13 +208,13 @@ mod model {
         }
 
         fn park(&self, _expected: u32) {
-            shuttle::thread::yield_now();
+            yield_now();
         }
 
         fn wake_all(&self) {}
 
         fn relax(_backoff: &Backoff) {
-            shuttle::thread::yield_now();
+            yield_now();
         }
     }
 
@@ -249,7 +252,7 @@ mod model {
                     .map(|party| {
                         let (clock, barrier, slots) =
                             (Arc::clone(&clock), Arc::clone(&barrier), Arc::clone(&slots));
-                        shuttle::thread::spawn(move || {
+                        spawn(move || {
                             let mut seen = 0;
                             let mut block = 0;
                             loop {

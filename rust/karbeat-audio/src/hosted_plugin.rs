@@ -1,10 +1,15 @@
 use karbeat_host::{ControlRetirement, PluginKind, PreparedProcessor, ProcessingConfig};
 
-use crate::event::PluginTarget;
-use karbeat_core::shared::TrackId;
+use crate::{commands::AudioCommand, engine::PluginTelemetrySnapshot, event::PluginTarget};
+use futures_lite::future::yield_now;
+use karbeat_core::{
+    core::project::{ApplicationState, AudioTrack, Clip, Pattern, RoutingConnection},
+    shared::{BusId, ClipId, PatternId, TrackId},
+};
+use std::time::Duration;
 
 /// Upper bound for DSP to release a control transfer after its receipt resolved.
-const CONTROL_RETIREMENT_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(1);
+const CONTROL_RETIREMENT_TIMEOUT: Duration = Duration::from_secs(1);
 
 /// Realtime layout used to prepare a hosted plugin for the engine's stereo graph.
 ///
@@ -46,12 +51,10 @@ pub enum HostedInstallResult {
 /// Control-side completion for one committed hosted installation.
 pub struct HostedInstallReceipt {
     result: rtrb::Consumer<HostedInstallResult>,
-    telemetry: Option<triple_buffer::Output<crate::engine::PluginTelemetrySnapshot>>,
+    telemetry: Option<triple_buffer::Output<PluginTelemetrySnapshot>>,
 }
 impl HostedInstallReceipt {
-    pub fn take_telemetry(
-        &mut self,
-    ) -> Option<triple_buffer::Output<crate::engine::PluginTelemetrySnapshot>> {
+    pub fn take_telemetry(&mut self) -> Option<triple_buffer::Output<PluginTelemetrySnapshot>> {
         self.telemetry.take()
     }
     /// Awaits the single terminal result published through the lock-free audio feedback path.
@@ -67,7 +70,7 @@ impl HostedInstallReceipt {
                         .pop()
                         .map_err(|_| karbeat_host::HostError::RuntimeUnavailable);
                 }
-                Err(rtrb::PopError::Empty) => futures_lite::future::yield_now().await,
+                Err(rtrb::PopError::Empty) => yield_now().await,
             }
         }
     }
@@ -80,7 +83,7 @@ pub struct HostedPluginInstall {
     pub(crate) config: ProcessingConfig,
     pub(crate) endpoint: Option<PreparedProcessor>,
     pub(crate) graph: Option<HostedTrackGraph>,
-    pub(crate) telemetry: Option<triple_buffer::Input<crate::engine::PluginTelemetrySnapshot>>,
+    pub(crate) telemetry: Option<triple_buffer::Input<PluginTelemetrySnapshot>>,
     pub(crate) bypass: bool,
     pub(crate) replace_missing: bool,
     result: Option<rtrb::Producer<HostedInstallResult>>,
@@ -95,11 +98,10 @@ impl HostedPluginInstall {
         endpoint: PreparedProcessor,
     ) -> (Self, HostedInstallReceipt) {
         let (result_tx, result) = rtrb::RingBuffer::new(1);
-        let (input, output) =
-            triple_buffer::triple_buffer(&crate::engine::PluginTelemetrySnapshot {
-                parameters: endpoint.parameter_values(),
-                ..Default::default()
-            });
+        let (input, output) = triple_buffer::triple_buffer(&PluginTelemetrySnapshot {
+            parameters: endpoint.parameter_values(),
+            ..Default::default()
+        });
         let receipt = HostedInstallReceipt {
             result,
             telemetry: Some(output),
@@ -146,16 +148,14 @@ impl HostedPluginInstall {
 
 /// Track publication prepared alongside an external instrument, before DSP can accept either.
 pub struct HostedTrackGraph {
-    pub(crate) tracks: Box<[karbeat_core::core::project::AudioTrack]>,
-    pub(crate) clips:
-        hashbrown::HashMap<karbeat_core::shared::ClipId, karbeat_core::core::project::Clip>,
-    pub(crate) patterns:
-        hashbrown::HashMap<karbeat_core::shared::PatternId, karbeat_core::core::project::Pattern>,
-    pub(crate) routing: Box<[karbeat_core::core::project::RoutingConnection]>,
+    pub(crate) tracks: Box<[AudioTrack]>,
+    pub(crate) clips: hashbrown::HashMap<ClipId, Clip>,
+    pub(crate) patterns: hashbrown::HashMap<PatternId, Pattern>,
+    pub(crate) routing: Box<[RoutingConnection]>,
 }
 
-impl From<&karbeat_core::core::project::ApplicationState> for HostedTrackGraph {
-    fn from(app: &karbeat_core::core::project::ApplicationState) -> Self {
+impl From<&ApplicationState> for HostedTrackGraph {
+    fn from(app: &ApplicationState) -> Self {
         let mut tracks: Vec<_> = app.tracks.values().cloned().collect();
         tracks.sort_by_key(|track| track.id);
         Self {
@@ -259,7 +259,7 @@ impl HostedRemovalReceipt {
                         .pop()
                         .map_err(|_| karbeat_host::HostError::RuntimeUnavailable);
                 }
-                Err(rtrb::PopError::Empty) => futures_lite::future::yield_now().await,
+                Err(rtrb::PopError::Empty) => yield_now().await,
             }
         }
     }
@@ -267,10 +267,10 @@ impl HostedRemovalReceipt {
 
 /// All targets are validated before any processor or graph is removed.
 pub struct HostedPluginRemoval {
-    pub(crate) bus: Option<karbeat_core::shared::BusId>,
+    pub(crate) bus: Option<BusId>,
     pub(crate) targets: Box<[(PluginTarget, Option<karbeat_host::HostInstanceId>)]>,
     pub(crate) graph: Option<HostedTrackGraph>,
-    pub(crate) telemetry: Vec<triple_buffer::Input<crate::engine::PluginTelemetrySnapshot>>,
+    pub(crate) telemetry: Vec<triple_buffer::Input<PluginTelemetrySnapshot>>,
     result: Option<rtrb::Producer<HostedRemovalResult>>,
 }
 impl HostedPluginRemoval {
@@ -293,7 +293,7 @@ impl HostedPluginRemoval {
         )
     }
 
-    pub fn with_bus(mut self, bus: Option<karbeat_core::shared::BusId>) -> Self {
+    pub fn with_bus(mut self, bus: Option<BusId>) -> Self {
         self.bus = bus;
         self
     }
@@ -308,15 +308,12 @@ impl HostedPluginRemoval {
 
 /// Project replacement is accepted as one command after every native instance is prepared.
 pub struct HostedProjectInstall {
-    pub(crate) commands: Vec<Option<crate::commands::AudioCommand>>,
+    pub(crate) commands: Vec<Option<AudioCommand>>,
     pub(crate) sample_rate: u32,
     result: Option<rtrb::Producer<HostedInstallResult>>,
 }
 impl HostedProjectInstall {
-    pub fn new(
-        commands: Vec<crate::commands::AudioCommand>,
-        sample_rate: u32,
-    ) -> (Self, HostedInstallReceipt) {
+    pub fn new(commands: Vec<AudioCommand>, sample_rate: u32) -> (Self, HostedInstallReceipt) {
         let (result_tx, result) = rtrb::RingBuffer::new(1);
         let receipt = HostedInstallReceipt {
             result,
@@ -347,6 +344,11 @@ impl HostedProjectInstall {
 )]
 mod tests {
     use super::*;
+    use futures_lite::future::block_on as futures_lite_block_on;
+    use shuttle::{
+        future::block_on as shuttle_block_on,
+        thread::{spawn, yield_now},
+    };
 
     #[test]
     fn hosted_processing_config_uses_the_smallest_safe_max_block() {
@@ -365,7 +367,7 @@ mod tests {
         producer.push(HostedInstallResult::Installed).unwrap();
         drop(producer);
 
-        let outcome = futures_lite::future::block_on(receipt.wait());
+        let outcome = futures_lite_block_on(receipt.wait());
         assert!(matches!(outcome, Ok(HostedInstallResult::Installed)));
     }
 
@@ -378,7 +380,7 @@ mod tests {
         };
         drop(producer);
 
-        let outcome = futures_lite::future::block_on(receipt.wait());
+        let outcome = futures_lite_block_on(receipt.wait());
         assert!(matches!(
             outcome,
             Err(karbeat_host::HostError::RuntimeUnavailable)
@@ -394,12 +396,12 @@ mod tests {
                     result,
                     telemetry: None,
                 };
-                let engine = shuttle::thread::spawn(move || {
+                let engine = spawn(move || {
                     producer.push(HostedInstallResult::Installed).unwrap();
-                    shuttle::thread::yield_now();
+                    yield_now();
                     drop(producer);
                 });
-                let outcome = shuttle::future::block_on(receipt.wait());
+                let outcome = shuttle_block_on(receipt.wait());
                 engine.join().unwrap();
                 assert!(matches!(outcome, Ok(HostedInstallResult::Installed)));
             },
@@ -413,12 +415,12 @@ mod tests {
             || {
                 let (mut producer, result) = rtrb::RingBuffer::new(1);
                 let mut receipt = HostedRemovalReceipt(result);
-                let engine = shuttle::thread::spawn(move || {
+                let engine = spawn(move || {
                     producer.push(HostedRemovalResult::Removed).unwrap();
-                    shuttle::thread::yield_now();
+                    yield_now();
                     drop(producer);
                 });
-                let outcome = shuttle::future::block_on(receipt.wait());
+                let outcome = shuttle_block_on(receipt.wait());
                 engine.join().unwrap();
                 assert!(matches!(outcome, Ok(HostedRemovalResult::Removed)));
             },

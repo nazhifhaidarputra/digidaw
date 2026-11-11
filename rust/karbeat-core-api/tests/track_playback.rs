@@ -19,6 +19,17 @@ use karbeat_core_api::{
     audio_analysis_api, audio_waveform_api, bounce_api, clip_api, timeline_api, track_api,
     transport_api,
 };
+use std::{
+    env::temp_dir,
+    f32::consts::TAU,
+    fs::remove_file,
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        mpsc::sync_channel,
+    },
+    thread::{scope as thread_scope, sleep},
+    time::Duration,
+};
 
 const RATE: u32 = 48_000;
 
@@ -29,7 +40,7 @@ fn session() -> (DawContext, AudioEngine) {
     let (sender, commands) = rtrb::RingBuffer::new(256);
     let (feedback, responses) = rtrb::RingBuffer::new(256);
     let (position, _positions) = rtrb::RingBuffer::new(256);
-    let (registration, _registrations) = std::sync::mpsc::sync_channel(256);
+    let (registration, _registrations) = sync_channel(256);
     let (telemetry, output) = AudioEngineTelemetry::new();
     ctx.telemetry_registry = Some(TelemetryRegistry::new(output));
     *ctx.command_sender.lock() = Some(sender);
@@ -50,7 +61,7 @@ fn session() -> (DawContext, AudioEngine) {
 
 /// Imports a two-second stereo tone through the real audio importer.
 fn import_tone(ctx: &mut DawContext, name: &str) -> AudioSourceId {
-    let path = std::env::temp_dir().join(name);
+    let path = temp_dir().join(name);
     let spec = hound::WavSpec {
         channels: 2,
         sample_rate: RATE,
@@ -59,8 +70,7 @@ fn import_tone(ctx: &mut DawContext, name: &str) -> AudioSourceId {
     };
     let mut writer = hound::WavWriter::create(&path, spec).unwrap();
     for frame in 0..RATE * 2 {
-        let value =
-            ((frame as f32 * 330.0 * std::f32::consts::TAU / RATE as f32).sin() * 16_000.0) as i16;
+        let value = ((frame as f32 * 330.0 * TAU / RATE as f32).sin() * 16_000.0) as i16;
         writer.write_sample(value).unwrap();
         writer.write_sample(value).unwrap();
     }
@@ -115,8 +125,6 @@ fn stretched_clip_is_audible_after_a_tempo_change() {
 
 #[test]
 fn bouncing_the_loop_region_adds_a_source_at_the_original_level() {
-    use std::sync::atomic::{AtomicBool, Ordering};
-
     let (mut ctx, mut engine) = session();
     let source = import_tone(&mut ctx, "karbeat_bounce_tone.wav");
     assert!(play_on_new_track(&mut ctx, &mut engine, source) > 0.1);
@@ -125,11 +133,11 @@ fn bouncing_the_loop_region_adds_a_source_at_the_original_level() {
 
     // The render asks the live engine for a snapshot, so the engine runs meanwhile
     let running = AtomicBool::new(true);
-    let bounced = std::thread::scope(|scope| {
+    let bounced = thread_scope(|scope| {
         scope.spawn(|| {
             while running.load(Ordering::Relaxed) {
                 engine.process(&mut [0.0_f32; 1_024][..]);
-                std::thread::sleep(std::time::Duration::from_millis(1));
+                sleep(Duration::from_millis(1));
             }
         });
         let bounced = bounce_api::bounce_loop_region(&mut ctx);
@@ -142,7 +150,7 @@ fn bouncing_the_loop_region_adds_a_source_at_the_original_level() {
     assert_eq!(waveform.name, "Bounce bar 1");
     let mut reader = hound::WavReader::open(&waveform.file_path).unwrap();
     let samples: Vec<f32> = reader.samples::<f32>().map(Result::unwrap).collect();
-    std::fs::remove_file(&waveform.file_path).unwrap();
+    remove_file(&waveform.file_path).unwrap();
 
     assert!(
         samples.len() >= RATE as usize * 2,

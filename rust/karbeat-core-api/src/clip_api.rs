@@ -1,10 +1,13 @@
 use karbeat_audio::context::DawContext;
-use karbeat_core::core::history::actions::{ClipEditRecorder, ClipsMadeUnique};
 use karbeat_core::core::project::clip::{
     Clip, ClipSourceType, ClipTimeUnit, MadeUnique, ResizeEdge,
 };
 use karbeat_core::core::project::clip_modulation::ClipModulation;
 use karbeat_core::core::project::envelope::GainEnvelope;
+use karbeat_core::core::{
+    history::actions::{ClipEditRecorder, ClipsMadeUnique},
+    project::ApplicationState,
+};
 use karbeat_core::shared::id::*;
 
 use crate::audio_analysis_api;
@@ -254,7 +257,7 @@ fn resize_delta(
     time: &ClipTimeUnit,
     edge: ResizeEdge,
     new_time_val: u64,
-    app: &karbeat_core::core::project::ApplicationState,
+    app: &ApplicationState,
 ) -> i64 {
     let bpm = app.transport.bpm;
     let sample_rate = app.audio_config.sample_rate;

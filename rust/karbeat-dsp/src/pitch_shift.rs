@@ -234,6 +234,7 @@ impl PitchShiftEngine {
 mod tests {
     use super::*;
     use karbeat_plugin_types::parameter::AutoParams;
+    use karbeat_utils::hash::FNV_OFFSET;
 
     fn render(input: &[f32], sizes: &[usize], cents: f32) -> Vec<f32> {
         let mut engine = PitchShiftEngine::default();
@@ -291,7 +292,7 @@ mod tests {
     fn pitch_cents_span_two_octaves_each_way() {
         let engine = PitchShiftEngine::default();
         let spec = engine
-            .auto_get_parameter_specs(karbeat_utils::hash::FNV_OFFSET, "")
+            .auto_get_parameter_specs(FNV_OFFSET, "")
             .into_iter()
             .find(|spec| spec.path.ends_with("pitch_cents"))
             .unwrap();

@@ -4,17 +4,21 @@ use std::{
         atomic::{AtomicUsize, Ordering},
         mpsc,
     },
+    thread::sleep as thread_sleep,
     time::Duration,
 };
 
 use karbeat_core::shared::id::AudioSourceId;
 use parking_lot::Mutex;
 use slotmap::KeyData;
-use tokio::runtime::Runtime;
+use tokio::{
+    runtime::{Builder, Runtime},
+    time::sleep as tokio_sleep,
+};
 
 use super::{
-    JobClass, JobContext, JobError, JobEvent, JobEventSink, JobKind, JobLimits, JobService,
-    JobSpec, JobState, JobTarget,
+    JobClass, JobContext, JobError, JobEvent, JobEventSink, JobHandle, JobKind, JobLimits,
+    JobService, JobSpec, JobState, JobTarget,
 };
 
 const LIMITS: JobLimits = JobLimits {
@@ -24,7 +28,7 @@ const LIMITS: JobLimits = JobLimits {
 };
 
 fn runtime() -> Runtime {
-    tokio::runtime::Builder::new_multi_thread()
+    Builder::new_multi_thread()
         .worker_threads(2)
         .enable_all()
         .build()
@@ -59,7 +63,7 @@ impl Recorder {
 /// Blocks until cancelled, polling like real chunked work does.
 fn until_cancelled(job: &JobContext) -> Result<(), &'static str> {
     while !job.is_cancelled() {
-        std::thread::sleep(Duration::from_millis(1));
+        thread_sleep(Duration::from_millis(1));
     }
     Err("stopped")
 }
@@ -201,7 +205,7 @@ fn class_semaphore_caps_concurrent_jobs() {
                 move |_| {
                     let now = running.fetch_add(1, Ordering::SeqCst) + 1;
                     peak.fetch_max(now, Ordering::SeqCst);
-                    std::thread::sleep(Duration::from_millis(20));
+                    thread_sleep(Duration::from_millis(20));
                     running.fetch_sub(1, Ordering::SeqCst);
                     Ok::<_, String>(())
                 },
@@ -251,7 +255,7 @@ fn project_replacement_cancels_source_jobs_and_marks_them_stale() {
         move |job| {
             started.send(()).unwrap();
             while !job.is_cancelled() {
-                std::thread::sleep(Duration::from_millis(1));
+                thread_sleep(Duration::from_millis(1));
             }
             Ok::<_, String>(job.is_current())
         },
@@ -298,7 +302,7 @@ fn async_job_runs_on_the_runtime_and_can_be_cancelled() {
         move |job| async move {
             started.send(()).unwrap();
             while !job.is_cancelled() {
-                tokio::time::sleep(Duration::from_millis(1)).await;
+                tokio_sleep(Duration::from_millis(1)).await;
             }
             Err::<(), _>("scan cancelled")
         },
@@ -384,10 +388,7 @@ fn debounced_burst_runs_only_the_last_request() {
             })
         })
         .collect();
-    let results: Vec<_> = handles
-        .into_iter()
-        .map(super::JobHandle::wait_blocking)
-        .collect();
+    let results: Vec<_> = handles.into_iter().map(JobHandle::wait_blocking).collect();
 
     assert_eq!(ran.load(Ordering::SeqCst), 1);
     assert_eq!(results.last().unwrap().as_ref().unwrap(), &4);

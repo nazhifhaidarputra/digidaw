@@ -9,7 +9,10 @@ use crate::{
     engine::AudioMixerState,
     event::PluginTarget,
 };
-use karbeat_core::shared::{BusId, TrackId};
+use karbeat_core::{
+    core::project::plugin::AudioPlugin,
+    shared::{BusId, TrackId},
+};
 
 /// Parameter values and requested custom buffers for one plugin.
 #[derive(Clone, Default)]
@@ -19,7 +22,7 @@ pub struct PluginTelemetrySnapshot {
 }
 
 impl PluginTelemetrySnapshot {
-    pub fn from_plugin(plugin: &dyn karbeat_core::core::project::plugin::AudioPlugin) -> Self {
+    pub fn from_plugin(plugin: &dyn AudioPlugin) -> Self {
         let parameters = plugin
             .get_parameter_specs()
             .into_iter()

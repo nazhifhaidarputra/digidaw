@@ -7,6 +7,7 @@ use std::{
         Arc,
         atomic::{AtomicBool, AtomicUsize, Ordering},
     },
+    thread::sleep,
     time::{Duration, Instant},
 };
 
@@ -348,7 +349,7 @@ fn run_segments(
             {
                 break;
             }
-            std::thread::sleep(POLL);
+            sleep(POLL);
         }
     });
     results

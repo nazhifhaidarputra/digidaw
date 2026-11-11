@@ -7,7 +7,11 @@ use karbeat_core_api::{
 use karbeat_host::{PluginDescriptor, PluginFormat, PluginKind, scanner::ScanSettings};
 
 use crate::{
-    api::{context::DawContext, jobs::run_job, plugin::UiPluginTarget},
+    api::{
+        context::{DawContext, project_ctx, read_ctx},
+        jobs::run_job,
+        plugin::UiPluginTarget,
+    },
     frb_generated::StreamSink,
 };
 
@@ -193,14 +197,14 @@ pub fn external_plugin_descriptor(
     ctx: &DawContext,
     target: UiPluginTarget,
 ) -> Option<UiExternalPluginDescriptor> {
-    crate::api::context::read_ctx!(ctx);
+    read_ctx!(ctx);
     external_plugin_api::descriptor(ctx, target.into()).map(Into::into)
 }
 
 pub fn refresh_external_plugin_catalog(
     ctx: &DawContext,
 ) -> anyhow::Result<Vec<UiExternalPluginEntry>> {
-    crate::api::context::project_ctx!(ctx);
+    project_ctx!(ctx);
     Ok(plugin_discovery_api::refresh_catalog(ctx)?
         .into_iter()
         .map(|entry| UiExternalPluginEntry {
@@ -329,7 +333,7 @@ pub fn convert_external_plugin_parameter(
 }
 
 pub fn external_plugin_failure(ctx: &DawContext, target: UiPluginTarget) -> Option<String> {
-    crate::api::context::read_ctx!(ctx);
+    read_ctx!(ctx);
     external_plugin_api::failure(ctx, target.into())
 }
 

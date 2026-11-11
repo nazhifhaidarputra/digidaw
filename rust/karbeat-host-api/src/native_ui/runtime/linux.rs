@@ -11,7 +11,7 @@ use glib::{ControlFlow, translate::FromGlib};
 
 use super::{
     super::{NativeUiError, NativeUiWakeHandle},
-    common::{self, NativeUiControlFlow},
+    common::{self, NativeUiControlFlow, NativeUiDispatcher},
 };
 
 static DRAIN_SCHEDULED: AtomicBool = AtomicBool::new(false);
@@ -64,7 +64,7 @@ pub fn install_ui_interval(
     interval: Duration,
     mut callback: impl FnMut() -> NativeUiControlFlow + 'static,
 ) -> Result<NativeUiInterval, NativeUiError> {
-    if !super::common::NativeUiDispatcher::is_owner_thread() {
+    if !NativeUiDispatcher::is_owner_thread() {
         return Err(NativeUiError::WrongThread);
     }
     Ok(glib::timeout_add_local(interval, move || {
@@ -168,12 +168,17 @@ unsafe extern "C" fn drop_fd_source(user_data: *mut c_void) {
     reason = "runtime test fixtures fail on unexpected results"
 )]
 mod tests {
-    use std::sync::{
-        Arc,
-        atomic::{AtomicUsize, Ordering},
+    use std::{
+        sync::{
+            Arc,
+            atomic::{AtomicUsize, Ordering},
+            mpsc::sync_channel,
+        },
+        thread::spawn,
     };
 
     use super::super::common::NativeUiDispatcher;
+    use futures_lite::future::{block_on, poll_once};
 
     fn iterate_until(condition: impl Fn() -> bool) {
         let context = glib::MainContext::default();
@@ -199,10 +204,10 @@ mod tests {
         iterate_until(NativeUiDispatcher::is_owner_thread);
         assert_eq!(calls.load(Ordering::Relaxed), 0);
 
-        let (ready, queued) = std::sync::mpsc::sync_channel(1);
+        let (ready, queued) = sync_channel(1);
         let batch_calls = Arc::new(AtomicUsize::new(0));
         let worker_calls = batch_calls.clone();
-        let worker = std::thread::spawn(move || {
+        let worker = spawn(move || {
             let dispatcher = NativeUiDispatcher::initialize().unwrap();
             let mut requests = Vec::new();
             for _ in 0..9 {
@@ -213,14 +218,11 @@ mod tests {
                 })));
             }
             for request in &mut requests {
-                assert!(
-                    futures_lite::future::block_on(futures_lite::future::poll_once(request))
-                        .is_none()
-                );
+                assert!(block_on(poll_once(request)).is_none());
             }
             ready.send(()).unwrap();
             for request in requests {
-                futures_lite::future::block_on(request).unwrap();
+                block_on(request).unwrap();
             }
         });
         queued.recv().unwrap();

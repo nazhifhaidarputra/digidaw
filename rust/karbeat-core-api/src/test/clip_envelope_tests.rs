@@ -9,7 +9,7 @@ mod tests {
     use crate::{audio_waveform_api, clip_api, plugin_api};
     use karbeat_audio::context::DawContext;
     use karbeat_core::core::project::{
-        ClipLoop, ClipModulation, DawSource, EnvelopePoint, Fade, GainEnvelope,
+        Clip, ClipLoop, ClipModulation, DawSource, EnvelopePoint, Fade, GainEnvelope,
         GeneratorInstanceType, PluginInstance, clip::ClipSourceType,
     };
     use karbeat_core::shared::id::{AudioSourceId, ClipId, TrackId};
@@ -275,8 +275,7 @@ mod tests {
         clip_api::set_clip_modulation(&mut ctx, copy, stutter()).expect("set modulation");
         let clip = &ctx.app_state.clips_pool[copy];
         let json = serde_json::to_string(clip).expect("serialize");
-        let restored: karbeat_core::core::project::Clip =
-            serde_json::from_str(&json).expect("deserialize");
+        let restored: Clip = serde_json::from_str(&json).expect("deserialize");
         assert_eq!(restored.modulation, clip.modulation);
     }
 

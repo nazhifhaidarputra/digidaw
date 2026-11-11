@@ -12,11 +12,13 @@
 
 use std::{
     ffi::c_void,
+    ptr::{from_mut, from_ref},
+    slice::from_raw_parts,
     sync::{
         Arc, Mutex, MutexGuard, PoisonError,
         atomic::{AtomicBool, Ordering},
     },
-    thread::{JoinHandle, Thread},
+    thread::{Builder, JoinHandle, Thread, current, park_timeout},
     time::Duration,
 };
 
@@ -64,7 +66,7 @@ impl Work {
         size: u32,
         data: *const c_void,
     ) -> lv2_sys::LV2_Worker_Status {
-        let handle = std::ptr::from_mut(responses).cast();
+        let handle = from_mut(responses).cast();
         // SAFETY: The caller guarantees the instance and the request; the response queue
         // outlives this synchronous call.
         unsafe { (self.call)(self.instance, Some(respond), handle, size, data) }
@@ -112,7 +114,7 @@ impl WorkerPort {
         let mut route = Box::new(Route::Detached);
         Self {
             record: Box::new(lv2_sys::LV2_Worker_Schedule {
-                handle: std::ptr::from_mut::<Route>(route.as_mut()).cast(),
+                handle: from_mut::<Route>(route.as_mut()).cast(),
                 schedule_work: Some(schedule_work),
             }),
             route,
@@ -124,7 +126,7 @@ impl WorkerPort {
     pub fn feature(&self) -> lv2_sys::LV2_Feature {
         lv2_sys::LV2_Feature {
             URI: lv2_sys::LV2_WORKER__schedule.as_ptr().cast(),
-            data: std::ptr::from_ref::<lv2_sys::LV2_Worker_Schedule>(self.record.as_ref())
+            data: from_ref::<lv2_sys::LV2_Worker_Schedule>(self.record.as_ref())
                 .cast_mut()
                 .cast(),
         }
@@ -185,7 +187,7 @@ unsafe fn message<'a>(size: u32, data: *const c_void) -> Option<&'a [u8]> {
         return None;
     }
     // SAFETY: The caller guarantees `size` readable bytes at a non-null `data`.
-    Some(unsafe { std::slice::from_raw_parts(data.cast::<u8>(), size) })
+    Some(unsafe { from_raw_parts(data.cast::<u8>(), size) })
 }
 
 unsafe extern "C" fn schedule_work(
@@ -315,32 +317,30 @@ impl WorkerThread {
             busy: Mutex::new(()),
         });
         let worker = shared.clone();
-        let thread = std::thread::Builder::new()
-            .name("lv2-worker".into())
-            .spawn(move || {
-                let mut scratch = Vec::new();
-                loop {
-                    requests.drain(|_, _, parts| {
-                        scratch.clear();
-                        scratch.extend_from_slice(parts[0]);
-                        scratch.extend_from_slice(parts[1]);
-                        let Ok(size) = u32::try_from(scratch.len()) else {
-                            pending.finish();
-                            return;
-                        };
-                        let _busy = worker.busy.lock().unwrap_or_else(PoisonError::into_inner);
-                        // SAFETY: The instance outlives this thread, `work` may run beside
-                        // `run`, and this thread runs one job at a time from its own copy.
-                        unsafe { work.run(&mut responses, size, scratch.as_ptr().cast()) };
-                        // Its responses are counted on their own, so the job is done.
+        let thread = Builder::new().name("lv2-worker".into()).spawn(move || {
+            let mut scratch = Vec::new();
+            loop {
+                requests.drain(|_, _, parts| {
+                    scratch.clear();
+                    scratch.extend_from_slice(parts[0]);
+                    scratch.extend_from_slice(parts[1]);
+                    let Ok(size) = u32::try_from(scratch.len()) else {
                         pending.finish();
-                    });
-                    if worker.stop.load(Ordering::Acquire) {
-                        break;
-                    }
-                    std::thread::park_timeout(IDLE_WAIT);
+                        return;
+                    };
+                    let _busy = worker.busy.lock().unwrap_or_else(PoisonError::into_inner);
+                    // SAFETY: The instance outlives this thread, `work` may run beside
+                    // `run`, and this thread runs one job at a time from its own copy.
+                    unsafe { work.run(&mut responses, size, scratch.as_ptr().cast()) };
+                    // Its responses are counted on their own, so the job is done.
+                    pending.finish();
+                });
+                if worker.stop.load(Ordering::Acquire) {
+                    break;
                 }
-            })?;
+                park_timeout(IDLE_WAIT);
+            }
+        })?;
         Ok(Self {
             shared,
             thread: Some(thread),
@@ -350,7 +350,7 @@ impl WorkerThread {
     fn handle(&self) -> Thread {
         self.thread
             .as_ref()
-            .map_or_else(std::thread::current, |thread| thread.thread().clone())
+            .map_or_else(current, |thread| thread.thread().clone())
     }
 
     /// Keeps the worker from starting a job until the guard is dropped, waiting for one that
@@ -379,7 +379,7 @@ impl Drop for WorkerThread {
 #[allow(clippy::unwrap_used, reason = "test fixtures must be creatable")]
 mod tests {
     use super::*;
-    use std::sync::atomic::AtomicU32;
+    use std::{ptr::null_mut, sync::atomic::AtomicU32, thread::sleep, time::Instant};
 
     static JOBS: AtomicU32 = AtomicU32::new(0);
     static RESPONSES: AtomicU32 = AtomicU32::new(0);
@@ -423,7 +423,7 @@ mod tests {
     fn schedule(port: &WorkerPort, byte: u8) -> lv2_sys::LV2_Worker_Status {
         let schedule = port.record.schedule_work.unwrap();
         // SAFETY: The record's handle is the port's own route, and one byte is readable.
-        unsafe { schedule(port.record.handle, 1, std::ptr::from_ref(&byte).cast()) }
+        unsafe { schedule(port.record.handle, 1, from_ref(&byte).cast()) }
     }
 
     #[test]
@@ -439,16 +439,14 @@ mod tests {
         assert!(!offline_work.is_pending());
 
         // Offline: the job has already run when `schedule_work` returns.
-        let (mut responses, thread) = detached
-            .attach(&interface, std::ptr::null_mut(), true)
-            .unwrap();
+        let (mut responses, thread) = detached.attach(&interface, null_mut(), true).unwrap();
         assert!(thread.is_none());
         let jobs = JOBS.load(Ordering::SeqCst);
         assert_eq!(schedule(&detached, 3), SUCCESS);
         assert_eq!(JOBS.load(Ordering::SeqCst), jobs + 1);
         // The response waits for the next block, so the plugin still has work pending.
         assert!(offline_work.is_pending());
-        responses.deliver(std::ptr::null_mut());
+        responses.deliver(null_mut());
         // Delivered; it stays pending only for the follow-up blocks.
         for _ in 0..PendingWork::FOLLOW_UP_BLOCKS {
             assert!(offline_work.is_pending());
@@ -462,30 +460,25 @@ mod tests {
         // block.
         let realtime_work = Arc::new(PendingWork::default());
         let mut port = WorkerPort::new(realtime_work.clone());
-        let (mut responses, thread) = port
-            .attach(&interface, std::ptr::null_mut(), false)
-            .unwrap();
+        let (mut responses, thread) = port.attach(&interface, null_mut(), false).unwrap();
         let thread = thread.unwrap();
         assert_eq!(schedule(&port, 5), SUCCESS);
         assert!(realtime_work.is_pending());
-        let deadline = std::time::Instant::now() + Duration::from_secs(5);
+        let deadline = Instant::now() + Duration::from_secs(5);
         // Pending until the job ran and its response was delivered to the plugin.
         while RESPONSES.load(Ordering::SeqCst) == 0 || realtime_work.is_pending() {
-            assert!(
-                std::time::Instant::now() < deadline,
-                "worker never responded"
-            );
+            assert!(Instant::now() < deadline, "worker never responded");
             // One processed block.
             realtime_work.processed();
-            responses.deliver(std::ptr::null_mut());
-            std::thread::sleep(Duration::from_millis(1));
+            responses.deliver(null_mut());
+            sleep(Duration::from_millis(1));
         }
         assert_eq!(RESPONSES.swap(0, Ordering::SeqCst), 10);
         // A held exclusion keeps the next job from starting.
         let excluded = thread.exclude();
         let jobs = JOBS.load(Ordering::SeqCst);
         assert_eq!(schedule(&port, 7), SUCCESS);
-        std::thread::sleep(Duration::from_millis(50));
+        sleep(Duration::from_millis(50));
         assert_eq!(JOBS.load(Ordering::SeqCst), jobs);
         drop(excluded);
         // Dropping the thread finishes the queued job first.

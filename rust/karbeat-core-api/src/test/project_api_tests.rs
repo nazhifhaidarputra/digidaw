@@ -4,6 +4,7 @@
 mod tests {
     use crate::project_api;
     use crate::test::helpers::{make_ctx, make_seeded_ctx};
+    use karbeat_core::core::project::ProjectMetadata;
 
     #[test]
     fn get_project_metadata_happy_path() {
@@ -18,7 +19,7 @@ mod tests {
     fn update_project_metadata_normalizes_and_replaces_metadata() {
         let mut ctx = make_ctx();
         let created_at = ctx.app_state.metadata.created_at;
-        let metadata = karbeat_core::core::project::ProjectMetadata {
+        let metadata = ProjectMetadata {
             name: "  New title  ".to_string(),
             author: " Author ".to_string(),
             description: " Description ".to_string(),

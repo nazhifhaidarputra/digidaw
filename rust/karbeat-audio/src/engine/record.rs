@@ -335,6 +335,7 @@ impl RecordState {
 )]
 mod tests {
     use super::*;
+    use std::iter::from_fn;
 
     fn track(id: u32) -> TrackId {
         TrackId::from(id)
@@ -367,7 +368,7 @@ mod tests {
     }
 
     fn drain(consumer: &mut rtrb::Consumer<f32>) -> Vec<f32> {
-        std::iter::from_fn(|| consumer.pop().ok()).collect()
+        from_fn(|| consumer.pop().ok()).collect()
     }
 
     #[test]

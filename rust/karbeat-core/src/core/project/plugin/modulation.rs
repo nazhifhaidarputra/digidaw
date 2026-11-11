@@ -6,9 +6,9 @@ use serde::{Deserialize, Serialize};
 use crate::{
     core::project::{
         ApplicationState, AutomationCurveType, AutomationLane, AutomationPoint, BezierHandles,
-        PluginTarget, automation::AutomationTarget,
+        PluginTarget, automation::AutomationTarget, detach_unless,
     },
-    shared::{AutomationId, BusId, ModulationId, ModulationLinkId, TrackId},
+    shared::{AutomationId, BusId, GeneratorId, ModulationId, ModulationLinkId, TrackId},
 };
 
 /// Automation and modulation state removed together with a plugin instance.
@@ -126,7 +126,7 @@ impl ApplicationState {
     pub fn remove_modulation_source(&mut self, source_id: ModulationId) {
         self.modulation_sources.detach(source_id);
         // Cascade delete: Remove any cables that were plugged into this source
-        crate::core::project::detach_unless(&mut self.modulation_links, |_, link| {
+        detach_unless(&mut self.modulation_links, |_, link| {
             link.prop.source_id != source_id
         });
     }
@@ -371,7 +371,7 @@ impl ApplicationState {
     pub fn remove_modulations_for_track(&mut self, track_id: TrackId) {
         let mut orphaned_lanes = Vec::new();
 
-        crate::core::project::detach_unless(&mut self.modulation_links, |_, link| {
+        detach_unless(&mut self.modulation_links, |_, link| {
             let references = link.prop.target.references_track(track_id);
 
             if references {
@@ -391,11 +391,11 @@ impl ApplicationState {
     }
 
     /// Removes modulation links, automation sources, and lanes owned by a generator.
-    pub fn remove_modulations_for_generator(&mut self, generator_id: crate::shared::GeneratorId) {
+    pub fn remove_modulations_for_generator(&mut self, generator_id: GeneratorId) {
         let mut automation_sources = Vec::new();
         let mut automation_lanes = Vec::new();
 
-        crate::core::project::detach_unless(&mut self.modulation_links, |_, link| {
+        detach_unless(&mut self.modulation_links, |_, link| {
             let references = link.prop.target.references_generator(generator_id);
             if references
                 && let Some(ModulationSource::Automation { lane_id }) =
@@ -494,7 +494,7 @@ impl ApplicationState {
     pub fn remove_modulations_for_bus(&mut self, bus_id: BusId) {
         let mut orphaned_lanes = Vec::new();
 
-        crate::core::project::detach_unless(&mut self.modulation_links, |_, link| {
+        detach_unless(&mut self.modulation_links, |_, link| {
             let references = link.prop.target.references_bus(bus_id);
             if references {
                 if let Some(ModulationSource::Automation { lane_id }) =

@@ -4,6 +4,7 @@ use std::{
         Arc, Weak,
         mpsc::{self, RecvTimeoutError},
     },
+    thread::Builder,
     time::Duration,
 };
 
@@ -12,14 +13,18 @@ use karbeat_core::core::mitigation::{
     AutoSaveSettings, FlutterCrashSource, RecoveryInfo, StoredCrashReport,
 };
 use karbeat_core_api::{
-    jobs::{JobClass, JobKind, JobSpec, JobTarget},
+    jobs::{JobClass, JobKind, JobSpec, JobTarget, global},
     mitigation_api::{self, StartupRecovery},
 };
+use tokio::task::spawn_blocking;
 
-use crate::api::context::{DawContext, DawSessionInner};
 use crate::api::jobs::run_job;
 use crate::api::project::UiApplicationState;
 use crate::api::serialization::restore_loaded_project;
+use crate::api::{
+    audio_analysis::schedule_source_renders,
+    context::{DawContext, DawSessionInner},
+};
 
 /// Retry delay after an auto save tick found another project operation running.
 const BUSY_RETRY: Duration = Duration::from_secs(5);
@@ -236,7 +241,7 @@ fn load_recovered_project_blocking(ctx: &DawContext) -> anyhow::Result<UiApplica
     };
     let ui_state = restore_loaded_project(&operation, recovered)?;
     drop(operation);
-    crate::api::audio_analysis::schedule_source_renders(ctx, false);
+    schedule_source_renders(ctx, false);
     tracing::info!("Recovered the auto saved project");
     Ok(ui_state)
 }
@@ -256,14 +261,13 @@ pub fn set_session_suspended(ctx: &DawContext, suspended: bool) -> anyhow::Resul
 }
 
 /// Upper bound for background jobs to stop when the app closes.
-const JOB_SHUTDOWN_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(3);
+const JOB_SHUTDOWN_TIMEOUT: Duration = Duration::from_secs(3);
 
 /// Ends the session cleanly so the next launch does not report a crash or offer recovery.
 ///
 /// Stops background jobs first so none of them touches the project after this point.
 pub async fn mark_clean_shutdown(ctx: &DawContext) -> anyhow::Result<()> {
-    tokio::task::spawn_blocking(|| karbeat_core_api::jobs::global().shutdown(JOB_SHUTDOWN_TIMEOUT))
-        .await?;
+    spawn_blocking(|| global().shutdown(JOB_SHUTDOWN_TIMEOUT)).await?;
     Ok(mitigation_api::mark_clean_shutdown(&ctx.read())?)
 }
 
@@ -302,7 +306,7 @@ fn start_auto_save_worker(ctx: &DawContext) -> anyhow::Result<()> {
     }
     let (sender, receiver) = mpsc::channel();
     let session = Arc::downgrade(&ctx.inner);
-    std::thread::Builder::new()
+    Builder::new()
         .name("karbeat-auto-save".into())
         .spawn(move || run_auto_save_worker(session, receiver))?;
     *wake = Some(sender);
@@ -352,6 +356,7 @@ mod tests {
     use super::{AutoSaveOutcome, auto_save_once};
     use crate::api::context::DawContext;
     use crate::sync::check_random;
+    use karbeat_audio::context::DawContext as CoreDawContext;
     use karbeat_core_api::{mitigation_api, track_api};
 
     #[test]
@@ -360,7 +365,7 @@ mod tests {
         let root = dir.path().to_path_buf();
         check_random(
             move || {
-                let session = DawContext::new(karbeat_audio::context::DawContext::new());
+                let session = DawContext::new(CoreDawContext::new());
                 assert_eq!(
                     auto_save_once(&session).expect("unconfigured"),
                     AutoSaveOutcome::Idle

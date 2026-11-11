@@ -1,8 +1,9 @@
-use karbeat_plugin_api::types::BusConfig;
+use karbeat_plugin_api::{traits::AudioPlugin, types::BusConfig};
 use karbeat_plugins::registry::PluginFactory;
 
 use crate::commands::PreparedPluginTelemetry;
 use karbeat_core::core::project::plugin::PluginInstance;
+use std::slice::from_ref;
 
 /// Builds a first-party plugin processor restored to `plugin`'s saved state and parameters.
 pub fn prepare_builtin_plugin(
@@ -10,10 +11,7 @@ pub fn prepare_builtin_plugin(
     plugin: &PluginInstance,
     sample_rate: u32,
     block_size: usize,
-) -> (
-    Box<dyn karbeat_plugin_api::traits::AudioPlugin>,
-    PreparedPluginTelemetry,
-) {
+) -> (Box<dyn AudioPlugin>, PreparedPluginTelemetry) {
     let mut prepared = factory();
     if plugin.plugin_state.is_empty() {
         // Without captured state the spec values are all that was persisted.
@@ -33,7 +31,7 @@ pub fn prepare_builtin_plugin(
         channel_count: 2,
         is_optional: false,
     };
-    prepared.set_io_layout(std::slice::from_ref(&bus), std::slice::from_ref(&bus));
+    prepared.set_io_layout(from_ref(&bus), from_ref(&bus));
     let telemetry = PreparedPluginTelemetry::new(prepared.as_ref());
     (prepared, telemetry)
 }

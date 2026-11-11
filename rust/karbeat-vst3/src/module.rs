@@ -1,4 +1,13 @@
+#[cfg(target_os = "macos")]
+use std::os::unix::ffi::OsStrExt;
+#[cfg(target_os = "macos")]
+use std::ptr::null;
 use std::{
+    env::{consts::ARCH, var_os},
+    ffi::c_char,
+    fs::{canonicalize, read_dir},
+    marker::PhantomData,
+    mem::zeroed,
     path::{Path, PathBuf},
     rc::Rc,
 };
@@ -8,6 +17,8 @@ use std::ffi::c_void;
 
 use karbeat_host_api::{HostError, PluginDescriptor, PluginFormat, PluginIdentity, PluginKind};
 use libloading::Library;
+#[cfg(target_os = "linux")]
+use libloading::os::unix::{Library as UnixLibrary, RTLD_LOCAL, RTLD_NOW};
 use vst3::{
     ComPtr,
     Steinberg::{
@@ -30,20 +41,20 @@ fn module_error(path: &Path, message: impl ToString) -> HostError {
 pub fn default_scan_paths() -> Vec<PathBuf> {
     let mut paths = Vec::new();
     if cfg!(target_os = "linux") {
-        if let Some(home) = std::env::var_os("HOME") {
+        if let Some(home) = var_os("HOME") {
             paths.push(PathBuf::from(home).join(".vst3"));
         }
         paths.extend(["/usr/lib/vst3", "/usr/local/lib/vst3"].map(PathBuf::from));
     } else if cfg!(target_os = "macos") {
-        if let Some(home) = std::env::var_os("HOME") {
+        if let Some(home) = var_os("HOME") {
             paths.push(PathBuf::from(home).join("Library/Audio/Plug-Ins/VST3"));
         }
         paths.push(PathBuf::from("/Library/Audio/Plug-Ins/VST3"));
     } else if cfg!(target_os = "windows") {
-        if let Some(local) = std::env::var_os("LOCALAPPDATA") {
+        if let Some(local) = var_os("LOCALAPPDATA") {
             paths.push(PathBuf::from(local).join("Programs/Common/VST3"));
         }
-        if let Some(common) = std::env::var_os("CommonProgramFiles") {
+        if let Some(common) = var_os("CommonProgramFiles") {
             paths.push(PathBuf::from(common).join("VST3"));
         }
     }
@@ -54,7 +65,7 @@ fn binary_path(bundle: &Path) -> Result<PathBuf, HostError> {
     if cfg!(target_os = "windows") && bundle.is_file() {
         return Ok(bundle.to_path_buf());
     }
-    let arch = std::env::consts::ARCH;
+    let arch = ARCH;
     let directory = if cfg!(target_os = "linux") {
         bundle.join("Contents").join(format!("{arch}-linux"))
     } else if cfg!(target_os = "windows") {
@@ -78,7 +89,7 @@ fn binary_path(bundle: &Path) -> Result<PathBuf, HostError> {
     } else {
         None
     };
-    let mut binaries = std::fs::read_dir(&directory)?
+    let mut binaries = read_dir(&directory)?
         .filter_map(Result::ok)
         .map(|e| e.path())
         .filter(|p| {
@@ -112,7 +123,7 @@ pub struct Vst3Module {
     _library: Library,
     #[cfg(target_os = "macos")]
     _bundle: MacBundle,
-    _ui_only: std::marker::PhantomData<Rc<()>>,
+    _ui_only: PhantomData<Rc<()>>,
 }
 
 impl Vst3Module {
@@ -128,11 +139,10 @@ impl Vst3Module {
     /// executable is ambiguous or missing, a required symbol is absent, module initialization
     /// fails, or the factory export returns null.
     pub fn load(path: &Path) -> Result<Rc<Self>, HostError> {
-        let path = std::fs::canonicalize(path)?;
+        let path = canonicalize(path)?;
         let binary = binary_path(&path)?;
         #[cfg(target_os = "linux")]
         let library: Library = {
-            use libloading::os::unix::{Library as UnixLibrary, RTLD_LOCAL, RTLD_NOW};
             // Linux RTLD_NODELETE keeps plugin code resident until process shutdown. Vital's
             // static OpenGL threads call dlclose during teardown, which deadlocks when dlclose
             // invokes their destructors while holding the loader lock. Objects and ModuleExit
@@ -148,11 +158,10 @@ impl Vst3Module {
         let library = unsafe { Library::new(&binary) }.map_err(|e| module_error(&path, e))?;
         #[cfg(target_os = "linux")]
         let (library, entry_ok, exit) = {
-            let native: libloading::os::unix::Library = library.into();
+            let native: UnixLibrary = library.into();
             let handle = native.into_raw();
             // SAFETY: Reconstitute the same owned dlopen handle; it is not closed in between.
-            let library: Library =
-                unsafe { libloading::os::unix::Library::from_raw(handle) }.into();
+            let library: Library = unsafe { UnixLibrary::from_raw(handle) }.into();
             // SAFETY: These are the VST3 Linux module ABI entry/exit signatures.
             let entry = unsafe {
                 library.get::<unsafe extern "system" fn(*mut c_void) -> bool>(b"ModuleEntry\0")
@@ -210,7 +219,7 @@ impl Vst3Module {
             _library: library,
             #[cfg(target_os = "macos")]
             _bundle: bundle,
-            _ui_only: std::marker::PhantomData,
+            _ui_only: PhantomData,
         };
         // SAFETY: The VST3 factory export returns an owned IPluginFactory reference.
         let get_factory = unsafe {
@@ -252,7 +261,7 @@ impl Vst3Module {
     pub fn descriptors(&self) -> Result<Vec<PluginDescriptor>, HostError> {
         let factory = self.factory()?;
         // SAFETY: PFactoryInfo contains integer and fixed-array fields with valid zero representations.
-        let mut vendor: PFactoryInfo = unsafe { std::mem::zeroed() };
+        let mut vendor: PFactoryInfo = unsafe { zeroed() };
         // SAFETY: Factory is live and vendor is writable for the duration of the call.
         let vendor_ok = unsafe { factory.getFactoryInfo(&raw mut vendor) } == kResultOk;
         let factory2 = factory.cast::<IPluginFactory2>();
@@ -264,7 +273,7 @@ impl Vst3Module {
         let mut descriptors = Vec::new();
         for index in 0..count {
             // SAFETY: Both structs are plain integer/fixed-array ABI records.
-            let mut info: PClassInfo = unsafe { std::mem::zeroed() };
+            let mut info: PClassInfo = unsafe { zeroed() };
             // SAFETY: index is in the factory's reported range; output is writable.
             if unsafe { factory.getClassInfo(index, &raw mut info) } != kResultOk {
                 continue;
@@ -273,7 +282,7 @@ impl Vst3Module {
                 continue;
             }
             // SAFETY: PClassInfo2 has no nonzero or pointer validity constraints.
-            let mut extended: PClassInfo2 = unsafe { std::mem::zeroed() };
+            let mut extended: PClassInfo2 = unsafe { zeroed() };
             let extended_ok = factory2.as_ref().is_some_and(|f| {
                 // SAFETY: Factory2 implements this method and output is writable.
                 (unsafe { f.getClassInfo2(index, &raw mut extended) }) == kResultOk
@@ -324,7 +333,7 @@ impl Drop for Vst3Module {
     }
 }
 
-fn c_string(chars: &[std::ffi::c_char]) -> String {
+fn c_string(chars: &[c_char]) -> String {
     let bytes = chars
         .iter()
         .take_while(|&&c| c != 0)
@@ -391,18 +400,17 @@ unsafe extern "C" {
 #[cfg(target_os = "macos")]
 impl MacBundle {
     fn new(path: &Path) -> Result<Self, HostError> {
-        use std::os::unix::ffi::OsStrExt;
         let bytes = path.as_os_str().as_bytes();
         let length = isize::try_from(bytes.len()).map_err(|e| module_error(path, e))?;
         // SAFETY: Bytes are valid for length; null allocator selects the system allocator.
         let url = unsafe {
-            CFURLCreateFromFileSystemRepresentation(std::ptr::null(), bytes.as_ptr(), length, true)
+            CFURLCreateFromFileSystemRepresentation(null(), bytes.as_ptr(), length, true)
         };
         if url.is_null() {
             return Err(module_error(path, "could not create bundle URL"));
         }
         // SAFETY: url is a retained CFURLRef.
-        let bundle = unsafe { CFBundleCreate(std::ptr::null(), url) };
+        let bundle = unsafe { CFBundleCreate(null(), url) };
         // SAFETY: Release exactly the owned URL reference.
         unsafe { CFRelease(url) };
         if bundle.is_null() {
@@ -427,6 +435,8 @@ impl Drop for MacBundle {
 )]
 mod tests {
     use super::*;
+    #[cfg(target_os = "windows")]
+    use std::fs::{create_dir_all, write};
 
     #[test]
     fn class_ids_are_canonical_and_round_trip() {
@@ -441,23 +451,19 @@ mod tests {
     fn windows_bundle_and_direct_module_paths_resolve_without_guessing_other_architectures() {
         let temporary = tempfile::tempdir().unwrap();
         let direct = temporary.path().join("Direct.vst3");
-        std::fs::write(&direct, []).unwrap();
+        write(&direct, []).unwrap();
         assert_eq!(binary_path(&direct).unwrap(), direct);
 
         let bundle = temporary.path().join("Bundle.vst3");
-        let architecture = if std::env::consts::ARCH == "aarch64" {
-            "arm64"
-        } else {
-            std::env::consts::ARCH
-        };
+        let architecture = if ARCH == "aarch64" { "arm64" } else { ARCH };
         let binary_directory = bundle.join("Contents").join(format!("{architecture}-win"));
-        std::fs::create_dir_all(&binary_directory).unwrap();
+        create_dir_all(&binary_directory).unwrap();
         let binary = binary_directory.join("Bundle.vst3");
-        std::fs::write(&binary, []).unwrap();
+        write(&binary, []).unwrap();
         assert_eq!(binary_path(&bundle).unwrap(), binary);
 
         let wrong_architecture = temporary.path().join("WrongArchitecture.vst3");
-        std::fs::create_dir_all(wrong_architecture.join("Contents/x86-win")).unwrap();
+        create_dir_all(wrong_architecture.join("Contents/x86-win")).unwrap();
         assert!(binary_path(&wrong_architecture).is_err());
     }
 }

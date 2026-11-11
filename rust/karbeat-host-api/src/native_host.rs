@@ -12,15 +12,18 @@ use crate::{
     NativeEditorBinding, NativeEditorEvent, NativeSurfacePreference, NativeUiControlFlow,
     NativeUiDispatcher, NativeUiPlatform, NativeWindow, NativeWindowConstraints, NativeWindowId,
     NativeWindowIdAllocator, NativeWindowSize, NativeWindowSpec, PluginDescriptor, PluginState,
-    PreparedProcessor, ProcessingConfig, ProcessorRetirement, SystemNativeUi,
+    PreparedProcessor, ProcessingConfig, ProcessorRetirement, SystemNativeUi, install_ui_interval,
+    spawn_ui_local,
 };
+use futures_lite::future::yield_now;
 use karbeat_plugin_api::prelude::ParameterSpec;
 use std::{
     cell::RefCell,
     collections::{HashMap, HashSet},
+    mem::take,
     rc::Rc,
     sync::atomic::{AtomicBool, Ordering},
-    time::Duration,
+    time::{Duration, Instant},
 };
 
 type NativeBinding = NativeEditorBinding<<SystemNativeUi as NativeUiPlatform>::Window>;
@@ -84,7 +87,7 @@ pub struct NativeHost<B: NativeBackend> {
     editor_contexts: HashMap<HostInstanceId, String>,
     events: Vec<HostEvent>,
     event_overflow: Option<HostInstanceId>,
-    parameter_flush_due: HashMap<HostInstanceId, std::time::Instant>,
+    parameter_flush_due: HashMap<HostInstanceId, Instant>,
     retirements: HashMap<HostInstanceId, NativeRetirement>,
     state_operations: HashSet<HostInstanceId>,
     parameter_flush_active: HashSet<HostInstanceId>,
@@ -365,7 +368,7 @@ impl<B: NativeBackend> NativeHost<B> {
     /// When the 4,096-event queue discarded an oldest event, a final `QueueOverflow` event is
     /// appended for the affected instance and the overflow marker is cleared.
     pub fn take_events(&mut self) -> Vec<HostEvent> {
-        let mut events = std::mem::take(&mut self.events);
+        let mut events = take(&mut self.events);
         if let Some(instance) = self.event_overflow.take() {
             events.push(HostEvent::QueueOverflow { instance });
         }
@@ -474,7 +477,7 @@ impl<B: NativeBackend> NativeHost<B> {
         if let Err(error) = self.native_ui.pump() {
             tracing::error!("native editor flush: {error}");
         }
-        let now = std::time::Instant::now();
+        let now = Instant::now();
         for event in self.host.drain_events() {
             match &event {
                 HostEvent::ParameterChanged { instance, .. } => {
@@ -508,7 +511,7 @@ impl<B: NativeBackend> NativeHost<B> {
             self.parameter_flush_due.remove(&id);
             if self.host.has_pending_parameters(id).unwrap_or(false) {
                 self.parameter_flush_active.insert(id);
-                if let Err(error) = crate::spawn_ui_local(async move {
+                if let Err(error) = spawn_ui_local(async move {
                     if let Err(error) =
                         run_state_operation::<B>(id, StateOperation::FlushParameters).await
                     {
@@ -713,7 +716,7 @@ async fn run_state_operation<B: NativeBackend>(
 
     let result = loop {
         match with_native_host::<B, _>(|owner| owner.host.suspend(instance)) {
-            Err(HostError::Busy) => futures_lite::future::yield_now().await,
+            Err(HostError::Busy) => yield_now().await,
             Err(error) => break Err(error),
             Ok(()) => {
                 break with_native_host::<B, _>(|owner| match operation {
@@ -766,7 +769,7 @@ async fn prepare_on_owner<B: NativeBackend>(
     })?;
     loop {
         match with_native_host::<B, _>(|owner| owner.host.advance_prepare(instance, &mut job)) {
-            Ok(false) => futures_lite::future::yield_now().await,
+            Ok(false) => yield_now().await,
             Ok(true) => break,
             Err(operation) => {
                 let cleanup = with_native_host::<B, _>(|owner| {
@@ -791,7 +794,7 @@ fn with_native_host<B: NativeBackend, T>(
         if runtime.is_none() {
             let (native_ui, _) = SystemNativeUi::initialize()?;
             *runtime = Some(NativeHost::new(B::create_on_owner(), native_ui));
-            crate::install_ui_interval(Duration::from_millis(8), pump_runtime::<B>)?;
+            install_ui_interval(Duration::from_millis(8), pump_runtime::<B>)?;
             B::runtime_ready().store(true, Ordering::Release);
         }
         action(runtime.as_mut().ok_or(HostError::WrongThread)?)

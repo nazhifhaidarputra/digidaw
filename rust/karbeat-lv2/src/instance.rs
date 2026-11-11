@@ -3,6 +3,8 @@
 use std::{
     cell::UnsafeCell,
     ffi::{CStr, CString, c_void},
+    mem::replace,
+    ptr::null_mut,
     rc::Rc,
     sync::{
         Arc,
@@ -181,7 +183,7 @@ impl Lv2Instance {
             resize_handler: None,
             slot: None,
             endpoint_taken: false,
-            plugin_handle: std::ptr::null_mut(),
+            plugin_handle: null_mut(),
             bundle,
         })
     }
@@ -218,7 +220,7 @@ impl Lv2Instance {
         )
             -> Result<AnyInstanceLifecycle, (AnyInstanceLifecycle, InvalidState)>,
     ) -> Result<(), HostError> {
-        let current = std::mem::replace(&mut self.lifecycle, AnyInstanceLifecycle::unprepared());
+        let current = replace(&mut self.lifecycle, AnyInstanceLifecycle::unprepared());
         match transition(current) {
             Ok(next) => {
                 self.lifecycle = next;
@@ -576,6 +578,14 @@ mod lsp_sampler {
     use karbeat_plugin_api::types::{
         AudioBuffers, AudioBusBuffer, MidiEvent, MidiMessage, ProcessContext, ProcessingMode,
     };
+    use std::{
+        env::var_os,
+        f64::consts::TAU,
+        fs::write,
+        path::PathBuf,
+        thread::sleep,
+        time::{Duration, Instant},
+    };
 
     const SAMPLER: &str = "http://lsp-plug.in/plugins/lv2/sampler_stereo";
     const FRAMES: usize = 256;
@@ -637,7 +647,7 @@ mod lsp_sampler {
         wav.extend(b"data");
         wav.extend(data.to_le_bytes());
         for frame in 0..frames {
-            let phase = f64::from(frame) * 440.0 * std::f64::consts::TAU / 48_000.0;
+            let phase = f64::from(frame) * 440.0 * TAU / 48_000.0;
             #[allow(
                 clippy::as_conversions,
                 clippy::cast_possible_truncation,
@@ -675,10 +685,8 @@ mod lsp_sampler {
     #[test]
     #[ignore = "needs LSP's LV2 bundle installed"]
     fn a_parked_sampler_loads_the_file_its_editor_sends() {
-        let bundle = std::env::var_os("LSP_LV2_PATH").map_or_else(
-            || "/usr/lib64/lv2/lsp-plugins.lv2".into(),
-            std::path::PathBuf::from,
-        );
+        let bundle = var_os("LSP_LV2_PATH")
+            .map_or_else(|| "/usr/lib64/lv2/lsp-plugins.lv2".into(), PathBuf::from);
         let descriptor = world::probe_bundle(&bundle)
             .unwrap()
             .into_iter()
@@ -686,7 +694,7 @@ mod lsp_sampler {
             .unwrap();
         let directory = tempfile::tempdir().unwrap();
         let path = directory.path().join("tone.wav");
-        std::fs::write(&path, tone_wav()).unwrap();
+        write(&path, tone_wav()).unwrap();
 
         let mut host = Lv2PluginHost::new();
         let id = host.create(&descriptor).unwrap();
@@ -720,14 +728,11 @@ mod lsp_sampler {
         // The engine processes a parked instrument only while it reports pending work: the
         // message, then the worker loading the file, then the loaded sample's hand-over.
         assert!(processor.has_pending_work());
-        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+        let deadline = Instant::now() + Duration::from_secs(10);
         while processor.has_pending_work() {
-            assert!(
-                std::time::Instant::now() < deadline,
-                "the load never finished"
-            );
+            assert!(Instant::now() < deadline, "the load never finished");
             block(processor.as_mut(), &[]);
-            std::thread::sleep(std::time::Duration::from_millis(2));
+            sleep(Duration::from_millis(2));
         }
 
         let notes: Vec<MidiEvent> = (0..128)

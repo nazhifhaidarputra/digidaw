@@ -6,7 +6,7 @@ use std::{
     ptr,
     rc::Rc,
     sync::atomic::{AtomicBool, AtomicUsize, Ordering},
-    thread::ThreadId,
+    thread::{ThreadId, current},
     time::Duration,
 };
 
@@ -70,7 +70,7 @@ impl WindowsStaGuard {
             )));
         }
         Ok(Self {
-            owner: std::thread::current().id(),
+            owner: current().id(),
             _not_send: PhantomData,
         })
     }
@@ -78,7 +78,7 @@ impl WindowsStaGuard {
 
 impl Drop for WindowsStaGuard {
     fn drop(&mut self) {
-        if self.owner == std::thread::current().id() {
+        if self.owner == current().id() {
             // SAFETY: this balances the successful initialization on the same thread.
             unsafe { CoUninitialize() };
         } else {
@@ -342,7 +342,10 @@ fn last_error(operation: &'static str) -> NativeUiError {
     reason = "Win32 runtime tests fail immediately when a platform invariant is broken"
 )]
 mod tests {
-    use std::num::NonZeroU64;
+    use std::{
+        num::NonZeroU64,
+        thread::{current, spawn},
+    };
 
     use crate::native_ui::{
         NativeSurfaceKind, NativeSurfacePreference, NativeUiDispatcher, NativeUiPlatform,
@@ -353,6 +356,7 @@ mod tests {
     use super::{
         initialize_windows_main_thread, request_windows_main_loop_shutdown, run_windows_main_loop,
     };
+    use futures_lite::future::block_on;
 
     #[test]
     fn main_loop_dispatches_on_owner_and_hosts_a_win32_window() {
@@ -388,11 +392,11 @@ mod tests {
         window.hide().unwrap();
         drop(window);
 
-        let owner = std::thread::current().id();
-        let worker = std::thread::spawn(move || {
+        let owner = current().id();
+        let worker = spawn(move || {
             let dispatcher = NativeUiDispatcher::initialize().unwrap();
-            futures_lite::future::block_on(dispatcher.dispatch(move || {
-                let ran_on_owner = std::thread::current().id() == owner;
+            block_on(dispatcher.dispatch(move || {
+                let ran_on_owner = current().id() == owner;
                 request_windows_main_loop_shutdown()?;
                 Ok(ran_on_owner)
             }))

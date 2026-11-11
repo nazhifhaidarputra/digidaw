@@ -1,31 +1,29 @@
 use karbeat_plugin_api::types::{MidiEvent, MidiMessage, NoteExpressionType};
 use smallvec::SmallVec;
-use std::sync::Arc;
+use std::{ops::Range, sync::Arc};
 
 use crate::{
     engine::{
-        helper::{FrameGain, LoopBounds, calc_fade, render_audio_waveform},
+        helper::{FrameGain, LoopBounds, render_audio_waveform},
         stretch_pool::{StretchKey, StretchLease, StretchPool, StretchRate, StretchSource},
     },
     render_state::AudioPluginState,
 };
 use karbeat_core::{
     core::project::{
-        AudioWaveform, ClipModulation, ClipTimeUnit, EnvelopeCursor, GainEnvelope,
-        GeneratorInstance, Note, Pattern, TickScale, audio_waveform::AudioSampleMode, equal_power,
+        AudioTrack, AudioWaveform, Clip, ClipModulation, ClipTimeUnit, DawSource, EnvelopeCursor,
+        GainEnvelope, GeneratorInstance, Note, Pattern, TickScale, audio_waveform::AudioSampleMode,
+        equal_power, track::note_transform::PITCH_RANGE,
     },
-    shared::{ClipId, GeneratorId, TrackId},
+    shared::{ClipId, GeneratorId, NoteId, PatternId, TrackId},
 };
 
 /// Borrowed parts of an audio graph used to decide which sounding notes changed.
 #[derive(Clone, Copy)]
 pub struct GraphView<'a> {
-    pub tracks: &'a [karbeat_core::core::project::AudioTrack],
-    pub clips: &'a hashbrown::HashMap<
-        karbeat_core::core::project::ClipId,
-        karbeat_core::core::project::Clip,
-    >,
-    pub patterns: &'a hashbrown::HashMap<karbeat_core::shared::PatternId, Pattern>,
+    pub tracks: &'a [AudioTrack],
+    pub clips: &'a hashbrown::HashMap<ClipId, Clip>,
+    pub patterns: &'a hashbrown::HashMap<PatternId, Pattern>,
 }
 
 impl<'a> GraphView<'a> {
@@ -46,8 +44,8 @@ impl<'a> GraphView<'a> {
     fn placements(
         &self,
         track_id: TrackId,
-        pattern_id: karbeat_core::shared::PatternId,
-    ) -> impl Iterator<Item = &'a karbeat_core::core::project::Clip> + 'a {
+        pattern_id: PatternId,
+    ) -> impl Iterator<Item = &'a Clip> + 'a {
         let clips = self.clips;
         self.tracks
             .iter()
@@ -57,7 +55,7 @@ impl<'a> GraphView<'a> {
             .filter(move |clip| {
                 matches!(
                     clip.source,
-                    Some(karbeat_core::core::project::DawSource::Midi(id)) if id == pattern_id
+                    Some(DawSource::Midi(id)) if id == pattern_id
                 )
             })
     }
@@ -68,7 +66,7 @@ impl<'a> GraphView<'a> {
         &self,
         other: &GraphView<'_>,
         track_id: TrackId,
-        pattern_id: karbeat_core::shared::PatternId,
+        pattern_id: PatternId,
     ) -> bool {
         self.placements(track_id, pattern_id).count()
             == other.placements(track_id, pattern_id).count()
@@ -91,6 +89,9 @@ pub struct GeneratorVoice {
     pub playing_notes: SmallVec<[PlayingNote; 8]>,
     /// Whether the generator processed this block's events. Set by the renderer.
     pub delivered: bool,
+    /// Whether the generator did not process in the last block. It settles its parameters
+    /// when it processes again.
+    pub parked: bool,
     /// Frames still owed after the last note/event before the generator can park.
     pub tail_remaining: u32,
 }
@@ -281,6 +282,9 @@ fn render_looping_voice(
     let clip_offset = voice.clip_content_offset;
     let origin = clip_offset as f64 * pitch_step * tempo_rate;
     let declick_samples = (sample_rate as f32 * 0.002) as u64;
+    // From the source's first frame there is nothing cut off to click, so the clip opens at
+    // full level.
+    let from_source_start = reads_from_source_start(waveform, clip_offset);
     let level = waveform.playback_gain();
 
     let clip_envelope = voice
@@ -292,7 +296,12 @@ fn render_looping_voice(
     let mut gain = ClipGain {
         start_elapsed,
         clip_length: voice.clip_loop_length,
-        declick_samples: declick_samples as u32,
+        declick_in: if from_source_start {
+            0
+        } else {
+            declick_samples as u32
+        },
+        declick_out: declick_samples as u32,
         clip_envelope,
         clip_cursor: clip_envelope
             .map(|envelope| EnvelopeCursor::seek(envelope, clip_offset + u64::from(start_elapsed)))
@@ -319,6 +328,9 @@ fn render_looping_voice(
 
         let timeline_pos = clip_offset + elapsed;
         let repeat_start = timeline_pos - phase.into;
+        // Only the first repeat opens the clip; later ones follow a repeat that faded out, and
+        // ramp in to hide the jump back.
+        let ramps_in = !(from_source_start && elapsed == phase.into);
         let step = read_rate * modulation.pitch_scale_at(repeat_start);
         let unwrapped = origin + phase.into as f64 * step;
         if !is_looping {
@@ -336,7 +348,8 @@ fn render_looping_voice(
         let repeat_gain = move |frame: u32| {
             let at = into + u64::from(frame);
             let to_end = length.saturating_sub(at);
-            (at.min(to_end) as f32 / ramp as f32).min(1.0)
+            let edge = if ramps_in { at.min(to_end) } else { to_end };
+            (edge as f32 / ramp as f32).min(1.0)
         };
         let first = run_start as u32;
         let at = (block_start + run_start) * channels;
@@ -435,7 +448,12 @@ pub(super) fn render_oneshot_voices(
         let mut gain = ClipGain {
             start_elapsed: voice.clip_elapsed_samples,
             clip_length: voice.clip_loop_length,
-            declick_samples,
+            declick_in: if reads_from_source_start(waveform, voice.clip_content_offset) {
+                0
+            } else {
+                declick_samples
+            },
+            declick_out: declick_samples,
             clip_envelope,
             clip_cursor: clip_envelope
                 .map(|envelope| EnvelopeCursor::seek(envelope, content_start))
@@ -540,10 +558,13 @@ pub(super) fn render_oneshot_voices(
 
 #[cfg(test)]
 mod midi_tests {
-    use super::{PlayingNote, VoiceState};
+    use super::{GeneratorVoice, PlayingNote, VoiceState};
     use crate::engine::schedule::clip_span_samples;
-    use karbeat_core::core::project::{ClipTimeUnit, Note, Pattern, TickScale};
     use karbeat_core::shared::{NoteId, PatternId};
+    use karbeat_core::{
+        core::project::{ClipTimeUnit, Note, Pattern, TickScale},
+        shared::{GeneratorId, TrackId},
+    };
     use karbeat_plugin_api::types::{MidiEvent, MidiMessage, NoteExpressionType};
     use smallvec::SmallVec;
 
@@ -585,7 +606,7 @@ mod midi_tests {
 
     #[test]
     fn pattern_notes_carry_pan_and_pitch_as_expressions() {
-        let note = karbeat_core::core::project::Note {
+        let note = Note {
             id: NoteId::from(1),
             start_tick: 0,
             duration: 960,
@@ -652,10 +673,7 @@ mod midi_tests {
 
     #[test]
     fn undelivered_blocks_keep_one_release_per_held_note() {
-        use karbeat_core::shared::{GeneratorId, TrackId};
-        use karbeat_plugin_api::types::MidiEvent;
-
-        let mut voice = super::GeneratorVoice::new(GeneratorId::from(1), TrackId::from(1), true);
+        let mut voice = GeneratorVoice::new(GeneratorId::from(1), TrackId::from(1), true);
         voice.midi_events.push(MidiEvent {
             sample_offset: 5,
             data: MidiMessage::NoteOn {
@@ -882,6 +900,7 @@ impl GeneratorVoice {
             playing_keys: Vec::new(),
             playing_notes: SmallVec::new(),
             delivered: false,
+            parked: true,
             tail_remaining: 0,
         }
     }
@@ -958,6 +977,7 @@ impl GeneratorVoice {
             self.midi_events
                 .extend(pending.into_iter().map(Self::note_off));
         }
+        self.parked = !self.delivered;
         self.delivered = false;
     }
 }
@@ -1136,7 +1156,10 @@ impl NeighbourCrossfade {
 struct ClipGain<'a> {
     start_elapsed: u32,
     clip_length: u32,
-    declick_samples: u32,
+    /// Anti-click ramp at the clip start; 0 when the clip opens on the source's first frame.
+    declick_in: u32,
+    /// Anti-click ramp at the clip end.
+    declick_out: u32,
     clip_envelope: Option<&'a GainEnvelope>,
     clip_cursor: EnvelopeCursor,
     content_offset: u64,
@@ -1150,7 +1173,7 @@ impl FrameGain for ClipGain<'_> {
     #[inline(always)]
     fn at(&mut self, frame: u32, read_pos: f64) -> f32 {
         let elapsed = self.start_elapsed + frame;
-        let mut gain = calc_fade(elapsed, self.declick_samples, self.clip_length);
+        let mut gain = self.declick(elapsed);
         if let Some(envelope) = self.clip_envelope {
             let elapsed = u64::from(elapsed);
             gain *= envelope.fade_gain(elapsed, u64::from(self.clip_length))
@@ -1177,17 +1200,45 @@ impl FrameGain for ClipGain<'_> {
         {
             return 0;
         }
-        if self.declick_samples == 0 {
-            return u32::MAX;
+        if self.declick_out == 0 {
+            return if self.start_elapsed.saturating_add(frame) < self.declick_in {
+                0
+            } else {
+                u32::MAX
+            };
         }
         let elapsed = self.start_elapsed.saturating_add(frame);
-        // Mirrors `calc_fade`: unity from the end of the fade-in until the fade-out starts.
-        let fade_out_start = self.clip_length.saturating_sub(self.declick_samples);
-        if elapsed < self.declick_samples || elapsed > fade_out_start {
+        // Mirrors `declick`: unity from the end of the fade-in until the fade-out starts.
+        let fade_out_start = self.clip_length.saturating_sub(self.declick_out);
+        if elapsed < self.declick_in || elapsed > fade_out_start {
             return 0;
         }
         fade_out_start - elapsed + 1
     }
+}
+
+impl ClipGain<'_> {
+    /// Anti-click gain at `elapsed` clip frames: ramps up over `declick_in` and down over the
+    /// last `declick_out` frames of the clip.
+    #[inline(always)]
+    fn declick(&self, elapsed: u32) -> f32 {
+        if elapsed < self.declick_in {
+            elapsed as f32 / self.declick_in as f32
+        } else if self.declick_out > 0
+            && elapsed.saturating_add(self.declick_out) > self.clip_length
+        {
+            self.clip_length.saturating_sub(elapsed) as f32 / self.declick_out as f32
+        } else {
+            1.0
+        }
+    }
+}
+
+/// Whether a clip whose content starts `content_offset` project samples into the source reads
+/// from the source's first frame. Its first frame is then the recording's own start, which an
+/// anti-click ramp would only silence.
+fn reads_from_source_start(waveform: &AudioWaveform, content_offset: u64) -> bool {
+    content_offset == 0 && waveform.trim_start == 0
 }
 
 /// Playback state for a browser or other temporary preview.
@@ -1361,7 +1412,7 @@ impl VoiceState {
     /// they claim the same stretchers as when every voice rendered on one thread.
     pub fn lease_stretchers(
         &mut self,
-        range: std::ops::Range<usize>,
+        range: Range<usize>,
         sample_rate: u32,
         bpm: f32,
         buffer_frames: usize,
@@ -1702,7 +1753,7 @@ impl VoiceState {
 
     pub fn schedule_pattern_notes(
         events: &mut SmallVec<[MidiEvent; 4]>,
-        pattern_id: karbeat_core::shared::PatternId,
+        pattern_id: PatternId,
         notes: &[Note],
         scale: TickScale,
         buffer_start: u32,
@@ -1748,7 +1799,6 @@ impl VoiceState {
         note_id: u64,
         note: &Note,
     ) {
-        use karbeat_core::core::project::track::note_transform::PITCH_RANGE;
         if note.pan != 0.0 {
             events.push(MidiEvent {
                 sample_offset,
@@ -1772,10 +1822,7 @@ impl VoiceState {
         }
     }
 
-    fn note_event_id(
-        pattern_id: karbeat_core::shared::PatternId,
-        note_id: karbeat_core::shared::NoteId,
-    ) -> u64 {
+    fn note_event_id(pattern_id: PatternId, note_id: NoteId) -> u64 {
         (u64::from(pattern_id.to_u32()) << 32) | u64::from(note_id.to_u32())
     }
 }
@@ -1786,11 +1833,11 @@ impl VoiceState {
     reason = "clip gain tests fail immediately when fixture buffers cannot be mapped"
 )]
 mod clip_gain_tests {
-    use std::sync::Arc;
+    use std::{f32::consts::FRAC_1_SQRT_2, sync::Arc};
 
     use memmap2::MmapOptions;
 
-    use super::{ClipSpan, NeighbourCrossfade, VoiceState};
+    use super::{ClipSpan, NeighbourCrossfade, VoiceState, render_oneshot_voices};
     use karbeat_core::core::project::{
         AudioWaveform, ClipLoop, ClipModulation, CurvePoint, EnvelopePoint, Fade, GainEnvelope,
     };
@@ -1852,7 +1899,7 @@ mod clip_gain_tests {
             120.0,
         );
         let mut output = vec![0.0; BLOCK * 2];
-        super::render_oneshot_voices(
+        render_oneshot_voices(
             &mut voices.active_oneshots,
             SAMPLE_RATE,
             &mut output,
@@ -1904,7 +1951,7 @@ mod clip_gain_tests {
                 120.0,
             );
             let mut output = vec![0.0; BLOCK * 2];
-            super::render_oneshot_voices(
+            render_oneshot_voices(
                 &mut voices.active_oneshots,
                 SAMPLE_RATE,
                 &mut output,
@@ -2107,7 +2154,7 @@ mod clip_gain_tests {
 
         let out = fading_out.gain(900);
         let fade_in = fading_in.gain(100);
-        assert!((out - std::f32::consts::FRAC_1_SQRT_2).abs() < 1e-6);
+        assert!((out - FRAC_1_SQRT_2).abs() < 1e-6);
         assert!((out * out + fade_in * fade_in - 1.0).abs() < 1e-6);
         assert!(fading_out.gain(999) < 0.01);
         assert_eq!(fading_out.gain(1_000), 0.0);
@@ -2143,8 +2190,39 @@ mod clip_gain_tests {
             fade_out_start: 0,
             fade_out: 1,
         };
-        let left = render(&waveform, None, crossfade);
-        assert!(left.iter().all(|sample| *sample == 0.0));
+        let mut voices = VoiceState::new();
+        // The one-frame fade-out ends the clip after its first frame.
+        voices.prepare_audio_voice(
+            TrackId::default(),
+            ClipId::default(),
+            0,
+            10_000,
+            0,
+            &waveform,
+            None,
+            None,
+            crossfade,
+            1,
+            1 + BLOCK as u32,
+            SAMPLE_RATE,
+            120.0,
+        );
+        assert!(voices.active_oneshots.is_empty());
+    }
+
+    #[test]
+    fn a_clip_from_the_source_start_skips_the_declick_ramp_in() {
+        let waveform = dc_waveform(20_000, GainEnvelope::default());
+        let left = render(&waveform, None, NeighbourCrossfade::default());
+        assert_eq!(left[0], 1.0);
+
+        let mut trimmed = (*waveform).clone();
+        trimmed.trim_start = 100;
+        let left = render(&Arc::new(trimmed), None, NeighbourCrossfade::default());
+        // Cut into the recording, the clip still ramps in over 2 ms.
+        assert_eq!(left[0], 0.0);
+        assert!(left[48] < 0.6, "{}", left[48]);
+        assert!((left[200] - 1.0).abs() < 1e-6);
     }
 }
 
@@ -2155,11 +2233,11 @@ mod clip_gain_tests {
     reason = "tempo playback tests fail immediately on fixture errors"
 )]
 mod tempo_playback_tests {
-    use std::sync::Arc;
+    use std::{f32::consts::TAU, sync::Arc};
 
     use memmap2::MmapOptions;
 
-    use super::{NeighbourCrossfade, VoiceState};
+    use super::{NeighbourCrossfade, VoiceState, render_oneshot_voices};
     use karbeat_core::core::project::{
         AudioWaveform,
         audio_waveform::{AudioSampleMode, EditedWaveform, WaveformEdits},
@@ -2194,7 +2272,7 @@ mod tempo_playback_tests {
 
     fn sine(mode: AudioSampleMode, frequency: f32) -> Arc<AudioWaveform> {
         waveform(mode, ENGINE_RATE, ENGINE_RATE as usize * 2, |frame| {
-            (frame as f32 * frequency * std::f32::consts::TAU / ENGINE_RATE as f32).sin() * 0.5
+            (frame as f32 * frequency * TAU / ENGINE_RATE as f32).sin() * 0.5
         })
     }
 
@@ -2225,13 +2303,7 @@ mod tempo_playback_tests {
             let mut block = vec![0.0; frames as usize * 2];
             let voice_count = voices.active_oneshots.len();
             voices.lease_stretchers(0..voice_count, ENGINE_RATE, bpm, frames as usize);
-            super::render_oneshot_voices(
-                &mut voices.active_oneshots,
-                ENGINE_RATE,
-                &mut block,
-                2,
-                bpm,
-            );
+            render_oneshot_voices(&mut voices.active_oneshots, ENGINE_RATE, &mut block, 2, bpm);
             output.extend(block.chunks(2).map(|frame| frame[0]));
             voices.clear_oneshots();
             voices.stretch_pool.end_block();

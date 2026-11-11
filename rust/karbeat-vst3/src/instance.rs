@@ -4,6 +4,7 @@ use crate::{
     api::{MemoryStream, create_instance, string128_to_string},
     bus_layout::{self, BusDescription, BusPlan, BusRole},
     context::{ComponentHandler, ParameterExchange},
+    editor::Vst3Editor,
     module::{Vst3Module, parse_class_id},
     wrapper::{Dsp, ProcessorSlot},
 };
@@ -14,6 +15,7 @@ use karbeat_plugin_api::prelude::ParameterSpec;
 use karbeat_utils::typestate::InvalidState;
 use std::{
     cell::UnsafeCell,
+    mem::{replace, zeroed},
     ptr,
     rc::Rc,
     sync::{
@@ -97,7 +99,7 @@ fn describe_buses(
     let mut infos = Vec::new();
     for index in 0..count {
         // SAFETY: BusInfo has only scalar/fixed-array fields.
-        let mut info: BusInfo = unsafe { std::mem::zeroed() };
+        let mut info: BusInfo = unsafe { zeroed() };
         // SAFETY: Bus index is in range and output storage is writable.
         check("component.getBusInfo", unsafe {
             component.getBusInfo(0, direction, index, &raw mut info)
@@ -155,7 +157,7 @@ fn current_arrangements(
         .map(|index| {
             let native_index = i32::try_from(index).map_err(|_| HostError::InvalidConfiguration)?;
             // SAFETY: BusInfo has only scalar/fixed-array fields.
-            let mut info: BusInfo = unsafe { std::mem::zeroed() };
+            let mut info: BusInfo = unsafe { zeroed() };
             // SAFETY: Bus index is within the count read before negotiation.
             check("component.getBusInfo", unsafe {
                 component.getBusInfo(0, direction, native_index, &raw mut info)
@@ -240,7 +242,7 @@ pub(crate) struct Vst3Instance {
     pub endpoint_taken: bool,
     pub exchange: Arc<ParameterExchange>,
     pub specs: Vec<ParameterSpec>,
-    pub editor: Option<crate::editor::Vst3Editor>,
+    pub editor: Option<Vst3Editor>,
     pub handler: Option<ComWrapper<ComponentHandler>>,
     _context: ComPtr<FUnknown>,
     _module: Rc<Vst3Module>,
@@ -265,7 +267,7 @@ impl Vst3Instance {
         )
             -> Result<AnyInstanceLifecycle, (AnyInstanceLifecycle, InvalidState)>,
     ) -> Result<(), HostError> {
-        let current = std::mem::replace(&mut self.lifecycle, AnyInstanceLifecycle::unprepared());
+        let current = replace(&mut self.lifecycle, AnyInstanceLifecycle::unprepared());
         match transition(current) {
             Ok(next) => {
                 self.lifecycle = next;
@@ -400,7 +402,7 @@ impl Vst3Instance {
         let mut specs = Vec::with_capacity(usize::try_from(count).unwrap_or(0));
         for index in 0..count {
             // SAFETY: ParameterInfo is a plain ABI record of scalars and fixed arrays.
-            let mut info: ParameterInfo = unsafe { std::mem::zeroed() };
+            let mut info: ParameterInfo = unsafe { zeroed() };
             // SAFETY: index is within the reported parameter range and info is writable.
             check("controller.getParameterInfo", unsafe {
                 controller.getParameterInfo(index, &raw mut info)

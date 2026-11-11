@@ -4,6 +4,7 @@
 use sysinfo::{MemoryRefreshKind, RefreshKind, System};
 
 use crate::AnalysisError;
+use std::{num::NonZeroUsize, thread::available_parallelism};
 
 /// Seconds of audio shared with each neighboring segment, so beats near a segment edge are
 /// taken from where the model saw context on both sides.
@@ -45,7 +46,7 @@ impl DeviceResources {
         let system = System::new_with_specifics(
             RefreshKind::nothing().with_memory(MemoryRefreshKind::nothing().with_ram()),
         );
-        let logical = std::thread::available_parallelism().map_or(1, std::num::NonZeroUsize::get);
+        let logical = available_parallelism().map_or(1, NonZeroUsize::get);
         Self {
             physical_cores: System::physical_core_count().unwrap_or(logical).max(1),
             available_mb: system.available_memory() / 1_048_576,

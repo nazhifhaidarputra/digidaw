@@ -1,3 +1,4 @@
+use super::external_plugin_api::reconfigure_for_audio_config;
 use karbeat_audio::{
     backend::{
         self, AudioDeviceInfo, AudioRuntimeSettings, OutputDeviceSelection, OutputHostSelection,
@@ -49,11 +50,7 @@ pub fn set_dsp_config(
 
     let current_sample_rate = ctx.audio_runtime_settings.read().requested_dsp.sample_rate;
     if current_sample_rate != sample_rate {
-        super::external_plugin_api::reconfigure_for_audio_config(
-            ctx,
-            sample_rate,
-            block_size as usize,
-        )?;
+        reconfigure_for_audio_config(ctx, sample_rate, block_size as usize)?;
     }
 
     Ok(commit_dsp_config(ctx, sample_rate, block_size))

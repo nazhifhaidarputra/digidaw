@@ -10,7 +10,7 @@ use std::{
 };
 
 use flutter_rust_bridge::frb;
-use karbeat_core::shared::id::AudioSourceId;
+use karbeat_core::{core::project::track::audio_waveform::BeatGrid, shared::id::AudioSourceId};
 use karbeat_core_api::{
     audio_analysis_api,
     jobs::{self, JobClass, JobContext, JobKind, JobSpec, JobTarget},
@@ -37,8 +37,8 @@ pub struct UiBeatGrid {
     pub downbeats: Vec<f32>,
 }
 
-impl From<&karbeat_core::core::project::track::audio_waveform::BeatGrid> for UiBeatGrid {
-    fn from(value: &karbeat_core::core::project::track::audio_waveform::BeatGrid) -> Self {
+impl From<&BeatGrid> for UiBeatGrid {
+    fn from(value: &BeatGrid) -> Self {
         Self {
             bpm: value.bpm,
             confidence: value.confidence,

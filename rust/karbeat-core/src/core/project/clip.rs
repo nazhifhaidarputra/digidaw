@@ -1,6 +1,7 @@
 use std::{
     cmp::Ordering,
     collections::{HashMap, HashSet},
+    mem::swap,
     sync::Arc,
 };
 
@@ -19,10 +20,13 @@ pub enum ResizeEdge {
 use crate::core::project::clip_modulation::ClipModulation;
 use crate::core::project::envelope::GainEnvelope;
 use crate::core::project::track::midi::Pattern;
-use crate::core::project::{ApplicationState, DawSource, track::TrackType};
 use crate::core::project::{AudioWaveform, ClipboardContent};
 use crate::shared::id::{ClipId, TrackId};
 use crate::shared::{AudioSourceId, PatternId};
+use crate::{
+    core::project::{ApplicationState, DawSource, track::TrackType},
+    utils::get_waveform_buffer,
+};
 
 /// Coarse clip-content category used when creating or validating clips.
 pub enum ClipSourceType {
@@ -425,9 +429,9 @@ impl ApplicationState {
             let Some(clip) = self.clips_pool.get_mut(timing.clip_id) else {
                 continue;
             };
-            std::mem::swap(&mut clip.time, &mut timing.time);
-            std::mem::swap(&mut clip.envelope, &mut timing.envelope);
-            std::mem::swap(&mut clip.modulation, &mut timing.modulation);
+            swap(&mut clip.time, &mut timing.time);
+            swap(&mut clip.envelope, &mut timing.envelope);
+            swap(&mut clip.modulation, &mut timing.modulation);
         }
     }
 
@@ -844,7 +848,7 @@ impl ApplicationState {
 
                 let project_sample_rate = self.audio_config.sample_rate as f64;
                 let source_sample_rate = audio_source.sample_rate as f64;
-                let buffer_len = crate::utils::get_waveform_buffer(&audio_source.buffer)
+                let buffer_len = get_waveform_buffer(&audio_source.buffer)
                     .map(|b| b.len())
                     .unwrap_or(0);
                 let source_frames = (buffer_len as u64) / (audio_source.channels as u64);

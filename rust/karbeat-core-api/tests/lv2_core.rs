@@ -19,6 +19,7 @@ fn main() {
     reason = "integration test assertions"
 )]
 mod lv2 {
+    use futures_lite::future::block_on;
     use karbeat_audio::{
         commands::{EffectTarget, MixerChannelTarget},
         context::DawContext,
@@ -28,17 +29,26 @@ mod lv2 {
             event::PluginTarget,
         },
     };
-    use karbeat_core::core::project::GeneratorInstanceType;
+    use karbeat_core::core::{
+        file_manager::project_loader::{load_daw_project, save_daw_project},
+        project::GeneratorInstanceType,
+    };
     use karbeat_core_api::{
         audio_api, audio_settings_api, external_plugin_api, mixer_api, project_api, track_api,
     };
-    use karbeat_host::{HostError, PluginDescriptor, PluginFormat};
+    use karbeat_host::{HostError, PluginController as _, PluginDescriptor, PluginFormat};
+    use karbeat_lv2::{native::call, world::probe_bundle};
+    use karbeat_vst3::module::Vst3Module;
     use std::{
-        path::PathBuf,
+        env::{args, var_os},
+        panic::{AssertUnwindSafe, catch_unwind, resume_unwind},
+        path::{Path, PathBuf},
         sync::{
             Arc,
             atomic::{AtomicBool, Ordering},
+            mpsc::sync_channel,
         },
+        thread::{sleep, spawn},
         time::{Duration, Instant},
     };
 
@@ -54,7 +64,7 @@ mod lv2 {
     fn wait_audible(audible: &AtomicBool, what: &str) {
         let deadline = Instant::now() + Duration::from_secs(5);
         while !audible.load(Ordering::Acquire) && Instant::now() < deadline {
-            std::thread::sleep(Duration::from_millis(2));
+            sleep(Duration::from_millis(2));
         }
         assert!(audible.load(Ordering::Acquire), "{what}");
     }
@@ -79,7 +89,7 @@ mod lv2 {
         let (sender, commands) = rtrb::RingBuffer::new(256);
         let (feedback, responses) = rtrb::RingBuffer::new(256);
         let (position, _positions) = rtrb::RingBuffer::new(256);
-        let (registration, _registrations) = std::sync::mpsc::sync_channel(256);
+        let (registration, _registrations) = sync_channel(256);
         let (telemetry, output) = AudioEngineTelemetry::new();
         ctx.telemetry_registry = Some(TelemetryRegistry::new(output));
         *ctx.command_sender.lock() = Some(sender);
@@ -88,7 +98,7 @@ mod lv2 {
         let audible = Arc::new(AtomicBool::new(false));
         let audio_stop = stop.clone();
         let audio_audible = audible.clone();
-        let audio = std::thread::spawn(move || {
+        let audio = spawn(move || {
             let mut engine = AudioEngine::new(
                 commands,
                 position,
@@ -107,10 +117,10 @@ mod lv2 {
                 if block.iter().any(|sample| sample.abs() > 0.000001) {
                     audio_audible.store(true, Ordering::Release);
                 }
-                std::thread::sleep(Duration::from_millis(1));
+                sleep(Duration::from_millis(1));
             }
         });
-        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        let result = catch_unwind(AssertUnwindSafe(|| {
             let instrument = plugins.instrument.clone();
             ctx.plugin_catalog
                 .merge([instrument.clone(), plugins.effect.clone()]);
@@ -211,9 +221,7 @@ mod lv2 {
             let directory = tempfile::tempdir().unwrap();
             let path = directory.path().join("lv2.digidaw");
             project_api::save_project(&mut ctx, path.to_str().unwrap()).unwrap();
-            let mut loaded =
-                karbeat_core::core::file_manager::project_loader::load_daw_project(&path, 48_000)
-                    .unwrap();
+            let mut loaded = load_daw_project(&path, 48_000).unwrap();
             assert_eq!(loaded.generator_pool.len(), 2);
             for (_, generator) in &loaded.generator_pool {
                 let GeneratorInstanceType::Plugin(plugin) = &generator.instance_type else {
@@ -231,11 +239,7 @@ mod lv2 {
             assert!(ctx.external_plugin_failures.is_empty());
             // The reloaded project hosts a new native instance; ask it for the live value.
             let reloaded = hosted_instance(&ctx, target);
-            let restored =
-                futures_lite::future::block_on(karbeat_lv2::native::call(move |owner| {
-                    use karbeat_host::PluginController as _;
-                    owner.host.parameters(reloaded)
-                }))
+            let restored = block_on(call(move |owner| owner.host.parameters(reloaded)))
                 .unwrap()
                 .into_iter()
                 .find(|spec| spec.id == parameter)
@@ -358,8 +362,7 @@ mod lv2 {
                 }
             }
             ctx.plugin_catalog.mark_missing(&instrument.identity);
-            karbeat_core::core::file_manager::project_loader::save_daw_project(&path, &loaded)
-                .unwrap();
+            save_daw_project(&path, &loaded).unwrap();
             project_api::load_project(&mut ctx, path.to_str().unwrap(), |_| ()).unwrap();
             assert_eq!(ctx.external_plugin_failures.len(), 2);
             assert!(external_plugin_api::capabilities(&mut ctx, target).is_err());
@@ -378,16 +381,16 @@ mod lv2 {
         stop.store(true, Ordering::Release);
         audio.join().unwrap();
         if let Err(error) = result {
-            std::panic::resume_unwind(error);
+            resume_unwind(error);
         }
     }
 
     fn bundle(variable: &str, default: &str) -> PathBuf {
-        std::env::var_os(variable).map_or_else(|| PathBuf::from(default), PathBuf::from)
+        var_os(variable).map_or_else(|| PathBuf::from(default), PathBuf::from)
     }
 
-    fn lv2_plugin(bundle: &std::path::Path, uri: &str) -> PluginDescriptor {
-        karbeat_lv2::world::probe_bundle(bundle)
+    fn lv2_plugin(bundle: &Path, uri: &str) -> PluginDescriptor {
+        probe_bundle(bundle)
             .unwrap()
             .into_iter()
             .find(|plugin| plugin.identity.native_id == uri)
@@ -395,7 +398,7 @@ mod lv2 {
     }
 
     pub(super) fn main() {
-        if !std::env::args().any(|arg| arg == "--ignored") {
+        if !args().any(|arg| arg == "--ignored") {
             return;
         }
         let vst3 = bundle("LSP_VST3_PATH", "/usr/lib64/vst3/lsp-plugins.vst3");
@@ -406,7 +409,7 @@ mod lv2 {
                 CLIPPER,
             ),
             vst3_effect: vst3.exists().then(|| {
-                karbeat_vst3::module::Vst3Module::load(&vst3)
+                Vst3Module::load(&vst3)
                     .unwrap()
                     .descriptors()
                     .unwrap()
@@ -415,13 +418,13 @@ mod lv2 {
                     .unwrap()
             }),
         };
-        let worker = std::thread::spawn(move || workflow(plugins));
+        let worker = spawn(move || workflow(plugins));
         let context = glib::MainContext::default();
         let deadline = Instant::now() + Duration::from_secs(180);
         while !worker.is_finished() {
             assert!(Instant::now() < deadline, "Core workflow timed out");
             context.iteration(false);
-            std::thread::sleep(Duration::from_millis(1));
+            sleep(Duration::from_millis(1));
         }
         worker.join().unwrap();
         for _ in 0..5 {

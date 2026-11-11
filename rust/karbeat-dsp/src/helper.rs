@@ -191,6 +191,7 @@ pub fn smooth_step(current: f64, target: f64, coefficient: f64) -> f64 {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::f64::consts::SQRT_2;
 
     #[test]
     fn test_db_conversions() {
@@ -210,6 +211,6 @@ mod tests {
     fn test_equal_power_crossfade() {
         // At mix = 0.5, gains should be ~0.707, so 1.0 * 0.707 + 1.0 * 0.707 ≈ 1.414
         let result = equal_power_crossfade(1.0, 1.0, 0.5);
-        assert!((result - std::f64::consts::SQRT_2).abs() < 1e-5);
+        assert!((result - SQRT_2).abs() < 1e-5);
     }
 }

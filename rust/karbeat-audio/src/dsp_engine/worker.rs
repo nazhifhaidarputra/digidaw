@@ -8,9 +8,11 @@
 
 use std::{
     cell::UnsafeCell,
+    num::NonZeroUsize,
     panic::{AssertUnwindSafe, catch_unwind},
+    ptr::{from_ref, null},
     sync::Arc,
-    thread::JoinHandle,
+    thread::{Builder, JoinHandle, available_parallelism, sleep},
     time::{Duration, Instant},
 };
 
@@ -22,8 +24,8 @@ pub const MAX_DSP_WORKERS: usize = 8;
 /// Threads, the DSP thread included, that render when the user has not chosen a count: every
 /// core but one, which is left to the UI.
 pub fn auto_worker_count() -> usize {
-    std::thread::available_parallelism()
-        .map_or(1, std::num::NonZeroUsize::get)
+    available_parallelism()
+        .map_or(1, NonZeroUsize::get)
         .saturating_sub(1)
         .clamp(1, MAX_DSP_WORKERS)
 }
@@ -84,7 +86,7 @@ impl RealtimeSlice {
         if self.since.elapsed() < self.slice {
             return false;
         }
-        std::thread::sleep(Duration::from_micros(20));
+        sleep(Duration::from_micros(20));
         self.blocked();
         true
     }
@@ -150,7 +152,7 @@ impl AudioWorkerPool {
             clock: BlockClock::new(),
             barrier: LevelBarrier::new(u32::try_from(workers).unwrap_or(1)),
             dispatch: UnsafeCell::new(Dispatch {
-                job: std::ptr::null(),
+                job: null(),
                 run: idle,
                 levels: 0,
             }),
@@ -161,7 +163,7 @@ impl AudioWorkerPool {
         };
         for index in 1..workers {
             let shared = Arc::clone(&pool.shared);
-            let spawned = std::thread::Builder::new()
+            let spawned = Builder::new()
                 .name(format!("karbeat-dsp-{index}"))
                 .spawn(move || worker_loop(&shared, index, block_frames, sample_rate));
             match spawned {
@@ -194,7 +196,7 @@ impl AudioWorkerPool {
         // block's last barrier, which this thread has passed; none reads again until the tick.
         unsafe {
             *self.shared.dispatch.get() = Dispatch {
-                job: std::ptr::from_ref(job).cast(),
+                job: from_ref(job).cast(),
                 run: run_erased::<J>,
                 levels,
             };
@@ -254,8 +256,12 @@ fn worker_loop(shared: &Shared, index: usize, block_frames: usize, sample_rate: 
     reason = "pool tests fail immediately when the pool cannot start"
 )]
 mod tests {
-    use super::{AudioWorkerPool, LevelJob};
-    use std::sync::atomic::{AtomicU32, Ordering};
+    use super::{AudioWorkerPool, LevelJob, RealtimeSlice};
+    use std::{
+        sync::atomic::{AtomicU32, Ordering},
+        thread::sleep,
+        time::Duration,
+    };
 
     /// Records, per level, which workers ran and what every earlier level had finished.
     struct Probe {
@@ -306,9 +312,9 @@ mod tests {
 
     #[test]
     fn a_thread_running_a_whole_slice_sleeps_once() {
-        let mut slice = super::RealtimeSlice::new(std::time::Duration::from_millis(2));
+        let mut slice = RealtimeSlice::new(Duration::from_millis(2));
         assert!(!slice.yield_if_due());
-        std::thread::sleep(std::time::Duration::from_millis(3));
+        sleep(Duration::from_millis(3));
         assert!(slice.yield_if_due());
         assert!(!slice.yield_if_due());
     }

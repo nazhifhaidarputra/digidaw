@@ -1,11 +1,12 @@
-use std::sync::Arc;
+use std::{mem::replace, sync::Arc};
 
 use serde::{Deserialize, Serialize};
 
-use crate::core::project::ApplicationState;
+use super::note_transform::NoteEdit;
 use crate::core::project::ClipboardContent;
 use crate::core::project::Note;
 use crate::core::project::NoteId;
+use crate::core::{history::actions::NotesChanged, project::ApplicationState};
 use crate::shared::id::PatternId;
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
@@ -504,10 +505,8 @@ impl ApplicationState {
         &mut self,
         pattern_id: PatternId,
         label: &'static str,
-        edit: super::note_transform::NoteEdit,
-    ) -> anyhow::Result<crate::core::history::actions::NotesChanged> {
-        use crate::core::history::actions::NotesChanged;
-
+        edit: NoteEdit,
+    ) -> anyhow::Result<NotesChanged> {
         let pattern = self
             .pattern_pool
             .get_mut(pattern_id)
@@ -536,7 +535,7 @@ impl ApplicationState {
 
         let mut touched = Vec::with_capacity(replacements.len() + edit.additions.len());
         for (index, after) in replacements {
-            let before = std::mem::replace(&mut pattern.notes[index], after.clone());
+            let before = replace(&mut pattern.notes[index], after.clone());
             if before.start_tick != after.start_tick
                 || before.duration != after.duration
                 || before.key != after.key

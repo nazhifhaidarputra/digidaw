@@ -390,7 +390,7 @@ impl AudioWaveform {
         let samples = self
             .buffer
             .as_ref()
-            .map_or(0, |buffer| buffer.len() / std::mem::size_of::<f32>());
+            .map_or(0, |buffer| buffer.len() / size_of::<f32>());
         u32::try_from(samples / channels).unwrap_or(u32::MAX)
     }
 

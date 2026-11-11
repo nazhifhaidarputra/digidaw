@@ -1,6 +1,7 @@
 use std::{
     cell::{Cell, RefCell},
     collections::{HashMap, VecDeque},
+    fmt::Display,
     io::ErrorKind,
     num::NonZeroU32,
     os::fd::AsRawFd,
@@ -514,7 +515,7 @@ fn size_as_i32(value: u32) -> Result<i32, NativeUiError> {
     i32::try_from(value).map_err(native_error)
 }
 
-fn native_error(error: impl std::fmt::Display) -> NativeUiError {
+fn native_error(error: impl Display) -> NativeUiError {
     NativeUiError::NativeOperationFailed(error.to_string())
 }
 

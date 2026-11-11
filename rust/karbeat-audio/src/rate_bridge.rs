@@ -245,6 +245,7 @@ enum BridgeKind {
 )]
 mod tests {
     use super::DeviceRateBridge;
+    use std::f32::consts::TAU;
 
     #[test]
     fn equal_rates_are_a_bit_exact_passthrough_with_no_added_latency() {
@@ -337,8 +338,7 @@ mod tests {
 
         for _ in 0..100 {
             for frame in input.chunks_exact_mut(2) {
-                let phase =
-                    std::f32::consts::TAU * 1_000.0 * input_frame as f32 / input_rate as f32;
+                let phase = TAU * 1_000.0 * input_frame as f32 / input_rate as f32;
                 let sample = phase.sin() * 0.5;
                 frame.copy_from_slice(&[sample, sample]);
                 input_frame += 1;

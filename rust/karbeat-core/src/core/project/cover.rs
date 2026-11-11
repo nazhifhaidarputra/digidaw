@@ -1,10 +1,13 @@
 //! Project cover art: the persisted file reference and the decoded image header.
 
 use std::{
+    fs::{create_dir_all, metadata, read, rename, write},
     hash::{DefaultHasher, Hasher},
+    io::Error as IoError,
     path::{Path, PathBuf},
 };
 
+use crate::core::file_manager::app_cache_dir;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
@@ -67,7 +70,7 @@ impl CoverFormat {
 #[derive(Debug, Error)]
 pub enum CoverArtError {
     #[error("cover image could not be read: {0}")]
-    Io(#[from] std::io::Error),
+    Io(#[from] IoError),
     #[error("cover image must be a JPEG or PNG file")]
     UnsupportedFormat,
     #[error("cover image is corrupt or truncated")]
@@ -97,10 +100,10 @@ pub struct CoverArt {
 
 impl CoverArt {
     pub fn read(path: &Path) -> Result<Self, CoverArtError> {
-        if std::fs::metadata(path)?.len() > MAX_COVER_BYTES as u64 {
+        if metadata(path)?.len() > MAX_COVER_BYTES as u64 {
             return Err(CoverArtError::TooLarge);
         }
-        Self::from_bytes(std::fs::read(path)?)
+        Self::from_bytes(read(path)?)
     }
 
     /// Identifies a JPEG or PNG image from its header and checks it is square.
@@ -154,10 +157,10 @@ impl CoverArt {
     /// Files are named by content, so saving the same crop twice reuses one file,
     /// and the path stays valid across sessions for projects that link to it.
     pub fn store_in_cache(&self) -> Result<PathBuf, CoverArtError> {
-        let directory = crate::core::file_manager::app_cache_dir()
+        let directory = app_cache_dir()
             .ok_or(CoverArtError::NoCacheDirectory)?
             .join("covers");
-        std::fs::create_dir_all(&directory)?;
+        create_dir_all(&directory)?;
 
         let mut hasher = DefaultHasher::new();
         hasher.write(&self.bytes);
@@ -169,8 +172,8 @@ impl CoverArt {
         if !path.is_file() {
             // Write beside the target first so a crash never leaves a partial cover
             let temporary = path.with_extension("partial");
-            std::fs::write(&temporary, &self.bytes)?;
-            std::fs::rename(&temporary, &path)?;
+            write(&temporary, &self.bytes)?;
+            rename(&temporary, &path)?;
         }
         Ok(path)
     }

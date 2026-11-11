@@ -8,7 +8,12 @@
 use karbeat_audio::{
     context::DawContext,
     engine::{AudioEngine, AudioEngineTelemetry},
+    event::PluginTarget,
     message::TelemetryRegistry,
+};
+use karbeat_core::core::{
+    file_manager::project_loader::{load_daw_project, save_daw_project},
+    project::GeneratorInstanceType,
 };
 use karbeat_core_api::{
     audio_api, audio_settings_api, external_plugin_api, project_api, track_api,
@@ -16,10 +21,15 @@ use karbeat_core_api::{
 use karbeat_host::PluginDescriptor;
 use karbeat_vst3::module::Vst3Module;
 use std::{
+    env::{args, var_os},
+    panic::{AssertUnwindSafe, catch_unwind, resume_unwind},
+    path::PathBuf,
     sync::{
         Arc,
         atomic::{AtomicBool, Ordering},
+        mpsc::sync_channel,
     },
+    thread::{sleep, spawn},
     time::{Duration, Instant},
 };
 
@@ -35,7 +45,7 @@ fn workflow(descriptor: PluginDescriptor) {
     let (sender, commands) = rtrb::RingBuffer::new(256);
     let (feedback, responses) = rtrb::RingBuffer::new(256);
     let (position, _positions) = rtrb::RingBuffer::new(256);
-    let (registration, _registrations) = std::sync::mpsc::sync_channel(256);
+    let (registration, _registrations) = sync_channel(256);
     let (telemetry, output) = AudioEngineTelemetry::new();
     ctx.telemetry_registry = Some(TelemetryRegistry::new(output));
     *ctx.command_sender.lock() = Some(sender);
@@ -44,7 +54,7 @@ fn workflow(descriptor: PluginDescriptor) {
     let audible = Arc::new(AtomicBool::new(false));
     let audio_stop = stop.clone();
     let audio_audible = audible.clone();
-    let audio = std::thread::spawn(move || {
+    let audio = spawn(move || {
         let mut engine = AudioEngine::new(
             commands,
             position,
@@ -63,16 +73,15 @@ fn workflow(descriptor: PluginDescriptor) {
             if block.iter().any(|sample| sample.abs() > 0.000001) {
                 audio_audible.store(true, Ordering::Release);
             }
-            std::thread::sleep(Duration::from_millis(1));
+            sleep(Duration::from_millis(1));
         }
     });
-    let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+    let result = catch_unwind(AssertUnwindSafe(|| {
         ctx.plugin_catalog.merge([descriptor.clone()]);
         let registry = ctx.plugin_catalog.resolve(&descriptor.identity).unwrap().id;
         let first = track_api::add_midi_track_with_generator_id(&mut ctx, registry).unwrap();
         let second = track_api::add_midi_track_with_generator_id(&mut ctx, registry).unwrap();
-        let target =
-            karbeat_audio::event::PluginTarget::Generator(first.generator.as_ref().unwrap().id);
+        let target = PluginTarget::Generator(first.generator.as_ref().unwrap().id);
         assert!(
             external_plugin_api::capabilities(&mut ctx, target)
                 .unwrap()
@@ -81,7 +90,7 @@ fn workflow(descriptor: PluginDescriptor) {
         audio_api::play_preview_note(&mut ctx, first.id, 60, 100, true).unwrap();
         let deadline = Instant::now() + Duration::from_secs(5);
         while !audible.load(Ordering::Acquire) && Instant::now() < deadline {
-            std::thread::sleep(Duration::from_millis(2));
+            sleep(Duration::from_millis(2));
         }
         assert!(
             audible.load(Ordering::Acquire),
@@ -94,7 +103,7 @@ fn workflow(descriptor: PluginDescriptor) {
         audio_api::play_preview_note(&mut ctx, first.id, 64, 100, true).unwrap();
         let deadline = Instant::now() + Duration::from_secs(5);
         while !audible.load(Ordering::Acquire) && Instant::now() < deadline {
-            std::thread::sleep(Duration::from_millis(2));
+            sleep(Duration::from_millis(2));
         }
         assert!(
             audible.load(Ordering::Acquire),
@@ -104,14 +113,10 @@ fn workflow(descriptor: PluginDescriptor) {
         let directory = tempfile::tempdir().unwrap();
         let path = directory.path().join("vital.digidaw");
         project_api::save_project(&mut ctx, path.to_str().unwrap()).unwrap();
-        let mut loaded =
-            karbeat_core::core::file_manager::project_loader::load_daw_project(&path, 48_000)
-                .unwrap();
+        let mut loaded = load_daw_project(&path, 48_000).unwrap();
         assert_eq!(loaded.generator_pool.len(), 2);
         for (_, generator) in &loaded.generator_pool {
-            let karbeat_core::core::project::GeneratorInstanceType::Plugin(plugin) =
-                &generator.instance_type
-            else {
+            let GeneratorInstanceType::Plugin(plugin) = &generator.instance_type else {
                 panic!("Wrong generator type");
             };
             let external = plugin.external.as_ref().unwrap();
@@ -127,9 +132,7 @@ fn workflow(descriptor: PluginDescriptor) {
             .unwrap()
             .instance_type
         {
-            karbeat_core::core::project::GeneratorInstanceType::Plugin(plugin) => {
-                plugin.parameter_specs[0].id
-            }
+            GeneratorInstanceType::Plugin(plugin) => plugin.parameter_specs[0].id,
             _ => panic!("Wrong generator type"),
         };
         let text = external_plugin_api::parameter_text(&mut ctx, target, parameter, 0.5).unwrap();
@@ -165,9 +168,7 @@ fn workflow(descriptor: PluginDescriptor) {
             .generator_pool
             .values()
             .filter_map(|generator| {
-                if let karbeat_core::core::project::GeneratorInstanceType::Plugin(plugin) =
-                    &generator.instance_type
-                {
+                if let GeneratorInstanceType::Plugin(plugin) = &generator.instance_type {
                     plugin
                         .external
                         .as_ref()
@@ -178,29 +179,23 @@ fn workflow(descriptor: PluginDescriptor) {
             })
             .collect();
         for (_, generator) in &mut loaded.generator_pool {
-            if let karbeat_core::core::project::GeneratorInstanceType::Plugin(plugin) =
-                &mut generator.instance_type
-            {
+            if let GeneratorInstanceType::Plugin(plugin) = &mut generator.instance_type {
                 plugin.external.as_mut().unwrap().descriptor.path =
                     directory.path().join("Absent.vst3");
             }
         }
         ctx.plugin_catalog.mark_missing(&descriptor.identity);
-        karbeat_core::core::file_manager::project_loader::save_daw_project(&path, &loaded).unwrap();
+        save_daw_project(&path, &loaded).unwrap();
         project_api::load_project(&mut ctx, path.to_str().unwrap(), |_| ()).unwrap();
         assert_eq!(ctx.external_plugin_failures.len(), 2);
         assert!(external_plugin_api::capabilities(&mut ctx, target).is_err());
         project_api::save_project(&mut ctx, path.to_str().unwrap()).unwrap();
-        let missing_saved =
-            karbeat_core::core::file_manager::project_loader::load_daw_project(&path, 48_000)
-                .unwrap();
+        let missing_saved = load_daw_project(&path, 48_000).unwrap();
         let stored_states: Vec<_> = missing_saved
             .generator_pool
             .values()
             .filter_map(|generator| {
-                if let karbeat_core::core::project::GeneratorInstanceType::Plugin(plugin) =
-                    &generator.instance_type
-                {
+                if let GeneratorInstanceType::Plugin(plugin) = &generator.instance_type {
                     plugin
                         .external
                         .as_ref()
@@ -214,15 +209,14 @@ fn workflow(descriptor: PluginDescriptor) {
         track_api::delete_track(&mut ctx, first.id).unwrap();
         assert_eq!(ctx.external_plugin_failures.len(), 1);
         ctx.plugin_catalog.merge([descriptor]);
-        let second_target =
-            karbeat_audio::event::PluginTarget::Generator(second.generator.as_ref().unwrap().id);
+        let second_target = PluginTarget::Generator(second.generator.as_ref().unwrap().id);
         external_plugin_api::retry(&mut ctx, second_target).unwrap();
         assert!(ctx.external_plugin_failures.is_empty());
         audible.store(false, Ordering::Release);
         audio_api::play_preview_note(&mut ctx, second.id, 67, 100, true).unwrap();
         let deadline = Instant::now() + Duration::from_secs(5);
         while !audible.load(Ordering::Acquire) && Instant::now() < deadline {
-            std::thread::sleep(Duration::from_millis(2));
+            sleep(Duration::from_millis(2));
         }
         assert!(
             audible.load(Ordering::Acquire),
@@ -234,20 +228,18 @@ fn workflow(descriptor: PluginDescriptor) {
     stop.store(true, Ordering::Release);
     audio.join().unwrap();
     if let Err(error) = result {
-        std::panic::resume_unwind(error);
+        resume_unwind(error);
     }
 }
 
 fn main() {
-    if std::env::var_os("VITAL_VST3_PATH").is_none()
-        && !std::env::args().any(|arg| arg == "--ignored")
-    {
+    if var_os("VITAL_VST3_PATH").is_none() && !args().any(|arg| arg == "--ignored") {
         return;
     }
     #[cfg(target_os = "windows")]
     karbeat_host_api::initialize_windows_main_thread().unwrap();
-    let path = std::env::var_os("VITAL_VST3_PATH")
-        .map(std::path::PathBuf::from)
+    let path = var_os("VITAL_VST3_PATH")
+        .map(PathBuf::from)
         .unwrap_or_else(|| "/usr/lib/vst3/Vital.vst3".into());
     let descriptor = Vst3Module::load(&path)
         .unwrap()
@@ -256,13 +248,12 @@ fn main() {
         .into_iter()
         .find(|plugin| plugin.name == "Vital")
         .unwrap();
-    let worker = std::thread::spawn(move || {
-        let result =
-            std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| workflow(descriptor)));
+    let worker = spawn(move || {
+        let result = catch_unwind(AssertUnwindSafe(|| workflow(descriptor)));
         #[cfg(target_os = "windows")]
         karbeat_host_api::request_windows_main_loop_shutdown().unwrap();
         if let Err(error) = result {
-            std::panic::resume_unwind(error);
+            resume_unwind(error);
         }
     });
     #[cfg(target_os = "linux")]
@@ -273,7 +264,7 @@ fn main() {
     while !worker.is_finished() {
         assert!(Instant::now() < deadline, "Core workflow timed out");
         context.iteration(false);
-        std::thread::sleep(Duration::from_millis(1));
+        sleep(Duration::from_millis(1));
     }
     #[cfg(target_os = "windows")]
     assert_eq!(karbeat_host_api::run_windows_main_loop().unwrap(), 0);

@@ -5,8 +5,13 @@ use karbeat_plugin_api::types::ZeroCopyBuffer;
 use karbeat_plugins::registry::PluginFactory;
 
 use crate::{
-    engine::{MetronomeClick, PlaybackMode, PluginTelemetrySnapshot},
+    engine::{
+        AudioExportSnapshot, MetronomeClick, PlaybackMode, PluginTelemetrySnapshot, RecordTake,
+    },
     event::PluginTarget,
+    hosted_plugin::{
+        HostedPluginInstall, HostedPluginReconfiguration, HostedPluginRemoval, HostedProjectInstall,
+    },
     render_state::{AudioAutomationLane, AudioGraphState},
 };
 pub use karbeat_core::core::project::{EffectTarget, MixerChannelTarget};
@@ -20,19 +25,20 @@ use karbeat_core::{
     },
     shared::{AutomationId, ModulationId, PatternId, id::*},
 };
+use std::sync::{Arc, mpsc::Sender};
 
 /// Preallocated triple-buffer endpoints used to publish one plugin's telemetry without locking.
 pub struct PreparedPluginTelemetry {
     /// Audio-thread writer retained beside the plugin instance.
-    pub producer: triple_buffer::Input<crate::engine::PluginTelemetrySnapshot>,
+    pub producer: triple_buffer::Input<PluginTelemetrySnapshot>,
     /// UI-side reader transferred through [`TelemetryRegistration`].
-    pub consumer: Box<triple_buffer::Output<crate::engine::PluginTelemetrySnapshot>>,
+    pub consumer: Box<triple_buffer::Output<PluginTelemetrySnapshot>>,
 }
 
 impl PreparedPluginTelemetry {
     /// Creates a telemetry channel seeded from the plugin's current buffers and metadata.
     pub fn new(plugin: &dyn AudioPlugin) -> Self {
-        let initial = crate::engine::PluginTelemetrySnapshot::from_plugin(plugin);
+        let initial = PluginTelemetrySnapshot::from_plugin(plugin);
         let (producer, consumer) = triple_buffer::triple_buffer(&initial);
         Self {
             producer,
@@ -47,15 +53,13 @@ impl PreparedPluginTelemetry {
 /// graph and parameter variants mutate only audio-thread-owned render state.
 pub enum AudioCommand {
     /// Installs all prepared hosted processors contained in a project snapshot.
-    InstallHostedProject(karbeat_host::ControlTransfer<crate::hosted_plugin::HostedProjectInstall>),
+    InstallHostedProject(karbeat_host::ControlTransfer<HostedProjectInstall>),
     /// Replaces active hosted endpoints with preconfigured instances after device changes.
-    ReconfigureHostedPlugins(
-        karbeat_host::ControlTransfer<crate::hosted_plugin::HostedPluginReconfiguration>,
-    ),
+    ReconfigureHostedPlugins(karbeat_host::ControlTransfer<HostedPluginReconfiguration>),
     /// Retires hosted processors and returns endpoint ownership to the native control owner.
-    RemoveHostedPlugins(karbeat_host::ControlTransfer<crate::hosted_plugin::HostedPluginRemoval>),
+    RemoveHostedPlugins(karbeat_host::ControlTransfer<HostedPluginRemoval>),
     /// Publishes one already prepared native endpoint; completion is acknowledged separately.
-    InstallHostedPlugin(karbeat_host::ControlTransfer<crate::hosted_plugin::HostedPluginInstall>),
+    InstallHostedPlugin(karbeat_host::ControlTransfer<HostedPluginInstall>),
     // =============================
     // Transport Command
     // =============================
@@ -120,11 +124,11 @@ pub enum AudioCommand {
     SetPlaybackMode(PlaybackMode),
 
     /// Hot-swaps the active generator while pattern playback is running
-    SwitchPatternGenerator(karbeat_core::shared::id::GeneratorId),
+    SwitchPatternGenerator(GeneratorId),
 
     /// Retargets pattern playback at another pattern without changing whether it is playing.
     /// The new pattern starts from its beginning with no loop region. No-op outside pattern mode.
-    SwitchPattern(karbeat_core::shared::id::PatternId),
+    SwitchPattern(PatternId),
 
     // =========================================================================
     // Generator Plugin Commands
@@ -359,7 +363,7 @@ pub enum AudioCommand {
     /// Request the read-only live-engine state needed to construct an offline renderer.
     QueryAudioExportSnapshot {
         /// One-use channel receiving the snapshot directly from command handling.
-        response_tx: std::sync::mpsc::Sender<crate::engine::AudioExportSnapshot>,
+        response_tx: Sender<AudioExportSnapshot>,
     },
 
     // =========================================================================
@@ -383,7 +387,7 @@ pub enum AudioCommand {
         /// Source whose waveform is replaced.
         id: AudioSourceId,
         /// Waveform snapshot to render from.
-        waveform: std::sync::Arc<AudioWaveform>,
+        waveform: Arc<AudioWaveform>,
     },
 
     /// Add or replace a single automation lane on the audio thread.
@@ -403,7 +407,7 @@ pub enum AudioCommand {
 
     /// Starts a take on a track. It records once the song plays; a take the engine cannot hold
     /// ends at once, without frames.
-    StartRecordingTake(Box<crate::engine::RecordTake>),
+    StartRecordingTake(Box<RecordTake>),
 
     /// Ends the take recording on a track.
     EndRecordingTake {

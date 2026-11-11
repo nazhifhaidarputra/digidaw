@@ -1,5 +1,6 @@
 use hashbrown::HashMap;
 
+use super::runtime::consts::MAX_ENGINE_CHANNELS;
 use karbeat_core::{core::project::SidechainRoute, shared::BusId};
 
 pub(super) struct RenderWorkspace {
@@ -11,7 +12,7 @@ pub(super) struct RenderWorkspace {
 
 impl RenderWorkspace {
     pub fn new(max_frames: usize, num_channels: u16) -> Self {
-        let channels = num_channels.min(super::runtime::consts::MAX_ENGINE_CHANNELS) as usize;
+        let channels = num_channels.min(MAX_ENGINE_CHANNELS) as usize;
         Self {
             mix_buffer: Vec::with_capacity(max_frames * channels),
             bus_buffers: HashMap::new(),

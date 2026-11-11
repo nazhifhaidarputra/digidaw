@@ -20,7 +20,10 @@
 use std::{
     collections::BTreeMap,
     f64::consts::PI,
+    iter::repeat_n,
+    mem::take,
     sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering},
+    thread::sleep,
     time::Duration,
 };
 
@@ -397,7 +400,7 @@ impl Splicer<'_> {
     fn emit(&mut self, frame: Option<&[f32]>) {
         match frame {
             Some(frame) => self.block.extend_from_slice(frame),
-            None => self.block.extend(std::iter::repeat_n(0.0, self.channels)),
+            None => self.block.extend(repeat_n(0.0, self.channels)),
         }
         self.cursor += 1;
         self.written += 1;
@@ -470,7 +473,7 @@ impl Splicer<'_> {
                     .unwrap_or(0.0);
                 *sample = (f64::from(a) * fade_out + f64::from(b) * fade_in) as f32;
             }
-            let frame = std::mem::take(&mut mixed);
+            let frame = take(&mut mixed);
             self.emit(Some(&frame));
             mixed = frame;
         }
@@ -568,7 +571,7 @@ pub fn stretch_offline_parallel<S: OfflineTimeStretcher>(
                         if stop.load(Ordering::Acquire) {
                             return;
                         }
-                        std::thread::sleep(WINDOW_WAIT);
+                        sleep(WINDOW_WAIT);
                     }
                     let rendered =
                         render_chunk(stretcher, request, chunk, map, stop, cancelled, done);
@@ -655,6 +658,7 @@ mod tests {
     use crate::stretcher::{
         DefaultOfflineStretcher, OfflineStretch, StretchError, stretch_offline,
     };
+    use std::{f32::consts::TAU, iter::repeat_n, time::Instant};
 
     const RATE: u32 = 48_000;
 
@@ -669,9 +673,8 @@ mod tests {
         let frames = frames(seconds, RATE);
         (0..frames)
             .flat_map(|frame| {
-                let value =
-                    (frame as f32 * frequency * std::f32::consts::TAU / RATE as f32).sin() * 0.5;
-                std::iter::repeat_n(value, channels)
+                let value = (frame as f32 * frequency * TAU / RATE as f32).sin() * 0.5;
+                repeat_n(value, channels)
             })
             .collect()
     }
@@ -936,12 +939,12 @@ mod tests {
     fn bench_three_minutes() {
         let input = sine(180.0, 440.0, 2);
         let request = request(&input, 2, 1.2);
-        let started = std::time::Instant::now();
+        let started = Instant::now();
         stretch_offline(&request, &|| false, &mut |_| {}, &mut |_| {}).unwrap();
         let serial = started.elapsed();
         eprintln!("3 min stereo: single pass {:.1} s", serial.as_secs_f32());
         for threads in [2, 3, 4] {
-            let started = std::time::Instant::now();
+            let started = Instant::now();
             run(&request, threads).unwrap();
             eprintln!(
                 "3 min stereo: {threads} threads {:.1} s",

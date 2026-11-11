@@ -12,6 +12,8 @@ pub(crate) use std::{
 };
 
 #[cfg(test)]
+use shuttle::scheduler::RandomScheduler;
+#[cfg(test)]
 pub(crate) use shuttle::{
     sync::{MutexGuard, RwLockReadGuard, RwLockWriteGuard, atomic, mpsc},
     thread, thread_local,
@@ -25,12 +27,13 @@ mod shuttle_lock {
     use std::sync::PoisonError;
 
     use super::{MutexGuard, RwLockReadGuard, RwLockWriteGuard};
+    use shuttle::sync::{Mutex as ShuttleMutex, RwLock as ShuttleRwLock};
 
-    pub(crate) struct Mutex<T>(shuttle::sync::Mutex<T>);
+    pub(crate) struct Mutex<T>(ShuttleMutex<T>);
 
     impl<T> Mutex<T> {
         pub(crate) fn new(value: T) -> Self {
-            Self(shuttle::sync::Mutex::new(value))
+            Self(ShuttleMutex::new(value))
         }
 
         pub(crate) fn lock(&self) -> MutexGuard<'_, T> {
@@ -42,11 +45,11 @@ mod shuttle_lock {
         }
     }
 
-    pub(crate) struct RwLock<T>(shuttle::sync::RwLock<T>);
+    pub(crate) struct RwLock<T>(ShuttleRwLock<T>);
 
     impl<T> RwLock<T> {
         pub(crate) fn new(value: T) -> Self {
-            Self(shuttle::sync::RwLock::new(value))
+            Self(ShuttleRwLock::new(value))
         }
 
         pub(crate) fn read(&self) -> RwLockReadGuard<'_, T> {
@@ -64,5 +67,5 @@ mod shuttle_lock {
 pub(crate) fn check_random(test: impl Fn() + Send + Sync + 'static, iterations: usize) {
     let mut config = shuttle::Config::new();
     config.stack_size = 1 << 21;
-    shuttle::Runner::new(shuttle::scheduler::RandomScheduler::new(iterations), config).run(test);
+    shuttle::Runner::new(RandomScheduler::new(iterations), config).run(test);
 }

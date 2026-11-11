@@ -3,19 +3,21 @@
 #[cfg(test)]
 mod tests {
     use crate as api;
-    use crate::{audio_waveform_api, recording_api, track_api};
+    use crate::{audio_waveform_api, recording_api, test::helpers::make_seeded_ctx, track_api};
     use karbeat_audio::recording::RecordedTake;
-    use karbeat_core::core::project::{DawSource, TrackInputSettings};
+    use karbeat_core::{
+        core::project::{DawSource, TrackInputSettings},
+        shared::TrackId,
+    };
 
     use crate::test::helpers::make_ctx;
     use karbeat_audio::commands::AudioCommand;
+    use karbeat_audio::context::DawContext;
+    use std::iter::from_fn;
 
     /// A context whose audio commands queue up on the returned consumer, standing in for the
     /// engine.
-    fn ctx_with_engine_queue() -> (
-        karbeat_audio::context::DawContext,
-        rtrb::Consumer<AudioCommand>,
-    ) {
+    fn ctx_with_engine_queue() -> (DawContext, rtrb::Consumer<AudioCommand>) {
         let ctx = make_ctx();
         let (producer, consumer) = rtrb::RingBuffer::new(64);
         *ctx.command_sender.lock() = Some(producer);
@@ -23,11 +25,7 @@ mod tests {
     }
 
     /// A finished take of `frames` stereo frames written to `dir`.
-    fn recorded_take(
-        dir: &tempfile::TempDir,
-        track_id: karbeat_core::shared::TrackId,
-        frames: u64,
-    ) -> RecordedTake {
+    fn recorded_take(dir: &tempfile::TempDir, track_id: TrackId, frames: u64) -> RecordedTake {
         let path = dir.path().join("Recording_2026-10-30T14-05-33+07-00.wav");
         let spec = hound::WavSpec {
             channels: 2,
@@ -91,7 +89,7 @@ mod tests {
 
         let finisher = recording_api::end_track_recording(&mut ctx, track.id).expect("ends");
         // The engine drops the take it never recorded into.
-        drop(std::iter::from_fn(|| engine.pop().ok()).collect::<Vec<_>>());
+        drop(from_fn(|| engine.pop().ok()).collect::<Vec<_>>());
         assert_eq!(finisher.wait().expect("the writer finishes"), None);
         assert!(recording_api::recording_tracks(&ctx).is_empty());
         assert!(ctx.app_state.tracks[track.id].clips.is_empty());
@@ -116,7 +114,7 @@ mod tests {
         let second = recording_api::start_track_recording(&mut ctx, again.id).expect("arms");
         assert!(!second.enabled_input);
 
-        let (seeded, ..) = crate::test::helpers::make_seeded_ctx();
+        let (seeded, ..) = make_seeded_ctx();
         let midi = seeded
             .app_state
             .tracks

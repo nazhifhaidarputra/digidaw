@@ -2,7 +2,7 @@
 // ================== Functions =====================================
 // ==================================================================
 
-use std::{path::PathBuf, sync::Arc};
+use std::{f32::consts::PI, path::PathBuf, sync::Arc};
 
 use memmap2::MmapOptions;
 use parking_lot::Mutex;
@@ -25,7 +25,7 @@ fn generate_startup_beep() -> Option<AudioWaveform> {
 
     for i in 0..total_frames {
         let t = (i as f32) / (sample_rate as f32);
-        let signal = (t * frequency * 2.0 * std::f32::consts::PI).sin();
+        let signal = (t * frequency * 2.0 * PI).sin();
         let envelope = 1.0 - (i as f32) / (total_frames as f32);
 
         let final_sample = signal * envelope * 0.3;

@@ -4,7 +4,7 @@
 //! allocates once the queue exists: the input queue is bounded, and plugin output is read into
 //! the parameter exchange as it arrives instead of being stored.
 
-use std::sync::atomic::Ordering;
+use std::{mem::take, sync::atomic::Ordering};
 
 use clack_common::events::{
     EventFlags, EventHeader, Pckn, UnknownEvent,
@@ -120,10 +120,10 @@ impl NoteSender {
             return true;
         };
         let mut delivered = true;
-        if std::mem::take(&mut self.recover) {
+        if take(&mut self.recover) {
             for slot in 0..KEY_SLOTS {
                 if let Some(active) = self.active.get_mut(slot)
-                    && std::mem::take(active)
+                    && take(active)
                 {
                     let (channel, key) = slot_key(slot);
                     delivered &= self.release(queue, input, 0, channel, key, None);
@@ -480,7 +480,7 @@ impl OutputEventBuffer for ParameterOutput<'_> {
 #[allow(clippy::unwrap_used, reason = "test fixtures inspect known events")]
 mod tests {
     use super::*;
-    use clack_common::events::{Event, io::OutputEvents};
+    use clack_common::events::{Event, event_types::ParamGestureBeginEvent, io::OutputEvents};
     use karbeat_plugin_api::prelude::ProcessingMode;
 
     fn context<'a>(events: &'a [MidiEvent]) -> ProcessContext<'a> {
@@ -691,9 +691,7 @@ mod tests {
         };
         let mut output = OutputEvents::from_buffer(&mut sink);
         let id = ClapId::new(4);
-        output
-            .try_push(clack_common::events::event_types::ParamGestureBeginEvent::new(0, id))
-            .unwrap();
+        output.try_push(ParamGestureBeginEvent::new(0, id)).unwrap();
         output
             .try_push(ParamValueEvent::new(0, id, Pckn::match_all(), 2.5))
             .unwrap();

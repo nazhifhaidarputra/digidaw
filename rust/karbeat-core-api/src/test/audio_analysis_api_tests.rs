@@ -2,7 +2,7 @@
 
 #[cfg(test)]
 mod tests {
-    use std::sync::Arc;
+    use std::{f32::consts::TAU, sync::Arc};
 
     use karbeat_audio::context::DawContext;
     use karbeat_core::{
@@ -14,20 +14,25 @@ mod tests {
         shared::id::{ClipId, TrackId},
     };
 
-    use crate::audio_analysis_api::{
-        begin_fit_to_tempo, begin_refresh_render, cancel_stale_renders, commit_beat_grid,
-        commit_render, execute_render, set_sample_mode, set_waveform_edits, set_waveform_pitch,
-        set_waveform_realtime, sources_needing_render,
-    };
     use crate::clip_api::{batch_resize_clips, resize_clip};
     use crate::test::helpers::{add_dc_audio_source, make_ctx};
+    use crate::{
+        audio_analysis_api::{
+            begin_fit_to_tempo, begin_refresh_render, cancel_stale_renders, commit_beat_grid,
+            commit_render, execute_render, set_sample_mode, set_waveform_edits, set_waveform_pitch,
+            set_waveform_realtime, sources_needing_render,
+        },
+        redo,
+        transport_api::set_bpm,
+        undo,
+    };
 
     fn source(ctx: &DawContext, id: AudioSourceId) -> &AudioWaveform {
         &ctx.app_state.asset_library.source_map[id]
     }
 
     fn frames(buffer: &memmap2::Mmap, channels: usize) -> usize {
-        buffer.len() / std::mem::size_of::<f32>() / channels
+        buffer.len() / size_of::<f32>() / channels
     }
 
     /// A source whose tempo detection found 120 BPM, in a 100 BPM project.
@@ -68,12 +73,12 @@ mod tests {
         assert!((fitted.playback_bpm().unwrap() - 100.0).abs() < 1e-3);
         assert!(fitted.tempo_rate(100.0) > 0.999);
 
-        crate::undo(&mut ctx).unwrap();
+        undo(&mut ctx).unwrap();
         let restored = source(&ctx, id);
         assert_eq!(restored.sample_mode, AudioSampleMode::Default);
         assert!(restored.edited.is_none());
 
-        crate::redo(&mut ctx).unwrap();
+        redo(&mut ctx).unwrap();
         let redone = source(&ctx, id).edited.as_ref().unwrap();
         assert!(Arc::ptr_eq(redone.buffer.as_ref().unwrap(), &rendered));
     }
@@ -133,7 +138,7 @@ mod tests {
         assert_eq!(source(&ctx, id).original_bpm, Some(128.0));
         assert_eq!(source(&ctx, id).beat_grid.as_ref(), Some(&grid));
 
-        crate::undo(&mut ctx).unwrap();
+        undo(&mut ctx).unwrap();
         assert_eq!(source(&ctx, id).original_bpm, None);
         assert!(source(&ctx, id).beat_grid.is_none());
     }
@@ -223,7 +228,7 @@ mod tests {
 
         // Undo brings back the fitted render: nothing needs rendering, yet the normalize
         // render in flight is stale.
-        crate::undo(&mut ctx).unwrap();
+        undo(&mut ctx).unwrap();
         assert!(sources_needing_render(&ctx).is_empty());
         assert_eq!(cancel_stale_renders(&ctx), 1);
         assert!(running.is_stale());
@@ -271,7 +276,7 @@ mod tests {
         let frames = (seconds * 48_000.0) as usize;
         let samples: Vec<f32> = (0..frames)
             .flat_map(|frame| {
-                let value = (frame as f32 * 220.0 * std::f32::consts::TAU / 48_000.0).sin() * 0.5;
+                let value = (frame as f32 * 220.0 * TAU / 48_000.0).sin() * 0.5;
                 [value, value]
             })
             .collect();
@@ -370,10 +375,10 @@ mod tests {
         assert!(set_waveform_edits(&mut ctx, id, false, true, true).unwrap());
         assert!(source(&ctx, id).edited.as_ref().unwrap().buffer.is_none());
 
-        crate::undo(&mut ctx).unwrap();
+        undo(&mut ctx).unwrap();
         let edits = &source(&ctx, id).edited.as_ref().unwrap().edits;
         assert!(edits.reverse && !edits.invert);
-        crate::undo(&mut ctx).unwrap();
+        undo(&mut ctx).unwrap();
         assert!(source(&ctx, id).edited.is_none());
         assert!(!set_waveform_edits(&mut ctx, id, false, false, false).unwrap());
     }
@@ -382,7 +387,7 @@ mod tests {
     fn sine_source(ctx: &mut DawContext) -> AudioSourceId {
         let samples: Vec<f32> = (0..48_000)
             .flat_map(|frame| {
-                let value = (frame as f32 * 440.0 * std::f32::consts::TAU / 48_000.0).sin() * 0.5;
+                let value = (frame as f32 * 440.0 * TAU / 48_000.0).sin() * 0.5;
                 [value, value]
             })
             .collect();
@@ -436,10 +441,10 @@ mod tests {
         assert!(edits.preserve_formants);
         assert!(set_waveform_pitch(&mut ctx, id, f32::NAN, false).is_err());
 
-        crate::undo(&mut ctx).unwrap();
+        undo(&mut ctx).unwrap();
         let edits = &source(&ctx, id).edited.as_ref().unwrap().edits;
         assert_eq!(edits.pitch_semitones, 12.0);
-        crate::undo(&mut ctx).unwrap();
+        undo(&mut ctx).unwrap();
         assert!(source(&ctx, id).edited.is_none());
     }
 
@@ -467,7 +472,7 @@ mod tests {
         refresh(&mut ctx, id);
         assert_ne!(rendered(&ctx, id), reversed);
 
-        crate::undo(&mut ctx).unwrap();
+        undo(&mut ctx).unwrap();
         assert!(source(&ctx, id).edited.as_ref().unwrap().edits.realtime);
         assert!(!set_waveform_realtime(&mut ctx, id, true).unwrap());
     }
@@ -498,7 +503,7 @@ mod tests {
         assert_eq!(waveform.sample_mode, AudioSampleMode::Resampled);
         assert!(waveform.edited.is_none());
 
-        crate::undo(&mut ctx).unwrap();
+        undo(&mut ctx).unwrap();
         assert_eq!(source(&ctx, id).sample_mode, AudioSampleMode::Stretch);
         assert!(source(&ctx, id).edited.as_ref().unwrap().buffer.is_some());
     }
@@ -529,7 +534,7 @@ mod tests {
         assert!(source(&ctx, id).edited.is_none());
         set_sample_mode(&mut ctx, id, AudioSampleMode::Stretch).unwrap();
         assert_eq!(source(&ctx, id).original_bpm, Some(160.0));
-        crate::undo(&mut ctx).unwrap();
+        undo(&mut ctx).unwrap();
         assert_eq!(source(&ctx, id).original_bpm, None);
     }
 
@@ -610,16 +615,16 @@ mod tests {
         assert_eq!(before, 96_000);
 
         // Twice the tempo: the audio plays in half the time, and so does the extra space.
-        crate::transport_api::set_bpm(&mut ctx, 240.0).unwrap();
+        set_bpm(&mut ctx, 240.0).unwrap();
         assert_eq!(samples(&ctx, clip).0, 48_000);
         let (new_start, new_ticks, _) = span(&ctx, clip);
         assert_eq!(new_start, start);
         assert!(new_ticks.abs_diff(ticks) <= 1, "{new_ticks} vs {ticks}");
 
-        crate::undo(&mut ctx).unwrap();
+        undo(&mut ctx).unwrap();
         assert_eq!(ctx.app_state.transport.bpm, 120.0);
         assert_eq!(samples(&ctx, clip).0, before);
-        crate::redo(&mut ctx).unwrap();
+        redo(&mut ctx).unwrap();
         assert_eq!(samples(&ctx, clip).0, 48_000);
     }
 
@@ -630,12 +635,12 @@ mod tests {
         let before = samples(&ctx, clip);
 
         for bpm in [130.0, 150.0, 180.0] {
-            crate::transport_api::set_bpm(&mut ctx, bpm).unwrap();
+            set_bpm(&mut ctx, bpm).unwrap();
         }
         assert!(samples(&ctx, clip).0.abs_diff(32_000) <= 1);
 
         while ctx.app_state.transport.bpm != 120.0 {
-            crate::undo(&mut ctx).unwrap();
+            undo(&mut ctx).unwrap();
         }
         assert_eq!(samples(&ctx, clip), before);
     }
@@ -644,7 +649,7 @@ mod tests {
     fn tempo_changes_leave_clips_of_other_sources_alone() {
         let (mut ctx, _, _, clip) = clip_setup();
         let before = samples(&ctx, clip);
-        crate::transport_api::set_bpm(&mut ctx, 240.0).unwrap();
+        set_bpm(&mut ctx, 240.0).unwrap();
         assert_eq!(samples(&ctx, clip), before);
     }
 
@@ -667,7 +672,7 @@ mod tests {
         ));
         assert_eq!(samples(&ctx, clip).0, before.0 * 2);
 
-        crate::undo(&mut ctx).unwrap();
+        undo(&mut ctx).unwrap();
         assert_eq!(samples(&ctx, clip), before);
     }
 
@@ -696,7 +701,7 @@ mod tests {
         assert!((waveform.tempo_rate(120.0) - 2.0 / 3.0).abs() < 1e-6);
 
         // One undo restores the length, the mode and the unknown tempo.
-        crate::undo(&mut ctx).unwrap();
+        undo(&mut ctx).unwrap();
         assert_eq!(span(&ctx, clip).1, length);
         let waveform = source(&ctx, clip_source(&ctx, clip));
         assert_eq!(waveform.sample_mode, AudioSampleMode::Default);

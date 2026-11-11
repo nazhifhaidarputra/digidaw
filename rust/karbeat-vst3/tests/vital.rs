@@ -21,8 +21,10 @@ mod x11_editor;
 use std::{
     alloc::{GlobalAlloc, Layout, System},
     cell::Cell,
+    env::{args, var_os},
     path::PathBuf,
     sync::atomic::{AtomicUsize, Ordering},
+    thread::spawn,
 };
 
 struct CountingAllocator;
@@ -57,14 +59,12 @@ unsafe impl GlobalAlloc for CountingAllocator {
 static ALLOCATOR: CountingAllocator = CountingAllocator;
 
 fn main() {
-    if std::env::var_os("VITAL_VST3_PATH").is_none()
-        && !std::env::args().any(|arg| arg == "--ignored")
-    {
+    if var_os("VITAL_VST3_PATH").is_none() && !args().any(|arg| arg == "--ignored") {
         return;
     }
     #[cfg(target_os = "windows")]
     karbeat_host_api::initialize_windows_main_thread().unwrap();
-    let path = std::env::var_os("VITAL_VST3_PATH")
+    let path = var_os("VITAL_VST3_PATH")
         .map_or_else(|| PathBuf::from("/usr/lib/vst3/Vital.vst3"), PathBuf::from);
     let descriptor = Vst3Module::load(&path)
         .unwrap()
@@ -93,7 +93,7 @@ fn main() {
     assert!(host.take_processor(first).is_err());
     assert!(host.destroy(first).is_err());
     host.resume(first).unwrap();
-    let (mut processor, energy) = std::thread::spawn(move || {
+    let (mut processor, energy) = spawn(move || {
         let note_on = [MidiEvent {
             sample_offset: 7,
             data: MidiMessage::NoteOn {
@@ -176,7 +176,7 @@ fn main() {
         "host audio path destroyed storage after preparation"
     );
     #[cfg(target_os = "linux")]
-    if std::env::var_os("VITAL_TEST_EDITOR").is_some() {
+    if var_os("VITAL_TEST_EDITOR").is_some() {
         x11_editor::exercise_editor(&mut host, first);
     }
     host.suspend(first).unwrap();
@@ -207,7 +207,7 @@ fn main() {
     processor.set_parameter(parameter.id, 0.73);
     assert!((processor.get_parameter(parameter.id) - 0.73).abs() < 0.0001);
     assert_eq!(other.get_parameter(parameter.id), other_value);
-    std::thread::spawn(move || {
+    spawn(move || {
         WATCH.with(|watch| watch.set(true));
         processor.retire();
         WATCH.with(|watch| watch.set(false));

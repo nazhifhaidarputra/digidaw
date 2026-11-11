@@ -21,6 +21,7 @@ mod native_state;
 
 #[cfg(target_os = "linux")]
 mod mda {
+    use super::native_state::exercise_state_gateway;
     use karbeat_host_api::{
         HostError, PluginController, PluginInstanceManager, PluginKind, ProcessingConfig,
     };
@@ -32,8 +33,10 @@ mod mda {
     use std::{
         alloc::{GlobalAlloc, Layout, System},
         cell::Cell,
+        env::{args, var_os},
         path::PathBuf,
         sync::atomic::{AtomicUsize, Ordering},
+        thread::spawn,
     };
 
     const DX10: &str = "http://drobilla.net/plugins/mda/DX10";
@@ -70,12 +73,10 @@ mod mda {
     static ALLOCATOR: CountingAllocator = CountingAllocator;
 
     pub(super) fn main() {
-        if std::env::var_os("MDA_LV2_PATH").is_none()
-            && !std::env::args().any(|arg| arg == "--ignored")
-        {
+        if var_os("MDA_LV2_PATH").is_none() && !args().any(|arg| arg == "--ignored") {
             return;
         }
-        let path = std::env::var_os("MDA_LV2_PATH")
+        let path = var_os("MDA_LV2_PATH")
             .map_or_else(|| PathBuf::from("/usr/lib64/lv2/mda.lv2"), PathBuf::from);
         let descriptor = world::probe_bundle(&path)
             .unwrap()
@@ -106,7 +107,7 @@ mod mda {
         assert!(host.take_processor(first).is_err());
         assert!(host.destroy(first).is_err());
         host.resume(first).unwrap();
-        let (mut processor, energy, released) = std::thread::spawn(move || {
+        let (mut processor, energy, released) = spawn(move || {
             let note_on = [MidiEvent {
                 sample_offset: 7,
                 data: MidiMessage::NoteOn {
@@ -245,7 +246,7 @@ mod mda {
                 .is_err()
         );
         assert!(host.parameter_text(first, u32::MAX, 0.5).is_err());
-        std::thread::spawn(move || {
+        spawn(move || {
             WATCH.with(|watch| watch.set(true));
             processor.retire();
             WATCH.with(|watch| watch.set(false));
@@ -270,6 +271,6 @@ mod mda {
         host.destroy(second).unwrap();
         assert!(host.parameters(first).is_err());
         drop(host);
-        super::native_state::exercise_state_gateway(descriptor, config);
+        exercise_state_gateway(descriptor, config);
     }
 }

@@ -2,24 +2,26 @@
 
 #[cfg(test)]
 mod tests {
-    use std::time::Duration;
+    use std::{path::Path, time::Duration};
 
-    use crate::test::helpers::{make_ctx, make_seeded_ctx, mitigation_root};
     use crate::{
         audio_api, automation_api, clipboard_api, mitigation_api, mixer_api, note_api, pattern_api,
         project_api, track_api, transport_api,
     };
+    use crate::{
+        redo,
+        test::helpers::{make_ctx, make_seeded_ctx, mitigation_root},
+        undo,
+    };
     use karbeat_audio::commands::MixerChannelTarget;
     use karbeat_audio::context::DawContext;
     use karbeat_core::core::mitigation::AutoSaveSettings;
-    use karbeat_core::core::project::{MixerChannelParams, ModulationSource};
+    use karbeat_core::{
+        core::project::{MixerChannelParams, ModulationSource},
+        shared::{PatternId, TrackId},
+    };
 
-    fn saved_ctx() -> (
-        DawContext,
-        karbeat_core::shared::TrackId,
-        karbeat_core::shared::TrackId,
-        karbeat_core::shared::PatternId,
-    ) {
+    fn saved_ctx() -> (DawContext, TrackId, TrackId, PatternId) {
         let (mut ctx, audio, midi, pattern) = make_seeded_ctx();
         let revision = ctx.app_state.session.revision();
         ctx.app_state.session.mark_saved_at(revision);
@@ -59,11 +61,11 @@ mod tests {
     fn undo_marks_unsaved_even_back_to_the_saved_point() {
         let (mut ctx, _, _, pattern) = make_seeded_ctx();
         note_api::add_note(&mut ctx, pattern, 72, 1920, Some(480)).expect("add note");
-        crate::undo(&mut ctx).expect("undo");
+        undo(&mut ctx).expect("undo");
         let revision = ctx.app_state.session.revision();
         ctx.app_state.session.mark_saved_at(revision);
 
-        crate::redo(&mut ctx).expect("redo");
+        redo(&mut ctx).expect("redo");
         assert!(!mitigation_api::is_project_saved(&ctx));
     }
 
@@ -143,10 +145,7 @@ mod tests {
         project_api::commit_save_project(&mut ctx, completed);
 
         assert!(!mitigation_api::is_project_saved(&ctx));
-        assert_eq!(
-            ctx.app_state.session.file_path(),
-            Some(std::path::Path::new(path))
-        );
+        assert_eq!(ctx.app_state.session.file_path(), Some(Path::new(path)));
 
         project_api::save_project(&mut ctx, path).expect("second save");
         assert!(mitigation_api::is_project_saved(&ctx));
@@ -167,7 +166,7 @@ mod tests {
         assert!(mitigation_api::is_project_saved(&loaded_ctx));
         assert_eq!(
             loaded_ctx.app_state.session.file_path(),
-            Some(std::path::Path::new(path))
+            Some(Path::new(path))
         );
     }
 

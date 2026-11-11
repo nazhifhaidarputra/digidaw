@@ -1,6 +1,9 @@
-use crate::api::context::{DawContext, ProjectOperationGuard};
 use crate::api::jobs::run_job;
 use crate::api::project::UiApplicationState;
+use crate::api::{
+    audio_analysis::schedule_source_renders,
+    context::{DawContext, ProjectOperationGuard},
+};
 use crate::frb_generated::StreamSink;
 use flutter_rust_bridge::frb;
 use karbeat_core::core::project::ApplicationState;
@@ -31,10 +34,7 @@ fn save_project_blocking(ctx: &DawContext, path_name: &str) -> Result<(), String
 }
 
 /// Load the `.karbeat` or `.dgdaw` project.
-pub async fn load_project(
-    ctx: &DawContext,
-    path_name: &str,
-) -> Result<crate::api::project::UiApplicationState, String> {
+pub async fn load_project(ctx: &DawContext, path_name: &str) -> Result<UiApplicationState, String> {
     let ctx = ctx.clone();
     let path_name = path_name.to_owned();
     run_job(
@@ -44,10 +44,7 @@ pub async fn load_project(
     .await
 }
 
-fn load_project_blocking(
-    ctx: &DawContext,
-    path_name: &str,
-) -> Result<crate::api::project::UiApplicationState, String> {
+fn load_project_blocking(ctx: &DawContext, path_name: &str) -> Result<UiApplicationState, String> {
     let operation = ctx.begin_project_operation();
     let sample_rate = operation
         .read_core()
@@ -60,7 +57,7 @@ fn load_project_blocking(
     let ui_state = restore_loaded_project(&operation, loaded).map_err(|error| error.to_string())?;
     drop(operation);
     // Rendered edits are not saved; rebuild them from their recipes.
-    crate::api::audio_analysis::schedule_source_renders(ctx, false);
+    schedule_source_renders(ctx, false);
 
     tracing::info!("Successfully loaded the project {}", path_name);
     Ok(ui_state)
@@ -79,9 +76,7 @@ pub(crate) fn restore_loaded_project(
     Ok(UiApplicationState::from(core.app_state.clone()))
 }
 
-pub async fn new_blank_project(
-    ctx: &DawContext,
-) -> anyhow::Result<crate::api::project::UiApplicationState> {
+pub async fn new_blank_project(ctx: &DawContext) -> anyhow::Result<UiApplicationState> {
     let ctx = ctx.clone();
     run_job(
         JobSpec::new(JobKind::ProjectRestore, JobClass::Control).with_target(JobTarget::Project),
@@ -91,9 +86,7 @@ pub async fn new_blank_project(
     .map_err(anyhow::Error::msg)
 }
 
-fn new_blank_project_blocking(
-    ctx: &DawContext,
-) -> anyhow::Result<crate::api::project::UiApplicationState> {
+fn new_blank_project_blocking(ctx: &DawContext) -> anyhow::Result<UiApplicationState> {
     let operation = ctx.begin_project_operation();
     let mut staged = operation.read_core().app_state.clone();
     staged.new_blank_project();

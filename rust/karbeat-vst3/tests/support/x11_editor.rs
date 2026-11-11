@@ -7,6 +7,7 @@ use karbeat_vst3::Vst3PluginHost;
 use std::{
     cell::RefCell,
     rc::Rc,
+    thread::sleep,
     time::{Duration, Instant},
 };
 
@@ -70,7 +71,7 @@ pub fn exercise_editor(host: &mut Vst3PluginHost, instance: HostInstanceId) {
                 .unwrap();
             native_ui.pump().unwrap();
             host.pump().unwrap();
-            std::thread::sleep(Duration::from_millis(8));
+            sleep(Duration::from_millis(8));
         }
 
         assert!(binding.borrow_mut().begin_close());

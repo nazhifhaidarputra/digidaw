@@ -1,6 +1,8 @@
 //! VST3 editor attachment to windows owned by DigiDAW's native window service.
 #![allow(non_snake_case, reason = "VST3 interface method names are ABI-defined")]
 
+#[cfg(target_os = "linux")]
+use crate::run_loop::delegate_run_loop;
 use crate::{
     instance::{check, plugin_call_error},
     run_loop::RunLoop,
@@ -9,7 +11,7 @@ use karbeat_host_api::{HostError, NativeParentHandle, NativeSurfaceKind};
 use raw_window_handle::RawWindowHandle;
 use std::{
     cell::{Cell, RefCell},
-    ffi::c_void,
+    ffi::{CStr, c_void},
     ptr,
     rc::Rc,
 };
@@ -63,7 +65,7 @@ impl IPlugFrameTrait for PlugFrame {
     }
 }
 #[cfg(target_os = "linux")]
-crate::run_loop::delegate_run_loop!(PlugFrame);
+delegate_run_loop!(PlugFrame);
 
 karbeat_utils::typestate! {
     /// Whether the plugin view is attached to a host parent window. Every `attached` call is
@@ -160,7 +162,7 @@ impl Vst3Editor {
         let AnyViewAttachment::Detached(detached) = self.attachment else {
             return Ok(());
         };
-        let (parent, platform): (*mut c_void, &std::ffi::CStr) =
+        let (parent, platform): (*mut c_void, &CStr) =
             match (parent_handle.kind, parent_handle.window) {
                 (NativeSurfaceKind::X11, RawWindowHandle::Xcb(handle)) => (
                     ptr::without_provenance_mut(

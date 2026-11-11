@@ -1,20 +1,29 @@
+#[cfg(target_os = "android")]
+use jni::{
+    errors::Error,
+    objects::JClass,
+    sys::{JNI_VERSION_1_6, jint},
+};
 use karbeat_audio::{context::DawContext as CoreDawContext, init::init_engine};
-use karbeat_core_api as api;
+use karbeat_core::core::mitigation::crash::install_panic_hook;
+use karbeat_core_api::{self as api, jobs::set_runtime_provider};
 #[cfg(target_os = "android")]
 use once_cell::sync::OnceCell;
 
 #[cfg(target_os = "android")]
 use jni::{objects::JObject, refs::Global};
 
-use crate::api::context::DawContext;
+use crate::api::{context::DawContext, jobs::frb_runtime_handle};
 use crate::init_logger;
+#[cfg(target_os = "android")]
+use std::ffi::c_void;
 
 #[flutter_rust_bridge::frb(init)]
 pub fn init_app() {
     flutter_rust_bridge::setup_default_user_utils();
     init_logger();
-    karbeat_core::core::mitigation::crash::install_panic_hook();
-    karbeat_core_api::jobs::set_runtime_provider(crate::api::jobs::frb_runtime_handle);
+    install_panic_hook();
+    set_runtime_provider(frb_runtime_handle);
     tracing::info!("FRB Base Utilities Initialized");
 }
 
@@ -55,11 +64,11 @@ pub fn set_history_limit(ctx: &DawContext, limit: u32) -> Result<u32, String> {
 
 #[cfg(target_os = "android")]
 #[no_mangle]
-pub extern "C" fn JNI_OnLoad(vm: jni::JavaVM, _res: *mut std::ffi::c_void) -> jni::sys::jint {
+pub extern "C" fn JNI_OnLoad(vm: jni::JavaVM, _res: *mut c_void) -> jint {
     tracing::info!("JNI_OnLoad Triggered in Rust");
 
     // Upgrade the JavaVM pointer to a safe JNIEnv using the closure API
-    let _outcome = vm.with_top_local_frame(|env| -> Result<(), jni::errors::Error> {
+    let _outcome = vm.with_top_local_frame(|env| -> Result<(), Error> {
         // You can safely use the `env` inside this block.
         // For example, this is the perfect place to do `env.find_class()`
         // lookups once and cache the GlobalRefs for later use.
@@ -70,7 +79,7 @@ pub extern "C" fn JNI_OnLoad(vm: jni::JavaVM, _res: *mut std::ffi::c_void) -> jn
     // If you actually needed to handle the error when getting the env,
     // you could do: `.expect("Cannot get reference to the JNIEnv");` on _outcome.
 
-    jni::sys::JNI_VERSION_1_6
+    JNI_VERSION_1_6
 }
 
 // We need a safe, static place to store the Global Reference so it is never dropped.
@@ -81,12 +90,12 @@ static ANDROID_CONTEXT: OnceCell<Global<JObject<'static>>> = OnceCell::new();
 #[no_mangle]
 pub unsafe extern "C" fn Java_app_digidaw_Digidaw_MainActivity_initRust(
     mut unowned_env: jni::EnvUnowned,
-    _class: jni::objects::JClass,
-    context: jni::objects::JObject,
+    _class: JClass,
+    context: JObject,
 ) {
     tracing::info!("Initializing ndk-context from Kotlin...");
 
-    let _outcome = unowned_env.with_env(|env| -> Result<(), jni::errors::Error> {
+    let _outcome = unowned_env.with_env(|env| -> Result<(), Error> {
         let vm = env.get_java_vm()?;
 
         // Upgrade the temporary Local Reference to a permanent Global Reference
@@ -100,8 +109,8 @@ pub unsafe extern "C" fn Java_app_digidaw_Digidaw_MainActivity_initRust(
 
         // Pass the global pointer to ndk-context
         ndk_context::initialize_android_context(
-            vm.get_raw() as *mut std::ffi::c_void,
-            global_context_raw as *mut std::ffi::c_void,
+            vm.get_raw() as *mut c_void,
+            global_context_raw as *mut c_void,
         );
 
         Ok(())

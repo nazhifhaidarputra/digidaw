@@ -1,4 +1,4 @@
-use std::io::Write;
+use std::{io::Write, num::TryFromIntError};
 
 use dasp::slice;
 use num_traits::ToPrimitive;
@@ -211,12 +211,12 @@ pub fn resample_buffers(
     let mut resampler = Fft::<f32>::new(
         source_sample_rate
             .try_into()
-            .map_err(|e: std::num::TryFromIntError| AudioResamplingError {
+            .map_err(|e: TryFromIntError| AudioResamplingError {
                 err_source: e.to_string(),
             })?,
         target_sample_rate
             .try_into()
-            .map_err(|e: std::num::TryFromIntError| AudioResamplingError {
+            .map_err(|e: TryFromIntError| AudioResamplingError {
                 err_source: e.to_string(),
             })?,
         CHUNK_SIZE,
@@ -284,12 +284,12 @@ pub fn resample_interleaved_buffer(
     let mut resampler = Fft::<f32>::new(
         source_sample_rate
             .try_into()
-            .map_err(|e: std::num::TryFromIntError| AudioResamplingError {
+            .map_err(|e: TryFromIntError| AudioResamplingError {
                 err_source: e.to_string(),
             })?,
         target_sample_rate
             .try_into()
-            .map_err(|e: std::num::TryFromIntError| AudioResamplingError {
+            .map_err(|e: TryFromIntError| AudioResamplingError {
                 err_source: e.to_string(),
             })?,
         CHUNK_SIZE,
@@ -379,12 +379,12 @@ where
     let mut resampler = Fft::<f32>::new(
         source_sample_rate
             .try_into()
-            .map_err(|e: std::num::TryFromIntError| AudioResamplingError {
+            .map_err(|e: TryFromIntError| AudioResamplingError {
                 err_source: e.to_string(),
             })?,
         target_sample_rate
             .try_into()
-            .map_err(|e: std::num::TryFromIntError| AudioResamplingError {
+            .map_err(|e: TryFromIntError| AudioResamplingError {
                 err_source: e.to_string(),
             })?,
         CHUNK_SIZE,

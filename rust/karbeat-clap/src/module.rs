@@ -3,15 +3,27 @@
 //! Loading a module initialises its entry, which runs plugin code, so discovery reads modules in
 //! the scanner helper. The host keeps each module it loaded for the rest of its lifetime.
 
+#[cfg(target_os = "linux")]
+use std::ffi::CString;
+#[cfg(target_os = "linux")]
+use std::os::unix::ffi::OsStrExt;
 use std::{
-    ffi::OsStr,
+    collections::HashSet,
+    env::{split_paths, var_os},
+    ffi::{CStr, OsStr},
+    fs::canonicalize,
+    marker::PhantomData,
     path::{Path, PathBuf},
     rc::Rc,
 };
 
 use clack_common::plugin::features;
+#[cfg(target_os = "linux")]
+use clack_host::entry::LibraryEntry;
 use clack_host::entry::PluginEntry;
 use karbeat_host_api::{HostError, PluginDescriptor, PluginFormat, PluginIdentity, PluginKind};
+#[cfg(target_os = "linux")]
+use libloading::os::unix::{Library as UnixLibrary, RTLD_LOCAL, RTLD_NOW};
 
 /// File extension that marks one CLAP module.
 pub const MODULE_EXTENSION: &str = "clap";
@@ -27,7 +39,7 @@ fn module_error(path: &Path, message: impl ToString) -> HostError {
 ///
 /// `CLAP_PATH` entries come first. Paths are returned whether or not they exist.
 pub fn default_scan_paths() -> Vec<PathBuf> {
-    let variable = |name: &str| std::env::var_os(name).map(PathBuf::from);
+    let variable = |name: &str| var_os(name).map(PathBuf::from);
     let defaults = if cfg!(target_os = "windows") {
         vec![
             variable("LOCALAPPDATA").map(|local| local.join("Programs/Common/CLAP")),
@@ -42,19 +54,19 @@ pub fn default_scan_paths() -> Vec<PathBuf> {
         );
         defaults
     };
-    scan_paths(std::env::var_os("CLAP_PATH").as_deref(), &defaults)
+    scan_paths(var_os("CLAP_PATH").as_deref(), &defaults)
 }
 
 fn scan_paths(configured: Option<&OsStr>, defaults: &[Option<PathBuf>]) -> Vec<PathBuf> {
     let mut paths: Vec<PathBuf> = configured
         .map(|configured| {
-            std::env::split_paths(configured)
+            split_paths(configured)
                 .filter(|path| !path.as_os_str().is_empty())
                 .collect()
         })
         .unwrap_or_default();
     paths.extend(defaults.iter().flatten().cloned());
-    let mut seen = std::collections::HashSet::new();
+    let mut seen = HashSet::new();
     paths.retain(|path| seen.insert(path.clone()));
     paths
 }
@@ -67,7 +79,7 @@ pub struct ClapModule {
     /// Canonical path of the module file.
     pub path: PathBuf,
     entry: PluginEntry,
-    _ui_only: std::marker::PhantomData<Rc<()>>,
+    _ui_only: PhantomData<Rc<()>>,
 }
 
 impl ClapModule {
@@ -78,7 +90,7 @@ impl ClapModule {
     /// Returns an error when the path is not a module file, the library or its `clap_entry`
     /// symbol cannot be loaded, or the entry fails to initialise.
     pub fn load(path: &Path) -> Result<Rc<Self>, HostError> {
-        let path = std::fs::canonicalize(path)?;
+        let path = canonicalize(path)?;
         if !path.is_file() {
             return Err(module_error(&path, "a CLAP module must be a library file"));
         }
@@ -86,7 +98,7 @@ impl ClapModule {
         Ok(Rc::new(Self {
             path,
             entry,
-            _ui_only: std::marker::PhantomData,
+            _ui_only: PhantomData,
         }))
     }
 
@@ -107,7 +119,7 @@ impl ClapModule {
             .entry
             .get_plugin_factory()
             .ok_or_else(|| module_error(&self.path, "module provides no plugin factory"))?;
-        let text = |value: Option<&std::ffi::CStr>| {
+        let text = |value: Option<&CStr>| {
             value.map_or_else(String::new, |value| value.to_string_lossy().into_owned())
         };
         let mut descriptors = factory
@@ -146,9 +158,6 @@ impl ClapModule {
 
 #[cfg(target_os = "linux")]
 fn load_entry(path: &Path) -> Result<PluginEntry, HostError> {
-    use clack_host::entry::LibraryEntry;
-    use libloading::os::unix::{Library as UnixLibrary, RTLD_LOCAL, RTLD_NOW};
-    use std::os::unix::ffi::OsStrExt;
     // Plugin code stays resident until process shutdown, as it does for VST3 and LV2 modules:
     // GUI toolkits start threads and register static destructors that deadlock in `dlclose`.
     const RTLD_NODELETE: i32 = 0x1000;
@@ -161,8 +170,8 @@ fn load_entry(path: &Path) -> Result<PluginEntry, HostError> {
     // SAFETY: `clap_entry` is the CLAP entry symbol; the provider keeps the library loaded.
     let provider = unsafe { LibraryEntry::load_from_library(library) }
         .map_err(|error| module_error(path, error))?;
-    let bundle = std::ffi::CString::new(path.as_os_str().as_bytes())
-        .map_err(|error| module_error(path, error))?;
+    let bundle =
+        CString::new(path.as_os_str().as_bytes()).map_err(|error| module_error(path, error))?;
     // SAFETY: The entry is initialised once with the module's own path and deinitialised when
     // its last reference is dropped.
     unsafe { PluginEntry::load_from(provider, &bundle) }.map_err(|error| module_error(path, error))
@@ -179,10 +188,14 @@ fn load_entry(path: &Path) -> Result<PluginEntry, HostError> {
 #[allow(clippy::unwrap_used, reason = "test fixtures must be creatable")]
 mod tests {
     use super::*;
+    use std::{
+        env::join_paths,
+        fs::{create_dir, write},
+    };
 
     #[test]
     fn configured_paths_come_first_and_duplicates_are_dropped() {
-        let configured = std::env::join_paths(["/opt/clap", "", "/usr/lib/clap"]).unwrap();
+        let configured = join_paths(["/opt/clap", "", "/usr/lib/clap"]).unwrap();
         let paths = scan_paths(
             Some(&configured),
             &[
@@ -209,11 +222,11 @@ mod tests {
     fn a_directory_or_missing_file_is_not_a_module() {
         let directory = tempfile::tempdir().unwrap();
         let bundle = directory.path().join("Bundle.clap");
-        std::fs::create_dir(&bundle).unwrap();
+        create_dir(&bundle).unwrap();
         assert!(ClapModule::load(&bundle).is_err());
         assert!(ClapModule::load(&directory.path().join("Missing.clap")).is_err());
         let invalid = directory.path().join("Invalid.clap");
-        std::fs::write(&invalid, b"not a library").unwrap();
+        write(&invalid, b"not a library").unwrap();
         assert!(matches!(
             ClapModule::load(&invalid),
             Err(HostError::Module { .. })

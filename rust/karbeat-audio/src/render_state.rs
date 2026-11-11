@@ -1,3 +1,4 @@
+use crate::event::PluginTarget;
 use hashbrown::HashMap;
 use karbeat_core::core::project::{
     ApplicationState, AssetLibrary, Clip, GeneratorId, TrackId,
@@ -12,6 +13,11 @@ use karbeat_host::HostedProcessor;
 use karbeat_utils::math::is_power_of_two;
 use karbeat_utils::types::NormalizedF64;
 use slab::Slab;
+use std::{
+    mem::{forget, replace},
+    thread::{sleep, spawn},
+    time::Duration,
+};
 
 // =============================================================================
 // Audio Thread Owned Plugin State
@@ -33,6 +39,9 @@ pub struct AudioEffectInstance {
     pub plugin: Box<dyn AudioPlugin>,
     /// Bypassed effects pass audio through untouched and report no latency.
     pub bypass: bool,
+    /// Whether the chain did not process this effect in the last block. A new instance starts
+    /// parked; it settles its parameters when it processes again.
+    pub parked: bool,
 }
 
 impl AudioEffectInstance {
@@ -126,7 +135,7 @@ pub struct AudioPluginState {
 impl Default for AudioPluginState {
     fn default() -> Self {
         let (retirement, mut consumer) = rtrb::RingBuffer::<Box<dyn AudioPlugin>>::new(1_024);
-        std::thread::spawn(move || {
+        spawn(move || {
             loop {
                 // Checked before pop: once abandoned no push can follow, so empty is final.
                 let abandoned = consumer.is_abandoned();
@@ -134,7 +143,7 @@ impl Default for AudioPluginState {
                     Ok(plugin) => plugin.retire(),
                     Err(rtrb::PopError::Empty) if abandoned => break,
                     Err(rtrb::PopError::Empty) => {
-                        std::thread::sleep(std::time::Duration::from_millis(10));
+                        sleep(Duration::from_millis(10));
                     }
                 }
             }
@@ -164,12 +173,11 @@ impl AudioPluginState {
             return;
         }
         if let Err(rtrb::PushError::Full(plugin)) = retirement.push(plugin) {
-            std::mem::forget(plugin);
+            forget(plugin);
         }
     }
 
-    pub fn plugin(&self, target: &crate::event::PluginTarget) -> Option<&dyn AudioPlugin> {
-        use crate::event::PluginTarget;
+    pub fn plugin(&self, target: &PluginTarget) -> Option<&dyn AudioPlugin> {
         let effect = match target {
             PluginTarget::Generator(id) => {
                 return self
@@ -200,7 +208,7 @@ impl AudioPluginState {
     /// Insert a generator or replace the existing instance with the same ID.
     pub fn insert_generator(&mut self, instance: AudioGeneratorInstance) {
         if let Some(&key) = self.generator_keys.get(&instance.id) {
-            let previous = std::mem::replace(&mut self.generators[key], instance).plugin;
+            let previous = replace(&mut self.generators[key], instance).plugin;
             self.retire_plugin(previous);
             return;
         }
@@ -532,9 +540,14 @@ impl From<&ApplicationState> for AudioRenderState {
     reason = "test fixtures fail immediately when an invariant is broken"
 )]
 mod tests {
-    use std::sync::{
-        Arc,
-        atomic::{AtomicUsize, Ordering},
+    use std::{
+        any::Any,
+        sync::{
+            Arc,
+            atomic::{AtomicUsize, Ordering},
+        },
+        thread::sleep,
+        time::{Duration, Instant},
     };
 
     use karbeat_core::{
@@ -600,7 +613,7 @@ mod tests {
         fn get_parameter_specs(&self) -> Vec<ParameterSpec> {
             Vec::new()
         }
-        fn as_any(&self) -> &dyn std::any::Any {
+        fn as_any(&self) -> &dyn Any {
             self
         }
     }
@@ -629,9 +642,9 @@ mod tests {
         }
 
         let expected = ROUNDS * PER_ROUND;
-        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
-        while retired.load(Ordering::SeqCst) < expected && std::time::Instant::now() < deadline {
-            std::thread::sleep(std::time::Duration::from_millis(5));
+        let deadline = Instant::now() + Duration::from_secs(5);
+        while retired.load(Ordering::SeqCst) < expected && Instant::now() < deadline {
+            sleep(Duration::from_millis(5));
         }
         assert_eq!(retired.load(Ordering::SeqCst), expected);
     }

@@ -5,27 +5,70 @@
     reason = "engine tests fail immediately when deterministic fixtures violate their invariants"
 )]
 
-use crate::commands::{AudioCommand, AudioFeedback, EffectTarget, TelemetryRegistration};
 use crate::engine::voices::VoiceState;
 use crate::engine::{AudioBuffer, AudioEngine, AudioEngineTelemetry};
 use crate::event::{PluginTarget, TransportFeedback};
 use crate::render_state::AudioGraphState;
-use karbeat_core::core::project::automation::{
-    AutomationLane, AutomationPoint, AutomationTarget, EffectAutomationTarget,
-    MasterAutomationTarget, MixerChannelParamTarget, TEMPO_AUTOMATION_MAX_BPM,
-    TEMPO_AUTOMATION_MIN_BPM, TrackAutomationTarget,
+#[cfg(test)]
+use crate::{commands::MixerChannelTarget, engine::GeneratorVoice};
+use crate::{
+    commands::{AudioCommand, AudioFeedback, EffectTarget, TelemetryRegistration},
+    engine::AudioMixerChannelValues,
+};
+#[cfg(test)]
+use crate::{
+    engine::{InputSource, PlaybackMode, RecordTake, TakeShared},
+    hosted_plugin::HostedPluginInstall,
 };
 use karbeat_core::core::project::modulation::{ModulationLink, ModulationSource};
 use karbeat_core::core::project::track::AudioTrack;
 use karbeat_core::core::project::{ApplicationState, ModulationLinkForOrderedLaneView, TrackType};
+#[cfg(test)]
+use karbeat_core::core::{
+    file_manager::audio_loader::load_audio_file, project::MixerChannelParams,
+};
+#[cfg(test)]
+use karbeat_core::{
+    core::project::{AudioWaveform, Fade, GainEnvelope, RoutingTap, clip::ClipSourceType},
+    shared::{EffectId, TrackId},
+};
+use karbeat_core::{
+    core::project::{
+        RoutingConnection, RoutingNode, SidechainRoute,
+        automation::{
+            AutomationLane, AutomationPoint, AutomationTarget, EffectAutomationTarget,
+            MasterAutomationTarget, MixerChannelParamTarget, TEMPO_AUTOMATION_MAX_BPM,
+            TEMPO_AUTOMATION_MIN_BPM, TrackAutomationTarget,
+        },
+        track::midi::Pattern,
+    },
+    shared::{BusId, GeneratorId, PatternId},
+};
+#[cfg(test)]
+use karbeat_host::{HostInstanceId, HostedProcessor, ProcessingConfig};
+#[cfg(test)]
+use karbeat_plugin_api::types::MidiEvent;
 use karbeat_plugin_api::types::ProcessingMode;
-use karbeat_plugin_api::types::{MidiMessage, NoteExpressionType};
+use karbeat_plugin_api::{
+    prelude::ParameterSpec,
+    traits::{AudioPlugin, HashMap},
+    types::{
+        AudioBuffers, BusConfig, MidiMessage, NoteExpressionType, PluginCategory, ProcessContext,
+    },
+};
 use karbeat_plugins::registry::PluginRegistry;
 use karbeat_utils::color::Color;
 use karbeat_utils::hash::hash_str;
 use karbeat_utils::types::NormalizedF64;
 use rtrb::RingBuffer;
-use std::sync::mpsc;
+#[cfg(test)]
+use std::f32::consts::FRAC_1_SQRT_2;
+#[cfg(test)]
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+use std::{
+    any::Any,
+    sync::{Arc, Mutex, mpsc},
+};
 // use crate::;
 
 struct TimestampedAudioBlock {
@@ -107,7 +150,7 @@ fn export_snapshot_builds_fresh_offline_runtime() {
     engine.transport.song.playhead_samples = 24_000;
     engine.transport.song.is_playing = true;
     engine.workspace.mix_buffer.extend_from_slice(&[0.5, -0.5]);
-    let bus_id = karbeat_core::shared::BusId::from(3);
+    let bus_id = BusId::from(3);
     engine.workspace.bus_buffers.insert(bus_id, vec![0.25]);
     engine.routing.track_tails.insert(track_id, 1_024);
     engine.mixer_state.master.mute = true;
@@ -117,7 +160,7 @@ fn export_snapshot_builds_fresh_offline_runtime() {
     let (plugin_factory, _) = plugin_registry
         .create_plugin_by_id(registry_id)
         .expect("test generator should be registered");
-    let generator_id = karbeat_core::shared::GeneratorId::from(1);
+    let generator_id = GeneratorId::from(1);
     engine.process_command(AudioCommand::AddGenerator {
         generator_id,
         track_id,
@@ -141,21 +184,21 @@ fn export_snapshot_builds_fresh_offline_runtime() {
     let (effect_factory, _) = plugin_registry
         .create_plugin_by_id(effect_registry_id)
         .expect("test effect should be registered");
-    let track_effect_id = karbeat_core::shared::EffectId::from(1);
+    let track_effect_id = EffectId::from(1);
     engine.process_command(AudioCommand::AddEffect {
         target: EffectTarget::Track(track_id),
         effect_id: track_effect_id,
         registry_id: effect_registry_id,
         effect_factory,
     });
-    let bus_effect_id = karbeat_core::shared::EffectId::from(2);
+    let bus_effect_id = EffectId::from(2);
     engine.process_command(AudioCommand::AddEffect {
         target: EffectTarget::Bus(bus_id),
         effect_id: bus_effect_id,
         registry_id: effect_registry_id,
         effect_factory,
     });
-    let master_effect_id = karbeat_core::shared::EffectId::from(3);
+    let master_effect_id = EffectId::from(3);
     engine.process_command(AudioCommand::AddEffect {
         target: EffectTarget::Master,
         effect_id: master_effect_id,
@@ -276,25 +319,23 @@ fn generator_remains_active_after_note_off_for_release_envelope() {
     let (factory, _) = registry
         .create_plugin_by_id(registry_id)
         .expect("test generator should be registered");
-    let generator_id = karbeat_core::shared::GeneratorId::from(1);
-    let track_id = karbeat_core::shared::TrackId::from(1);
+    let generator_id = GeneratorId::from(1);
+    let track_id = TrackId::from(1);
     engine.process_command(AudioCommand::AddGenerator {
         generator_id,
         track_id,
         registry_id,
         plugin_factory: factory,
     });
-    let mut voice = crate::engine::GeneratorVoice::new(generator_id, track_id, true);
-    voice
-        .midi_events
-        .push(karbeat_plugin_api::types::MidiEvent {
-            sample_offset: 0,
-            data: MidiMessage::NoteOff {
-                note_id: None,
-                channel: 0,
-                key: 60,
-            },
-        });
+    let mut voice = GeneratorVoice::new(generator_id, track_id, true);
+    voice.midi_events.push(MidiEvent {
+        sample_offset: 0,
+        data: MidiMessage::NoteOff {
+            note_id: None,
+            channel: 0,
+            key: 60,
+        },
+    });
     engine.voices.active_generators.push(voice);
 
     engine.cleanup_finished_voices(64);
@@ -321,19 +362,17 @@ fn generator_parks_after_its_release_tail_expires() {
         AudioEngineTelemetry::new_for_export(),
         telemetry_sender,
     );
-    let generator_id = karbeat_core::shared::GeneratorId::from(1);
-    let track_id = karbeat_core::shared::TrackId::from(1);
-    let mut voice = crate::engine::GeneratorVoice::new(generator_id, track_id, true);
-    voice
-        .midi_events
-        .push(karbeat_plugin_api::types::MidiEvent {
-            sample_offset: 0,
-            data: MidiMessage::NoteOff {
-                note_id: None,
-                channel: 0,
-                key: 60,
-            },
-        });
+    let generator_id = GeneratorId::from(1);
+    let track_id = TrackId::from(1);
+    let mut voice = GeneratorVoice::new(generator_id, track_id, true);
+    voice.midi_events.push(MidiEvent {
+        sample_offset: 0,
+        data: MidiMessage::NoteOff {
+            note_id: None,
+            channel: 0,
+            key: 60,
+        },
+    });
     engine.voices.active_generators.push(voice);
 
     // The event block starts the fallback tail, then a block longer than the tail parks it.
@@ -375,7 +414,7 @@ fn browser_preview_stops_at_its_frame_limit() {
         writer.write_sample(16_384_i16).expect("fixture sample");
     }
     writer.finalize().expect("finalize fixture");
-    let waveform = karbeat_core::core::file_manager::audio_loader::load_audio_file(
+    let waveform = load_audio_file(
         file.path().to_str().expect("fixture path"),
         None,
         sample_rate,
@@ -465,7 +504,7 @@ fn test_automation_lane_applied_to_mixer_volume() {
         graph: AudioGraphState::from(&app_state),
     });
 
-    let mut new_val = crate::engine::AudioMixerChannelValues::default();
+    let mut new_val = AudioMixerChannelValues::default();
     new_val.volume.set_base(0.5);
     engine.mixer_state.track_channels.insert(track_id, new_val);
 
@@ -573,7 +612,7 @@ fn manual_mixer_edit_suspends_automation_until_a_transport_seek() {
         graph: AudioGraphState::from(&app_state),
     });
 
-    let mut channel = crate::engine::AudioMixerChannelValues::default();
+    let mut channel = AudioMixerChannelValues::default();
     channel.volume.set_base(0.5);
     engine.mixer_state.track_channels.insert(track_id, channel);
 
@@ -618,8 +657,8 @@ fn manual_mixer_edit_suspends_automation_until_a_transport_seek() {
         target: target.clone(),
     });
     engine.process_command(AudioCommand::SetMixerChannelParameter {
-        target: crate::commands::MixerChannelTarget::Track(track_id),
-        param: karbeat_core::core::project::MixerChannelParams::Volume(-6.0),
+        target: MixerChannelTarget::Track(track_id),
+        param: MixerChannelParams::Volume(-6.0),
     });
     engine.process(&mut block);
     let manual = engine
@@ -735,7 +774,7 @@ fn effect_bypass_skips_latency_and_survives_export_snapshot() {
     let (effect_factory, _) = plugin_registry
         .create_plugin_by_id(effect_registry_id)
         .expect("test effect should be registered");
-    let effect_id = karbeat_core::shared::EffectId::from(1);
+    let effect_id = EffectId::from(1);
     engine.process_command(AudioCommand::AddEffect {
         target: EffectTarget::Master,
         effect_id,
@@ -796,7 +835,7 @@ fn removing_an_effect_drops_its_automation_in_the_same_command() {
         telemetry_sender,
     );
 
-    let effect_id = karbeat_core::shared::EffectId::from(1);
+    let effect_id = EffectId::from(1);
     let effect_target = AutomationTarget::Master(MasterAutomationTarget::MixerChannel(
         MixerChannelParamTarget::Plugin {
             effect_id,
@@ -868,7 +907,7 @@ fn removing_an_effect_drops_its_automation_in_the_same_command() {
 struct ToneEffect;
 
 /// Effect that passes its main input through and accumulates the energy of its sidechain input.
-struct AuxProbe(std::sync::Arc<std::sync::Mutex<f32>>);
+struct AuxProbe(Arc<Mutex<f32>>);
 
 macro_rules! test_effect_boilerplate {
     () => {
@@ -907,13 +946,9 @@ macro_rules! test_effect_boilerplate {
     };
 }
 
-impl karbeat_plugin_api::traits::AudioPlugin for ToneEffect {
+impl AudioPlugin for ToneEffect {
     test_effect_boilerplate!();
-    fn process(
-        &mut self,
-        buffers: &mut karbeat_plugin_api::types::AudioBuffers,
-        _: &karbeat_plugin_api::types::ProcessContext,
-    ) {
+    fn process(&mut self, buffers: &mut AudioBuffers, _: &ProcessContext) {
         for output in buffers.main_outputs.iter_mut() {
             for channel in output.channel_data.iter_mut() {
                 channel.fill(0.5);
@@ -922,13 +957,9 @@ impl karbeat_plugin_api::traits::AudioPlugin for ToneEffect {
     }
 }
 
-impl karbeat_plugin_api::traits::AudioPlugin for AuxProbe {
+impl AudioPlugin for AuxProbe {
     test_effect_boilerplate!();
-    fn process(
-        &mut self,
-        buffers: &mut karbeat_plugin_api::types::AudioBuffers,
-        _: &karbeat_plugin_api::types::ProcessContext,
-    ) {
+    fn process(&mut self, buffers: &mut AudioBuffers, _: &ProcessContext) {
         for (output, input) in buffers
             .main_outputs
             .iter_mut()
@@ -956,14 +987,10 @@ impl karbeat_plugin_api::traits::AudioPlugin for AuxProbe {
 /// Effect that panics on every block, standing in for a crashing plugin.
 struct PanicEffect;
 
-impl karbeat_plugin_api::traits::AudioPlugin for PanicEffect {
+impl AudioPlugin for PanicEffect {
     test_effect_boilerplate!();
     #[allow(clippy::panic, reason = "the test plugin crashes on purpose")]
-    fn process(
-        &mut self,
-        _: &mut karbeat_plugin_api::types::AudioBuffers,
-        _: &karbeat_plugin_api::types::ProcessContext,
-    ) {
+    fn process(&mut self, _: &mut AudioBuffers, _: &ProcessContext) {
         panic!("test plugin crashed");
     }
 }
@@ -1002,18 +1029,13 @@ fn render_with_crashing_track(workers: usize, crash: bool) -> Vec<f32> {
     engine.process_command(AudioCommand::UpdateRouting {
         routing: tracks
             .iter()
-            .map(|&track| {
-                karbeat_core::core::project::RoutingConnection::new(
-                    karbeat_core::core::project::RoutingNode::Track(track),
-                    karbeat_core::core::project::RoutingNode::Master,
-                )
-            })
+            .map(|&track| RoutingConnection::new(RoutingNode::Track(track), RoutingNode::Master))
             .collect(),
     });
     for (index, &track) in tracks.iter().enumerate() {
         engine.process_command(AudioCommand::InstallEffect {
             target: EffectTarget::Track(track),
-            effect_id: karbeat_core::shared::EffectId::from(index as u32 * 2 + 1),
+            effect_id: EffectId::from(index as u32 * 2 + 1),
             registry_id: 0,
             plugin: Box::new(ToneEffect),
             telemetry: None,
@@ -1024,13 +1046,13 @@ fn render_with_crashing_track(workers: usize, crash: bool) -> Vec<f32> {
     if crash {
         engine.process_command(AudioCommand::InstallEffect {
             target: EffectTarget::Track(tracks[1]),
-            effect_id: karbeat_core::shared::EffectId::from(4),
+            effect_id: EffectId::from(4),
             registry_id: 0,
             plugin: Box::new(PanicEffect),
             telemetry: None,
         });
     } else {
-        let mut muted = crate::engine::AudioMixerChannelValues::default();
+        let mut muted = AudioMixerChannelValues::default();
         muted.mute = true;
         engine.mixer_state.track_channels.insert(tracks[1], muted);
     }
@@ -1054,9 +1076,7 @@ fn a_crashing_plugin_silences_its_track_without_stalling_the_pool() {
 
 /// Renders a tone track through a bus into the sidechain of a probe effect on a silent track,
 /// with the source fader pulled down, and returns the sidechain energy the probe received.
-fn render_bus_keyed_sidechain(tap: karbeat_core::core::project::RoutingTap) -> f32 {
-    use karbeat_core::core::project::{RoutingConnection, RoutingNode, SidechainRoute};
-
+fn render_bus_keyed_sidechain(tap: RoutingTap) -> f32 {
     let (_, command_consumer) = RingBuffer::<AudioCommand>::new(32);
     let (position_producer, _) = RingBuffer::<TransportFeedback>::new(32);
     let (feedback_producer, _) = RingBuffer::<AudioFeedback>::new(32);
@@ -1084,14 +1104,14 @@ fn render_bus_keyed_sidechain(tap: karbeat_core::core::project::RoutingTap) -> f
     engine.process_command(AudioCommand::ReplaceFullGraph {
         graph: AudioGraphState::from(&app_state),
     });
-    let bus = karbeat_core::shared::BusId::from(1);
+    let bus = BusId::from(1);
     engine.process_command(AudioCommand::AddBus {
         bus_id: bus,
         name: "Key".into(),
     });
-    let tone = karbeat_core::shared::EffectId::from(1);
-    let probe = karbeat_core::shared::EffectId::from(2);
-    let energy = std::sync::Arc::new(std::sync::Mutex::new(0.0));
+    let tone = EffectId::from(1);
+    let probe = EffectId::from(2);
+    let energy = Arc::new(Mutex::new(0.0));
     engine.process_command(AudioCommand::InstallEffect {
         target: EffectTarget::Track(source),
         effect_id: tone,
@@ -1121,7 +1141,7 @@ fn render_bus_keyed_sidechain(tap: karbeat_core::core::project::RoutingTap) -> f
         ]
         .into_boxed_slice(),
     });
-    let mut source_channel = crate::engine::AudioMixerChannelValues::default();
+    let mut source_channel = AudioMixerChannelValues::default();
     source_channel.volume.set_base(-100.0);
     engine
         .mixer_state
@@ -1144,13 +1164,11 @@ fn render_bus_keyed_sidechain(tap: karbeat_core::core::project::RoutingTap) -> f
 
 #[test]
 fn bus_feeds_a_track_sidechain_and_pre_fader_taps_ignore_the_source_fader() {
-    use karbeat_core::core::project::RoutingTap;
-
     let pre_fader = render_bus_keyed_sidechain(RoutingTap::PreFader);
     let post_fader = render_bus_keyed_sidechain(RoutingTap::PostFader);
     // 8 blocks of 64 stereo frames at the tone's 0.5 amplitude, through the bus's
     // constant-power center pan.
-    let expected = 512.0 * std::f32::consts::FRAC_1_SQRT_2;
+    let expected = 512.0 * FRAC_1_SQRT_2;
     assert!(
         (pre_fader - expected).abs() < 1.0,
         "bus signal must reach the track sidechain, got {pre_fader}"
@@ -1163,8 +1181,6 @@ fn bus_feeds_a_track_sidechain_and_pre_fader_taps_ignore_the_source_fader() {
 
 /// Renders a tone track and returns the master output energy of the last block.
 fn render_tone_track(linked_to_master: bool) -> f32 {
-    use karbeat_core::core::project::{RoutingConnection, RoutingNode};
-
     let (_, command_consumer) = RingBuffer::<AudioCommand>::new(32);
     let (position_producer, _) = RingBuffer::<TransportFeedback>::new(32);
     let (feedback_producer, _) = RingBuffer::<AudioFeedback>::new(32);
@@ -1189,7 +1205,7 @@ fn render_tone_track(linked_to_master: bool) -> f32 {
     });
     engine.process_command(AudioCommand::InstallEffect {
         target: EffectTarget::Track(track),
-        effect_id: karbeat_core::shared::EffectId::from(1),
+        effect_id: EffectId::from(1),
         registry_id: 0,
         plugin: Box::new(ToneEffect),
         telemetry: None,
@@ -1224,24 +1240,18 @@ fn unlinked_track_does_not_reach_master() {
 /// calls without reporting a tail, optionally asking for continuous processing the way hosted
 /// plugins do.
 pub(crate) struct IdleProbe {
-    pub calls: std::sync::Arc<std::sync::atomic::AtomicUsize>,
+    pub calls: Arc<AtomicUsize>,
     pub ringing: usize,
     pub continuous: bool,
 }
 
-impl karbeat_plugin_api::traits::AudioPlugin for IdleProbe {
+impl AudioPlugin for IdleProbe {
     test_effect_boilerplate!();
     fn needs_continuous_processing(&self) -> bool {
         self.continuous
     }
-    fn process(
-        &mut self,
-        buffers: &mut karbeat_plugin_api::types::AudioBuffers,
-        _: &karbeat_plugin_api::types::ProcessContext,
-    ) {
-        let call = self
-            .calls
-            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    fn process(&mut self, buffers: &mut AudioBuffers, _: &ProcessContext) {
+        let call = self.calls.fetch_add(1, Ordering::Relaxed);
         let level = if call < self.ringing { 0.25 } else { 0.0 };
         for output in buffers.main_outputs.iter_mut() {
             for channel in output.channel_data.iter_mut() {
@@ -1254,12 +1264,10 @@ impl karbeat_plugin_api::traits::AudioPlugin for IdleProbe {
 /// Renders four blocks of a stopped, clipless project with an [`IdleProbe`] on `target`, and
 /// returns the probe's process calls and the energy that reached the master output.
 fn render_idle_probe(
-    target: fn(karbeat_core::shared::TrackId, karbeat_core::shared::BusId) -> EffectTarget,
+    target: fn(TrackId, BusId) -> EffectTarget,
     continuous: bool,
     bypass: bool,
 ) -> (usize, f32) {
-    use karbeat_core::core::project::{RoutingConnection, RoutingNode};
-
     let (_, command_consumer) = RingBuffer::<AudioCommand>::new(32);
     let (position_producer, _) = RingBuffer::<TransportFeedback>::new(32);
     let (feedback_producer, _) = RingBuffer::<AudioFeedback>::new(32);
@@ -1282,7 +1290,7 @@ fn render_idle_probe(
     engine.process_command(AudioCommand::ReplaceFullGraph {
         graph: AudioGraphState::from(&app_state),
     });
-    let bus = karbeat_core::shared::BusId::from(1);
+    let bus = BusId::from(1);
     engine.process_command(AudioCommand::AddBus {
         bus_id: bus,
         name: "Idle".into(),
@@ -1295,8 +1303,8 @@ fn render_idle_probe(
         .into_boxed_slice(),
     });
     let target = target(track, bus);
-    let effect_id = karbeat_core::shared::EffectId::from(1);
-    let calls = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
+    let effect_id = EffectId::from(1);
+    let calls = Arc::new(AtomicUsize::new(0));
     engine.process_command(AudioCommand::InstallEffect {
         target,
         effect_id,
@@ -1320,13 +1328,12 @@ fn render_idle_probe(
         engine.process(&mut block);
         energy += block.iter().map(|sample| sample.abs()).sum::<f32>();
     }
-    (calls.load(std::sync::atomic::Ordering::Relaxed), energy)
+    (calls.load(Ordering::Relaxed), energy)
 }
 
 #[test]
 fn silent_channels_keep_processing_effects_that_need_it() {
-    let targets: [fn(karbeat_core::shared::TrackId, karbeat_core::shared::BusId) -> EffectTarget;
-        3] = [
+    let targets: [fn(TrackId, BusId) -> EffectTarget; 3] = [
         |track, _| EffectTarget::Track(track),
         |_, bus| EffectTarget::Bus(bus),
         |_, _| EffectTarget::Master,
@@ -1344,10 +1351,6 @@ fn silent_channels_keep_processing_effects_that_need_it() {
 
 #[test]
 fn hosted_effects_park_on_silent_channels_by_default() {
-    use crate::hosted_plugin::HostedPluginInstall;
-    use karbeat_core::shared::EffectId;
-    use karbeat_host::{HostInstanceId, HostedProcessor, ProcessingConfig};
-
     let (_, command_consumer) = RingBuffer::<AudioCommand>::new(32);
     let (position_producer, _) = RingBuffer::<TransportFeedback>::new(32);
     let (feedback_producer, _) = RingBuffer::<AudioFeedback>::new(32);
@@ -1366,7 +1369,7 @@ fn hosted_effects_park_on_silent_channels_by_default() {
     engine.process_command(AudioCommand::UpdateRouting {
         routing: Box::default(),
     });
-    let calls = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
+    let calls = Arc::new(AtomicUsize::new(0));
     let endpoint = Box::new(HostedProcessor::new(
         Box::new(IdleProbe {
             calls: calls.clone(),
@@ -1398,15 +1401,13 @@ fn hosted_effects_park_on_silent_channels_by_default() {
     for _ in 0..4 {
         engine.process(&mut block);
     }
-    assert_eq!(calls.load(std::sync::atomic::Ordering::Relaxed), 0);
+    assert_eq!(calls.load(Ordering::Relaxed), 0);
     drop(engine);
     assert!(retirement.take().is_some());
 }
 
 #[test]
 fn pattern_transport_pauses_seeks_and_loops_a_region() {
-    use karbeat_core::core::project::track::midi::Pattern;
-
     let (_, command_consumer) = RingBuffer::<AudioCommand>::new(32);
     let (position_producer, _) = RingBuffer::<TransportFeedback>::new(64);
     let (feedback_producer, _) = RingBuffer::<AudioFeedback>::new(32);
@@ -1439,7 +1440,7 @@ fn pattern_transport_pauses_seeks_and_loops_a_region() {
     let (plugin_factory, _) = registry
         .create_plugin_by_id(registry_id)
         .expect("test generator should be registered");
-    let generator_id = karbeat_core::shared::GeneratorId::from(1);
+    let generator_id = GeneratorId::from(1);
     engine.process_command(AudioCommand::AddGenerator {
         generator_id,
         track_id,
@@ -1482,9 +1483,6 @@ fn pattern_transport_pauses_seeks_and_loops_a_region() {
 
 #[test]
 fn switching_patterns_retargets_playback_and_keeps_its_play_state() {
-    use crate::engine::PlaybackMode;
-    use karbeat_core::core::project::track::midi::Pattern;
-
     let (_, command_consumer) = RingBuffer::<AudioCommand>::new(32);
     let (position_producer, _) = RingBuffer::<TransportFeedback>::new(64);
     let (feedback_producer, _) = RingBuffer::<AudioFeedback>::new(32);
@@ -1509,7 +1507,7 @@ fn switching_patterns_retargets_playback_and_keeps_its_play_state() {
         id,
         ..Pattern::default()
     });
-    let generator_id = karbeat_core::shared::GeneratorId::from(1);
+    let generator_id = GeneratorId::from(1);
 
     engine.process_command(AudioCommand::TogglePatternPlayback {
         pattern_id: first,
@@ -1541,28 +1539,19 @@ fn switching_patterns_retargets_playback_and_keeps_its_play_state() {
 }
 
 /// Generator that records which keys it is holding, from the MIDI it actually receives.
-struct HeldKeysRecorder(std::sync::Arc<std::sync::Mutex<Vec<u8>>>);
+struct HeldKeysRecorder(Arc<Mutex<Vec<u8>>>);
 
-impl karbeat_plugin_api::traits::AudioPlugin for HeldKeysRecorder {
+impl AudioPlugin for HeldKeysRecorder {
     fn name(&self) -> &str {
         "Held keys recorder"
     }
-    fn category(&self) -> karbeat_plugin_api::types::PluginCategory {
-        karbeat_plugin_api::types::PluginCategory::Instrument
+    fn category(&self) -> PluginCategory {
+        PluginCategory::Instrument
     }
     fn prepare(&mut self, _: f32, _: usize) {}
     fn reset(&mut self) {}
-    fn set_io_layout(
-        &mut self,
-        _: &[karbeat_plugin_api::types::BusConfig],
-        _: &[karbeat_plugin_api::types::BusConfig],
-    ) {
-    }
-    fn process(
-        &mut self,
-        _: &mut karbeat_plugin_api::types::AudioBuffers,
-        context: &karbeat_plugin_api::types::ProcessContext,
-    ) {
+    fn set_io_layout(&mut self, _: &[BusConfig], _: &[BusConfig]) {}
+    fn process(&mut self, _: &mut AudioBuffers, context: &ProcessContext) {
         let mut held = self.0.lock().expect("recorder lock");
         for event in context.midi_events {
             match event.data {
@@ -1584,16 +1573,16 @@ impl karbeat_plugin_api::traits::AudioPlugin for HeldKeysRecorder {
     }
     fn apply_automation(&mut self, _: u32, _: f32) {}
     fn clear_automation(&mut self, _: u32) {}
-    fn default_parameters(&self) -> karbeat_plugin_api::traits::HashMap<u32, f32> {
-        karbeat_plugin_api::traits::HashMap::new()
+    fn default_parameters(&self) -> HashMap<u32, f32> {
+        HashMap::new()
     }
-    fn static_parameter_specs() -> Vec<karbeat_plugin_api::prelude::ParameterSpec> {
+    fn static_parameter_specs() -> Vec<ParameterSpec> {
         Vec::new()
     }
-    fn get_parameter_specs(&self) -> Vec<karbeat_plugin_api::prelude::ParameterSpec> {
+    fn get_parameter_specs(&self) -> Vec<ParameterSpec> {
         Vec::new()
     }
-    fn as_any(&self) -> &dyn std::any::Any {
+    fn as_any(&self) -> &dyn Any {
         self
     }
 }
@@ -1601,17 +1590,15 @@ impl karbeat_plugin_api::traits::AudioPlugin for HeldKeysRecorder {
 struct PatternRig {
     engine: AudioEngine,
     app_state: ApplicationState,
-    track_id: karbeat_core::shared::TrackId,
-    pattern_id: karbeat_core::shared::PatternId,
-    generator_id: karbeat_core::shared::GeneratorId,
-    held: std::sync::Arc<std::sync::Mutex<Vec<u8>>>,
+    track_id: TrackId,
+    pattern_id: PatternId,
+    generator_id: GeneratorId,
+    held: Arc<Mutex<Vec<u8>>>,
 }
 
 impl PatternRig {
     /// A pattern with one long note on `key`, played by a recording generator.
     fn new(key: u8) -> Self {
-        use karbeat_core::core::project::track::midi::Pattern;
-
         let (_, command_consumer) = RingBuffer::<AudioCommand>::new(32);
         let (position_producer, _) = RingBuffer::<TransportFeedback>::new(256);
         let (feedback_producer, _) = RingBuffer::<AudioFeedback>::new(32);
@@ -1641,8 +1628,8 @@ impl PatternRig {
         engine.process_command(AudioCommand::ReplaceFullGraph {
             graph: AudioGraphState::from(&app_state),
         });
-        let held = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
-        let generator_id = karbeat_core::shared::GeneratorId::from(1);
+        let held = Arc::new(Mutex::new(Vec::new()));
+        let generator_id = GeneratorId::from(1);
         engine.process_command(AudioCommand::InstallGenerator {
             generator_id,
             track_id,
@@ -1757,9 +1744,6 @@ fn releases_queued_while_a_track_is_muted_reach_the_generator_later() {
 
 #[test]
 fn update_audio_source_swaps_only_that_waveform() {
-    use karbeat_core::core::project::{AudioWaveform, Fade, GainEnvelope};
-    use std::sync::Arc;
-
     let (_, cmd_consumer) = RingBuffer::<AudioCommand>::new(32);
     let (pos_producer, _) = RingBuffer::<TransportFeedback>::new(32);
     let (fb_producer, _) = RingBuffer::<AudioFeedback>::new(32);
@@ -1830,9 +1814,6 @@ fn update_audio_source_swaps_only_that_waveform() {
 /// An audio clip sounds both in live song playback and in an export built from its snapshot.
 #[test]
 fn audio_clip_plays_live_and_in_export() {
-    use karbeat_core::core::project::{AudioWaveform, clip::ClipSourceType};
-    use std::sync::Arc;
-
     let (_, command_consumer) = RingBuffer::<AudioCommand>::new(64);
     let (position_producer, _) = RingBuffer::<TransportFeedback>::new(1024);
     let (feedback_producer, _) = RingBuffer::<AudioFeedback>::new(1024);
@@ -1875,9 +1856,7 @@ fn audio_clip_plays_live_and_in_export() {
     engine.process_command(AudioCommand::ReplaceFullGraph {
         graph: AudioGraphState::from(&app),
     });
-    engine.process_command(AudioCommand::SetPlaybackMode(
-        crate::engine::PlaybackMode::Song,
-    ));
+    engine.process_command(AudioCommand::SetPlaybackMode(PlaybackMode::Song));
     engine.process_command(AudioCommand::SetPlayhead(0));
     engine.process_command(AudioCommand::SetPlaying(true));
     let mut live = vec![0.0_f32; 4_096 * 2];
@@ -1904,7 +1883,7 @@ fn audio_clip_plays_live_and_in_export() {
             sample_rate: Some(44_100),
             buffer_size: Some(4_096),
         },
-        AudioCommand::SetPlaybackMode(crate::engine::PlaybackMode::Song),
+        AudioCommand::SetPlaybackMode(PlaybackMode::Song),
         AudioCommand::SetPlayhead(0),
         AudioCommand::SetPlaying(true),
     ] {
@@ -1920,9 +1899,6 @@ fn audio_clip_plays_live_and_in_export() {
 /// every 1,000 samples, so any offset in playback position shows up in the output. The clip
 /// spans two seconds (96,000 samples).
 pub(crate) fn song_engine_with_ramp_clip() -> AudioEngine {
-    use karbeat_core::core::project::{AudioWaveform, ClipSourceType};
-    use std::sync::Arc;
-
     let (_, command_consumer) = RingBuffer::<AudioCommand>::new(32);
     let (position_producer, _) = RingBuffer::<TransportFeedback>::new(1024);
     let (feedback_producer, _) = RingBuffer::<AudioFeedback>::new(1024);
@@ -1970,9 +1946,7 @@ pub(crate) fn song_engine_with_ramp_clip() -> AudioEngine {
     engine.process_command(AudioCommand::ReplaceFullGraph {
         graph: AudioGraphState::from(&app),
     });
-    engine.process_command(AudioCommand::SetPlaybackMode(
-        crate::engine::PlaybackMode::Song,
-    ));
+    engine.process_command(AudioCommand::SetPlaybackMode(PlaybackMode::Song));
     engine
 }
 
@@ -2027,10 +2001,6 @@ fn song_loop_region_lets_a_playhead_past_its_end_play_on() {
 
 #[test]
 fn a_take_waits_for_the_song_and_holds_the_loop_while_it_records() {
-    use crate::engine::{InputSource, RecordTake, TakeShared};
-    use karbeat_core::shared::TrackId;
-    use std::sync::Arc;
-
     let mut engine = song_engine_with_ramp_clip();
     let (producer, consumer) = RingBuffer::<f32>::new(48_000);
     let shared = Arc::new(TakeShared::default());
@@ -2093,13 +2063,9 @@ struct HoldingGenerator {
     held: Vec<u8>,
 }
 
-impl karbeat_plugin_api::traits::AudioPlugin for HoldingGenerator {
+impl AudioPlugin for HoldingGenerator {
     test_effect_boilerplate!();
-    fn process(
-        &mut self,
-        buffers: &mut karbeat_plugin_api::types::AudioBuffers,
-        context: &karbeat_plugin_api::types::ProcessContext,
-    ) {
+    fn process(&mut self, buffers: &mut AudioBuffers, context: &ProcessContext) {
         let frames = buffers
             .main_outputs
             .first()
@@ -2128,8 +2094,6 @@ impl karbeat_plugin_api::traits::AudioPlugin for HoldingGenerator {
 
 #[test]
 fn a_stop_applied_in_an_empty_block_still_releases_held_notes() {
-    use karbeat_core::core::project::{RoutingConnection, RoutingNode};
-
     let (_, command_consumer) = RingBuffer::<AudioCommand>::new(32);
     let (position_producer, _) = RingBuffer::<TransportFeedback>::new(1024);
     let (feedback_producer, _) = RingBuffer::<AudioFeedback>::new(1024);
@@ -2159,16 +2123,14 @@ fn a_stop_applied_in_an_empty_block_still_releases_held_notes() {
         )]
         .into_boxed_slice(),
     });
-    let generator_id = karbeat_core::shared::GeneratorId::from(1);
+    let generator_id = GeneratorId::from(1);
     engine.process_command(AudioCommand::AddGenerator {
         generator_id,
         track_id,
         registry_id: 0,
         plugin_factory: || Box::new(HoldingGenerator::default()),
     });
-    engine.process_command(AudioCommand::SetPlaybackMode(
-        crate::engine::PlaybackMode::Song,
-    ));
+    engine.process_command(AudioCommand::SetPlaybackMode(PlaybackMode::Song));
     engine.process_command(AudioCommand::SetPlaying(true));
     engine.process_command(AudioCommand::PlayPreviewNote {
         note_key: 60,
@@ -2194,22 +2156,17 @@ fn a_stop_applied_in_an_empty_block_still_releases_held_notes() {
 
 /// Counts its process calls and reports pending work while `pending` is set.
 struct PendingWorkProbe {
-    calls: std::sync::Arc<std::sync::atomic::AtomicUsize>,
-    pending: std::sync::Arc<std::sync::atomic::AtomicBool>,
+    calls: Arc<AtomicUsize>,
+    pending: Arc<AtomicBool>,
 }
 
-impl karbeat_plugin_api::traits::AudioPlugin for PendingWorkProbe {
+impl AudioPlugin for PendingWorkProbe {
     test_effect_boilerplate!();
     fn has_pending_work(&self) -> bool {
-        self.pending.load(std::sync::atomic::Ordering::Relaxed)
+        self.pending.load(Ordering::Relaxed)
     }
-    fn process(
-        &mut self,
-        buffers: &mut karbeat_plugin_api::types::AudioBuffers,
-        _: &karbeat_plugin_api::types::ProcessContext,
-    ) {
-        self.calls
-            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    fn process(&mut self, buffers: &mut AudioBuffers, _: &ProcessContext) {
+        self.calls.fetch_add(1, Ordering::Relaxed);
         for output in buffers.main_outputs.iter_mut() {
             for channel in output.channel_data.iter_mut() {
                 channel.fill(0.0);
@@ -2220,12 +2177,6 @@ impl karbeat_plugin_api::traits::AudioPlugin for PendingWorkProbe {
 
 #[test]
 fn plugins_with_pending_work_are_processed_while_parked() {
-    use karbeat_core::core::project::{RoutingConnection, RoutingNode};
-    use std::sync::{
-        Arc,
-        atomic::{AtomicBool, AtomicUsize, Ordering},
-    };
-
     let (_, command_consumer) = RingBuffer::<AudioCommand>::new(32);
     let (position_producer, _) = RingBuffer::<TransportFeedback>::new(1024);
     let (feedback_producer, _) = RingBuffer::<AudioFeedback>::new(1024);
@@ -2266,7 +2217,7 @@ fn plugins_with_pending_work_are_processed_while_parked() {
     };
     let (generator, generator_calls, generator_pending) = probe();
     engine.process_command(AudioCommand::InstallGenerator {
-        generator_id: karbeat_core::shared::GeneratorId::from(1),
+        generator_id: GeneratorId::from(1),
         track_id,
         registry_id: 0,
         plugin: generator,
@@ -2275,7 +2226,7 @@ fn plugins_with_pending_work_are_processed_while_parked() {
     let (effect, effect_calls, effect_pending) = probe();
     engine.process_command(AudioCommand::InstallEffect {
         target: EffectTarget::Master,
-        effect_id: karbeat_core::shared::EffectId::from(1),
+        effect_id: EffectId::from(1),
         registry_id: 0,
         plugin: effect,
         telemetry: None,

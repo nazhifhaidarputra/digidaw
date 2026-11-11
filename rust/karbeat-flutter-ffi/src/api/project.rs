@@ -28,10 +28,13 @@ use karbeat_core_api::{
 use karbeat_utils::types::BipolarF64;
 use serde::Serialize;
 
-use crate::api::automation::AutomationCurveTypeDto;
 use crate::api::context::DawSessionInner;
 use crate::api::jobs::run_job;
 use crate::api::waveform::WaveformHandle;
+use crate::api::{
+    audio_analysis::UiBeatGrid, automation::AutomationCurveTypeDto, mixer::UiMixerState,
+    pattern::UiPattern, timeline::UiTimelineState,
+};
 use crate::frb_generated::StreamSink;
 
 /// Shared bridge handle whose inner guards control access to the core DAW state.
@@ -53,10 +56,10 @@ pub struct UiApplicationState {
     pub hardware_config: UiAudioHardwareConfig,
     pub tracks: HashMap<u64, UiTrack>,
     pub generators: HashMap<u64, UiGeneratorInstance>,
-    pub patterns: HashMap<u64, crate::api::pattern::UiPattern>,
-    pub mixer: crate::api::mixer::UiMixerState,
+    pub patterns: HashMap<u64, UiPattern>,
+    pub mixer: UiMixerState,
     pub audio_sources: HashMap<u64, AudioWaveformUiForSourceList>,
-    pub timeline: crate::api::timeline::UiTimelineState,
+    pub timeline: UiTimelineState,
 }
 
 impl From<ApplicationState> for UiApplicationState {
@@ -73,10 +76,10 @@ impl From<ApplicationState> for UiApplicationState {
             .map(|(id, generator)| (id.to_u64(), UiGeneratorInstance::from(generator)))
             .collect();
 
-        let patterns: HashMap<u64, crate::api::pattern::UiPattern> = value
+        let patterns: HashMap<u64, UiPattern> = value
             .pattern_pool
             .iter()
-            .map(|(id, pat)| (id.to_u64(), crate::api::pattern::UiPattern::from(pat)))
+            .map(|(id, pat)| (id.to_u64(), UiPattern::from(pat)))
             .collect();
 
         let audio_sources: HashMap<u64, AudioWaveformUiForSourceList> = value
@@ -98,9 +101,9 @@ impl From<ApplicationState> for UiApplicationState {
             tracks,
             generators,
             patterns,
-            mixer: crate::api::mixer::UiMixerState::from(&value.mixer),
+            mixer: UiMixerState::from(&value.mixer),
             audio_sources,
-            timeline: crate::api::timeline::UiTimelineState::from(&value.timeline),
+            timeline: UiTimelineState::from(&value.timeline),
         }
     }
 }
@@ -724,7 +727,7 @@ pub struct AudioWaveformUiForAudioProperties {
     /// tempo-following mode was entered. `None` when unknown.
     pub original_bpm: Option<f32>,
     /// Beats found by tempo detection, if it ran.
-    pub beat_grid: Option<crate::api::audio_analysis::UiBeatGrid>,
+    pub beat_grid: Option<UiBeatGrid>,
     /// Whether an offline render stretches the source to the project tempo.
     pub fitted: bool,
     /// Whether the stretch follows each detected beat.

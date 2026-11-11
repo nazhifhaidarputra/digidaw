@@ -1,6 +1,10 @@
 use crate::api::context::DawContext;
-use crate::api::project::{UiApplicationState, UiTrackType};
 use crate::api::track::UiResizeEdge;
+use crate::api::{
+    audio_analysis::schedule_source_renders,
+    context::{project_ctx, read_ctx},
+    project::{UiApplicationState, UiTrackType},
+};
 use crate::api::{pattern::UiNote, project::UiClip};
 use karbeat_core::core::project::clip::ClipTimeUnit;
 use karbeat_core::core::project::clipboard::ClipboardContent;
@@ -50,7 +54,7 @@ pub fn undo(ctx: &DawContext) -> Result<UiApplicationState, String> {
         UiApplicationState::from(core.app_state.clone())
     };
     // The step may have changed the tempo; stretched sources follow it.
-    crate::api::audio_analysis::schedule_source_renders(ctx, true);
+    schedule_source_renders(ctx, true);
     Ok(state)
 }
 
@@ -61,7 +65,7 @@ pub fn redo(ctx: &DawContext) -> Result<UiApplicationState, String> {
         api::redo(&mut core)?;
         UiApplicationState::from(core.app_state.clone())
     };
-    crate::api::audio_analysis::schedule_source_renders(ctx, true);
+    schedule_source_renders(ctx, true);
     Ok(state)
 }
 
@@ -75,7 +79,7 @@ pub fn copy_pattern_notes(
     pattern_id: u64,
     note_ids: Vec<u32>,
 ) -> Result<UiClipboardContent, String> {
-    crate::api::context::project_ctx!(ctx);
+    project_ctx!(ctx);
     let pattern_id = PatternId::from_u64(pattern_id);
     let note_ids: Vec<NoteId> = note_ids.into_iter().map(NoteId::from).collect();
 
@@ -91,7 +95,7 @@ pub fn cut_pattern_notes(
     pattern_id: u64,
     note_ids: Vec<u32>,
 ) -> Result<(), String> {
-    crate::api::context::project_ctx!(ctx);
+    project_ctx!(ctx);
     clipboard_api::cut_notes(
         ctx,
         PatternId::from_u64(pattern_id),
@@ -108,7 +112,7 @@ pub fn paste_pattern_notes(
     playhead_tick: u64,
     target_key: Option<u8>,
 ) -> Result<Vec<UiNote>, String> {
-    crate::api::context::project_ctx!(ctx);
+    project_ctx!(ctx);
     let notes = clipboard_api::paste_notes(
         ctx,
         PatternId::from_u64(target_pattern_id),
@@ -126,11 +130,8 @@ pub fn delete_pattern_notes(
     pattern_id: u64,
     note_ids: Vec<u32>,
 ) -> Result<(), String> {
-    crate::api::context::project_ctx!(ctx);
-    let note_ids_typed = note_ids
-        .into_iter()
-        .map(karbeat_core::core::project::NoteId::from)
-        .collect();
+    project_ctx!(ctx);
+    let note_ids_typed = note_ids.into_iter().map(NoteId::from).collect();
     note_api::delete_notes_batch(ctx, PatternId::from_u64(pattern_id), note_ids_typed)
         .map_err(|e| format!("{}", e))?;
 
@@ -144,7 +145,7 @@ pub fn delete_pattern_notes(
 /// Copy selected clips to the clipboard.
 /// Each (track_id, clip_id) pair identifies a clip to copy.
 pub fn copy_clips(ctx: &DawContext, track_id: u64, clip_ids: Vec<u64>) {
-    crate::api::context::project_ctx!(ctx);
+    project_ctx!(ctx);
     let track_id = TrackId::from_u64(track_id);
     let clip_ids: Vec<ClipId> = clip_ids.into_iter().map(ClipId::from_u64).collect();
 
@@ -153,7 +154,7 @@ pub fn copy_clips(ctx: &DawContext, track_id: u64, clip_ids: Vec<u64>) {
 
 /// Cut selected clips: copies them to clipboard then deletes with history.
 pub fn cut_clips(ctx: &DawContext, track_id: u64, clip_ids: Vec<u64>) -> Result<(), String> {
-    crate::api::context::project_ctx!(ctx);
+    project_ctx!(ctx);
     let clip_ids_typed = clip_ids.into_iter().map(ClipId::from_u64).collect();
     clipboard_api::cut_clips(ctx, TrackId::from_u64(track_id), clip_ids_typed);
 
@@ -168,7 +169,7 @@ pub fn paste_clips(
     paste_start_time: u32,
     track_type: UiTrackType,
 ) -> Result<Vec<UiClip>, String> {
-    crate::api::context::project_ctx!(ctx);
+    project_ctx!(ctx);
     let clip_time_unit = match track_type {
         UiTrackType::Audio => ClipTimeUnit::Audio {
             start_tick: paste_start_time as u64,
@@ -195,7 +196,7 @@ pub fn paste_clips(
 
 /// Delete specified clips from a track with history support.
 pub fn delete_clips(ctx: &DawContext, track_id: u64, clip_ids: Vec<u64>) -> Result<(), String> {
-    crate::api::context::project_ctx!(ctx);
+    project_ctx!(ctx);
     let clip_ids_typed = clip_ids.into_iter().map(ClipId::from_u64).collect();
     clip_api::batch_delete_clips(ctx, TrackId::from_u64(track_id), clip_ids_typed)
         .map_err(|e| format!("{}", e))?;
@@ -211,7 +212,7 @@ pub fn move_clip(
     clip_id: u64,
     new_start_time: u64,
 ) -> Result<(), String> {
-    crate::api::context::project_ctx!(ctx);
+    project_ctx!(ctx);
     clip_api::move_clip(
         ctx,
         TrackId::from_u64(old_track_id),
@@ -233,7 +234,7 @@ pub fn resize_clip(
     edge: UiResizeEdge,
     new_time_val: u64,
 ) -> Result<(), String> {
-    crate::api::context::project_ctx!(ctx);
+    project_ctx!(ctx);
     clip_api::resize_clip(
         ctx,
         TrackId::from_u64(track_id),
@@ -252,7 +253,7 @@ pub fn resize_clip(
 // ==================================
 
 pub fn get_clipboard_contents(ctx: &DawContext) -> UiClipboardContent {
-    crate::api::context::read_ctx!(ctx);
+    read_ctx!(ctx);
     clipboard_api::get_clipboard_contents(ctx, |clipboard_ref| {
         UiClipboardContent::from(clipboard_ref)
     })

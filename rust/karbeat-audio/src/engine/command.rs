@@ -9,13 +9,17 @@ use super::{
 use crate::{
     commands::{
         AudioCommand, AudioFeedback, EffectParameterSnapshot, EffectTarget,
-        GeneratorParameterSnapshot, TelemetryRegistration,
+        GeneratorParameterSnapshot, PreparedPluginTelemetry, TelemetryRegistration,
     },
     event::{FeedbackTiming, PluginTarget},
+    hosted_plugin::HostedInstallResult,
     render_state::{AudioEffectInstance, AudioGeneratorInstance},
 };
 use hashbrown::{HashMap, HashSet};
+use karbeat_core::core::project::clip::ClipTimeUnit;
 use karbeat_core::core::project::*;
+use karbeat_plugin_api::types::ProcessingMode;
+use std::mem::{replace, take as mem_take};
 
 impl AudioEngine {
     /// Process incoming commands from command queue buffer
@@ -49,13 +53,12 @@ impl AudioEngine {
         }
         match cmd {
             AudioCommand::InstallHostedProject(mut transfer) => {
-                use crate::hosted_plugin::HostedInstallResult;
                 let Some(project) = transfer.get_mut() else {
                     return;
                 };
                 if self.config.sample_rate != project.sample_rate
                     || self.config.num_channels != 2
-                    || self.processing_mode != karbeat_plugin_api::types::ProcessingMode::Realtime
+                    || self.processing_mode != ProcessingMode::Realtime
                 {
                     project.complete(HostedInstallResult::InvalidConfiguration);
                     return;
@@ -235,7 +238,7 @@ impl AudioEngine {
                         .map(PluginTelemetrySnapshot::from_plugin)
                         .unwrap_or_default();
                     let (producer, consumer) = triple_buffer::triple_buffer(&initial_snapshot);
-                    crate::commands::PreparedPluginTelemetry {
+                    PreparedPluginTelemetry {
                         producer,
                         consumer: Box::new(consumer),
                     }
@@ -391,6 +394,7 @@ impl AudioEngine {
                 telemetry,
             } => {
                 let instance = AudioEffectInstance {
+                    parked: true,
                     id: effect_id,
                     registry_id,
                     plugin: effect,
@@ -434,7 +438,7 @@ impl AudioEngine {
                         .map(PluginTelemetrySnapshot::from_plugin)
                         .unwrap_or_default();
                     let (producer, consumer) = triple_buffer::triple_buffer(&initial_snapshot);
-                    crate::commands::PreparedPluginTelemetry {
+                    PreparedPluginTelemetry {
                         producer,
                         consumer: Box::new(consumer),
                     }
@@ -620,7 +624,7 @@ impl AudioEngine {
                 self.routing.cached_order =
                     compute_routing_order(&self.current_state.graph.tracks, bus_ids, &routing);
                 self.routing.set_routes(&routing);
-                let previous = std::mem::replace(&mut self.current_state.graph.routing, routing);
+                let previous = replace(&mut self.current_state.graph.routing, routing);
                 self.retire_graph_state(RetiredGraphState::Routing(previous));
                 self.sync_sidechain_buffers();
                 tracing::info!(
@@ -671,13 +675,13 @@ impl AudioEngine {
                 self.routing.master_tail = 0;
 
                 // Clear all previous telemetry state.
-                let mut producers = std::mem::take(&mut self.telemetry.param_telemetry_producers);
+                let mut producers = mem_take(&mut self.telemetry.param_telemetry_producers);
                 for (_, producer) in producers.drain() {
                     self.retire_graph_state(RetiredGraphState::TelemetryProducer(producer));
                 }
                 self.telemetry.param_telemetry_producers = producers;
                 let mut subscriptions =
-                    std::mem::take(&mut self.telemetry.active_telemetry_subscriptions);
+                    mem_take(&mut self.telemetry.active_telemetry_subscriptions);
                 for (_, subscription) in subscriptions.drain() {
                     self.retire_graph_state(RetiredGraphState::TelemetrySubscription(subscription));
                 }
@@ -761,6 +765,7 @@ impl AudioEngine {
                         self.plugin_state.add_track_effect(
                             track_id.to_u32() as usize,
                             AudioEffectInstance {
+                                parked: true,
                                 id: effect_id,
                                 registry_id,
                                 plugin,
@@ -786,6 +791,7 @@ impl AudioEngine {
                         self.plugin_state.add_bus_effect(
                             bus_id_index,
                             AudioEffectInstance {
+                                parked: true,
                                 id: effect_id,
                                 registry_id,
                                 plugin,
@@ -813,6 +819,7 @@ impl AudioEngine {
                 // Batch load Master Effects
                 for (effect_id, (registry_id, plugin, telemetry)) in master_effects.into_iter() {
                     self.plugin_state.master_effects.push(AudioEffectInstance {
+                        parked: true,
                         id: effect_id,
                         registry_id,
                         plugin,
@@ -1085,7 +1092,7 @@ impl AudioEngine {
                     .source_map
                     .get_mut(id)
                 {
-                    std::mem::replace(slot, waveform)
+                    replace(slot, waveform)
                 } else {
                     tracing::debug!("[AudioEngine] Ignored update for unknown audio source {id}");
                     waveform
@@ -1100,10 +1107,9 @@ impl AudioEngine {
                 // Update only the track/pattern/sample-index portion of the local graph.
                 // Routing and automation lanes are untouched by this command.
                 self.clip_schedule.invalidate();
-                let old_tracks = std::mem::replace(&mut self.current_state.graph.tracks, tracks);
-                let old_clips = std::mem::replace(&mut self.current_state.graph.clips, clips);
-                let old_patterns =
-                    std::mem::replace(&mut self.current_state.graph.patterns, patterns);
+                let old_tracks = replace(&mut self.current_state.graph.tracks, tracks);
+                let old_clips = replace(&mut self.current_state.graph.clips, clips);
+                let old_patterns = replace(&mut self.current_state.graph.patterns, patterns);
                 // Notes sounding from a note or clip that just changed are released now;
                 // their scheduled note-offs would use the edited key and position.
                 let clips_matter = matches!(self.transport.mode, PlaybackMode::Song);
@@ -1211,7 +1217,7 @@ impl AudioEngine {
                         // Scale sample-domain audio clip values while preserving tick placement.
                         for clip in self.current_state.graph.clips.values_mut() {
                             match &mut clip.time {
-                                karbeat_core::core::project::clip::ClipTimeUnit::Samples {
+                                ClipTimeUnit::Samples {
                                     start_time,
                                     loop_length,
                                     offset_start,
@@ -1220,7 +1226,7 @@ impl AudioEngine {
                                     *loop_length = (*loop_length as f64 * ratio) as u64;
                                     *offset_start = (*offset_start as f64 * ratio) as u64;
                                 }
-                                karbeat_core::core::project::clip::ClipTimeUnit::Audio {
+                                ClipTimeUnit::Audio {
                                     loop_length,
                                     offset_start,
                                     ..
@@ -1228,9 +1234,7 @@ impl AudioEngine {
                                     *loop_length = (*loop_length as f64 * ratio) as u64;
                                     *offset_start = (*offset_start as f64 * ratio) as u64;
                                 }
-                                karbeat_core::core::project::clip::ClipTimeUnit::Ticks {
-                                    ..
-                                } => {}
+                                ClipTimeUnit::Ticks { .. } => {}
                             }
                         }
 
@@ -1296,7 +1300,7 @@ impl AudioEngine {
                 self.routing.set_routes(&graph.routing);
 
                 self.clip_schedule.invalidate();
-                let previous = std::mem::replace(&mut self.current_state.graph, graph);
+                let previous = replace(&mut self.current_state.graph, graph);
                 let clips_matter = matches!(self.transport.mode, PlaybackMode::Song);
                 self.voices.release_changed_notes(
                     GraphView {

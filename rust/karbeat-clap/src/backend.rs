@@ -2,10 +2,12 @@
 
 use std::{
     collections::HashMap,
-    path::PathBuf,
+    fs::canonicalize,
+    mem::forget,
+    path::{Path, PathBuf},
     rc::Rc,
     sync::{Arc, atomic::Ordering},
-    thread::ThreadId,
+    thread::{ThreadId, current},
 };
 
 use karbeat_host_api::{
@@ -48,7 +50,7 @@ impl ClapPluginHost {
     /// Must be constructed on the native UI thread, which owns the host for its entire lifetime.
     pub fn new() -> Self {
         Self {
-            owner: std::thread::current().id(),
+            owner: current().id(),
             instances: HashMap::new(),
             modules: HashMap::new(),
             closed_editors: Vec::new(),
@@ -56,7 +58,7 @@ impl ClapPluginHost {
     }
 
     fn check_thread(&self) -> Result<(), HostError> {
-        if self.owner == std::thread::current().id() {
+        if self.owner == current().id() {
             Ok(())
         } else {
             Err(HostError::WrongThread)
@@ -77,8 +79,8 @@ impl ClapPluginHost {
             .ok_or(HostError::UnknownInstance(id))
     }
 
-    fn module(&mut self, path: &std::path::Path) -> Result<Rc<ClapModule>, HostError> {
-        let path = std::fs::canonicalize(path)?;
+    fn module(&mut self, path: &Path) -> Result<Rc<ClapModule>, HostError> {
+        let path = canonicalize(path)?;
         if let Some(module) = self.modules.get(&path) {
             return Ok(module.clone());
         }
@@ -441,7 +443,7 @@ impl Drop for ClapPluginHost {
                 tracing::error!(
                     "CLAP host dropped before audio endpoint retirement; retaining instance for process lifetime"
                 );
-                std::mem::forget(instance);
+                forget(instance);
             }
         }
     }

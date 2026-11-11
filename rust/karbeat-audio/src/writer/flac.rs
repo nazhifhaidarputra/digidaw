@@ -1,4 +1,5 @@
 use std::{
+    error::Error,
     fs::File,
     io::{BufWriter, Seek, SeekFrom, Write},
     path::Path,
@@ -8,6 +9,7 @@ use flacenc::{
     bitsink::ByteSink,
     component::{BitRepr, StreamInfo},
     config,
+    constant::MAX_BITS_PER_SAMPLE,
     error::{Verified, Verify},
     source::{Context, Fill, FrameBuf},
 };
@@ -59,7 +61,7 @@ impl FlacAudioWriter {
         metadata: &AudioMetadata,
     ) -> Result<Self, AudioWriteError> {
         let bits_per_sample = usize::from(config.bits_per_sample.as_u16());
-        if bits_per_sample > flacenc::constant::MAX_BITS_PER_SAMPLE {
+        if bits_per_sample > MAX_BITS_PER_SAMPLE {
             return Err(AudioWriteError::unsupported(
                 AudioFileFormat::Flac,
                 format!("{bits_per_sample}-bit samples; use 24-bit or lower"),
@@ -222,12 +224,12 @@ fn write_block_header(
     Ok(())
 }
 
-fn flac_error(error: impl std::error::Error + Send + Sync + 'static) -> AudioWriteError {
+fn flac_error(error: impl Error + Send + Sync + 'static) -> AudioWriteError {
     AudioWriteError::encoder(AudioFileFormat::Flac, error)
 }
 
 /// flacenc's source/encode errors hold an `Rc`, so only their message can cross threads
-fn flac_message_error(error: impl std::error::Error) -> AudioWriteError {
+fn flac_message_error(error: impl Error) -> AudioWriteError {
     AudioWriteError::encoder(AudioFileFormat::Flac, error.to_string())
 }
 

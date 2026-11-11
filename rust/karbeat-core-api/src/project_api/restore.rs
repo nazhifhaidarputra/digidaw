@@ -3,17 +3,22 @@ use hashbrown::HashMap;
 use indexmap::IndexMap;
 use karbeat_audio::{
     commands::{AudioCommand, EffectTarget, MixerChannelSeed},
-    context::DawContext,
+    context::{ControlHandles, DawContext, HostedTargetState},
     event::PluginTarget,
     hosted_plugin::{
-        HostedInstallResult, HostedPluginInstall, HostedProjectInstall, retire_control_transfer,
+        HostedInstallReceipt, HostedInstallResult, HostedPluginInstall, HostedProjectInstall,
+        retire_control_transfer,
     },
     missing_plugin::MissingPlugin,
+    plugin_catalog::PluginCatalog,
     render_state::AudioGraphState,
 };
-use karbeat_core::core::project::{
-    ApplicationState, GeneratorInstanceType, LoopRegion, mixer::MixerChannel,
-    plugin::PluginInstance,
+use karbeat_core::{
+    core::project::{
+        ApplicationState, GeneratorInstanceType, LoopRegion, mixer::MixerChannel,
+        plugin::PluginInstance,
+    },
+    heap::schedule_release_to_os,
 };
 use karbeat_plugins::registry::{PluginFactory, PluginRegistry};
 
@@ -87,6 +92,8 @@ fn seed(channel: &MixerChannel) -> MixerChannelSeed {
     }
 }
 
+use crate::external_plugin_api::hosted_processing_config;
+use futures_lite::future::block_on;
 use karbeat_audio::builtin_plugin::prepare_builtin_plugin;
 
 pub(super) fn hydration_command(
@@ -169,9 +176,9 @@ fn bypass_commands(app: &ApplicationState) -> Vec<AudioCommand> {
 
 pub struct PendingProjectRestore {
     staged: ApplicationState,
-    handles: karbeat_audio::context::ControlHandles,
+    handles: ControlHandles,
     plugin_registry: PluginRegistry,
-    plugin_catalog: karbeat_audio::plugin_catalog::PluginCatalog,
+    plugin_catalog: PluginCatalog,
     sample_rate: u32,
     block_size: usize,
     has_engine: bool,
@@ -183,7 +190,7 @@ pub struct CompletedProjectRestore {
     receipts: Vec<(
         PluginTarget,
         karbeat_host::ExternalPluginInstanceHandle,
-        karbeat_audio::hosted_plugin::HostedInstallReceipt,
+        HostedInstallReceipt,
     )>,
 }
 
@@ -245,12 +252,9 @@ pub(super) fn execute_replace(
                 || external.descriptor.clone(),
                 |entry| entry.descriptor.clone(),
             );
-        let config = crate::external_plugin_api::hosted_processing_config(
-            descriptor.kind,
-            f64::from(pending.sample_rate),
-        );
+        let config = hosted_processing_config(descriptor.kind, f64::from(pending.sample_rate));
         let state = external.state.clone();
-        let prepared = futures_lite::future::block_on(pending.handles.external_plugins.prepare(
+        let prepared = block_on(pending.handles.external_plugins.prepare(
             karbeat_host::PrepareRequest {
                 descriptor,
                 config: config.clone(),
@@ -265,7 +269,7 @@ pub(super) fn execute_replace(
             }
         };
         let instance = prepared.instance;
-        futures_lite::future::block_on(pending.handles.external_plugins.resume(instance))?;
+        block_on(pending.handles.external_plugins.resume(instance))?;
         let track = if let PluginTarget::Generator(id) = target {
             Some(
                 pending
@@ -362,7 +366,7 @@ pub(super) fn execute_replace(
         .context("Audio engine is unavailable")?
         .push(AudioCommand::InstallHostedProject(command))
         .map_err(|_| anyhow::anyhow!("Audio command queue is full"))?;
-    let result = futures_lite::future::block_on(receipt.wait());
+    let result = block_on(receipt.wait());
     // The project payload owns any plugin transfers DSP did not process, so retire it first.
     retire_control_transfer(&mut project_retirement, "Hosted project");
     for retirement in &mut control_retirements {
@@ -373,7 +377,7 @@ pub(super) fn execute_replace(
         result => anyhow::bail!("Audio engine rejected project replacement: {result:?}"),
     }
     for (_, _, plugin_receipt) in &mut receipts {
-        let result = futures_lite::future::block_on(plugin_receipt.wait())?;
+        let result = block_on(plugin_receipt.wait())?;
         anyhow::ensure!(
             result == HostedInstallResult::Installed,
             "Prepared external plugin was rejected: {result:?}"
@@ -399,14 +403,12 @@ pub(super) fn commit_replace(ctx: &mut DawContext, completed: CompletedProjectRe
     }
     ctx.external_plugin_failures = completed.missing;
     for (target, reason) in &ctx.external_plugin_failures {
-        ctx.hosted_targets.insert(
-            *target,
-            karbeat_audio::context::HostedTargetState::failed(reason.clone()),
-        );
+        ctx.hosted_targets
+            .insert(*target, HostedTargetState::failed(reason.clone()));
     }
     ctx.app_state = completed.staged;
     // The previous project, its engine graph, and its plugin instances are freed by now or shortly.
-    karbeat_core::heap::schedule_release_to_os();
+    schedule_release_to_os();
 }
 
 pub(super) fn replace(ctx: &mut DawContext, staged: ApplicationState) -> anyhow::Result<()> {

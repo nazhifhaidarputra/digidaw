@@ -1,3 +1,5 @@
+use std::f32::consts::TAU;
+
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum MetronomeSound {
     SineClick,
@@ -20,8 +22,7 @@ impl MetronomeSound {
 
                 // Add a tiny bit of pitch drop (FM) for a percussive "thwack" instead of a "beep"
                 let pitch_drop = (-time_sec * 200.0).exp();
-                let fm_osc =
-                    (time_sec * std::f32::consts::TAU * (freq + (freq * pitch_drop))).sin();
+                let fm_osc = (time_sec * TAU * (freq + (freq * pitch_drop))).sin();
 
                 fm_osc * envelope * 0.5
             }

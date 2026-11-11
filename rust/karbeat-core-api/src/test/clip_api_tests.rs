@@ -3,7 +3,11 @@
 #[cfg(test)]
 mod tests {
     use crate::clip_api;
-    use crate::test::helpers::{make_ctx, make_seeded_ctx};
+    use crate::{
+        test::helpers::{make_ctx, make_seeded_ctx},
+        undo,
+    };
+    use karbeat_audio::context::DawContext;
     use karbeat_core::core::project::{
         ClipboardContent, DawSource,
         clip::{Clip, ClipSourceType, ClipTimeUnit, ResizeEdge},
@@ -11,20 +15,12 @@ mod tests {
     use karbeat_core::shared::AudioSourceId;
     use karbeat_core::shared::id::{ClipId, TrackId};
 
-    fn add_midi_clip(
-        ctx: &mut karbeat_audio::context::DawContext,
-        track_id: TrackId,
-        start: u32,
-    ) -> karbeat_core::core::project::clip::Clip {
+    fn add_midi_clip(ctx: &mut DawContext, track_id: TrackId, start: u32) -> Clip {
         clip_api::add_clip(ctx, None, ClipSourceType::Midi, track_id, start)
             .expect("add_clip should succeed")
     }
 
-    fn add_audio_clip(
-        ctx: &mut karbeat_audio::context::DawContext,
-        track_id: TrackId,
-        start: u64,
-    ) -> Clip {
+    fn add_audio_clip(ctx: &mut DawContext, track_id: TrackId, start: u64) -> Clip {
         let app = &mut ctx.app_state;
         let clip_id = app.clips_pool.insert_with_key(|id| Clip {
             name: "test audio".to_string(),
@@ -418,7 +414,7 @@ mod tests {
         assert_eq!(ctx.history.undo_stack.len(), history_count_before + 1);
         assert_eq!(ctx.history.undo_label(), Some("Duplicate Clips"));
 
-        crate::undo(&mut ctx).expect("one undo should remove the complete draw batch");
+        undo(&mut ctx).expect("one undo should remove the complete draw batch");
         assert_eq!(ctx.app_state.tracks[midi_id].clips.len(), clip_count_before);
     }
 

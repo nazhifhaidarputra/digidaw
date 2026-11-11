@@ -6,6 +6,7 @@
 
 use clack_extensions::params::{ParamInfo, ParamInfoFlags};
 use karbeat_plugin_api::prelude::ParameterSpec;
+use std::mem::swap;
 
 /// One CLAP parameter exposed to the host.
 #[derive(Clone, Debug, PartialEq)]
@@ -37,7 +38,7 @@ impl ClapParameter {
         let mut minimum = finite(info.min_value, 0.0);
         let mut maximum = finite(info.max_value, minimum + 1.0);
         if maximum < minimum {
-            std::mem::swap(&mut minimum, &mut maximum);
+            swap(&mut minimum, &mut maximum);
         }
         let name = String::from_utf8_lossy(info.name).trim().to_owned();
         Some(Self {

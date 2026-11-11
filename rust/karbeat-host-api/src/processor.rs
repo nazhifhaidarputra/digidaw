@@ -1,5 +1,13 @@
-use crate::HostInstanceId;
+use crate::{HostError, HostInstanceId};
 use karbeat_plugin_api::prelude::*;
+use std::{
+    any::Any,
+    mem::forget,
+    sync::{
+        Arc,
+        atomic::{AtomicI32, Ordering},
+    },
+};
 
 /// Maximum number of native instances accepted by one host implementation.
 pub const MAX_HOSTED_INSTANCES: usize = 256;
@@ -28,7 +36,7 @@ pub struct HostedProcessor {
     /// Tail used when the format cannot report one, so a parked hosted endpoint still rings
     /// out for a bounded time after its last active block.
     fallback_tail_samples: u32,
-    processing_status: Option<std::sync::Arc<std::sync::atomic::AtomicI32>>,
+    processing_status: Option<Arc<AtomicI32>>,
     retirement: Option<rtrb::Producer<Box<HostedProcessor>>>,
 }
 impl HostedProcessor {
@@ -61,26 +69,23 @@ impl HostedProcessor {
     }
 
     /// Attach the backend's sticky process status before publishing the endpoint.
-    pub fn set_processing_status(&mut self, status: std::sync::Arc<std::sync::atomic::AtomicI32>) {
+    pub fn set_processing_status(&mut self, status: Arc<AtomicI32>) {
         self.processing_status = Some(status);
     }
 
     /// Read on a control/render worker; a nonzero native result is retained until acknowledged.
-    pub fn processing_error(&self) -> Option<crate::HostError> {
-        let code = self
-            .processing_status
-            .as_ref()?
-            .load(std::sync::atomic::Ordering::Acquire);
-        (code != 0).then_some(crate::HostError::PluginCall {
+    pub fn processing_error(&self) -> Option<HostError> {
+        let code = self.processing_status.as_ref()?.load(Ordering::Acquire);
+        (code != 0).then_some(HostError::PluginCall {
             operation: "processor.process",
             code,
         })
     }
 
     /// Install a one-use return queue before transferring this endpoint to the engine.
-    pub fn enable_retirement(&mut self) -> Result<ProcessorRetirement, crate::HostError> {
+    pub fn enable_retirement(&mut self) -> Result<ProcessorRetirement, HostError> {
         if self.retirement.is_some() {
-            return Err(crate::HostError::InvalidTransition);
+            return Err(HostError::InvalidTransition);
         }
         let (sender, receiver) = rtrb::RingBuffer::new(1);
         self.retirement = Some(sender);
@@ -92,7 +97,7 @@ impl HostedProcessor {
     /// Make publication failure and discarded commands return ownership to the native owner.
     pub fn prepare_transfer(
         mut self: Box<Self>,
-    ) -> Result<(PreparedProcessor, ProcessorRetirement), crate::HostError> {
+    ) -> Result<(PreparedProcessor, ProcessorRetirement), HostError> {
         let retirement = self.enable_retirement()?;
         Ok((
             PreparedProcessor {
@@ -122,11 +127,11 @@ impl PreparedProcessor {
     /// Consumes the transfer and returns its endpoint for installation in the audio graph.
     ///
     /// Returns [`HostError::InvalidTransition`] if the endpoint was already taken.
-    pub fn install(mut self) -> Result<Box<dyn AudioPlugin>, crate::HostError> {
+    pub fn install(mut self) -> Result<Box<dyn AudioPlugin>, HostError> {
         self.processor
             .take()
             .map(|processor| -> Box<dyn AudioPlugin> { processor })
-            .ok_or(crate::HostError::InvalidTransition)
+            .ok_or(HostError::InvalidTransition)
     }
 }
 impl Drop for PreparedProcessor {
@@ -164,7 +169,7 @@ impl Drop for ProcessorRetirement {
                 // A premature control-owner shutdown must not make the audio thread the final
                 // owner of the return queue. Retain it until process exit rather than unload code.
                 tracing::error!("Hosted plugin owner shut down before endpoint retirement");
-                std::mem::forget(receiver);
+                forget(receiver);
             }
         }
     }
@@ -174,7 +179,7 @@ impl AudioPlugin for HostedProcessor {
         if let Some(mut sender) = self.retirement.take() {
             // This private producer is used exactly once, with capacity reserved at creation.
             if let Err(rtrb::PushError::Full(endpoint)) = sender.push(self) {
-                std::mem::forget(endpoint);
+                forget(endpoint);
             }
         }
     }
@@ -285,7 +290,7 @@ impl AudioPlugin for HostedProcessor {
         self.inner.set_state(state);
         self.inner.clear_parameter_overrides();
     }
-    fn as_any(&self) -> &dyn std::any::Any {
+    fn as_any(&self) -> &dyn Any {
         self
     }
 }
@@ -330,7 +335,7 @@ mod tests {
         fn get_parameter_specs(&self) -> Vec<ParameterSpec> {
             Vec::new()
         }
-        fn as_any(&self) -> &dyn std::any::Any {
+        fn as_any(&self) -> &dyn Any {
             self
         }
     }
@@ -367,7 +372,7 @@ mod tests {
         fn get_parameter_specs(&self) -> Vec<ParameterSpec> {
             Vec::new()
         }
-        fn as_any(&self) -> &dyn std::any::Any {
+        fn as_any(&self) -> &dyn Any {
             self
         }
     }

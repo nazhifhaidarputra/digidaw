@@ -2,20 +2,34 @@ use rtrb::RingBuffer;
 use thiserror::Error;
 
 use crate::{
-    commands::AudioCommand,
-    context::DawContext,
-    engine::{AudioEngine, AudioExportSnapshot},
+    commands::{AudioCommand, AudioFeedback},
+    context::{ControlHandles, DawContext, HostedTargetState},
+    engine::{AudioEngine, AudioExportSnapshot, PlaybackMode},
+    event::{PluginTarget, TransportFeedback},
     rate_bridge::DeviceRateBridge,
     writer::{AudioExportConfig, AudioWriter, create_writer, metadata::AudioMetadata},
 };
-use karbeat_core::core::project::ClipTimeUnit;
+use futures_lite::future::block_on;
+use karbeat_core::core::project::{ApplicationState, ClipTimeUnit, GeneratorInstanceType};
 use karbeat_plugins::registry::PluginRegistry;
+use std::{
+    fs::{remove_file, rename},
+    io::ErrorKind,
+    iter::repeat_n,
+    mem::take,
+    path::{Path, PathBuf},
+    sync::mpsc::channel as mpsc_channel,
+    thread::{scope as thread_scope, sleep},
+    time::{Duration, Instant},
+};
 
 /// Wall-clock time hosted plugins get to finish restoring their state before the timeline
 /// renders.
-const HOSTED_SETTLE_TIME: std::time::Duration = std::time::Duration::from_millis(400);
+const HOSTED_SETTLE_TIME: Duration = Duration::from_millis(400);
+/// Longest wait for hosted plugins that still report pending work after the settle time.
+const HOSTED_SETTLE_LIMIT: Duration = Duration::from_secs(10);
 /// Pause between settling blocks, which leaves plugin worker threads time to run.
-const HOSTED_SETTLE_INTERVAL: std::time::Duration = std::time::Duration::from_millis(10);
+const HOSTED_SETTLE_INTERVAL: Duration = Duration::from_millis(10);
 /// Peak below which a block counts as silent while hosted plugins ring out (-80 dBFS).
 const RING_OUT_SILENCE: f32 = 1.0e-4;
 /// Longest ring-out rendered after the reported tail, matching the engine's cap on reported
@@ -29,12 +43,20 @@ pub struct AudioExportError {
     pub message: String,
 }
 
+/// [`AudioExportError::error_source`] of a render the progress callback stopped.
+pub const EXPORT_CANCELLED: &str = "Cancelled";
+
 impl AudioExportError {
     pub fn new(source: &str, message: impl Into<String>) -> Self {
         Self {
             error_source: source.to_string(),
             message: message.into(),
         }
+    }
+
+    /// Whether the progress callback stopped the render.
+    pub fn is_cancelled(&self) -> bool {
+        self.error_source == EXPORT_CANCELLED
     }
 }
 
@@ -76,9 +98,9 @@ pub struct RenderOptions {
 }
 
 pub struct PendingAudioExport {
-    app: karbeat_core::core::project::ApplicationState,
+    app: ApplicationState,
     plugin_registry: PluginRegistry,
-    handles: crate::context::ControlHandles,
+    handles: ControlHandles,
     hosted_formats: hashbrown::HashMap<karbeat_host::HostInstanceId, karbeat_host::PluginFormat>,
 }
 
@@ -91,12 +113,11 @@ pub fn begin_export(ctx: &DawContext) -> PendingAudioExport {
             .hosted_targets
             .values()
             .filter_map(|state| match state {
-                crate::context::HostedTargetState::Active(target) => {
+                HostedTargetState::Active(target) => {
                     let instance = target.state().instance;
                     Some((instance.id, instance.format))
                 }
-                crate::context::HostedTargetState::Transitioning(_)
-                | crate::context::HostedTargetState::Failed(_) => None,
+                HostedTargetState::Transitioning(_) | HostedTargetState::Failed(_) => None,
             })
             .collect(),
     }
@@ -104,7 +125,9 @@ pub fn begin_export(ctx: &DawContext) -> PendingAudioExport {
 
 /// Export project to a sound file based on provided writer
 /// Generic, UI-agnostic.
-/// `progress_callback` should return `true` to continue, or `false` to abort rendering.
+/// `progress_callback` should return `true` to continue, or `false` to abort rendering, which
+/// deletes the partial file and fails with an error whose
+/// [`is_cancelled`](AudioExportError::is_cancelled) is `true`.
 pub fn export_project<F>(
     ctx: &mut DawContext,
     output_path: &str,
@@ -136,7 +159,7 @@ where
 {
     tracing::info!("Starting offline render to: {}", output_path);
 
-    let (snapshot_tx, snapshot_rx) = std::sync::mpsc::channel();
+    let (snapshot_tx, snapshot_rx) = mpsc_channel();
 
     pending
         .handles
@@ -150,7 +173,7 @@ where
         .map_err(|_| AudioExportError::new("Engine", "Failed to query audio export snapshot"))?;
 
     let snapshot = snapshot_rx
-        .recv_timeout(std::time::Duration::from_secs(30))
+        .recv_timeout(Duration::from_secs(30))
         .map_err(|e| {
             AudioExportError::new(
                 "QueryExportSnapshotReceiver",
@@ -171,7 +194,7 @@ where
     let external_plugins = pending.handles.external_plugins;
     let hosted_formats = pending.hosted_formats;
 
-    std::thread::scope(|scope| {
+    thread_scope(|scope| {
         scope
             .spawn(move || {
                 render_snapshot(
@@ -192,11 +215,9 @@ where
 }
 
 fn validate_external_plugins(
-    app: &karbeat_core::core::project::ApplicationState,
+    app: &ApplicationState,
     snapshot: &AudioExportSnapshot,
 ) -> Result<(), AudioExportError> {
-    use crate::event::PluginTarget;
-    use karbeat_core::core::project::GeneratorInstanceType;
     let generators =
         app.generator_pool
             .iter()
@@ -245,7 +266,7 @@ fn validate_external_plugins(
     Ok(())
 }
 
-fn render_snapshot<F>(
+pub(crate) fn render_snapshot<F>(
     snapshot: AudioExportSnapshot,
     output_path: &str,
     config: AudioExportConfig,
@@ -281,8 +302,8 @@ where
                 .get(&instance)
                 .copied()
                 .ok_or(karbeat_host::HostError::UnknownInstance(instance))?;
-            futures_lite::future::block_on(external_plugins.prepare_offline(
-                karbeat_host::OfflinePrepareRequest {
+            block_on(
+                external_plugins.prepare_offline(karbeat_host::OfflinePrepareRequest {
                     instance: karbeat_host::ExternalPluginInstanceHandle {
                         format,
                         id: instance,
@@ -291,8 +312,8 @@ where
                     // The engine prepares plugins for at least 512 frames.
                     max_block_size: block_size.max(512),
                     output_channels: ENGINE_CHANNELS,
-                },
-            ))
+                }),
+            )
             .map(|prepared| prepared.processor)
         })
         .map_err(|error| AudioExportError::new("HostedPlugin", error.to_string()))?;
@@ -309,8 +330,8 @@ where
     )
     .map_err(|e| AudioExportError::new("Snapshot", e.to_string()))?;
     let (file_rate, file_channels) = (config.sample_rate(), usize::from(config.channels()));
-    let path = std::path::Path::new(output_path);
-    let writer = create_writer(path, config, metadata).map_err(|e| {
+    let output = StagedOutput::new(Path::new(output_path));
+    let writer = create_writer(&output.staging, config, metadata).map_err(|e| {
         AudioExportError::new("WriterInit", format!("Failed to create writer: {e}"))
     })?;
     let mut sink = ExportSink::new(writer, sample_rate, file_rate, file_channels, block_size)?;
@@ -328,9 +349,7 @@ where
         })
         .map_err(|_| AudioExportError::new("Engine", "Command queue full"))?;
     cmd_producer
-        .push(AudioCommand::SetPlaybackMode(
-            crate::engine::PlaybackMode::Song,
-        ))
+        .push(AudioCommand::SetPlaybackMode(PlaybackMode::Song))
         .map_err(|_| AudioExportError::new("Engine", "Command queue full"))?;
     render.engine.process(&mut []);
     validate_rendered_block(&render.engine, &[])?;
@@ -339,6 +358,7 @@ where
         &mut render.engine,
         &mut render.buffer,
         HOSTED_SETTLE_TIME,
+        HOSTED_SETTLE_LIMIT,
         &mut render.position,
         &mut render.feedback,
     )?;
@@ -386,21 +406,29 @@ where
 
     // Delay compensation holds the output back by the system latency. Render past it so the
     // file starts on the first frame of the range, as the live playhead display does.
+    // The pre-roll and the range render as one stream of engine blocks, as playback renders
+    // them; a separate pre-roll would end on a short block and shift every later block
+    // boundary, which block-wise processing such as envelopes and automation can hear.
     let latency = render.engine.system_latency();
-    render.render(latency, None, |_| true)?;
+    sink.skip(latency);
 
     let (progress_base, progress_scale) = match tail_handling {
         TailHandling::CutRemainder => (0.0, 1.0),
         TailHandling::LeaveRemainder => (0.0, 0.95),
         TailHandling::WrapRemainder => (0.5, 0.5),
     };
-    let completed = render.render(song_length_samples, Some(&mut sink), |rendered| {
-        loop_counter += 1;
-        loop_counter % throttle_limit != 0
-            || progress_callback(
-                progress_base + rendered as f32 / song_length_samples as f32 * progress_scale,
-            )
-    })?;
+    let completed = render.render(
+        song_length_samples.saturating_add(latency),
+        Some(&mut sink),
+        |rendered| {
+            loop_counter += 1;
+            let rendered = rendered.saturating_sub(latency);
+            loop_counter % throttle_limit != 0
+                || progress_callback(
+                    progress_base + rendered as f32 / song_length_samples as f32 * progress_scale,
+                )
+        },
+    )?;
     if !completed {
         return sink.cancel();
     }
@@ -439,6 +467,7 @@ where
 
     let _ = progress_callback(1.0);
     sink.finish()?;
+    output.commit()?;
     tracing::info!("Offline render successfully completed");
     Ok(())
 }
@@ -451,8 +480,8 @@ struct OfflineRender {
     engine: AudioEngine,
     /// One engine block of interleaved stereo.
     buffer: Vec<f32>,
-    position: rtrb::Consumer<crate::event::TransportFeedback>,
-    feedback: rtrb::Consumer<crate::commands::AudioFeedback>,
+    position: rtrb::Consumer<TransportFeedback>,
+    feedback: rtrb::Consumer<AudioFeedback>,
 }
 
 impl OfflineRender {
@@ -505,6 +534,9 @@ struct ExportSink {
     output_frames: u64,
     /// Resampled frames still to drop: the resampler's delay.
     delay: usize,
+    /// Rendered frames still to drop before any reach the file: the delay-compensation
+    /// pre-roll.
+    skip: usize,
     /// One write in the file's layout.
     scratch: Vec<f32>,
 }
@@ -539,8 +571,14 @@ impl ExportSink {
             channels,
             input_frames: 0,
             output_frames: 0,
+            skip: 0,
             scratch: Vec::new(),
         })
+    }
+
+    /// Drops the next `frames` rendered frames.
+    fn skip(&mut self, frames: u32) {
+        self.skip = self.skip.saturating_add(frames as usize);
     }
 
     /// File frames the accepted DSP frames make.
@@ -550,6 +588,14 @@ impl ExportSink {
 
     /// Takes interleaved stereo frames at the DSP rate.
     fn push(&mut self, stereo: &[f32]) -> Result<(), AudioExportError> {
+        let skipped = self.skip.min(stereo.len() / ENGINE_CHANNELS);
+        self.skip = self.skip.saturating_sub(skipped);
+        let stereo = stereo
+            .get(skipped.saturating_mul(ENGINE_CHANNELS)..)
+            .unwrap_or_default();
+        if stereo.is_empty() {
+            return Ok(());
+        }
         self.input_frames += (stereo.len() / ENGINE_CHANNELS) as u64;
         if self.bridge.is_none() {
             return self.write(stereo);
@@ -572,7 +618,7 @@ impl ExportSink {
             self.resampled.clear();
             self.resampled.extend_from_slice(output);
             self.pending.drain(..needed);
-            let resampled = std::mem::take(&mut self.resampled);
+            let resampled = take(&mut self.resampled);
             let result = self.write(&resampled);
             self.resampled = resampled;
             result?;
@@ -594,7 +640,7 @@ impl ExportSink {
             } else {
                 self.scratch.extend_from_slice(&[left, right]);
                 self.scratch
-                    .extend(std::iter::repeat_n(0.0, self.channels - ENGINE_CHANNELS));
+                    .extend(repeat_n(0.0, self.channels - ENGINE_CHANNELS));
             }
             written += 1;
         }
@@ -628,7 +674,7 @@ impl ExportSink {
                     .map_or(0, DeviceRateBridge::input_frames_next)
                     * ENGINE_CHANNELS;
                 let missing = needed.saturating_sub(self.pending.len());
-                self.pending.extend(std::iter::repeat_n(0.0, missing));
+                self.pending.extend(repeat_n(0.0, missing));
                 self.resample_pending()?;
             }
         }
@@ -637,9 +683,54 @@ impl ExportSink {
             .map_err(|e| AudioExportError::new("Writer", format!("Finalize error: {e}")))
     }
 
-    /// Finalizes what was written so far after a cancelled render.
+    /// Abandons a cancelled render. The staged file is deleted with its [`StagedOutput`].
     fn cancel(self) -> Result<(), AudioExportError> {
-        finalize_cancelled(self.writer)
+        tracing::info!("Export cancelled");
+        Err(AudioExportError::new(
+            EXPORT_CANCELLED,
+            "The export was cancelled",
+        ))
+    }
+}
+
+/// A render's file while it is written: a hidden sibling of the target that replaces the target
+/// only once the render has finished. A cancelled or failed render deletes it on drop and leaves
+/// any earlier file at the target untouched.
+struct StagedOutput {
+    staging: PathBuf,
+    target: PathBuf,
+}
+
+impl StagedOutput {
+    fn new(target: &Path) -> Self {
+        let name = target
+            .file_name()
+            .map_or_else(|| "export".into(), |name| name.to_string_lossy());
+        Self {
+            staging: target.with_file_name(format!(".{name}.partial")),
+            target: target.to_path_buf(),
+        }
+    }
+
+    /// Moves the finished file over the target.
+    fn commit(self) -> Result<(), AudioExportError> {
+        rename(&self.staging, &self.target).map_err(|error| {
+            AudioExportError::new("Writer", format!("Failed to save the export: {error}"))
+        })
+        // Drop then finds no staged file left to remove.
+    }
+}
+
+impl Drop for StagedOutput {
+    fn drop(&mut self) {
+        match remove_file(&self.staging) {
+            Ok(()) => {}
+            Err(error) if error.kind() == ErrorKind::NotFound => {}
+            Err(error) => tracing::warn!(
+                "Failed to remove the unfinished export {}: {error}",
+                self.staging.display()
+            ),
+        }
     }
 }
 
@@ -665,8 +756,8 @@ fn range_in_samples(
 }
 
 fn drain_engine_feedback(
-    position: &mut rtrb::Consumer<crate::event::TransportFeedback>,
-    feedback: &mut rtrb::Consumer<crate::commands::AudioFeedback>,
+    position: &mut rtrb::Consumer<TransportFeedback>,
+    feedback: &mut rtrb::Consumer<AudioFeedback>,
 ) {
     while position.pop().is_ok() {}
     while feedback.pop().is_ok() {}
@@ -675,27 +766,39 @@ fn drain_engine_feedback(
 /// Runs the stopped engine at a real-time pace so hosted plugins finish restoring their state.
 ///
 /// Native plugins apply restored state from their process callback, often after a worker
-/// thread has loaded files; LSP's convolution reverbs load their impulse responses this way.
-/// An offline render outruns that work, so the timeline would otherwise start on plugins that
-/// are still loading. Renders without hosted effects skip the wait.
+/// thread has loaded files; LSP's samplers load their samples and its convolution reverbs their
+/// impulse responses this way. An offline render outruns that work, so the timeline would
+/// otherwise start on plugins that are still loading, and a sampler would drop its first note.
+/// Instruments are woken for every block, since a parked one gets no process calls. Settling
+/// lasts `settle`, and longer while a plugin reports pending work, up to `limit`. Renders without
+/// hosted plugins skip the wait.
 fn settle_hosted_plugins(
     engine: &mut AudioEngine,
     buffer: &mut [f32],
-    settle: std::time::Duration,
-    position: &mut rtrb::Consumer<crate::event::TransportFeedback>,
-    feedback: &mut rtrb::Consumer<crate::commands::AudioFeedback>,
+    settle: Duration,
+    limit: Duration,
+    position: &mut rtrb::Consumer<TransportFeedback>,
+    feedback: &mut rtrb::Consumer<AudioFeedback>,
 ) -> Result<(), AudioExportError> {
-    if !engine.has_continuous_effects() {
+    if !engine.has_hosted_plugins() {
         return Ok(());
     }
-    let deadline = std::time::Instant::now() + settle;
-    while std::time::Instant::now() < deadline {
+    let started = Instant::now();
+    loop {
+        engine.wake_hosted_generators();
         engine.process(buffer);
         validate_rendered_block(engine, buffer)?;
         drain_engine_feedback(position, feedback);
-        std::thread::sleep(HOSTED_SETTLE_INTERVAL);
+        let elapsed = started.elapsed();
+        if elapsed >= settle && !engine.has_pending_plugin_work() {
+            return Ok(());
+        }
+        if elapsed >= limit {
+            tracing::warn!("Hosted plugins still report pending work after {elapsed:?}");
+            return Ok(());
+        }
+        sleep(HOSTED_SETTLE_INTERVAL);
     }
-    Ok(())
 }
 
 /// Renders the next block after the reported tail; `false` once the engine has gone silent.
@@ -721,13 +824,6 @@ fn validate_rendered_block(engine: &AudioEngine, samples: &[f32]) -> Result<(), 
     Ok(())
 }
 
-fn finalize_cancelled(mut writer: Box<dyn AudioWriter>) -> Result<(), AudioExportError> {
-    tracing::warn!("Export cancelled by callback");
-    writer
-        .finalize()
-        .map_err(|e| AudioExportError::new("Writer", format!("Finalize error: {e}")))
-}
-
 #[cfg(test)]
 #[allow(
     clippy::unwrap_used,
@@ -736,14 +832,19 @@ fn finalize_cancelled(mut writer: Box<dyn AudioWriter>) -> Result<(), AudioExpor
 mod tests {
     use super::*;
     use crate::{
-        engine::AudioEngineTelemetry,
+        commands::{EffectTarget, MixerChannelTarget},
+        engine::{
+            AudioEngineTelemetry,
+            tests::{IdleProbe, song_engine_with_ramp_clip},
+        },
         event::PluginTarget,
         hosted_plugin::HostedPluginInstall,
         writer::{BitDepth, BitPerSample, wav::WavAudioWriterConfig},
     };
     use karbeat_core::{
         core::project::{
-            ApplicationState, ExternalPluginInstance, GeneratorInstanceType, PluginInstance,
+            ApplicationState, ExternalPluginInstance, GeneratorInstanceType, MixerChannelParams,
+            PluginInstance,
         },
         shared::EffectId,
     };
@@ -753,12 +854,21 @@ mod tests {
     };
     use karbeat_plugin_api::traits::AudioPluginBuilder;
     use karbeat_plugins::effect::delay::DigidawDelay;
+    use karbeat_utils::hash::hash_str;
+    use std::{
+        fs::{read, read_dir, write},
+        sync::{
+            Arc,
+            atomic::{AtomicUsize, Ordering},
+            mpsc::sync_channel,
+        },
+    };
 
     fn engine() -> AudioEngine {
         let (_, commands) = RingBuffer::new(8);
         let (position, _) = RingBuffer::new(8);
         let (feedback, _) = RingBuffer::new(8);
-        let (telemetry, _) = std::sync::mpsc::sync_channel(8);
+        let (telemetry, _) = sync_channel(8);
         AudioEngine::new(
             commands,
             position,
@@ -832,7 +942,7 @@ mod tests {
         assert!(control.collect());
         let directory = tempfile::tempdir().unwrap();
         let path = directory.path().join("existing.wav");
-        std::fs::write(&path, b"previous export").unwrap();
+        write(&path, b"previous export").unwrap();
         let config = AudioExportConfig::Wav(WavAudioWriterConfig {
             sample_rate: 44_100,
             channels: 2,
@@ -850,7 +960,7 @@ mod tests {
             &mut |_| true,
         );
         assert_eq!(result.unwrap_err().error_source, "HostedPlugin");
-        assert_eq!(std::fs::read(path).unwrap(), b"previous export");
+        assert_eq!(read(path).unwrap(), b"previous export");
         drop(engine);
         assert!(retirement.take().is_some());
     }
@@ -861,13 +971,13 @@ mod tests {
         ringing: usize,
     ) -> (
         AudioEngine,
-        std::sync::Arc<std::sync::atomic::AtomicUsize>,
+        Arc<AtomicUsize>,
         karbeat_host::ProcessorRetirement,
     ) {
         let mut engine = engine();
-        let calls = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let calls = Arc::new(AtomicUsize::new(0));
         let mut endpoint = Box::new(HostedProcessor::new(
-            Box::new(crate::engine::tests::IdleProbe {
+            Box::new(IdleProbe {
                 calls: calls.clone(),
                 ringing,
                 continuous: false,
@@ -909,27 +1019,29 @@ mod tests {
         let mut buffer = vec![0.0; 512];
 
         // Without hosted effects there is nothing to wait for.
-        let started = std::time::Instant::now();
+        let started = Instant::now();
         settle_hosted_plugins(
             &mut engine(),
             &mut buffer,
-            std::time::Duration::from_secs(30),
+            Duration::from_secs(30),
+            Duration::from_secs(30),
             &mut position,
             &mut feedback,
         )
         .unwrap();
-        assert!(started.elapsed() < std::time::Duration::from_secs(5));
+        assert!(started.elapsed() < Duration::from_secs(5));
 
         let (mut engine, calls, mut retirement) = engine_with_hosted_ringing_effect(0);
         settle_hosted_plugins(
             &mut engine,
             &mut buffer,
-            std::time::Duration::from_millis(50),
+            Duration::from_millis(50),
+            Duration::from_secs(5),
             &mut position,
             &mut feedback,
         )
         .unwrap();
-        assert!(calls.load(std::sync::atomic::Ordering::Relaxed) > 0);
+        assert!(calls.load(Ordering::Relaxed) > 0);
         assert_eq!(engine.get_export_length(), 0);
         drop(engine);
         assert!(retirement.take().is_some());
@@ -993,8 +1105,6 @@ mod tests {
 
     #[test]
     fn region_export_renders_exactly_the_region() {
-        use crate::engine::tests::song_engine_with_ramp_clip;
-
         let engine = song_engine_with_ramp_clip();
         let whole_song = render_ramp(&engine, RenderOptions::default()).unwrap();
         assert_eq!(whole_song.len(), 96_000);
@@ -1013,8 +1123,6 @@ mod tests {
 
     #[test]
     fn region_past_the_song_end_renders_silence_after_it() {
-        use crate::engine::tests::song_engine_with_ramp_clip;
-
         // Ticks 3,360..4,800 are samples 84,000..120,000; the clip ends at 96,000
         let rendered = render_ramp(
             &song_engine_with_ramp_clip(),
@@ -1028,8 +1136,6 @@ mod tests {
 
     #[test]
     fn empty_regions_are_rejected() {
-        use crate::engine::tests::song_engine_with_ramp_clip;
-
         let error = render_ramp(
             &song_engine_with_ramp_clip(),
             region(960, 960, RenderPurpose::Export),
@@ -1040,10 +1146,6 @@ mod tests {
 
     #[test]
     fn bounces_skip_the_master_fader() {
-        use crate::commands::MixerChannelTarget;
-        use crate::engine::tests::song_engine_with_ramp_clip;
-        use karbeat_core::core::project::MixerChannelParams;
-
         let mut engine = song_engine_with_ramp_clip();
         let unity = render_ramp(&engine, region(0, 960, RenderPurpose::Export)).unwrap();
         engine.process_command(AudioCommand::SetMixerChannelParameter {
@@ -1099,15 +1201,12 @@ mod tests {
 
     #[test]
     fn delay_compensation_does_not_shift_the_export() {
-        use crate::engine::tests::song_engine_with_ramp_clip;
-        use karbeat_utils::hash::hash_str;
-
         let mut engine = song_engine_with_ramp_clip();
         let registry = PluginRegistry::new_with_defaults();
         let registry_id = hash_str("effect_pitch_shifter");
         let (effect_factory, _) = registry.create_plugin_by_id(registry_id).unwrap();
         engine.process_command(AudioCommand::AddEffect {
-            target: crate::commands::EffectTarget::Master,
+            target: EffectTarget::Master,
             effect_id: EffectId::from(1),
             registry_id,
             effect_factory,
@@ -1132,8 +1231,6 @@ mod tests {
 
     #[test]
     fn exports_at_another_rate_are_resampled_after_rendering() {
-        use crate::engine::tests::song_engine_with_ramp_clip;
-
         let engine = song_engine_with_ramp_clip();
         let native = render_song(&engine, RENDER_RATE, 2);
         let resampled = render_song(&engine, 44_100, 2);
@@ -1156,8 +1253,6 @@ mod tests {
 
     #[test]
     fn mono_exports_mix_both_channels_at_full_length() {
-        use crate::engine::tests::song_engine_with_ramp_clip;
-
         let engine = song_engine_with_ramp_clip();
         let stereo = render_song(&engine, RENDER_RATE, 2);
         let mono = render_song(&engine, RENDER_RATE, 1);
@@ -1169,6 +1264,55 @@ mod tests {
                 "frame {index}: {mono} != {mixed}"
             );
         }
+    }
+
+    #[test]
+    fn a_clip_from_the_source_start_opens_at_full_level() {
+        // The ramp source reads frame k as k / 1,000, and the master's centre pan halves it.
+        // An anti-click fade-in once silenced the first frames of every clip.
+        let left = render_ramp(&song_engine_with_ramp_clip(), RenderOptions::default()).unwrap();
+        for (frame, sample) in left.iter().enumerate().take(200) {
+            let expected = frame as f32 / 1_000.0 * 0.5;
+            assert!(
+                (sample - expected).abs() < 1e-5,
+                "frame {frame}: {sample} != {expected}"
+            );
+        }
+    }
+
+    #[test]
+    fn cancelling_keeps_the_earlier_file_and_leaves_no_partial_render() {
+        let engine = song_engine_with_ramp_clip();
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("song.wav");
+        write(&path, b"previous export").unwrap();
+        let mut calls = 0;
+        let error = render_snapshot(
+            engine.export_snapshot(),
+            path.to_str().unwrap(),
+            AudioExportConfig::Wav(WavAudioWriterConfig {
+                sample_rate: RENDER_RATE,
+                channels: 2,
+                bit_depth: BitDepth::BitPerSample(BitPerSample::B16),
+            }),
+            &AudioMetadata::default(),
+            RenderOptions::default(),
+            PluginRegistry::new_with_defaults(),
+            karbeat_host::HostClient::unavailable(),
+            hashbrown::HashMap::new(),
+            &mut |_| {
+                calls += 1;
+                calls < 3
+            },
+        )
+        .unwrap_err();
+        assert!(error.is_cancelled(), "{error}");
+        assert_eq!(read(&path).unwrap(), b"previous export");
+        let left: Vec<_> = read_dir(directory.path())
+            .unwrap()
+            .map(|entry| entry.unwrap().file_name())
+            .collect();
+        assert_eq!(left, ["song.wav"]);
     }
 
     #[test]

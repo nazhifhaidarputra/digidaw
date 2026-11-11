@@ -11,10 +11,14 @@
     reason = "reference renders fail immediately when a fixture cannot be built or read"
 )]
 
+#[cfg(test)]
+use std::hint::black_box;
 use std::{
     alloc::{GlobalAlloc, Layout, System},
     any::Any,
     cell::Cell,
+    env::var_os,
+    fs::{create_dir_all, read, write},
     path::PathBuf,
     sync::{
         Arc, Mutex,
@@ -31,7 +35,7 @@ use super::test_support::{
 };
 use crate::{
     commands::{AudioCommand, AudioFeedback, EffectTarget, MixerChannelTarget},
-    engine::{AudioEngine, tests::IdleProbe},
+    engine::{AudioEngine, PlaybackMode, tests::IdleProbe},
     event::{PluginTarget, TransportFeedback},
     hosted_plugin::HostedPluginInstall,
 };
@@ -43,6 +47,7 @@ use karbeat_core::{
     },
     shared::{BusId, EffectId, PatternId, TrackId},
 };
+use karbeat_host::{HostInstanceId, HostedProcessor, ProcessingConfig};
 
 /// Largest per-sample difference from a stored render that still passes (-100 dBFS).
 const TOLERANCE: f32 = 1.0e-5;
@@ -173,12 +178,12 @@ fn check(name: &str, build: fn() -> Scenario) {
             "{name} block {block}: the scenario renders silence"
         );
         let path = fixture(name, block);
-        if std::env::var_os("UPDATE_ENGINE_GOLDEN").is_some() {
-            std::fs::create_dir_all(path.parent().unwrap()).unwrap();
-            std::fs::write(&path, bytemuck::cast_slice::<f32, u8>(&rendered)).unwrap();
+        if var_os("UPDATE_ENGINE_GOLDEN").is_some() {
+            create_dir_all(path.parent().unwrap()).unwrap();
+            write(&path, bytemuck::cast_slice::<f32, u8>(&rendered)).unwrap();
             continue;
         }
-        let bytes = std::fs::read(&path)
+        let bytes = read(&path)
             .unwrap_or_else(|error| panic!("{}: {error}; see the module docs", path.display()));
         let reference: Vec<f32> = bytes
             .chunks_exact(4)
@@ -581,8 +586,6 @@ fn pattern_mode() -> Scenario {
 }
 
 fn hosted_idle() -> Scenario {
-    use karbeat_host::{HostInstanceId, HostedProcessor, ProcessingConfig};
-
     let mut app = project();
     let track = tone_track(&mut app, 220.0, 330.0);
     let mut engine = engine(512);
@@ -669,7 +672,7 @@ fn bounce() -> Scenario {
             sample_rate: Some(SAMPLE_RATE),
             buffer_size: Some(512),
         },
-        AudioCommand::SetPlaybackMode(crate::engine::PlaybackMode::Song),
+        AudioCommand::SetPlaybackMode(PlaybackMode::Song),
         AudioCommand::SetPlayhead(0),
         AudioCommand::SetPlaying(true),
     ] {
@@ -690,7 +693,7 @@ fn playing_projects_render_without_allocating() {
     // The counter itself must see an allocation, or a zero below would prove nothing.
     ALLOCATIONS.store(0, Ordering::Relaxed);
     WATCH.set(true);
-    let probe = std::hint::black_box(vec![0_u8; 64]);
+    let probe = black_box(vec![0_u8; 64]);
     WATCH.set(false);
     drop(probe);
     assert_eq!(ALLOCATIONS.load(Ordering::Relaxed), 1);
@@ -823,3 +826,130 @@ golden!(
     hosted_idle,
     bounce,
 );
+
+/// The export renders exactly what real-time playback plays: the same engine, block size and
+/// project, captured once from the buffer the device callback receives and once from the
+/// exported file, must agree on every sample.
+///
+/// Live output frame `n` plays timeline frame `n - latency`, since delay compensation holds the
+/// output back by the system latency (the playhead display accounts for it). The export starts
+/// the file on timeline frame 0, so the comparison skips the live output's latency.
+mod realtime_matches_export {
+    use super::*;
+    use crate::{
+        exporter::{ExportRange, RenderOptions, render_snapshot},
+        writer::{
+            AudioExportConfig, BitDepth, BitPerSample, metadata::AudioMetadata,
+            wav::WavAudioWriterConfig,
+        },
+    };
+
+    /// Samples per tick at the fixture tempo and rate.
+    const SAMPLES_PER_TICK: usize = 25;
+
+    fn check(name: &str, build: fn() -> Scenario) {
+        let scenario = build();
+        assert!(
+            scenario.events.is_empty(),
+            "{name}: scripted events have no export equivalent"
+        );
+        let mut scenario = scenario;
+        let snapshot = scenario.engine.export_snapshot();
+        let block = snapshot.block_size();
+        let frames = scenario.frames;
+
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("export.wav");
+        render_snapshot(
+            snapshot,
+            path.to_str().unwrap(),
+            AudioExportConfig::Wav(WavAudioWriterConfig {
+                sample_rate: SAMPLE_RATE,
+                channels: 2,
+                bit_depth: BitDepth::BitPerSample(BitPerSample::B32),
+            }),
+            &AudioMetadata::default(),
+            RenderOptions {
+                range: ExportRange::Ticks {
+                    start_tick: 0,
+                    end_tick: frames.div_ceil(SAMPLES_PER_TICK) as u64,
+                },
+                ..RenderOptions::default()
+            },
+            PluginRegistry::new_with_defaults(),
+            karbeat_host::HostClient::unavailable(),
+            hashbrown::HashMap::new(),
+            &mut |_| true,
+        )
+        .unwrap();
+        let exported: Vec<f32> = hound::WavReader::open(&path)
+            .unwrap()
+            .samples::<f32>()
+            .map(Result::unwrap)
+            .collect();
+
+        // The device callback: the engine's own blocks, one after another. Plugins report their
+        // latency once they have run, so the latency is read after the first pass and that much
+        // more is rendered.
+        let mut live = Vec::new();
+        let mut render_more = |engine: &mut AudioEngine, frames: usize| {
+            let start = live.len();
+            live.resize(start + frames * 2, 0.0);
+            for chunk in live[start..].chunks_mut(block * 2) {
+                engine.process(chunk);
+            }
+        };
+        render_more(&mut scenario.engine, frames);
+        let latency = scenario.engine.system_latency() as usize;
+        render_more(&mut scenario.engine, latency);
+        let realtime = &live[latency * 2..];
+        assert!(
+            realtime.iter().any(|sample| sample.abs() > 1.0e-3),
+            "{name}: the scenario renders silence"
+        );
+        assert!(
+            exported.len() >= realtime.len(),
+            "{name}: the export has {} samples, real time {}",
+            exported.len(),
+            realtime.len()
+        );
+        let mismatched: Vec<usize> = realtime
+            .iter()
+            .zip(&exported)
+            .enumerate()
+            .filter(|(_, (live, file))| live.to_bits() != file.to_bits())
+            .map(|(index, _)| index)
+            .collect();
+        if let Some(&first) = mismatched.first() {
+            panic!(
+                "{name}: {} of {} samples differ; first at frame {} channel {}: real time {} \
+                 but export {}",
+                mismatched.len(),
+                realtime.len(),
+                first / 2,
+                first % 2,
+                realtime[first],
+                exported[first]
+            );
+        }
+    }
+
+    macro_rules! parity {
+        ($($name:ident),+ $(,)?) => {
+            $(
+                #[test]
+                fn $name() {
+                    check(stringify!($name), super::$name);
+                }
+            )+
+        };
+    }
+
+    parity!(
+        clip_static,
+        clip_resampled_loop,
+        clip_tempo_modes,
+        synth_chain,
+        routing_pdc,
+    );
+}

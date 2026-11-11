@@ -9,7 +9,7 @@ use std::{
         Arc,
         atomic::{AtomicBool, AtomicU64, Ordering},
     },
-    thread::ThreadId,
+    thread::{ThreadId, current},
     time::{Duration, Instant},
 };
 
@@ -32,8 +32,11 @@ use clack_host::{
         HostError as ClackError, HostExtensions, HostHandlers, MainThreadHandler, SharedHandler,
     },
     plugin::InitializingPluginHandle,
+    utils::ClapId,
 };
 
+#[cfg(target_os = "linux")]
+use clack_extensions::posix_fd::{FdFlags, HostPosixFd, HostPosixFdImpl};
 use karbeat_host_api::PendingWork;
 
 use crate::wrapper::in_audio_context;
@@ -63,7 +66,7 @@ impl HostHandlers for ClapHostHandlers {
             .register::<HostGui>()
             .register::<HostTimer>();
         #[cfg(target_os = "linux")]
-        builder.register::<clack_extensions::posix_fd::HostPosixFd>();
+        builder.register::<HostPosixFd>();
     }
 }
 
@@ -97,7 +100,7 @@ impl ClapHostSharedHandler {
     /// are recorded in `pending_work`, which the instance's exchange shares.
     pub fn new(label: &str, pending_work: Arc<PendingWork>) -> Self {
         Self {
-            owner: std::thread::current().id(),
+            owner: current().id(),
             label: label.to_owned(),
             callback_requested: AtomicBool::new(false),
             restart_requested: AtomicBool::new(false),
@@ -138,7 +141,7 @@ impl<'a> SharedHandler<'a> for ClapHostSharedHandler {
 
 impl HostThreadCheckImpl for ClapHostSharedHandler {
     fn is_main_thread(&self) -> bool {
-        std::thread::current().id() == self.owner
+        current().id() == self.owner
     }
 
     fn is_audio_thread(&self) -> bool {
@@ -218,7 +221,7 @@ pub(crate) struct ClapHostMainThreadHandler<'a> {
     timers: RefCell<Vec<Timer>>,
     next_timer: Cell<u32>,
     #[cfg(target_os = "linux")]
-    pub fds: RefCell<Vec<(i32, clack_extensions::posix_fd::FdFlags)>>,
+    pub fds: RefCell<Vec<(i32, FdFlags)>>,
 }
 
 impl<'a> ClapHostMainThreadHandler<'a> {
@@ -266,7 +269,7 @@ impl HostParamsImplMainThread for ClapHostMainThreadHandler<'_> {
         self.values_changed.set(true);
     }
 
-    fn clear(&self, _param_id: clack_host::utils::ClapId, _flags: ParamClearFlags) {
+    fn clear(&self, _param_id: ClapId, _flags: ParamClearFlags) {
         // The host keeps no automation or modulation of its own for external parameters.
     }
 }
@@ -344,12 +347,8 @@ impl HostTimerImpl for ClapHostMainThreadHandler<'_> {
 }
 
 #[cfg(target_os = "linux")]
-impl clack_extensions::posix_fd::HostPosixFdImpl for ClapHostMainThreadHandler<'_> {
-    fn register_fd(
-        &self,
-        fd: i32,
-        flags: clack_extensions::posix_fd::FdFlags,
-    ) -> Result<(), ClackError> {
+impl HostPosixFdImpl for ClapHostMainThreadHandler<'_> {
+    fn register_fd(&self, fd: i32, flags: FdFlags) -> Result<(), ClackError> {
         let mut fds = self
             .fds
             .try_borrow_mut()
@@ -363,11 +362,7 @@ impl clack_extensions::posix_fd::HostPosixFdImpl for ClapHostMainThreadHandler<'
         Ok(())
     }
 
-    fn modify_fd(
-        &self,
-        fd: i32,
-        flags: clack_extensions::posix_fd::FdFlags,
-    ) -> Result<(), ClackError> {
+    fn modify_fd(&self, fd: i32, flags: FdFlags) -> Result<(), ClackError> {
         let mut fds = self
             .fds
             .try_borrow_mut()

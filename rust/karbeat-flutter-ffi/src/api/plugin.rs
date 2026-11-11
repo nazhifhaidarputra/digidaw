@@ -1,6 +1,10 @@
 use crate::api::context::DawContext;
 use crate::api::plugins::PluginTelemetrySnapshotDto;
-use crate::api::{mixer::UiEffectInstance, project::UiGeneratorInstance};
+use crate::api::{
+    context::{project_ctx, read_ctx, runtime_ctx},
+    mixer::UiEffectInstance,
+    project::UiGeneratorInstance,
+};
 use flutter_rust_bridge::frb;
 use karbeat_audio::event::PluginTarget;
 use karbeat_core::core::project::TrackId;
@@ -8,7 +12,7 @@ use karbeat_core::plugin_types::ParameterValueType;
 use karbeat_core::shared::id::*;
 use karbeat_core_api::plugin_api::{self, IntoParamId};
 use karbeat_plugins::registry::PluginInfo;
-use karbeat_utils::parser::FromPluginCommand;
+use karbeat_utils::{hash::hash_str, parser::FromPluginCommand};
 pub use parking_lot::Mutex;
 
 // ============================================================================
@@ -63,7 +67,7 @@ impl UiParamId {
     pub fn resolve(self) -> u32 {
         match self {
             UiParamId::Id(id) => id,
-            UiParamId::Path(path) => karbeat_utils::hash::hash_str(&path),
+            UiParamId::Path(path) => hash_str(&path),
         }
     }
 }
@@ -72,7 +76,7 @@ impl IntoParamId for UiParamId {
     fn into_id(self) -> u32 {
         match self {
             UiParamId::Id(id) => id,
-            UiParamId::Path(path) => karbeat_utils::hash::hash_str(&path),
+            UiParamId::Path(path) => hash_str(&path),
         }
     }
 }
@@ -199,7 +203,7 @@ impl From<PluginInfo> for UiPluginInfo {
 
 /// Get all available generators with their registry IDs (preferred for UI)
 pub fn get_available_generators_with_ids(ctx: &DawContext) -> Result<Vec<UiPluginInfo>, String> {
-    crate::api::context::read_ctx!(ctx);
+    read_ctx!(ctx);
     Ok(plugin_api::get_available_generators(ctx, |plugin_info| {
         UiPluginInfo::from_info_to_synth(plugin_info)
     }))
@@ -207,14 +211,14 @@ pub fn get_available_generators_with_ids(ctx: &DawContext) -> Result<Vec<UiPlugi
 
 /// Get all available effects with their registry IDs (preferred for UI)
 pub fn get_available_effects_with_ids(ctx: &DawContext) -> Result<Vec<UiPluginInfo>, String> {
-    crate::api::context::read_ctx!(ctx);
+    read_ctx!(ctx);
     Ok(plugin_api::get_available_effects(ctx, |plugin_info| {
         UiPluginInfo::from_info_to_effect(plugin_info)
     }))
 }
 
 pub fn get_available_plugins_with_ids(ctx: &DawContext) -> Vec<UiPluginInfo> {
-    crate::api::context::read_ctx!(ctx);
+    read_ctx!(ctx);
     plugin_api::get_available_plugins::<UiPluginInfo, _>(ctx)
 }
 
@@ -224,7 +228,7 @@ pub fn rename_generator(
     generator_id: u64,
     display_name: Option<String>,
 ) -> Result<UiGeneratorInstance, String> {
-    crate::api::context::project_ctx!(ctx);
+    project_ctx!(ctx);
     let generator = plugin_api::rename_generator(
         ctx,
         GeneratorId::from_u64(generator_id),
@@ -235,7 +239,7 @@ pub fn rename_generator(
 }
 
 pub fn get_generator(ctx: &DawContext, generator_id: u64) -> Result<UiGeneratorInstance, String> {
-    crate::api::context::read_ctx!(ctx);
+    read_ctx!(ctx);
     let gen_id = GeneratorId::from_u64(generator_id);
     let gen_instance = plugin_api::get_generator(ctx, &gen_id, |g| UiGeneratorInstance::from(g))
         .ok_or_else(|| format!("Generator {} not found", generator_id))?;
@@ -247,7 +251,7 @@ pub fn get_effect(
     track_id: u64,
     effect_id: u64,
 ) -> Result<UiEffectInstance, String> {
-    crate::api::context::read_ctx!(ctx);
+    read_ctx!(ctx);
     let track_id = TrackId::from_u64(track_id);
     let effect_id = EffectId::from_u64(effect_id);
     plugin_api::get_effect(ctx, &track_id, &effect_id, |e| UiEffectInstance::from(e))
@@ -258,7 +262,7 @@ pub fn get_effect_from_master(
     ctx: &DawContext,
     effect_id: u64,
 ) -> Result<UiEffectInstance, String> {
-    crate::api::context::read_ctx!(ctx);
+    read_ctx!(ctx);
     let effect_id_typed = EffectId::from_u64(effect_id);
     plugin_api::get_effect_from_master(ctx, &effect_id_typed, |e| UiEffectInstance::from(e))
         .ok_or_else(|| format!("Effect {} not found", effect_id))
@@ -268,14 +272,14 @@ pub fn get_effects_from_track(
     ctx: &DawContext,
     track_id: u64,
 ) -> Result<Vec<UiEffectInstance>, String> {
-    crate::api::context::read_ctx!(ctx);
+    read_ctx!(ctx);
     let track_id = TrackId::from_u64(track_id);
     plugin_api::get_effects_from_track(ctx, &track_id, |e| UiEffectInstance::from(e))
         .ok_or_else(|| format!("Track {} not found", track_id))
 }
 
 pub fn get_master_effects(ctx: &DawContext) -> Vec<UiEffectInstance> {
-    crate::api::context::read_ctx!(ctx);
+    read_ctx!(ctx);
     plugin_api::get_master_effects(ctx, |e| UiEffectInstance::from(e))
 }
 
@@ -288,7 +292,7 @@ pub fn get_plugin_parameter_specs(
     ctx: &DawContext,
     target: UiPluginTarget,
 ) -> Result<Vec<UiPluginParameter>, String> {
-    crate::api::context::read_ctx!(ctx);
+    read_ctx!(ctx);
     let plugin_target = target.into();
 
     plugin_api::get_plugin_parameter_specs(ctx, &plugin_target, |p, value| UiPluginParameter {
@@ -312,7 +316,7 @@ pub fn get_automatable_plugin_parameter_specs(
     ctx: &DawContext,
     target: UiPluginTarget,
 ) -> Result<Vec<UiPluginParameter>, String> {
-    crate::api::context::read_ctx!(ctx);
+    read_ctx!(ctx);
     let plugin_target = target.into();
 
     plugin_api::get_automatable_plugin_parameter_specs(ctx, &plugin_target, |p, value| {
@@ -340,7 +344,7 @@ pub fn set_plugin_parameter(
     param_id: UiParamId,
     value: f32,
 ) -> Result<(), String> {
-    crate::api::context::project_ctx!(ctx);
+    project_ctx!(ctx);
     plugin_api::set_plugin_parameter(ctx, &target.into(), param_id.resolve(), value)
         .map_err(|e| e.to_string())
 }
@@ -351,7 +355,7 @@ pub fn begin_plugin_parameter_edit(
     target: UiPluginTarget,
     param_id: UiParamId,
 ) -> Result<(), String> {
-    crate::api::context::project_ctx!(ctx);
+    project_ctx!(ctx);
     plugin_api::begin_plugin_parameter_edit(ctx, &target.into(), param_id.resolve())
         .map_err(|e| e.to_string())
 }
@@ -362,7 +366,7 @@ pub fn end_plugin_parameter_edit(
     target: UiPluginTarget,
     param_id: UiParamId,
 ) -> Result<(), String> {
-    crate::api::context::project_ctx!(ctx);
+    project_ctx!(ctx);
     plugin_api::end_plugin_parameter_edit(ctx, &target.into(), param_id.resolve())
         .map_err(|e| e.to_string())
 }
@@ -394,7 +398,7 @@ pub fn execute_plugin_command_by_registry_id(
     command: String,
     payload_json: String,
 ) -> Option<String> {
-    crate::api::context::project_ctx!(ctx);
+    project_ctx!(ctx);
     let payload_value: serde_json::Value =
         serde_json::from_str(&payload_json).unwrap_or(serde_json::json!({}));
 
@@ -409,7 +413,7 @@ pub fn execute_plugin_instance_command(
     command: String,
     payload_json: String,
 ) -> Result<String, String> {
-    crate::api::context::read_ctx!(ctx);
+    read_ctx!(ctx);
     let payload_value: serde_json::Value =
         serde_json::from_str(&payload_json).unwrap_or(serde_json::json!({}));
 
@@ -425,7 +429,7 @@ pub fn execute_live_plugin_command(
     command: String,
     payload_json: String,
 ) -> Result<u32, String> {
-    crate::api::context::runtime_ctx!(ctx);
+    runtime_ctx!(ctx);
     let payload: serde_json::Value =
         serde_json::from_str(&payload_json).unwrap_or(serde_json::json!({}));
 
@@ -445,7 +449,7 @@ pub fn get_plugin_snapshot_telemetry_sync(
     ctx: &DawContext,
     target: UiPluginTarget,
 ) -> Option<PluginTelemetrySnapshotDto> {
-    crate::api::context::runtime_ctx!(ctx);
+    runtime_ctx!(ctx);
     plugin_api::get_plugin_telemetry_sync(ctx, target.into()).map(|t| t.into())
 }
 
@@ -456,7 +460,7 @@ pub fn set_plugin_telemetry_subs(
     buffers: Vec<String>,
     active: bool,
 ) -> Result<(), String> {
-    crate::api::context::runtime_ctx!(ctx);
+    runtime_ctx!(ctx);
     plugin_api::set_plugin_telemetry_subs(ctx, target.into(), buffers, active)
         .map_err(|e| e.to_string())
 }
@@ -464,12 +468,14 @@ pub fn set_plugin_telemetry_subs(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::sync::check_random;
+    use karbeat_audio::context::DawContext as CoreDawContext;
 
     #[test]
     fn generator_lookup_rejects_a_deleted_generator_id() {
-        crate::sync::check_random(
+        check_random(
             || {
-                let mut core = karbeat_audio::context::DawContext::new();
+                let mut core = CoreDawContext::new();
                 let removed = core.app_state.add_generator(Default::default());
                 core.app_state.remove_generator(removed);
                 let replacement = core.app_state.add_generator(Default::default());

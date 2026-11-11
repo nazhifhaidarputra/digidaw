@@ -1,4 +1,6 @@
 use std::{
+    collections::HashSet,
+    fs::{create_dir_all, read},
     path::PathBuf,
     sync::{
         Arc, LazyLock,
@@ -12,7 +14,9 @@ use karbeat_host::{
 };
 use parking_lot::Mutex;
 
+use futures_lite::future::block_on;
 use karbeat_audio::{context::DawContext, plugin_catalog::ExternalPluginEntry};
+use karbeat_core::core::file_manager::app_cache_dir;
 
 use crate::jobs::{self, JobClass, JobKind, JobSpec};
 
@@ -63,7 +67,7 @@ pub enum PluginScanEvent {
 }
 
 fn cache_path() -> Result<PathBuf, HostError> {
-    let base = karbeat_core::core::file_manager::app_cache_dir()
+    let base = app_cache_dir()
         .ok_or_else(|| HostError::Scanner("user cache directory is unavailable".into()))?;
     Ok(base.join("plugins/vst3-v1.json"))
 }
@@ -71,7 +75,7 @@ fn cache_path() -> Result<PathBuf, HostError> {
 /// Returns the platform's conventional search directories for every hosted plugin format.
 pub fn default_scan_paths() -> Vec<PathBuf> {
     karbeat_host::HostClient::global()
-        .and_then(|client| futures_lite::future::block_on(client.default_scan_paths_all()))
+        .and_then(|client| block_on(client.default_scan_paths_all()))
         .unwrap_or_default()
 }
 
@@ -81,8 +85,7 @@ pub fn scan_settings() -> Result<ScanSettings, HostError> {
     if !path.exists() {
         return Ok(ScanSettings::default());
     }
-    serde_json::from_slice(&std::fs::read(path)?)
-        .map_err(|error| HostError::Scanner(error.to_string()))
+    serde_json::from_slice(&read(path)?).map_err(|error| HostError::Scanner(error.to_string()))
 }
 
 fn save_scan_settings(settings: &ScanSettings) -> Result<(), HostError> {
@@ -90,7 +93,7 @@ fn save_scan_settings(settings: &ScanSettings) -> Result<(), HostError> {
     let parent = path
         .parent()
         .ok_or_else(|| HostError::Scanner("scan settings directory is unavailable".into()))?;
-    std::fs::create_dir_all(parent)?;
+    create_dir_all(parent)?;
     let temporary = tempfile::NamedTempFile::new_in(parent)?;
     serde_json::to_writer(temporary.as_file(), settings)
         .map_err(|error| HostError::Scanner(error.to_string()))?;
@@ -111,7 +114,7 @@ fn normalize_scan_settings(mut settings: ScanSettings) -> Result<ScanSettings, H
         return Err(HostError::InvalidConfiguration);
     }
 
-    let mut seen = std::collections::HashSet::new();
+    let mut seen = HashSet::new();
     settings
         .directories
         .retain(|directory| seen.insert(directory.clone()));
@@ -230,6 +233,11 @@ pub fn refresh_catalog(ctx: &mut DawContext) -> Result<Vec<ExternalPluginEntry>,
 )]
 mod tests {
     use super::*;
+    use std::{
+        sync::mpsc::sync_channel,
+        thread::yield_now,
+        time::{Duration, Instant},
+    };
 
     #[test]
     fn scan_settings_validate_and_deduplicate_directories() {
@@ -260,8 +268,8 @@ mod tests {
 
     #[test]
     fn only_one_scan_runs_and_cancellation_cannot_target_another_scan() {
-        let (started, started_rx) = std::sync::mpsc::sync_channel(1);
-        let (release, release_rx) = std::sync::mpsc::sync_channel(1);
+        let (started, started_rx) = sync_channel(1);
+        let (release, release_rx) = sync_channel(1);
         let id = start_scan(ScanSettings::default(), false, move |event| {
             if let PluginScanEvent::Started { id } = event {
                 started.send(id).unwrap();
@@ -278,10 +286,10 @@ mod tests {
         assert!(!cancel_scan(id + 1));
         assert!(cancel_scan(id));
         release.send(()).unwrap();
-        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+        let deadline = Instant::now() + Duration::from_secs(5);
         while ACTIVE_SCAN.lock().is_some() {
-            assert!(std::time::Instant::now() < deadline);
-            std::thread::yield_now();
+            assert!(Instant::now() < deadline);
+            yield_now();
         }
         assert!(!cancel_scan(id));
     }

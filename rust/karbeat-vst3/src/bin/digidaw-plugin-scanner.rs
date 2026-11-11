@@ -1,4 +1,11 @@
-use std::{fs::File, path::PathBuf, process::ExitCode};
+use std::{
+    env::args_os,
+    error::Error,
+    ffi::OsStr,
+    fs::File,
+    path::{Path, PathBuf},
+    process::ExitCode,
+};
 
 use karbeat_host_api::{
     HostError, PluginDescriptor, PluginFormat,
@@ -7,10 +14,7 @@ use karbeat_host_api::{
 use karbeat_vst3::module::Vst3Module;
 
 /// Loads one module of `format` in this disposable process and lists its plugin classes.
-fn probe(
-    format: PluginFormat,
-    module: &std::path::Path,
-) -> Result<Vec<PluginDescriptor>, HostError> {
+fn probe(format: PluginFormat, module: &Path) -> Result<Vec<PluginDescriptor>, HostError> {
     match format {
         PluginFormat::Vst3 => Vst3Module::load(module).and_then(|module| module.descriptors()),
         PluginFormat::Clap => karbeat_clap::probe_module(module),
@@ -20,15 +24,15 @@ fn probe(
     }
 }
 
-fn run() -> Result<(), Box<dyn std::error::Error>> {
+fn run() -> Result<(), Box<dyn Error>> {
     #[cfg(target_os = "windows")]
     let _com = karbeat_host_api::WindowsStaGuard::initialize()?;
-    let mut arguments = std::env::args_os().skip(1);
-    if arguments.next().as_deref() != Some(std::ffi::OsStr::new("--module")) {
+    let mut arguments = args_os().skip(1);
+    if arguments.next().as_deref() != Some(OsStr::new("--module")) {
         return Err("expected --module".into());
     }
     let module = PathBuf::from(arguments.next().ok_or("missing module")?);
-    if arguments.next().as_deref() != Some(std::ffi::OsStr::new("--result")) {
+    if arguments.next().as_deref() != Some(OsStr::new("--result")) {
         return Err("expected --result".into());
     }
     let result_path = PathBuf::from(arguments.next().ok_or("missing result path")?);

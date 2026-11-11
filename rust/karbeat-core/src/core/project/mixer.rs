@@ -9,11 +9,12 @@ use slotmap::{SecondaryMap, SlotMap};
 use thiserror::Error;
 
 use crate::{
-    core::project::{ApplicationState, AudioTrack, PluginInstance, TrackId},
+    core::project::{ApplicationState, AudioTrack, PluginInstance, TrackId, detach_unless},
     shared::{BusId, EffectId, GeneratorId, GraphNodeId},
 };
 
 use super::PluginTarget;
+use std::iter::once;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 /// Mixer channel addressed by UI mixer operations.
@@ -712,7 +713,7 @@ impl MixerState {
         if let Some(bus) = self.buses.detach(bus_id) {
             self.graph_nodes.detach(bus.graph_node_id);
         }
-        crate::core::project::detach_unless(&mut self.graph_nodes, |_, node| {
+        detach_unless(&mut self.graph_nodes, |_, node| {
             !matches!(
                 node,
                 RoutingNode::PluginSidechain(SidechainRoute::BusEffect(id, _))
@@ -938,7 +939,7 @@ impl MixerState {
             .keys()
             .map(RoutingNode::Track)
             .chain(self.buses.keys().map(RoutingNode::Bus))
-            .chain(std::iter::once(RoutingNode::Master));
+            .chain(once(RoutingNode::Master));
         for n in all_nodes {
             adj.entry(n).or_default();
         }
@@ -983,7 +984,7 @@ impl MixerState {
             .keys()
             .map(RoutingNode::Track)
             .chain(self.buses.keys().map(RoutingNode::Bus))
-            .chain(std::iter::once(RoutingNode::Master))
+            .chain(once(RoutingNode::Master))
             .collect();
 
         let mut in_degree: HashMap<RoutingNode, usize> = HashMap::new();
@@ -1091,7 +1092,7 @@ impl MixerState {
             !(is_source || is_effect_dest || is_generator_dest)
         });
 
-        crate::core::project::detach_unless(&mut self.graph_nodes, |_, node| {
+        detach_unless(&mut self.graph_nodes, |_, node| {
             let is_track = *node == RoutingNode::Track(track_id);
             let is_track_effect = matches!(
                 node,

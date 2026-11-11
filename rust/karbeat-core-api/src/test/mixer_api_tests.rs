@@ -16,16 +16,25 @@ mod tests {
     use karbeat_host::{PluginDescriptor, PluginFormat, PluginIdentity, PluginKind};
     use karbeat_utils::types::NormalizedF64;
 
-    use crate::test::helpers::{
-        make_ctx, make_seeded_ctx, param_eq_registry_id, sidechain_compressor_registry_id,
+    use crate::{
+        redo,
+        test::helpers::{
+            make_ctx, make_seeded_ctx, param_eq_registry_id, sidechain_compressor_registry_id,
+        },
+        undo,
     };
     use karbeat_core::core::project::mixer::{
         RoutingConnection, RoutingNode, RoutingTap, default_bus_color,
     };
     use karbeat_core::shared::id::{AutomationId, BusId, EffectId, TrackId};
+    use std::{
+        fs::{read, read_dir, write},
+        iter::from_fn,
+        path::Path,
+    };
 
-    fn saved_template(path: &std::path::Path) -> ChannelTemplate {
-        serde_json::from_slice(&std::fs::read(path).unwrap()).unwrap()
+    fn saved_template(path: &Path) -> ChannelTemplate {
+        serde_json::from_slice(&read(path).unwrap()).unwrap()
     }
 
     #[test]
@@ -118,12 +127,12 @@ mod tests {
             )
             .is_err()
         );
-        assert_eq!(std::fs::read_dir(directory.path()).unwrap().count(), 0);
+        assert_eq!(read_dir(directory.path()).unwrap().count(), 0);
     }
 
     /// Writes a template of a renamed, bypassed EQ with saved state, a missing external plugin,
     /// a plugin this build does not have, and a compressor.
-    fn write_mixed_template(path: &std::path::Path) -> Vec<u8> {
+    fn write_mixed_template(path: &Path) -> Vec<u8> {
         let state = vec![1, 2, 3];
         let mut eq = PluginInstance::new_with_id(param_eq_registry_id(), "EQ");
         eq.plugin_state = state.clone();
@@ -211,10 +220,10 @@ mod tests {
         assert_eq!(ctx.app_state.mixer.master_bus.effects.to_vec().len(), 2);
         assert!(!ctx.app_state.session.is_saved());
 
-        crate::undo(&mut ctx).unwrap();
+        undo(&mut ctx).unwrap();
         assert!(ctx.app_state.mixer.master_bus.effects.is_empty());
 
-        crate::redo(&mut ctx).unwrap();
+        redo(&mut ctx).unwrap();
         let effects = ctx.app_state.mixer.master_bus.effects.to_vec();
         assert_eq!(effects.len(), 2);
         assert_eq!(effects[0].instance.plugin_state, state);
@@ -271,7 +280,7 @@ mod tests {
             .is_err()
         );
         let garbage = directory.path().join("garbage.effch");
-        std::fs::write(&garbage, b"not json").unwrap();
+        write(&garbage, b"not json").unwrap();
         for bad in [garbage, directory.path().join("absent.effch")] {
             assert!(
                 mixer_api::load_channel_template(
@@ -780,7 +789,7 @@ mod tests {
 
         mixer_api::remove_effect_from_mixer_channel(&mut ctx, audio_id, effect_id).unwrap();
 
-        let removals = std::iter::from_fn(|| consumer.pop().ok())
+        let removals = from_fn(|| consumer.pop().ok())
             .filter(|command| !matches!(command, AudioCommand::QueryPluginState { .. }))
             .collect::<Vec<_>>();
         assert!(matches!(

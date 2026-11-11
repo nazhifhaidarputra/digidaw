@@ -4,6 +4,7 @@ use crate::{
     core::project::{ApplicationState, plugin::instance::PluginInstance},
     shared::id::GeneratorId,
 };
+use std::mem::replace;
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Default)]
 #[serde(default)]
@@ -88,7 +89,7 @@ impl ApplicationState {
         let GeneratorInstanceType::Plugin(plugin) = &mut generator.instance_type else {
             return None;
         };
-        std::mem::replace(&mut plugin.display_name, display_name)
+        replace(&mut plugin.display_name, display_name)
     }
 
     /// Deletes a generator source and removes all clips referencing it.

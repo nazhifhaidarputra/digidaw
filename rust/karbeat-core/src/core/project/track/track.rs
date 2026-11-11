@@ -7,7 +7,7 @@ use slotmap::SlotMap;
 use crate::{
     core::project::{
         ApplicationState, Clip, DawSource, GeneratorInstance, GeneratorInstanceType,
-        PluginInstance, TrackMixerChannel,
+        PluginInstance, RoutingNode, TrackMixerChannel,
     },
     shared::{
         GeneratorId, GraphNodeId,
@@ -15,6 +15,7 @@ use crate::{
     },
 };
 use karbeat_utils::color::Color;
+use std::str::FromStr;
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 #[serde(default)]
@@ -96,7 +97,7 @@ pub enum TrackType {
 /// Track category returned after a track is removed.
 pub type RemovedTrackType = TrackType;
 
-impl std::str::FromStr for TrackType {
+impl FromStr for TrackType {
     type Err = String;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
@@ -316,10 +317,7 @@ impl ApplicationState {
             },
         );
         self.mixer.add_track_default_routing(new_track_id);
-        if let Some(node_id) = self
-            .mixer
-            .graph_node_id(crate::core::project::RoutingNode::Track(new_track_id))
-        {
+        if let Some(node_id) = self.mixer.graph_node_id(RoutingNode::Track(new_track_id)) {
             self.tracks[new_track_id].graph_node_id = node_id;
             self.mixer.channels[new_track_id].graph_node_id = node_id;
         }
@@ -377,10 +375,7 @@ impl ApplicationState {
             },
         );
         self.mixer.add_track_default_routing(track_id);
-        if let Some(node_id) = self
-            .mixer
-            .graph_node_id(crate::core::project::RoutingNode::Track(track_id))
-        {
+        if let Some(node_id) = self.mixer.graph_node_id(RoutingNode::Track(track_id)) {
             self.tracks[track_id].graph_node_id = node_id;
             self.mixer.channels[track_id].graph_node_id = node_id;
         }

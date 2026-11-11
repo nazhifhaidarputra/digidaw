@@ -3,6 +3,7 @@ use karbeat_audio::context::DawContext;
 use karbeat_audio::engine::PlaybackMode;
 use karbeat_core::core::history::actions::TempoChanged;
 use karbeat_core::shared::{GeneratorId, PatternId};
+use std::mem::replace;
 
 /// Set is playing for song mode
 pub fn set_playing(ctx: &mut DawContext, val: bool) -> anyhow::Result<()> {
@@ -32,7 +33,7 @@ pub fn set_looping(ctx: &mut DawContext, val: bool) {
 pub fn set_bpm(ctx: &mut DawContext, val: f32) -> anyhow::Result<bool> {
     anyhow::ensure!(val.is_finite(), "Tempo must be a finite number");
     let durations = ctx.app_state.source_duration_scales();
-    let previous = std::mem::replace(&mut ctx.app_state.transport.bpm, val);
+    let previous = replace(&mut ctx.app_state.transport.bpm, val);
     let clips = ctx.app_state.follow_source_durations(&durations);
     let rescaled = !clips.is_empty();
     ctx.push_history(TempoChanged::new(previous).with_clips(clips));

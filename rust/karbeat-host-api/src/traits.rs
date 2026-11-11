@@ -3,9 +3,9 @@ use std::path::PathBuf;
 use karbeat_plugin_api::prelude::ParameterSpec;
 
 use crate::{
-    HostCapabilities, HostError, HostEvent, HostInstanceId, NativeParentHandle,
+    HostCapabilities, HostError, HostEvent, HostInstanceId, HostedProcessor, NativeParentHandle,
     NativeSurfacePreference, NativeWindowConstraints, NativeWindowSize, PluginDescriptor,
-    PluginFormat, PluginState, ProcessingConfig,
+    PluginFormat, PluginIdentity, PluginState, ProcessingConfig,
 };
 
 /// Discovers the native format and conventional search roots supported by a backend.
@@ -21,18 +21,18 @@ pub trait HostStateCapture: Send + Sync {
     /// Captures fresh state for `instance`, verifying it belongs to `identity` when required.
     fn capture_state(
         &self,
-        identity: &crate::PluginIdentity,
+        identity: &PluginIdentity,
         instance: HostInstanceId,
     ) -> Result<PluginState, HostError>;
 }
 
 impl<F> HostStateCapture for F
 where
-    F: Fn(&crate::PluginIdentity, HostInstanceId) -> Result<PluginState, HostError> + Send + Sync,
+    F: Fn(&PluginIdentity, HostInstanceId) -> Result<PluginState, HostError> + Send + Sync,
 {
     fn capture_state(
         &self,
-        identity: &crate::PluginIdentity,
+        identity: &PluginIdentity,
         instance: HostInstanceId,
     ) -> Result<PluginState, HostError> {
         self(identity, instance)
@@ -55,7 +55,7 @@ pub trait PluginInstanceManager {
     fn take_processor(
         &mut self,
         instance: HostInstanceId,
-    ) -> Result<Box<crate::HostedProcessor>, HostError>;
+    ) -> Result<Box<HostedProcessor>, HostError>;
     /// Requests nonblocking suspension and succeeds only after DSP ownership is released.
     fn suspend(&mut self, instance: HostInstanceId) -> Result<(), HostError>;
     /// Publishes prepared control-side changes and allows audio processing to resume.

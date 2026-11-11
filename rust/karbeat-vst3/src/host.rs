@@ -1,19 +1,31 @@
 //! The VST3 implementation of DigiDAW's universal native host contracts.
 
 use crate::{
+    api::string128_to_string,
     context::Vst3HostContext,
     editor::Vst3Editor,
     instance::{Vst3Instance, Vst3PrepareJob, check, check_optional},
     module::{self, Vst3Module},
     wrapper::Vst3Processor,
 };
+use karbeat_host_api::bypass::BypassDelay;
 use karbeat_host_api::*;
 use karbeat_plugin_api::prelude::ParameterSpec;
-use std::{collections::HashMap, path::PathBuf, rc::Rc, sync::atomic::Ordering, thread::ThreadId};
+use std::{
+    collections::HashMap,
+    fs::canonicalize,
+    mem::{forget, zeroed},
+    path::PathBuf,
+    rc::Rc,
+    sync::{Arc, atomic::Ordering},
+    thread::{ThreadId, current},
+};
 use vst3::{
     ComWrapper,
     Steinberg::{
-        FUnknown, IPluginFactory3, IPluginFactory3Trait, Vst::IEditControllerTrait, kNotImplemented,
+        FUnknown, IPluginFactory3, IPluginFactory3Trait,
+        Vst::{BusInfo, IComponentTrait, IEditControllerTrait},
+        kNotImplemented,
     },
 };
 
@@ -37,14 +49,14 @@ impl Vst3PluginHost {
     /// Must be constructed on the native UI thread, which owns the host for its entire lifetime.
     pub fn new() -> Self {
         Self {
-            owner: std::thread::current().id(),
+            owner: current().id(),
             context: ComWrapper::new(Vst3HostContext::default()),
             instances: HashMap::new(),
             modules: HashMap::new(),
         }
     }
     fn check_thread(&self) -> Result<(), HostError> {
-        if self.owner == std::thread::current().id() {
+        if self.owner == current().id() {
             Ok(())
         } else {
             Err(HostError::WrongThread)
@@ -181,7 +193,7 @@ impl PluginInstanceManager for Vst3PluginHost {
         if descriptor.identity.format != PluginFormat::Vst3 {
             return Err(HostError::Unsupported("plugin format"));
         }
-        let path = std::fs::canonicalize(&descriptor.path)?;
+        let path = canonicalize(&descriptor.path)?;
         let module = if let Some(module) = self.modules.get(&path) {
             module.clone()
         } else {
@@ -232,12 +244,11 @@ impl PluginInstanceManager for Vst3PluginHost {
         let instance = self.instance(id)?;
         let mut sidechain = false;
         if let Some(component) = &instance.component {
-            use vst3::Steinberg::Vst::{BusInfo, IComponentTrait};
             // SAFETY: Bus metadata is queried on the component's owning UI thread.
             let count = unsafe { component.getBusCount(0, 0) }.clamp(0, 64);
             for index in 0..count {
                 // SAFETY: BusInfo is a plain ABI record with valid zero values.
-                let mut info: BusInfo = unsafe { std::mem::zeroed() };
+                let mut info: BusInfo = unsafe { zeroed() };
                 // SAFETY: index is within the component's reported bus count.
                 if unsafe { component.getBusInfo(0, 0, index, &raw mut info) } == 0
                     && info.busType == 1
@@ -262,7 +273,7 @@ impl PluginInstanceManager for Vst3PluginHost {
         if instance.endpoint_taken {
             return Err(HostError::InvalidTransition);
         }
-        let bypass_delay = karbeat_host_api::bypass::BypassDelay::new(
+        let bypass_delay = BypassDelay::new(
             2,
             usize::try_from(slot.latency.load(Ordering::Acquire))
                 .map_err(|_| HostError::InvalidConfiguration)?,
@@ -300,7 +311,7 @@ impl PluginInstanceManager for Vst3PluginHost {
         if instance
             .slot
             .as_ref()
-            .is_some_and(|s| std::sync::Arc::strong_count(s) != 1)
+            .is_some_and(|s| Arc::strong_count(s) != 1)
         {
             return Err(HostError::Busy);
         }
@@ -381,7 +392,7 @@ impl PluginController for Vst3PluginHost {
         check("controller.getParamStringByValue", unsafe {
             controller.getParamStringByValue(parameter, value, &raw mut text)
         })?;
-        Ok(crate::api::string128_to_string(&text))
+        Ok(string128_to_string(&text))
     }
     fn parse_parameter(
         &self,
@@ -540,13 +551,13 @@ impl Drop for Vst3PluginHost {
             if instance
                 .slot
                 .as_ref()
-                .is_some_and(|s| std::sync::Arc::strong_count(s) != 1)
+                .is_some_and(|s| Arc::strong_count(s) != 1)
             {
                 // Losing the UI owner before endpoint retirement cannot safely unload native code.
                 tracing::error!(
                     "VST3 host dropped before audio endpoint retirement; retaining module for process lifetime"
                 );
-                std::mem::forget(instance);
+                forget(instance);
             }
         }
         self.context.run_loop.clear();

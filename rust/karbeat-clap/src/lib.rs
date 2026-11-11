@@ -67,6 +67,7 @@ mod stub;
 pub use backend::ClapPluginHost;
 #[cfg(any(target_os = "linux", target_os = "windows"))]
 pub use executor::ClapExecutor;
+use std::path::Path;
 #[cfg(not(any(target_os = "linux", target_os = "windows")))]
 pub use stub::ClapExecutor;
 #[cfg(any(target_os = "linux", target_os = "windows"))]
@@ -80,7 +81,7 @@ pub use wrapper::ClapProcessor;
 ///
 /// Returns an error when the module cannot be loaded or its entry provides no plugin factory.
 pub fn probe_module(
-    path: &std::path::Path,
+    path: &Path,
 ) -> Result<Vec<karbeat_host_api::PluginDescriptor>, karbeat_host_api::HostError> {
     #[cfg(any(target_os = "linux", target_os = "windows"))]
     return module::ClapModule::load(path).and_then(|module| module.descriptors());

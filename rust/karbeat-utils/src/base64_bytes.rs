@@ -71,13 +71,14 @@ impl<'de> de::Visitor<'de> for BytesVisitor {
 pub mod option {
     use std::fmt;
 
+    use super::{deserialize as base64_bytes_deserialize, serialize as base64_bytes_serialize};
     use serde::{Deserializer, Serialize, Serializer, de};
 
     struct Blob<'a>(&'a [u8]);
 
     impl Serialize for Blob<'_> {
         fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-            super::serialize(self.0, serializer)
+            base64_bytes_serialize(self.0, serializer)
         }
     }
 
@@ -120,7 +121,7 @@ pub mod option {
             self,
             deserializer: D,
         ) -> Result<Self::Value, D::Error> {
-            super::deserialize(deserializer).map(Some)
+            base64_bytes_deserialize(deserializer).map(Some)
         }
     }
 }

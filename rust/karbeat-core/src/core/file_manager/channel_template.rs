@@ -3,7 +3,7 @@
 //! A template holds each plugin's identity and state, and nothing tied to the project it came
 //! from: no effect IDs, routing, sidechain sends, automation, or fader values.
 
-use std::{io::Write, path::Path};
+use std::{fs::read, io::Write, path::Path};
 
 use anyhow::Context;
 use serde::{Deserialize, Serialize};
@@ -71,8 +71,7 @@ pub fn load_channel_template(path: &Path) -> anyhow::Result<ChannelTemplate> {
     }
 
     ensure_channel_template_path(path)?;
-    let bytes =
-        std::fs::read(path).with_context(|| format!("Failed to open {}", path.display()))?;
+    let bytes = read(path).with_context(|| format!("Failed to open {}", path.display()))?;
     let header: Header =
         serde_json::from_slice(&bytes).context("This file is not a channel template")?;
     anyhow::ensure!(
@@ -109,6 +108,7 @@ pub fn save_channel_template(path: &Path, template: &ChannelTemplate) -> anyhow:
 mod tests {
     use super::*;
     use karbeat_plugin_types::ParameterSpec;
+    use std::fs::{read_dir, write};
 
     fn template() -> ChannelTemplate {
         let mut eq = PluginInstance::new_with_id(7, "EQ");
@@ -126,8 +126,7 @@ mod tests {
         let template = template();
         save_channel_template(&path, &template).unwrap();
 
-        let document: serde_json::Value =
-            serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
+        let document: serde_json::Value = serde_json::from_slice(&read(&path).unwrap()).unwrap();
         assert_eq!(document["version"], CHANNEL_TEMPLATE_VERSION);
         assert_eq!(load_channel_template(&path).unwrap(), template);
     }
@@ -137,12 +136,12 @@ mod tests {
         let directory = tempfile::tempdir().unwrap();
 
         let future = directory.path().join("future.effch");
-        std::fs::write(&future, br#"{"version":99,"chain":{}}"#).unwrap();
+        write(&future, br#"{"version":99,"chain":{}}"#).unwrap();
         let error = load_channel_template(&future).unwrap_err();
         assert!(error.to_string().contains("format version 99"), "{error}");
 
         let garbage = directory.path().join("garbage.effch");
-        std::fs::write(&garbage, b"not json").unwrap();
+        write(&garbage, b"not json").unwrap();
         let error = load_channel_template(&garbage).unwrap_err();
         assert!(
             error.to_string().contains("not a channel template"),
@@ -150,7 +149,7 @@ mod tests {
         );
 
         let wrong_extension = directory.path().join("chain.json");
-        std::fs::write(&wrong_extension, br#"{"version":1,"effects":[]}"#).unwrap();
+        write(&wrong_extension, br#"{"version":1,"effects":[]}"#).unwrap();
         assert!(load_channel_template(&wrong_extension).is_err());
     }
 
@@ -158,7 +157,7 @@ mod tests {
     fn non_finite_values_fail_the_save_and_keep_the_previous_file() {
         let directory = tempfile::tempdir().unwrap();
         let path = directory.path().join("keep.effch");
-        std::fs::write(&path, b"previous template").unwrap();
+        write(&path, b"previous template").unwrap();
 
         let mut broken = template();
         broken.effects[0].parameter_specs = vec![ParameterSpec::new_float(
@@ -173,7 +172,7 @@ mod tests {
         )];
         let error = save_channel_template(&path, &broken).unwrap_err();
         assert!(error.to_string().contains("not finite"), "{error}");
-        assert_eq!(std::fs::read(&path).unwrap(), b"previous template");
-        assert_eq!(std::fs::read_dir(directory.path()).unwrap().count(), 1);
+        assert_eq!(read(&path).unwrap(), b"previous template");
+        assert_eq!(read_dir(directory.path()).unwrap().count(), 1);
     }
 }

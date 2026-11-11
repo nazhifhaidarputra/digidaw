@@ -4,9 +4,14 @@ use karbeat_host_api::{
     ParseParameterRequest, PluginController, PluginFormat, PluginFormatExecutor,
     PluginInstanceManager, PluginState, PrepareRequest, PreparedExternalPlugin, ReconfigureRequest,
     ScanRequest, SetParameterRequest,
+    scanner::{
+        ModuleScanner, ScanCache, ScanResult, ScanSettings, helper_probe, scan, scanner_executable,
+    },
 };
+use tokio::sync::oneshot::channel;
 
-use crate::native;
+use crate::{module::default_scan_paths, native};
+use std::{path::PathBuf, thread::Builder};
 
 /// Statically dispatched VST3 executor backed by the native UI owner.
 #[derive(Clone, Copy, Debug, Default)]
@@ -38,25 +43,23 @@ impl Vst3Executor {
     }
 
     /// Runs one blocking scan, including cache load and save.
-    fn scan_blocking(
-        request: ScanRequest,
-    ) -> Result<karbeat_host_api::scanner::ScanResult, HostError> {
-        let settings = karbeat_host_api::scanner::ScanSettings {
+    fn scan_blocking(request: ScanRequest) -> Result<ScanResult, HostError> {
+        let settings = ScanSettings {
             directories: request.directories,
             timeout_seconds: request.timeout_seconds,
         };
-        let helper = karbeat_host_api::scanner::scanner_executable()?;
+        let helper = scanner_executable()?;
         let mut cache = if let Some(path) = &request.cache_path {
-            karbeat_host_api::scanner::ScanCache::load(path)?
+            ScanCache::load(path)?
         } else {
-            karbeat_host_api::scanner::ScanCache::default()
+            ScanCache::default()
         };
         let progress = request.progress;
-        let result = karbeat_host_api::scanner::scan(
-            &karbeat_host_api::scanner::ModuleScanner {
+        let result = scan(
+            &ModuleScanner {
                 format: PluginFormat::Vst3,
                 extension: "vst3",
-                probe: &karbeat_host_api::scanner::helper_probe(&helper, PluginFormat::Vst3),
+                probe: &helper_probe(&helper, PluginFormat::Vst3),
             },
             &settings,
             &mut cache,
@@ -80,19 +83,16 @@ impl PluginFormatExecutor for Vst3Executor {
         PluginFormat::Vst3
     }
 
-    fn default_scan_paths(&self) -> Vec<std::path::PathBuf> {
-        crate::module::default_scan_paths()
+    fn default_scan_paths(&self) -> Vec<PathBuf> {
+        default_scan_paths()
     }
 
-    async fn scan(
-        &self,
-        mut request: ScanRequest,
-    ) -> Result<karbeat_host_api::scanner::ScanResult, HostError> {
+    async fn scan(&self, mut request: ScanRequest) -> Result<ScanResult, HostError> {
         request.directories.extend(self.default_scan_paths());
         // The scanner waits on helper processes. Running it on its own thread keeps this
         // executor serving prepare, parameter and editor requests during a scan.
-        let (reply, result) = tokio::sync::oneshot::channel();
-        std::thread::Builder::new()
+        let (reply, result) = channel();
+        Builder::new()
             .name("vst3-scan".into())
             .spawn(move || drop(reply.send(Self::scan_blocking(request))))?;
         result

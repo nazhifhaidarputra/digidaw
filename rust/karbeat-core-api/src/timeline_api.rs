@@ -3,6 +3,7 @@ use karbeat_core::core::history::actions::{CueMarkersChanged, LoopRegionChanged}
 use karbeat_core::core::project::{CueMarker, LoopRegion};
 use karbeat_core::shared::id::CueMarkerId;
 use karbeat_utils::color::Color;
+use std::mem::replace;
 
 /// Sets the song loop region, or clears it with `None`, and queues it to the audio thread.
 ///
@@ -14,7 +15,7 @@ pub fn set_loop_region(ctx: &mut DawContext, region: Option<(u64, u64)>) -> anyh
     if ctx.app_state.timeline.loop_region == region {
         return Ok(());
     }
-    let previous = std::mem::replace(&mut ctx.app_state.timeline.loop_region, region);
+    let previous = replace(&mut ctx.app_state.timeline.loop_region, region);
     ctx.push_history(LoopRegionChanged::new(previous));
     ctx.broadcast_loop_region();
     Ok(())

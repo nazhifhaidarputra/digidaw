@@ -545,7 +545,7 @@ impl AudioPlugin for DigiWavetableSynth {
         "DigiWavetableSynth"
     }
 
-    fn category(&self) -> karbeat_plugin_api::prelude::PluginCategory {
+    fn category(&self) -> PluginCategory {
         PluginCategory::Instrument
     }
 
@@ -553,18 +553,9 @@ impl AudioPlugin for DigiWavetableSynth {
 
     fn reset(&mut self) {}
 
-    fn set_io_layout(
-        &mut self,
-        _inputs: &[karbeat_plugin_api::prelude::BusConfig],
-        outputs: &[BusConfig],
-    ) {
+    fn set_io_layout(&mut self, _inputs: &[BusConfig], outputs: &[BusConfig]) {
         let _new_channels = outputs.first().map(|b| b.channel_count).unwrap_or(2);
     }
 
-    fn process(
-        &mut self,
-        _buffers: &mut karbeat_plugin_api::prelude::AudioBuffers,
-        _context: &ProcessContext,
-    ) {
-    }
+    fn process(&mut self, _buffers: &mut AudioBuffers, _context: &ProcessContext) {}
 }

@@ -9,6 +9,7 @@ use karbeat_core::{
     core::project::{AutomationTarget, ModulationLink, ModulationSource},
     shared::{AutomationId, ModulationId, constants::f64::PPQ},
 };
+use std::f32::consts::TAU;
 
 #[derive(Clone)]
 pub struct LiveLfo {
@@ -19,12 +20,8 @@ pub struct LiveLfo {
 #[derive(Clone)]
 pub enum LiveModulationSource {
     LFO(LiveLfo),
-    Automation {
-        lane_id: karbeat_core::shared::AutomationId,
-    },
-    PeakController {
-        source: PluginTarget,
-    },
+    Automation { lane_id: AutomationId },
+    PeakController { source: PluginTarget },
 }
 
 impl LiveModulationSource {
@@ -108,7 +105,7 @@ impl ModulationState {
                 LiveModulationSource::LFO(lfo) => {
                     let phase_increment = lfo.rate_hz * buffer_size as f32 / sample_rate;
                     lfo.phase = (lfo.phase + phase_increment).fract();
-                    *output = (lfo.phase * std::f32::consts::TAU).sin();
+                    *output = (lfo.phase * TAU).sin();
                 }
                 LiveModulationSource::Automation { lane_id } => {
                     if let Some(lane) = automation_lanes.get(lane_id) {

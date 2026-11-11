@@ -1,5 +1,6 @@
-use std::{fs::File, io::Write, mem::MaybeUninit, slice};
+use std::{fmt::Debug, fs::File, io::Write, mem::MaybeUninit, slice};
 
+use super::BitPerSecond;
 use crate::writer::{
     AudioFileFormat, AudioWriteError, AudioWriter, BitDepth, metadata::AudioMetadata,
 };
@@ -28,11 +29,11 @@ impl TryFrom<BitDepth> for mp3lame_encoder::Bitrate {
             }
             BitDepth::BitPerSecond(bit_per_second) => {
                 let lame_encoder = match bit_per_second {
-                    super::BitPerSecond::Kbps128 => mp3lame_encoder::Bitrate::Kbps128,
-                    super::BitPerSecond::Kbps160 => mp3lame_encoder::Bitrate::Kbps160,
-                    super::BitPerSecond::Kbps192 => mp3lame_encoder::Bitrate::Kbps192,
-                    super::BitPerSecond::Kbps256 => mp3lame_encoder::Bitrate::Kbps256,
-                    super::BitPerSecond::Kbps320 => mp3lame_encoder::Bitrate::Kbps320,
+                    BitPerSecond::Kbps128 => mp3lame_encoder::Bitrate::Kbps128,
+                    BitPerSecond::Kbps160 => mp3lame_encoder::Bitrate::Kbps160,
+                    BitPerSecond::Kbps192 => mp3lame_encoder::Bitrate::Kbps192,
+                    BitPerSecond::Kbps256 => mp3lame_encoder::Bitrate::Kbps256,
+                    BitPerSecond::Kbps320 => mp3lame_encoder::Bitrate::Kbps320,
                 };
 
                 Ok(lame_encoder)
@@ -181,6 +182,6 @@ impl AudioWriter for Mp3AudioWriter {
 }
 
 /// LAME errors only implement `std::error::Error` behind the crate's `std` feature
-fn mp3_error(error: impl std::fmt::Debug) -> AudioWriteError {
+fn mp3_error(error: impl Debug) -> AudioWriteError {
     AudioWriteError::encoder(AudioFileFormat::Mp3, format!("{error:?}"))
 }
