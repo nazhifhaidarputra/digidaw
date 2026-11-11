@@ -73,38 +73,6 @@ abstract class ShortcutChord with _$ShortcutChord {
     meta: meta,
     includeRepeats: false,
   );
-
-  Map<String, Object> toStorageJson() => {
-    'key': logicalKeyId,
-    'control': control,
-    'shift': shift,
-    'alt': alt,
-    'meta': meta,
-  };
-
-  static ShortcutChord? tryFromStorageJson(Object? value) {
-    if (value is! Map<String, dynamic>) return null;
-    final key = value['key'];
-    final control = value['control'];
-    final shift = value['shift'];
-    final alt = value['alt'];
-    final meta = value['meta'];
-    if (key is! int ||
-        control is! bool ||
-        shift is! bool ||
-        alt is! bool ||
-        meta is! bool) {
-      return null;
-    }
-    final chord = ShortcutChord(
-      logicalKeyId: key,
-      control: control,
-      shift: shift,
-      alt: alt,
-      meta: meta,
-    );
-    return chord.isSupported ? chord : null;
-  }
 }
 
 @freezed

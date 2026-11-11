@@ -1,4 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:karbeat/features/setting/models/general_settings_state.dart';
+import 'package:karbeat/features/setting/services/general_settings_provider.dart';
 import 'package:karbeat/shared/models/export_audio.dart';
 import 'package:karbeat/src/rust/api/project.dart';
 import 'package:freezed_annotation/freezed_annotation.dart';
@@ -81,3 +83,14 @@ class ExportProjectNotifier extends Notifier<ExportProjectStateData> {
 final exportProjectProvider = NotifierProvider<ExportProjectNotifier, ExportProjectStateData>(
   ExportProjectNotifier.new,
 );
+
+/// Folder exports go to: the one picked in the export panel, otherwise the
+/// default export folder from the General settings.
+final exportDirectoryProvider = Provider<String?>((ref) {
+  return ref.watch(exportProjectProvider.select((s) => s.exportDirectory)) ??
+      ref.watch(
+        generalSettingsProvider.select(
+          (s) => s.usableFolder(DefaultFolder.export),
+        ),
+      );
+});

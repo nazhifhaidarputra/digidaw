@@ -1,3 +1,4 @@
+import 'package:fast_immutable_collections/fast_immutable_collections.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:karbeat/app/providers/notification_provider.dart';
 import 'package:karbeat/core/utils/result_type.dart';
@@ -5,6 +6,7 @@ import 'package:karbeat/features/setting/models/general_settings_state.dart';
 import 'package:karbeat/features/setting/services/settings_service.dart';
 import 'package:karbeat/src/rust/api/mitigation.dart';
 import 'package:karbeat/src/rust/api/project.dart';
+import 'package:karbeat/src/rust/api/settings.dart';
 
 final settingsServiceProvider = Provider<SettingsService>((ref) {
   return SettingsService();
@@ -24,6 +26,10 @@ class GeneralSettingsNotifier extends Notifier<GeneralSettingsState> {
     state = state.copyWith(isApplyingHistoryLimit: true);
 
     final service = ref.read(settingsServiceProvider);
+    final general = await service.loadGeneralSettings();
+    if (general case Ok(value: final general)) {
+      await _publishStored(general);
+    }
     final loaded = await service.loadHistoryLimit();
     if (loaded case Error<int>(error: final error)) {
       _initializationStarted = false;
@@ -173,6 +179,86 @@ class GeneralSettingsNotifier extends Notifier<GeneralSettingsState> {
       );
     }
     return Result.ok(null);
+  }
+
+  /// Asks for [kind]'s folder and saves it; cancelling keeps the current one.
+  Future<Result<void>> chooseDefaultFolder(DefaultFolder kind) async {
+    final service = ref.read(settingsServiceProvider);
+    final picked = await service.pickFolder(
+      dialogTitle: switch (kind) {
+        DefaultFolder.project => 'Choose default project folder',
+        DefaultFolder.export => 'Choose default export folder',
+      },
+      initialDirectory: state.usableFolder(kind),
+    );
+    if (picked case Error<String?>(error: final error)) {
+      return ref.notifyErrorResult(error, title: 'Could not choose a folder');
+    }
+    final folder = picked.ok();
+    if (folder == null) return Result.ok(null);
+    return setDefaultFolder(kind, folder);
+  }
+
+  /// Saves [folder] as [kind]'s folder; null clears it.
+  Future<Result<void>> setDefaultFolder(
+    DefaultFolder kind,
+    String? folder,
+  ) async {
+    if (state.isSavingFolder) {
+      return Result.error(Exception('A folder is already being saved'));
+    }
+    state = state.copyWith(isSavingFolder: true);
+    final service = ref.read(settingsServiceProvider);
+    final saved = await switch (kind) {
+      DefaultFolder.project => service.saveDefaultProjectFolder(folder),
+      DefaultFolder.export => service.saveDefaultExportFolder(folder),
+    };
+    state = state.copyWith(isSavingFolder: false);
+    switch (saved) {
+      case Ok(value: final settings):
+        await _publishStored(settings);
+        return Result.ok(null);
+      case Error(:final error):
+        return ref.notifyErrorResult(error, title: 'Could not save the folder');
+    }
+  }
+
+  /// Shows or hides the recent projects in the project menu.
+  Future<Result<void>> setShowRecentProjects(bool visible) async {
+    final previous = state.showRecentProjects;
+    state = state.copyWith(showRecentProjects: visible);
+    final saved = await ref
+        .read(settingsServiceProvider)
+        .saveShowRecentProjects(visible);
+    if (saved case Error(:final error)) {
+      state = state.copyWith(showRecentProjects: previous);
+      return ref.notifyErrorResult(
+        error,
+        title: 'Could not save the recent projects setting',
+      );
+    }
+    return Result.ok(null);
+  }
+
+  /// Publishes the stored settings that the engine does not apply: the
+  /// default folders, whether they still exist, and the recent projects
+  /// option.
+  Future<void> _publishStored(UiGeneralSettings settings) async {
+    final service = ref.read(settingsServiceProvider);
+    final folders = {
+      DefaultFolder.project: settings.defaultProjectFolder,
+      DefaultFolder.export: settings.defaultExportFolder,
+    };
+    final missing = <DefaultFolder>{
+      for (final MapEntry(key: kind, value: folder) in folders.entries)
+        if (folder != null && !await service.folderExists(folder)) kind,
+    };
+    state = state.copyWith(
+      defaultProjectFolder: settings.defaultProjectFolder,
+      defaultExportFolder: settings.defaultExportFolder,
+      missingFolders: missing.lock,
+      showRecentProjects: settings.showRecentProjects,
+    );
   }
 }
 

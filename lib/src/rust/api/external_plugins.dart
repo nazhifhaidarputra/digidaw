@@ -10,15 +10,17 @@ import 'plugin.dart';
 import 'project.dart';
 part 'external_plugins.freezed.dart';
 
-// These functions are ignored because they are not marked as `pub`: `resolve_hosted_target`, `retry_external_plugin_blocking`
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `from`, `from`, `from`
+// These functions are ignored because they are not marked as `pub`: `resolve_hosted_target`, `retry_external_plugin_blocking`, `scan_settings`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `from`, `from`, `from`, `from`
 
 Future<List<String>> defaultPluginScanPaths() =>
     RustLib.instance.api.crateApiExternalPluginsDefaultPluginScanPaths();
 
+/// The saved scan folders and timeout; defaults when they cannot be used.
 Future<UiPluginScanSettings> pluginScanSettings() =>
     RustLib.instance.api.crateApiExternalPluginsPluginScanSettings();
 
+/// Validates, deduplicates and saves the scan folders and timeout.
 Future<UiPluginScanSettings> savePluginScanSettings({
   required List<String> directories,
   required int timeoutSeconds,
@@ -27,7 +29,8 @@ Future<UiPluginScanSettings> savePluginScanSettings({
   timeoutSeconds: timeoutSeconds,
 );
 
-/// Starts a worker and publishes progress events; never retains the project context.
+/// Saves the scan settings, then starts a worker that publishes progress events; never retains
+/// the project context.
 Stream<UiPluginScanEvent> scanExternalPlugins({
   required List<String> directories,
   required int timeoutSeconds,

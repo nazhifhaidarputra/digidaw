@@ -14,7 +14,11 @@ T _$identity<T>(T value) => value;
 /// @nodoc
 mixin _$GeneralSettingsState {
 
- int get maxHistoryEntries; bool get isApplyingHistoryLimit; bool get autoSaveEnabled; int get autoSaveIntervalSeconds; bool get isApplyingAutoSave; bool get isInitialized;
+ int get maxHistoryEntries; bool get isApplyingHistoryLimit; bool get autoSaveEnabled; int get autoSaveIntervalSeconds; bool get isApplyingAutoSave; bool get isInitialized;/// Folder project dialogs start in; null lets the dialog choose.
+ String? get defaultProjectFolder;/// Folder exports go to; null asks for one on every export.
+ String? get defaultExportFolder;/// Set folders that no longer exist; the dialogs ignore them.
+ ISet<DefaultFolder> get missingFolders; bool get isSavingFolder;/// Whether the project menu lists recently opened projects.
+ bool get showRecentProjects;
 /// Create a copy of GeneralSettingsState
 /// with the given fields replaced by the non-null parameter values.
 @JsonKey(includeFromJson: false, includeToJson: false)
@@ -25,16 +29,16 @@ $GeneralSettingsStateCopyWith<GeneralSettingsState> get copyWith => _$GeneralSet
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is GeneralSettingsState&&(identical(other.maxHistoryEntries, maxHistoryEntries) || other.maxHistoryEntries == maxHistoryEntries)&&(identical(other.isApplyingHistoryLimit, isApplyingHistoryLimit) || other.isApplyingHistoryLimit == isApplyingHistoryLimit)&&(identical(other.autoSaveEnabled, autoSaveEnabled) || other.autoSaveEnabled == autoSaveEnabled)&&(identical(other.autoSaveIntervalSeconds, autoSaveIntervalSeconds) || other.autoSaveIntervalSeconds == autoSaveIntervalSeconds)&&(identical(other.isApplyingAutoSave, isApplyingAutoSave) || other.isApplyingAutoSave == isApplyingAutoSave)&&(identical(other.isInitialized, isInitialized) || other.isInitialized == isInitialized));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is GeneralSettingsState&&(identical(other.maxHistoryEntries, maxHistoryEntries) || other.maxHistoryEntries == maxHistoryEntries)&&(identical(other.isApplyingHistoryLimit, isApplyingHistoryLimit) || other.isApplyingHistoryLimit == isApplyingHistoryLimit)&&(identical(other.autoSaveEnabled, autoSaveEnabled) || other.autoSaveEnabled == autoSaveEnabled)&&(identical(other.autoSaveIntervalSeconds, autoSaveIntervalSeconds) || other.autoSaveIntervalSeconds == autoSaveIntervalSeconds)&&(identical(other.isApplyingAutoSave, isApplyingAutoSave) || other.isApplyingAutoSave == isApplyingAutoSave)&&(identical(other.isInitialized, isInitialized) || other.isInitialized == isInitialized)&&(identical(other.defaultProjectFolder, defaultProjectFolder) || other.defaultProjectFolder == defaultProjectFolder)&&(identical(other.defaultExportFolder, defaultExportFolder) || other.defaultExportFolder == defaultExportFolder)&&const DeepCollectionEquality().equals(other.missingFolders, missingFolders)&&(identical(other.isSavingFolder, isSavingFolder) || other.isSavingFolder == isSavingFolder)&&(identical(other.showRecentProjects, showRecentProjects) || other.showRecentProjects == showRecentProjects));
 }
 
 
 @override
-int get hashCode => Object.hash(runtimeType,maxHistoryEntries,isApplyingHistoryLimit,autoSaveEnabled,autoSaveIntervalSeconds,isApplyingAutoSave,isInitialized);
+int get hashCode => Object.hash(runtimeType,maxHistoryEntries,isApplyingHistoryLimit,autoSaveEnabled,autoSaveIntervalSeconds,isApplyingAutoSave,isInitialized,defaultProjectFolder,defaultExportFolder,const DeepCollectionEquality().hash(missingFolders),isSavingFolder,showRecentProjects);
 
 @override
 String toString() {
-  return 'GeneralSettingsState(maxHistoryEntries: $maxHistoryEntries, isApplyingHistoryLimit: $isApplyingHistoryLimit, autoSaveEnabled: $autoSaveEnabled, autoSaveIntervalSeconds: $autoSaveIntervalSeconds, isApplyingAutoSave: $isApplyingAutoSave, isInitialized: $isInitialized)';
+  return 'GeneralSettingsState(maxHistoryEntries: $maxHistoryEntries, isApplyingHistoryLimit: $isApplyingHistoryLimit, autoSaveEnabled: $autoSaveEnabled, autoSaveIntervalSeconds: $autoSaveIntervalSeconds, isApplyingAutoSave: $isApplyingAutoSave, isInitialized: $isInitialized, defaultProjectFolder: $defaultProjectFolder, defaultExportFolder: $defaultExportFolder, missingFolders: $missingFolders, isSavingFolder: $isSavingFolder, showRecentProjects: $showRecentProjects)';
 }
 
 
@@ -45,7 +49,7 @@ abstract mixin class $GeneralSettingsStateCopyWith<$Res>  {
   factory $GeneralSettingsStateCopyWith(GeneralSettingsState value, $Res Function(GeneralSettingsState) _then) = _$GeneralSettingsStateCopyWithImpl;
 @useResult
 $Res call({
- int maxHistoryEntries, bool isApplyingHistoryLimit, bool autoSaveEnabled, int autoSaveIntervalSeconds, bool isApplyingAutoSave, bool isInitialized
+ int maxHistoryEntries, bool isApplyingHistoryLimit, bool autoSaveEnabled, int autoSaveIntervalSeconds, bool isApplyingAutoSave, bool isInitialized, String? defaultProjectFolder, String? defaultExportFolder, ISet<DefaultFolder> missingFolders, bool isSavingFolder, bool showRecentProjects
 });
 
 
@@ -62,7 +66,7 @@ class _$GeneralSettingsStateCopyWithImpl<$Res>
 
 /// Create a copy of GeneralSettingsState
 /// with the given fields replaced by the non-null parameter values.
-@pragma('vm:prefer-inline') @override $Res call({Object? maxHistoryEntries = null,Object? isApplyingHistoryLimit = null,Object? autoSaveEnabled = null,Object? autoSaveIntervalSeconds = null,Object? isApplyingAutoSave = null,Object? isInitialized = null,}) {
+@pragma('vm:prefer-inline') @override $Res call({Object? maxHistoryEntries = null,Object? isApplyingHistoryLimit = null,Object? autoSaveEnabled = null,Object? autoSaveIntervalSeconds = null,Object? isApplyingAutoSave = null,Object? isInitialized = null,Object? defaultProjectFolder = freezed,Object? defaultExportFolder = freezed,Object? missingFolders = null,Object? isSavingFolder = null,Object? showRecentProjects = null,}) {
   return _then(_self.copyWith(
 maxHistoryEntries: null == maxHistoryEntries ? _self.maxHistoryEntries : maxHistoryEntries // ignore: cast_nullable_to_non_nullable
 as int,isApplyingHistoryLimit: null == isApplyingHistoryLimit ? _self.isApplyingHistoryLimit : isApplyingHistoryLimit // ignore: cast_nullable_to_non_nullable
@@ -70,6 +74,11 @@ as bool,autoSaveEnabled: null == autoSaveEnabled ? _self.autoSaveEnabled : autoS
 as bool,autoSaveIntervalSeconds: null == autoSaveIntervalSeconds ? _self.autoSaveIntervalSeconds : autoSaveIntervalSeconds // ignore: cast_nullable_to_non_nullable
 as int,isApplyingAutoSave: null == isApplyingAutoSave ? _self.isApplyingAutoSave : isApplyingAutoSave // ignore: cast_nullable_to_non_nullable
 as bool,isInitialized: null == isInitialized ? _self.isInitialized : isInitialized // ignore: cast_nullable_to_non_nullable
+as bool,defaultProjectFolder: freezed == defaultProjectFolder ? _self.defaultProjectFolder : defaultProjectFolder // ignore: cast_nullable_to_non_nullable
+as String?,defaultExportFolder: freezed == defaultExportFolder ? _self.defaultExportFolder : defaultExportFolder // ignore: cast_nullable_to_non_nullable
+as String?,missingFolders: null == missingFolders ? _self.missingFolders : missingFolders // ignore: cast_nullable_to_non_nullable
+as ISet<DefaultFolder>,isSavingFolder: null == isSavingFolder ? _self.isSavingFolder : isSavingFolder // ignore: cast_nullable_to_non_nullable
+as bool,showRecentProjects: null == showRecentProjects ? _self.showRecentProjects : showRecentProjects // ignore: cast_nullable_to_non_nullable
 as bool,
   ));
 }
@@ -155,10 +164,10 @@ return $default(_that);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( int maxHistoryEntries,  bool isApplyingHistoryLimit,  bool autoSaveEnabled,  int autoSaveIntervalSeconds,  bool isApplyingAutoSave,  bool isInitialized)?  $default,{required TResult orElse(),}) {final _that = this;
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( int maxHistoryEntries,  bool isApplyingHistoryLimit,  bool autoSaveEnabled,  int autoSaveIntervalSeconds,  bool isApplyingAutoSave,  bool isInitialized,  String? defaultProjectFolder,  String? defaultExportFolder,  ISet<DefaultFolder> missingFolders,  bool isSavingFolder,  bool showRecentProjects)?  $default,{required TResult orElse(),}) {final _that = this;
 switch (_that) {
 case _GeneralSettingsState() when $default != null:
-return $default(_that.maxHistoryEntries,_that.isApplyingHistoryLimit,_that.autoSaveEnabled,_that.autoSaveIntervalSeconds,_that.isApplyingAutoSave,_that.isInitialized);case _:
+return $default(_that.maxHistoryEntries,_that.isApplyingHistoryLimit,_that.autoSaveEnabled,_that.autoSaveIntervalSeconds,_that.isApplyingAutoSave,_that.isInitialized,_that.defaultProjectFolder,_that.defaultExportFolder,_that.missingFolders,_that.isSavingFolder,_that.showRecentProjects);case _:
   return orElse();
 
 }
@@ -176,10 +185,10 @@ return $default(_that.maxHistoryEntries,_that.isApplyingHistoryLimit,_that.autoS
 /// }
 /// ```
 
-@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( int maxHistoryEntries,  bool isApplyingHistoryLimit,  bool autoSaveEnabled,  int autoSaveIntervalSeconds,  bool isApplyingAutoSave,  bool isInitialized)  $default,) {final _that = this;
+@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( int maxHistoryEntries,  bool isApplyingHistoryLimit,  bool autoSaveEnabled,  int autoSaveIntervalSeconds,  bool isApplyingAutoSave,  bool isInitialized,  String? defaultProjectFolder,  String? defaultExportFolder,  ISet<DefaultFolder> missingFolders,  bool isSavingFolder,  bool showRecentProjects)  $default,) {final _that = this;
 switch (_that) {
 case _GeneralSettingsState():
-return $default(_that.maxHistoryEntries,_that.isApplyingHistoryLimit,_that.autoSaveEnabled,_that.autoSaveIntervalSeconds,_that.isApplyingAutoSave,_that.isInitialized);case _:
+return $default(_that.maxHistoryEntries,_that.isApplyingHistoryLimit,_that.autoSaveEnabled,_that.autoSaveIntervalSeconds,_that.isApplyingAutoSave,_that.isInitialized,_that.defaultProjectFolder,_that.defaultExportFolder,_that.missingFolders,_that.isSavingFolder,_that.showRecentProjects);case _:
   throw StateError('Unexpected subclass');
 
 }
@@ -196,10 +205,10 @@ return $default(_that.maxHistoryEntries,_that.isApplyingHistoryLimit,_that.autoS
 /// }
 /// ```
 
-@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( int maxHistoryEntries,  bool isApplyingHistoryLimit,  bool autoSaveEnabled,  int autoSaveIntervalSeconds,  bool isApplyingAutoSave,  bool isInitialized)?  $default,) {final _that = this;
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( int maxHistoryEntries,  bool isApplyingHistoryLimit,  bool autoSaveEnabled,  int autoSaveIntervalSeconds,  bool isApplyingAutoSave,  bool isInitialized,  String? defaultProjectFolder,  String? defaultExportFolder,  ISet<DefaultFolder> missingFolders,  bool isSavingFolder,  bool showRecentProjects)?  $default,) {final _that = this;
 switch (_that) {
 case _GeneralSettingsState() when $default != null:
-return $default(_that.maxHistoryEntries,_that.isApplyingHistoryLimit,_that.autoSaveEnabled,_that.autoSaveIntervalSeconds,_that.isApplyingAutoSave,_that.isInitialized);case _:
+return $default(_that.maxHistoryEntries,_that.isApplyingHistoryLimit,_that.autoSaveEnabled,_that.autoSaveIntervalSeconds,_that.isApplyingAutoSave,_that.isInitialized,_that.defaultProjectFolder,_that.defaultExportFolder,_that.missingFolders,_that.isSavingFolder,_that.showRecentProjects);case _:
   return null;
 
 }
@@ -210,8 +219,8 @@ return $default(_that.maxHistoryEntries,_that.isApplyingHistoryLimit,_that.autoS
 /// @nodoc
 
 
-class _GeneralSettingsState implements GeneralSettingsState {
-  const _GeneralSettingsState({this.maxHistoryEntries = 100, this.isApplyingHistoryLimit = false, this.autoSaveEnabled = true, this.autoSaveIntervalSeconds = 300, this.isApplyingAutoSave = false, this.isInitialized = false});
+class _GeneralSettingsState extends GeneralSettingsState {
+  const _GeneralSettingsState({this.maxHistoryEntries = 100, this.isApplyingHistoryLimit = false, this.autoSaveEnabled = true, this.autoSaveIntervalSeconds = 300, this.isApplyingAutoSave = false, this.isInitialized = false, this.defaultProjectFolder, this.defaultExportFolder, this.missingFolders = const ISetConst<DefaultFolder>({}), this.isSavingFolder = false, this.showRecentProjects = true}): super._();
   
 
 @override@JsonKey() final  int maxHistoryEntries;
@@ -220,6 +229,15 @@ class _GeneralSettingsState implements GeneralSettingsState {
 @override@JsonKey() final  int autoSaveIntervalSeconds;
 @override@JsonKey() final  bool isApplyingAutoSave;
 @override@JsonKey() final  bool isInitialized;
+/// Folder project dialogs start in; null lets the dialog choose.
+@override final  String? defaultProjectFolder;
+/// Folder exports go to; null asks for one on every export.
+@override final  String? defaultExportFolder;
+/// Set folders that no longer exist; the dialogs ignore them.
+@override@JsonKey() final  ISet<DefaultFolder> missingFolders;
+@override@JsonKey() final  bool isSavingFolder;
+/// Whether the project menu lists recently opened projects.
+@override@JsonKey() final  bool showRecentProjects;
 
 /// Create a copy of GeneralSettingsState
 /// with the given fields replaced by the non-null parameter values.
@@ -231,16 +249,16 @@ _$GeneralSettingsStateCopyWith<_GeneralSettingsState> get copyWith => __$General
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is _GeneralSettingsState&&(identical(other.maxHistoryEntries, maxHistoryEntries) || other.maxHistoryEntries == maxHistoryEntries)&&(identical(other.isApplyingHistoryLimit, isApplyingHistoryLimit) || other.isApplyingHistoryLimit == isApplyingHistoryLimit)&&(identical(other.autoSaveEnabled, autoSaveEnabled) || other.autoSaveEnabled == autoSaveEnabled)&&(identical(other.autoSaveIntervalSeconds, autoSaveIntervalSeconds) || other.autoSaveIntervalSeconds == autoSaveIntervalSeconds)&&(identical(other.isApplyingAutoSave, isApplyingAutoSave) || other.isApplyingAutoSave == isApplyingAutoSave)&&(identical(other.isInitialized, isInitialized) || other.isInitialized == isInitialized));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is _GeneralSettingsState&&(identical(other.maxHistoryEntries, maxHistoryEntries) || other.maxHistoryEntries == maxHistoryEntries)&&(identical(other.isApplyingHistoryLimit, isApplyingHistoryLimit) || other.isApplyingHistoryLimit == isApplyingHistoryLimit)&&(identical(other.autoSaveEnabled, autoSaveEnabled) || other.autoSaveEnabled == autoSaveEnabled)&&(identical(other.autoSaveIntervalSeconds, autoSaveIntervalSeconds) || other.autoSaveIntervalSeconds == autoSaveIntervalSeconds)&&(identical(other.isApplyingAutoSave, isApplyingAutoSave) || other.isApplyingAutoSave == isApplyingAutoSave)&&(identical(other.isInitialized, isInitialized) || other.isInitialized == isInitialized)&&(identical(other.defaultProjectFolder, defaultProjectFolder) || other.defaultProjectFolder == defaultProjectFolder)&&(identical(other.defaultExportFolder, defaultExportFolder) || other.defaultExportFolder == defaultExportFolder)&&const DeepCollectionEquality().equals(other.missingFolders, missingFolders)&&(identical(other.isSavingFolder, isSavingFolder) || other.isSavingFolder == isSavingFolder)&&(identical(other.showRecentProjects, showRecentProjects) || other.showRecentProjects == showRecentProjects));
 }
 
 
 @override
-int get hashCode => Object.hash(runtimeType,maxHistoryEntries,isApplyingHistoryLimit,autoSaveEnabled,autoSaveIntervalSeconds,isApplyingAutoSave,isInitialized);
+int get hashCode => Object.hash(runtimeType,maxHistoryEntries,isApplyingHistoryLimit,autoSaveEnabled,autoSaveIntervalSeconds,isApplyingAutoSave,isInitialized,defaultProjectFolder,defaultExportFolder,const DeepCollectionEquality().hash(missingFolders),isSavingFolder,showRecentProjects);
 
 @override
 String toString() {
-  return 'GeneralSettingsState(maxHistoryEntries: $maxHistoryEntries, isApplyingHistoryLimit: $isApplyingHistoryLimit, autoSaveEnabled: $autoSaveEnabled, autoSaveIntervalSeconds: $autoSaveIntervalSeconds, isApplyingAutoSave: $isApplyingAutoSave, isInitialized: $isInitialized)';
+  return 'GeneralSettingsState(maxHistoryEntries: $maxHistoryEntries, isApplyingHistoryLimit: $isApplyingHistoryLimit, autoSaveEnabled: $autoSaveEnabled, autoSaveIntervalSeconds: $autoSaveIntervalSeconds, isApplyingAutoSave: $isApplyingAutoSave, isInitialized: $isInitialized, defaultProjectFolder: $defaultProjectFolder, defaultExportFolder: $defaultExportFolder, missingFolders: $missingFolders, isSavingFolder: $isSavingFolder, showRecentProjects: $showRecentProjects)';
 }
 
 
@@ -251,7 +269,7 @@ abstract mixin class _$GeneralSettingsStateCopyWith<$Res> implements $GeneralSet
   factory _$GeneralSettingsStateCopyWith(_GeneralSettingsState value, $Res Function(_GeneralSettingsState) _then) = __$GeneralSettingsStateCopyWithImpl;
 @override @useResult
 $Res call({
- int maxHistoryEntries, bool isApplyingHistoryLimit, bool autoSaveEnabled, int autoSaveIntervalSeconds, bool isApplyingAutoSave, bool isInitialized
+ int maxHistoryEntries, bool isApplyingHistoryLimit, bool autoSaveEnabled, int autoSaveIntervalSeconds, bool isApplyingAutoSave, bool isInitialized, String? defaultProjectFolder, String? defaultExportFolder, ISet<DefaultFolder> missingFolders, bool isSavingFolder, bool showRecentProjects
 });
 
 
@@ -268,7 +286,7 @@ class __$GeneralSettingsStateCopyWithImpl<$Res>
 
 /// Create a copy of GeneralSettingsState
 /// with the given fields replaced by the non-null parameter values.
-@override @pragma('vm:prefer-inline') $Res call({Object? maxHistoryEntries = null,Object? isApplyingHistoryLimit = null,Object? autoSaveEnabled = null,Object? autoSaveIntervalSeconds = null,Object? isApplyingAutoSave = null,Object? isInitialized = null,}) {
+@override @pragma('vm:prefer-inline') $Res call({Object? maxHistoryEntries = null,Object? isApplyingHistoryLimit = null,Object? autoSaveEnabled = null,Object? autoSaveIntervalSeconds = null,Object? isApplyingAutoSave = null,Object? isInitialized = null,Object? defaultProjectFolder = freezed,Object? defaultExportFolder = freezed,Object? missingFolders = null,Object? isSavingFolder = null,Object? showRecentProjects = null,}) {
   return _then(_GeneralSettingsState(
 maxHistoryEntries: null == maxHistoryEntries ? _self.maxHistoryEntries : maxHistoryEntries // ignore: cast_nullable_to_non_nullable
 as int,isApplyingHistoryLimit: null == isApplyingHistoryLimit ? _self.isApplyingHistoryLimit : isApplyingHistoryLimit // ignore: cast_nullable_to_non_nullable
@@ -276,6 +294,11 @@ as bool,autoSaveEnabled: null == autoSaveEnabled ? _self.autoSaveEnabled : autoS
 as bool,autoSaveIntervalSeconds: null == autoSaveIntervalSeconds ? _self.autoSaveIntervalSeconds : autoSaveIntervalSeconds // ignore: cast_nullable_to_non_nullable
 as int,isApplyingAutoSave: null == isApplyingAutoSave ? _self.isApplyingAutoSave : isApplyingAutoSave // ignore: cast_nullable_to_non_nullable
 as bool,isInitialized: null == isInitialized ? _self.isInitialized : isInitialized // ignore: cast_nullable_to_non_nullable
+as bool,defaultProjectFolder: freezed == defaultProjectFolder ? _self.defaultProjectFolder : defaultProjectFolder // ignore: cast_nullable_to_non_nullable
+as String?,defaultExportFolder: freezed == defaultExportFolder ? _self.defaultExportFolder : defaultExportFolder // ignore: cast_nullable_to_non_nullable
+as String?,missingFolders: null == missingFolders ? _self.missingFolders : missingFolders // ignore: cast_nullable_to_non_nullable
+as ISet<DefaultFolder>,isSavingFolder: null == isSavingFolder ? _self.isSavingFolder : isSavingFolder // ignore: cast_nullable_to_non_nullable
+as bool,showRecentProjects: null == showRecentProjects ? _self.showRecentProjects : showRecentProjects // ignore: cast_nullable_to_non_nullable
 as bool,
   ));
 }

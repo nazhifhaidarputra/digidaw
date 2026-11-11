@@ -6,25 +6,18 @@ import 'package:karbeat/app/providers/notification_provider.dart';
 import 'package:karbeat/core/utils/result_type.dart';
 import 'package:karbeat/src/rust/api/audio.dart' as audio_api;
 import 'package:karbeat/src/rust/api/project.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import 'package:karbeat/src/rust/api/settings.dart' as settings_api;
 
 /// Picks, stores and applies the custom metronome sound.
 class MetronomeSoundService {
-  static const soundPathKey = 'settings.audio.metronome_sound_path.v1';
-
   Future<Result<String?>> loadPath() {
-    return attemptAsync(() => SharedPreferencesAsync().getString(soundPathKey));
+    return attemptAsync(
+      () async => (await settings_api.loadAudioPreferences()).metronomeSound,
+    );
   }
 
   Future<Result<void>> savePath(String? path) {
-    return attemptAsync(() async {
-      final preferences = SharedPreferencesAsync();
-      if (path == null) {
-        await preferences.remove(soundPathKey);
-      } else {
-        await preferences.setString(soundPathKey, path);
-      }
-    });
+    return attemptAsync(() => settings_api.saveMetronomeSound(path: path));
   }
 
   Future<Result<String?>> pickSound() {

@@ -30,7 +30,9 @@ import 'package:karbeat/features/setting/services/metronome_sound_provider.dart'
 import 'package:karbeat/features/setting/services/plugin_settings_provider.dart';
 import 'package:karbeat/features/workspace/view/main_screen.dart';
 import 'package:karbeat/src/rust/api/project.dart';
+import 'package:karbeat/src/rust/api/settings.dart';
 import 'package:karbeat/src/rust/frb_generated.dart';
+import 'package:path_provider/path_provider.dart';
 
 class KarbeatApp extends ConsumerStatefulWidget {
   const KarbeatApp({super.key});
@@ -122,13 +124,13 @@ class _KarbeatAppState extends ConsumerState<KarbeatApp> {
 
   Future<void> _initializeApplication() async {
     try {
+      // Settings live in Rust, so the library loads before anything reads them.
+      await RustLib.init();
+      if (!mounted) return;
+      await _openSettings();
+      if (!mounted) return;
       await ref.read(appearanceSettingsProvider.notifier).initialize();
       await ref.read(shortcutManagerProvider.notifier).initialize();
-      if (!mounted) return;
-      await Future.wait([
-        RustLib.init(),
-        Future.delayed(const Duration(seconds: 5)),
-      ]);
 
       if (!mounted) return;
       // Subscribe before any project work so every job's events are seen.
@@ -193,6 +195,22 @@ class _KarbeatAppState extends ConsumerState<KarbeatApp> {
           _rustStackTrace = stackTrace;
         });
       }
+    }
+  }
+
+  /// Opens the settings store under the application-support directory and
+  /// warns about settings files that had to be reset.
+  Future<void> _openSettings() async {
+    final support = await getApplicationSupportDirectory();
+    final recovered = await openSettings(supportDir: support.path);
+    for (final file in recovered) {
+      ref
+          .read(notificationProvider.notifier)
+          .warn(
+            'Settings in ${file.file} could not be read (${file.reason}). '
+            'Defaults are used; the old file was kept as ${file.backup}.',
+            title: 'Settings reset',
+          );
     }
   }
 

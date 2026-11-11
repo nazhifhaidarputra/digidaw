@@ -1,5 +1,3 @@
-import 'dart:convert';
-
 import 'package:fast_immutable_collections/fast_immutable_collections.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
@@ -15,6 +13,7 @@ import 'package:karbeat/core/input/input.dart';
 import 'package:karbeat/core/input/shortcut_models.dart';
 import 'package:karbeat/core/input/shortcut_preferences_service.dart';
 import 'package:karbeat/core/utils/result_type.dart';
+import 'package:karbeat/src/rust/api/settings.dart';
 
 class _FakeShortcutPreferencesService extends ShortcutPreferencesService {
   IMap<String, ShortcutChord> loaded = const IMapConst({});
@@ -54,13 +53,19 @@ void main() {
     );
   });
 
-  test('chord storage schema round-trips supported keys', () {
-    final decoded = ShortcutChord.tryFromStorageJson(
-      customChord.toStorageJson(),
+  test('stored chords round-trip supported keys', () {
+    final decoded = ShortcutPreferencesService.fromStored(
+      ShortcutPreferencesService.toStored(
+        IMap({'workspace.save': customChord}),
+      ),
     );
 
-    expect(decoded, customChord);
-    expect(decoded?.toActivator().trigger, LogicalKeyboardKey.keyP);
+    expect(decoded.repaired, isFalse);
+    expect(decoded.overrides['workspace.save'], customChord);
+    expect(
+      decoded.overrides['workspace.save']?.toActivator().trigger,
+      LogicalKeyboardKey.keyP,
+    );
   });
 
   test(
@@ -356,15 +361,16 @@ void main() {
     expect(global.err(), isA<ShortcutConflictException>());
   });
 
-  test('malformed preferences reset safely', () {
-    final result = ShortcutPreferencesService.decode(
-      jsonEncode({
-        'version': 1,
-        'overrides': {
-          'workspace.save': {'key': 'not-an-integer'},
-        },
-      }),
-    );
+  test('stored chords this platform cannot trigger are dropped', () {
+    final result = ShortcutPreferencesService.fromStored({
+      'workspace.save': UiShortcutChord(
+        key: LogicalKeyboardKey.keyS.keyId,
+        control: false,
+        shift: false,
+        alt: false,
+        meta: false,
+      ),
+    });
 
     expect(result.repaired, isTrue);
     expect(result.overrides, isEmpty);

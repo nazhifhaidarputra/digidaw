@@ -3,6 +3,7 @@ use crate::api::project::UiApplicationState;
 use crate::api::{
     audio_analysis::schedule_source_renders,
     context::{DawContext, ProjectOperationGuard},
+    settings::record_recent_project,
 };
 use crate::frb_generated::StreamSink;
 use flutter_rust_bridge::frb;
@@ -28,6 +29,8 @@ fn save_project_blocking(ctx: &DawContext, path_name: &str) -> Result<(), String
     let pending = project_api::begin_save_project(&operation.read_core(), path_name);
     let completed = project_api::execute_save_project(pending).map_err(|e| e.to_string())?;
     project_api::commit_save_project(&mut operation.write_core(), completed);
+    drop(operation);
+    record_recent_project(path_name);
 
     tracing::info!("Successfully saved project to {}", path_name);
     Ok(())
@@ -58,6 +61,7 @@ fn load_project_blocking(ctx: &DawContext, path_name: &str) -> Result<UiApplicat
     drop(operation);
     // Rendered edits are not saved; rebuild them from their recipes.
     schedule_source_renders(ctx, false);
+    record_recent_project(path_name);
 
     tracing::info!("Successfully loaded the project {}", path_name);
     Ok(ui_state)

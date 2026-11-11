@@ -11,6 +11,7 @@ import 'package:karbeat/features/setting/services/appearance_preferences_service
 import 'package:karbeat/features/setting/services/appearance_settings_provider.dart';
 import 'package:karbeat/features/setting/services/color_theme_parser.dart';
 import 'package:karbeat/features/setting/view/appearance_settings_page.dart';
+import 'package:karbeat/src/rust/api/settings.dart';
 
 class _FakeAppearanceService extends AppearancePreferencesService {
   AppearancePreferences loaded = (
@@ -134,8 +135,7 @@ void main() {
         backgroundOverlayOpacity: 0.35,
         customFontPath: null,
         customFontFamily: null,
-        colorThemeSource:
-            AppearancePreferencesService.explicitDefaultColorThemeSource,
+        colorThemeSource: null,
         customColorThemePaths: const [],
       );
     final container = ProviderContainer(
@@ -412,32 +412,35 @@ void main() {
       expect(preferences.saved?.colorThemeSource, isNull);
     });
 
-    test('a missing theme source uses the bundled default', () {
+    test('stored color theme choices map to theme sources', () {
       const defaultSource = AppearanceAssetService.defaultColorThemeSource;
-      const explicitDefault =
-          AppearancePreferencesService.explicitDefaultColorThemeSource;
 
       expect(
-        AppearancePreferencesService.resolveColorThemeSource(
-          hasStoredSource: false,
-          storedSource: null,
+        AppearancePreferencesService.colorThemeSourceFromStored(
+          const UiColorThemeChoice.bundled(),
         ),
         defaultSource,
       );
       expect(
-        AppearancePreferencesService.resolveColorThemeSource(
-          hasStoredSource: true,
-          storedSource: explicitDefault,
+        AppearancePreferencesService.colorThemeSourceFromStored(
+          const UiColorThemeChoice.accentPalette(),
         ),
         isNull,
       );
       expect(
-        AppearancePreferencesService.resolveColorThemeSource(
-          hasStoredSource: true,
-          storedSource: '/themes/mine.json',
+        AppearancePreferencesService.colorThemeSourceFromStored(
+          const UiColorThemeChoice.source('/themes/mine.json'),
         ),
         '/themes/mine.json',
       );
+      for (final source in [defaultSource, null, '/themes/mine.json']) {
+        expect(
+          AppearancePreferencesService.colorThemeSourceFromStored(
+            AppearancePreferencesService.colorThemeSourceToStored(source),
+          ),
+          source,
+        );
+      }
     });
 
     test('picked theme files are loaded, applied, and kept', () async {

@@ -53,12 +53,14 @@ bool isSupportedProjectFile(String path) {
       lower.endsWith('.$karbeatProjectExtension');
 }
 
-/// Opens the project chooser, restricted to supported project files.
+/// Opens the project chooser, restricted to supported project files and
+/// starting in [initialDirectory] when given.
 ///
 /// Returns `null` when the user cancels.
-Future<String?> pickProjectFileToOpen() async {
+Future<String?> pickProjectFileToOpen({String? initialDirectory}) async {
   if (!_usesDesktopTypeLabels) {
     final result = await picker.FilePicker.pickFiles(
+      initialDirectory: initialDirectory,
       type: picker.FileType.custom,
       allowedExtensions: <String>[
         dgdawProjectExtension,
@@ -72,6 +74,7 @@ Future<String?> pickProjectFileToOpen() async {
 
   final file = await openFile(
     acceptedTypeGroups: _projectOpenTypeGroups,
+    initialDirectory: initialDirectory,
     confirmButtonText: 'Open',
   );
   if (file == null) return null;
@@ -79,12 +82,14 @@ Future<String?> pickProjectFileToOpen() async {
   return isSupportedProjectFile(path) ? path : null;
 }
 
-/// Opens the save chooser and returns a path ending in `.dgdaw`.
+/// Opens the save chooser, starting in [initialDirectory] when given, and
+/// returns a path ending in `.dgdaw`.
 ///
 /// Returns `null` when the user cancels.
-Future<String?> pickProjectFileToSave() async {
+Future<String?> pickProjectFileToSave({String? initialDirectory}) async {
   if (!_usesDesktopTypeLabels) {
     final path = await picker.FilePicker.saveFile(
+      initialDirectory: initialDirectory,
       fileName: 'untitled.$dgdawProjectExtension',
       type: picker.FileType.custom,
       allowedExtensions: const <String>[dgdawProjectExtension],
@@ -94,6 +99,7 @@ Future<String?> pickProjectFileToSave() async {
 
   final location = await getSaveLocation(
     acceptedTypeGroups: const <XTypeGroup>[dgdawProjectTypeGroup],
+    initialDirectory: initialDirectory,
     suggestedName: 'untitled.$dgdawProjectExtension',
     confirmButtonText: 'Save',
   );
@@ -112,18 +118,20 @@ XTypeGroup audioExportTypeGroup(String extension) {
   );
 }
 
-/// Opens the export save chooser locked to [extension] and returns a matching
-/// path.
+/// Opens the export save chooser locked to [extension], starting in
+/// [initialDirectory] when given, and returns a matching path.
 ///
 /// Returns `null` when the user cancels.
 Future<String?> pickAudioExportFileToSave({
   required String fileName,
   required String extension,
+  String? initialDirectory,
 }) async {
   final normalizedExtension = extension.toLowerCase();
   final suggestedName = withFileExtension(fileName, normalizedExtension);
   if (!_usesDesktopTypeLabels) {
     final path = await picker.FilePicker.saveFile(
+      initialDirectory: initialDirectory,
       fileName: suggestedName,
       type: picker.FileType.custom,
       allowedExtensions: <String>[normalizedExtension],
@@ -133,6 +141,7 @@ Future<String?> pickAudioExportFileToSave({
 
   final location = await getSaveLocation(
     acceptedTypeGroups: <XTypeGroup>[audioExportTypeGroup(normalizedExtension)],
+    initialDirectory: initialDirectory,
     suggestedName: suggestedName,
     confirmButtonText: 'Export',
   );

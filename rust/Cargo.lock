@@ -2347,6 +2347,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "karbeat-settings"
+version = "0.8.1"
+dependencies = [
+ "serde",
+ "tempfile",
+ "thiserror 2.0.18",
+ "toml",
+ "tracing",
+]
+
+[[package]]
 name = "karbeat-signalsmith"
 version = "0.8.1"
 dependencies = [
@@ -2408,6 +2419,7 @@ dependencies = [
  "karbeat-lv2",
  "karbeat-plugin-api",
  "karbeat-plugins",
+ "karbeat-settings",
  "karbeat-utils",
  "karbeat-vst3",
  "ndk-context",

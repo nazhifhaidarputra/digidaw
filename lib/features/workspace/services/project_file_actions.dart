@@ -1,7 +1,11 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:karbeat/app/providers/blocking_task_provider.dart';
 import 'package:karbeat/app/providers/project_provider.dart';
+import 'package:karbeat/features/setting/models/general_settings_state.dart';
+import 'package:karbeat/features/setting/services/general_settings_provider.dart';
 import 'package:karbeat/features/workspace/services/project_file_dialogs.dart';
 import 'package:karbeat/features/workspace/view/unsaved_changes_guard.dart';
 import 'package:karbeat/src/rust/api/serialization.dart' as serialization_api;
@@ -9,11 +13,17 @@ import 'package:karbeat/src/rust/api/serialization.dart' as serialization_api;
 /// Saves the current project behind the blocking overlay.
 ///
 /// Asks for a destination when the project is untitled or [saveAs] is set.
-/// Returns `true` only when the project was written.
+/// The dialog starts in the project's own folder, or the default project
+/// folder for an untitled project. Returns `true` only when the project was
+/// written.
 Future<bool> saveCurrentProject(WidgetRef ref, {bool saveAs = false}) async {
   var path = ref.read(projectProvider).value?.currentFilePath;
   if (saveAs || path == null) {
-    path = await pickProjectFileToSave();
+    path = await pickProjectFileToSave(
+      initialDirectory: path == null
+          ? _defaultProjectFolder(ref)
+          : File(path).parent.path,
+    );
   }
   if (path == null) return false;
 
@@ -57,7 +67,9 @@ final projectWindowTitleProvider = Provider<String>((ref) {
 
 Future<Null> openProject(BuildContext context, WidgetRef ref) async {
   if (!await confirmDiscardUnsavedChanges(context, ref)) return;
-  final path = await pickProjectFileToOpen();
+  final path = await pickProjectFileToOpen(
+    initialDirectory: _defaultProjectFolder(ref),
+  );
   if (path == null) return;
   final project = ref.read(projectProvider.notifier);
 
@@ -66,6 +78,23 @@ Future<Null> openProject(BuildContext context, WidgetRef ref) async {
       .read(blockingTaskProvider.notifier)
       .run(label: 'Loading project...', task: () => project.loadProject(path));
 }
+
+/// Opens the recent project at [path], after the unsaved changes prompt.
+Future<void> openRecentProject(
+  BuildContext context,
+  WidgetRef ref,
+  String path,
+) async {
+  if (!await confirmDiscardUnsavedChanges(context, ref)) return;
+  final project = ref.read(projectProvider.notifier);
+  await ref
+      .read(blockingTaskProvider.notifier)
+      .run(label: 'Loading project...', task: () => project.loadProject(path));
+}
+
+/// The default project folder, when it is set and still exists.
+String? _defaultProjectFolder(WidgetRef ref) =>
+    ref.read(generalSettingsProvider).usableFolder(DefaultFolder.project);
 
 Future<Null> newProject(BuildContext context, WidgetRef ref) async {
   if (!await confirmDiscardUnsavedChanges(context, ref)) return;

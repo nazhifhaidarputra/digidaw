@@ -226,6 +226,37 @@ void main() {
     expect(tester.widget(find.byType(ContextMenuWrapper)), same(headerBody));
   });
 
+  testWidgets('the meter spans the header from border to border', (
+    tester,
+  ) async {
+    await _pumpTrackHeader(
+      tester,
+      service: _ExternalPluginService(isExternal: false),
+      launcher: _FlutterPluginLauncher(),
+    );
+
+    final header = tester.getRect(find.byType(TrackHeader));
+    final meter = tester.getRect(find.byType(DbLevelMeter));
+    expect(meter.left, header.left);
+    // Only the header's 1 px right border lies beyond the meter.
+    expect(meter.right, header.right - 1);
+  });
+
+  testWidgets('the shortest header fits its buttons above the meter', (
+    tester,
+  ) async {
+    await _pumpTrackHeader(
+      tester,
+      service: _ExternalPluginService(isExternal: false),
+      launcher: _FlutterPluginLauncher(),
+      itemHeight: 48,
+    );
+
+    expect(tester.takeException(), isNull);
+    expect(find.byType(DbLevelMeter), findsOneWidget);
+    expect(find.byType(ChannelToggleButton), findsNWidgets(2));
+  });
+
   testWidgets('tapping the header body selects the track', (tester) async {
     var selectCount = 0;
     await _pumpTrackHeader(
@@ -252,6 +283,7 @@ Future<void> _pumpTrackHeader(
   UiMixerChannel? channel,
   VoidCallback? onSelect,
   MixerNotifier? mixer,
+  double itemHeight = 90,
 }) async {
   final project = _projectData(channel: channel);
   await tester.pumpWidget(
@@ -268,7 +300,7 @@ Future<void> _pumpTrackHeader(
             width: 300,
             child: TrackHeader(
               trackId: 1,
-              itemHeight: 90,
+              itemHeight: itemHeight,
               onDragStarted: () {},
               onDragEnded: (_) {},
               onSelect: onSelect,

@@ -1,6 +1,5 @@
 use std::{
     collections::HashSet,
-    fs::{create_dir_all, read},
     path::PathBuf,
     sync::{
         Arc, LazyLock,
@@ -79,32 +78,11 @@ pub fn default_scan_paths() -> Vec<PathBuf> {
         .unwrap_or_default()
 }
 
-/// Loads the persisted scan settings, or returns defaults when no settings file exists.
-pub fn scan_settings() -> Result<ScanSettings, HostError> {
-    let path = cache_path()?.with_file_name("scan-settings-v1.json");
-    if !path.exists() {
-        return Ok(ScanSettings::default());
-    }
-    serde_json::from_slice(&read(path)?).map_err(|error| HostError::Scanner(error.to_string()))
-}
-
-fn save_scan_settings(settings: &ScanSettings) -> Result<(), HostError> {
-    let path = cache_path()?.with_file_name("scan-settings-v1.json");
-    let parent = path
-        .parent()
-        .ok_or_else(|| HostError::Scanner("scan settings directory is unavailable".into()))?;
-    create_dir_all(parent)?;
-    let temporary = tempfile::NamedTempFile::new_in(parent)?;
-    serde_json::to_writer(temporary.as_file(), settings)
-        .map_err(|error| HostError::Scanner(error.to_string()))?;
-    temporary.as_file().sync_all()?;
-    temporary
-        .persist(path)
-        .map_err(|error| HostError::Io(error.error))?;
-    Ok(())
-}
-
-fn normalize_scan_settings(mut settings: ScanSettings) -> Result<ScanSettings, HostError> {
+/// Validates and deduplicates plugin scan settings.
+///
+/// Timeouts must be between one and 300 seconds and directory paths must be non-empty. Repeated
+/// directories are kept once, in their first position.
+pub fn normalize_scan_settings(mut settings: ScanSettings) -> Result<ScanSettings, HostError> {
     if !(1..=300).contains(&settings.timeout_seconds)
         || settings
             .directories
@@ -118,16 +96,6 @@ fn normalize_scan_settings(mut settings: ScanSettings) -> Result<ScanSettings, H
     settings
         .directories
         .retain(|directory| seen.insert(directory.clone()));
-    Ok(settings)
-}
-
-/// Validates, deduplicates, and atomically persists plugin scan settings.
-///
-/// Timeouts must be between one and 300 seconds and directory paths must be non-empty. The returned
-/// value is the normalized form written to disk.
-pub fn update_scan_settings(settings: ScanSettings) -> Result<ScanSettings, HostError> {
-    let settings = normalize_scan_settings(settings)?;
-    save_scan_settings(&settings)?;
     Ok(settings)
 }
 
@@ -160,7 +128,7 @@ pub fn start_scan(
                 return Ok(());
             }
             let result = async {
-                let settings = update_scan_settings(settings)?;
+                let settings = normalize_scan_settings(settings)?;
                 let progress_notify = notify.clone();
                 let cancelled = job.cancel_flag();
                 let progress_cancelled = cancelled.clone();

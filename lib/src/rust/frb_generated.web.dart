@@ -24,6 +24,7 @@ import 'api/project.dart';
 import 'api/recording.dart';
 import 'api/serialization.dart';
 import 'api/session.dart';
+import 'api/settings.dart';
 import 'api/simple.dart';
 import 'api/timeline.dart';
 import 'api/track.dart';
@@ -183,6 +184,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   Map<String, ZeroCopyHandle>
   dco_decode_Map_String_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerZeroCopyHandle_None(
+    dynamic raw,
+  );
+
+  @protected
+  Map<String, UiShortcutChord> dco_decode_Map_String_ui_shortcut_chord_None(
     dynamic raw,
   );
 
@@ -391,6 +397,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   dco_decode_box_autoadd_ui_actual_input_stream_config(dynamic raw);
 
   @protected
+  UiAppearanceSettings dco_decode_box_autoadd_ui_appearance_settings(
+    dynamic raw,
+  );
+
+  @protected
   UiAutoSaveSettings dco_decode_box_autoadd_ui_auto_save_settings(dynamic raw);
 
   @protected
@@ -408,6 +419,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   UiGainEnvelope dco_decode_box_autoadd_ui_gain_envelope(dynamic raw);
+
+  @protected
+  UiLogSettings dco_decode_box_autoadd_ui_log_settings(dynamic raw);
 
   @protected
   UiLoopRegion dco_decode_box_autoadd_ui_loop_region(dynamic raw);
@@ -601,6 +615,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  List<(String, UiShortcutChord)>
+  dco_decode_list_record_string_ui_shortcut_chord(dynamic raw);
+
+  @protected
   List<(int, int)> dco_decode_list_record_u_32_casted_primitive_u_64(
     dynamic raw,
   );
@@ -624,6 +642,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   List<UiAudioHostInfo> dco_decode_list_ui_audio_host_info(dynamic raw);
+
+  @protected
+  List<UiAutomationTemplate> dco_decode_list_ui_automation_template(
+    dynamic raw,
+  );
 
   @protected
   List<UiClip> dco_decode_list_ui_clip(dynamic raw);
@@ -680,6 +703,14 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   List<UiPluginScanFailure> dco_decode_list_ui_plugin_scan_failure(dynamic raw);
+
+  @protected
+  List<UiRecentProject> dco_decode_list_ui_recent_project(dynamic raw);
+
+  @protected
+  List<UiRecoveredSettingsFile> dco_decode_list_ui_recovered_settings_file(
+    dynamic raw,
+  );
 
   @protected
   List<UiRoutingConnection> dco_decode_list_ui_routing_connection(dynamic raw);
@@ -923,6 +954,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  (String, UiShortcutChord) dco_decode_record_string_ui_shortcut_chord(
+    dynamic raw,
+  );
+
+  @protected
   (int, int) dco_decode_record_u_32_casted_primitive_u_64(dynamic raw);
 
   @protected
@@ -982,6 +1018,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  UiAppearanceSettings dco_decode_ui_appearance_settings(dynamic raw);
+
+  @protected
   UiApplicationState dco_decode_ui_application_state(dynamic raw);
 
   @protected
@@ -994,6 +1033,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   UiAudioHostInfo dco_decode_ui_audio_host_info(dynamic raw);
 
   @protected
+  UiAudioPreferences dco_decode_ui_audio_preferences(dynamic raw);
+
+  @protected
   UiAudioRuntimeSettings dco_decode_ui_audio_runtime_settings(dynamic raw);
 
   @protected
@@ -1001,6 +1043,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   UiAutoSaveSettings dco_decode_ui_auto_save_settings(dynamic raw);
+
+  @protected
+  UiAutomationTemplate dco_decode_ui_automation_template(dynamic raw);
+
+  @protected
+  UiBackgroundFit dco_decode_ui_background_fit(dynamic raw);
 
   @protected
   UiBeatGrid dco_decode_ui_beat_grid(dynamic raw);
@@ -1025,6 +1073,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   UiClipboardContent dco_decode_ui_clipboard_content(dynamic raw);
+
+  @protected
+  UiColorPalette dco_decode_ui_color_palette(dynamic raw);
+
+  @protected
+  UiColorThemeChoice dco_decode_ui_color_theme_choice(dynamic raw);
 
   @protected
   UiCrashReportSummary dco_decode_ui_crash_report_summary(dynamic raw);
@@ -1073,6 +1127,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   UiGainEnvelope dco_decode_ui_gain_envelope(dynamic raw);
 
   @protected
+  UiGeneralSettings dco_decode_ui_general_settings(dynamic raw);
+
+  @protected
   UiGeneratorInstance dco_decode_ui_generator_instance(dynamic raw);
 
   @protected
@@ -1092,6 +1149,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   UiJobTarget dco_decode_ui_job_target(dynamic raw);
+
+  @protected
+  UiLogLevel dco_decode_ui_log_level(dynamic raw);
+
+  @protected
+  UiLogSettings dco_decode_ui_log_settings(dynamic raw);
 
   @protected
   UiLoopRegion dco_decode_ui_loop_region(dynamic raw);
@@ -1166,7 +1229,13 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   UiProjectMetadata dco_decode_ui_project_metadata(dynamic raw);
 
   @protected
+  UiRecentProject dco_decode_ui_recent_project(dynamic raw);
+
+  @protected
   UiRecordingProgress dco_decode_ui_recording_progress(dynamic raw);
+
+  @protected
+  UiRecoveredSettingsFile dco_decode_ui_recovered_settings_file(dynamic raw);
 
   @protected
   UiRecoveryInfo dco_decode_ui_recovery_info(dynamic raw);
@@ -1193,6 +1262,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   UiRoutingTap dco_decode_ui_routing_tap(dynamic raw);
 
   @protected
+  UiShortcutChord dco_decode_ui_shortcut_chord(dynamic raw);
+
+  @protected
   UiSidechainSource dco_decode_ui_sidechain_source(dynamic raw);
 
   @protected
@@ -1203,6 +1275,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   UiStartupRecovery dco_decode_ui_startup_recovery(dynamic raw);
+
+  @protected
+  UiThemeMode dco_decode_ui_theme_mode(dynamic raw);
 
   @protected
   UiTimelineState dco_decode_ui_timeline_state(dynamic raw);
@@ -1369,6 +1444,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   Map<String, ZeroCopyHandle>
   sse_decode_Map_String_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerZeroCopyHandle_None(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  Map<String, UiShortcutChord> sse_decode_Map_String_ui_shortcut_chord_None(
     SseDeserializer deserializer,
   );
 
@@ -1625,6 +1705,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  UiAppearanceSettings sse_decode_box_autoadd_ui_appearance_settings(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   UiAutoSaveSettings sse_decode_box_autoadd_ui_auto_save_settings(
     SseDeserializer deserializer,
   );
@@ -1648,6 +1733,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   UiGainEnvelope sse_decode_box_autoadd_ui_gain_envelope(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  UiLogSettings sse_decode_box_autoadd_ui_log_settings(
     SseDeserializer deserializer,
   );
 
@@ -1883,6 +1973,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  List<(String, UiShortcutChord)>
+  sse_decode_list_record_string_ui_shortcut_chord(SseDeserializer deserializer);
+
+  @protected
   List<(int, int)> sse_decode_list_record_u_32_casted_primitive_u_64(
     SseDeserializer deserializer,
   );
@@ -1910,6 +2004,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   List<UiAudioHostInfo> sse_decode_list_ui_audio_host_info(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  List<UiAutomationTemplate> sse_decode_list_ui_automation_template(
     SseDeserializer deserializer,
   );
 
@@ -1986,6 +2085,16 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   List<UiPluginScanFailure> sse_decode_list_ui_plugin_scan_failure(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  List<UiRecentProject> sse_decode_list_ui_recent_project(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  List<UiRecoveredSettingsFile> sse_decode_list_ui_recovered_settings_file(
     SseDeserializer deserializer,
   );
 
@@ -2287,6 +2396,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  (String, UiShortcutChord) sse_decode_record_string_ui_shortcut_chord(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   (int, int) sse_decode_record_u_32_casted_primitive_u_64(
     SseDeserializer deserializer,
   );
@@ -2356,6 +2470,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  UiAppearanceSettings sse_decode_ui_appearance_settings(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   UiApplicationState sse_decode_ui_application_state(
     SseDeserializer deserializer,
   );
@@ -2372,6 +2491,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   UiAudioHostInfo sse_decode_ui_audio_host_info(SseDeserializer deserializer);
 
   @protected
+  UiAudioPreferences sse_decode_ui_audio_preferences(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   UiAudioRuntimeSettings sse_decode_ui_audio_runtime_settings(
     SseDeserializer deserializer,
   );
@@ -2385,6 +2509,14 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   UiAutoSaveSettings sse_decode_ui_auto_save_settings(
     SseDeserializer deserializer,
   );
+
+  @protected
+  UiAutomationTemplate sse_decode_ui_automation_template(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  UiBackgroundFit sse_decode_ui_background_fit(SseDeserializer deserializer);
 
   @protected
   UiBeatGrid sse_decode_ui_beat_grid(SseDeserializer deserializer);
@@ -2409,6 +2541,14 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   UiClipboardContent sse_decode_ui_clipboard_content(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  UiColorPalette sse_decode_ui_color_palette(SseDeserializer deserializer);
+
+  @protected
+  UiColorThemeChoice sse_decode_ui_color_theme_choice(
     SseDeserializer deserializer,
   );
 
@@ -2469,6 +2609,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   UiGainEnvelope sse_decode_ui_gain_envelope(SseDeserializer deserializer);
 
   @protected
+  UiGeneralSettings sse_decode_ui_general_settings(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   UiGeneratorInstance sse_decode_ui_generator_instance(
     SseDeserializer deserializer,
   );
@@ -2494,6 +2639,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   UiJobTarget sse_decode_ui_job_target(SseDeserializer deserializer);
+
+  @protected
+  UiLogLevel sse_decode_ui_log_level(SseDeserializer deserializer);
+
+  @protected
+  UiLogSettings sse_decode_ui_log_settings(SseDeserializer deserializer);
 
   @protected
   UiLoopRegion sse_decode_ui_loop_region(SseDeserializer deserializer);
@@ -2592,7 +2743,15 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  UiRecentProject sse_decode_ui_recent_project(SseDeserializer deserializer);
+
+  @protected
   UiRecordingProgress sse_decode_ui_recording_progress(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  UiRecoveredSettingsFile sse_decode_ui_recovered_settings_file(
     SseDeserializer deserializer,
   );
 
@@ -2629,6 +2788,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   UiRoutingTap sse_decode_ui_routing_tap(SseDeserializer deserializer);
 
   @protected
+  UiShortcutChord sse_decode_ui_shortcut_chord(SseDeserializer deserializer);
+
+  @protected
   UiSidechainSource sse_decode_ui_sidechain_source(
     SseDeserializer deserializer,
   );
@@ -2643,6 +2805,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   UiStartupRecovery sse_decode_ui_startup_recovery(
     SseDeserializer deserializer,
   );
+
+  @protected
+  UiThemeMode sse_decode_ui_theme_mode(SseDeserializer deserializer);
 
   @protected
   UiTimelineState sse_decode_ui_timeline_state(SseDeserializer deserializer);
@@ -2831,6 +2996,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void
   sse_encode_Map_String_Auto_Owned_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerZeroCopyHandle_None(
     Map<String, ZeroCopyHandle> self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_Map_String_ui_shortcut_chord_None(
+    Map<String, UiShortcutChord> self,
     SseSerializer serializer,
   );
 
@@ -3130,6 +3301,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_box_autoadd_ui_appearance_settings(
+    UiAppearanceSettings self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_box_autoadd_ui_auto_save_settings(
     UiAutoSaveSettings self,
     SseSerializer serializer,
@@ -3159,6 +3336,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_box_autoadd_ui_gain_envelope(
     UiGainEnvelope self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_box_autoadd_ui_log_settings(
+    UiLogSettings self,
     SseSerializer serializer,
   );
 
@@ -3446,6 +3629,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_list_record_string_ui_shortcut_chord(
+    List<(String, UiShortcutChord)> self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_list_record_u_32_casted_primitive_u_64(
     List<(int, int)> self,
     SseSerializer serializer,
@@ -3479,6 +3668,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_list_ui_audio_host_info(
     List<UiAudioHostInfo> self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_list_ui_automation_template(
+    List<UiAutomationTemplate> self,
     SseSerializer serializer,
   );
 
@@ -3575,6 +3770,18 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_list_ui_plugin_scan_failure(
     List<UiPluginScanFailure> self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_list_ui_recent_project(
+    List<UiRecentProject> self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_list_ui_recovered_settings_file(
+    List<UiRecoveredSettingsFile> self,
     SseSerializer serializer,
   );
 
@@ -3921,6 +4128,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_record_string_ui_shortcut_chord(
+    (String, UiShortcutChord) self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_record_u_32_casted_primitive_u_64(
     (int, int) self,
     SseSerializer serializer,
@@ -4005,6 +4218,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_ui_appearance_settings(
+    UiAppearanceSettings self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_ui_application_state(
     UiApplicationState self,
     SseSerializer serializer,
@@ -4029,6 +4248,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_ui_audio_preferences(
+    UiAudioPreferences self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_ui_audio_runtime_settings(
     UiAudioRuntimeSettings self,
     SseSerializer serializer,
@@ -4043,6 +4268,18 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_ui_auto_save_settings(
     UiAutoSaveSettings self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_ui_automation_template(
+    UiAutomationTemplate self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_ui_background_fit(
+    UiBackgroundFit self,
     SseSerializer serializer,
   );
 
@@ -4073,6 +4310,18 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_ui_clipboard_content(
     UiClipboardContent self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_ui_color_palette(
+    UiColorPalette self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_ui_color_theme_choice(
+    UiColorThemeChoice self,
     SseSerializer serializer,
   );
 
@@ -4152,6 +4401,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_ui_general_settings(
+    UiGeneralSettings self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_ui_generator_instance(
     UiGeneratorInstance self,
     SseSerializer serializer,
@@ -4180,6 +4435,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_ui_job_target(UiJobTarget self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_ui_log_level(UiLogLevel self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_ui_log_settings(UiLogSettings self, SseSerializer serializer);
 
   @protected
   void sse_encode_ui_loop_region(UiLoopRegion self, SseSerializer serializer);
@@ -4302,8 +4563,20 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_ui_recent_project(
+    UiRecentProject self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_ui_recording_progress(
     UiRecordingProgress self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_ui_recovered_settings_file(
+    UiRecoveredSettingsFile self,
     SseSerializer serializer,
   );
 
@@ -4347,6 +4620,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_ui_routing_tap(UiRoutingTap self, SseSerializer serializer);
 
   @protected
+  void sse_encode_ui_shortcut_chord(
+    UiShortcutChord self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_ui_sidechain_source(
     UiSidechainSource self,
     SseSerializer serializer,
@@ -4363,6 +4642,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
     UiStartupRecovery self,
     SseSerializer serializer,
   );
+
+  @protected
+  void sse_encode_ui_theme_mode(UiThemeMode self, SseSerializer serializer);
 
   @protected
   void sse_encode_ui_timeline_state(

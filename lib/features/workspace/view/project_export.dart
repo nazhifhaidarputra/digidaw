@@ -71,6 +71,7 @@ class _ProjectExportPanelState extends ConsumerState<ProjectExportPanel> {
     final outputFile = await pickAudioExportFileToSave(
       fileName: _nameController.text,
       extension: extension,
+      initialDirectory: ref.read(exportDirectoryProvider),
     );
 
     if (outputFile != null) {
@@ -92,10 +93,11 @@ class _ProjectExportPanelState extends ConsumerState<ProjectExportPanel> {
 
   Future<void> _handleExport() async {
     final exportState = ref.read(exportProjectProvider);
+    final exportDirectory = ref.read(exportDirectoryProvider);
 
     final ctx = ref.read(projectProvider.notifier).dawContext;
 
-    if (exportState.exportDirectory == null) {
+    if (exportDirectory == null) {
       ref
           .read(notificationProvider.notifier)
           .warn('Please select an export directory first.');
@@ -126,7 +128,7 @@ class _ProjectExportPanelState extends ConsumerState<ProjectExportPanel> {
         // Consume the progress stream using values straight from the provider state
         final progressStream = exportProject(
           ctx: ctx,
-          path: exportState.exportDirectory!,
+          path: exportDirectory,
           soundfileName: _nameController.text,
           format: exportState.selectedFormat,
           bitDepth: exportState.selectedBitDepth,
@@ -165,11 +167,11 @@ class _ProjectExportPanelState extends ConsumerState<ProjectExportPanel> {
     if (exportState.openFolderAfterExport) {
       // Best effort to open folder
       if (Platform.isWindows) {
-        Process.run('explorer.exe', [exportState.exportDirectory!]);
+        Process.run('explorer.exe', [exportDirectory]);
       } else if (Platform.isMacOS) {
-        Process.run('open', [exportState.exportDirectory!]);
+        Process.run('open', [exportDirectory]);
       } else if (Platform.isLinux) {
-        Process.run('xdg-open', [exportState.exportDirectory!]);
+        Process.run('xdg-open', [exportDirectory]);
       }
     }
 
@@ -192,6 +194,7 @@ class _ProjectExportPanelState extends ConsumerState<ProjectExportPanel> {
     final colors = Theme.of(context).colorScheme;
     final size = MediaQuery.of(context).size;
     final exportState = ref.watch(exportProjectProvider);
+    final exportDirectory = ref.watch(exportDirectoryProvider);
     final exportNotifier = ref.read(exportProjectProvider.notifier);
     final hasLoopRegion = ref.watch(loopRegionProvider) != null;
 
@@ -275,7 +278,7 @@ class _ProjectExportPanelState extends ConsumerState<ProjectExportPanel> {
                         TextField(
                           readOnly: true,
                           style: TextStyle(
-                            color: exportState.exportDirectory == null
+                            color: exportDirectory == null
                                 ? colors.onSurfaceVariant
                                 : colors.onSurface,
                           ),
@@ -305,9 +308,9 @@ class _ProjectExportPanelState extends ConsumerState<ProjectExportPanel> {
                             ),
                           ),
                           controller: TextEditingController(
-                            text: exportState.exportDirectory == null
+                            text: exportDirectory == null
                                 ? ""
-                                : "${exportState.exportDirectory}${Platform.pathSeparator}${_nameController.text}.${exportState.selectedFormat.name.toLowerCase()}",
+                                : "$exportDirectory${Platform.pathSeparator}${_nameController.text}.${exportState.selectedFormat.name.toLowerCase()}",
                           ),
                         ),
                         const SizedBox(height: 24),

@@ -51,7 +51,6 @@ dependencies:
   logger: ^2.7.0
   built_collection: ^5.1.1
   fast_immutable_collections: ^11.2.0
-  shared_preferences: ^2.5.5
   package_info_plus: ^9.0.1
   path_provider: ^2.1.6
   file_selector: ^1.1.0

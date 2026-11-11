@@ -11,6 +11,7 @@ use crate::{
         context::{DawContext, project_ctx, read_ctx},
         jobs::run_job,
         plugin::UiPluginTarget,
+        settings,
     },
     frb_generated::StreamSink,
 };
@@ -139,37 +140,53 @@ pub struct UiPluginScanSettings {
     pub timeout_seconds: u32,
 }
 
-pub fn plugin_scan_settings() -> anyhow::Result<UiPluginScanSettings> {
-    let settings = plugin_discovery_api::scan_settings()?;
-    Ok(UiPluginScanSettings {
-        directories: settings
-            .directories
-            .into_iter()
-            .map(|path| path.to_string_lossy().into_owned())
-            .collect(),
-        timeout_seconds: u32::try_from(settings.timeout_seconds)?.clamp(1, 300),
-    })
+impl From<ScanSettings> for UiPluginScanSettings {
+    fn from(settings: ScanSettings) -> Self {
+        Self {
+            directories: settings
+                .directories
+                .into_iter()
+                .map(|path| path.to_string_lossy().into_owned())
+                .collect(),
+            timeout_seconds: u32::try_from(settings.timeout_seconds)
+                .unwrap_or(u32::MAX)
+                .clamp(1, 300),
+        }
+    }
 }
 
+fn scan_settings(directories: Vec<String>, timeout_seconds: u32) -> ScanSettings {
+    ScanSettings {
+        directories: directories.into_iter().map(Into::into).collect(),
+        timeout_seconds: u64::from(timeout_seconds),
+    }
+}
+
+/// The saved scan folders and timeout; defaults when they cannot be used.
+pub fn plugin_scan_settings() -> anyhow::Result<UiPluginScanSettings> {
+    let stored = settings::stored_plugin_scan()?;
+    let settings = ScanSettings {
+        directories: stored.directories,
+        timeout_seconds: stored.timeout_seconds,
+    };
+    Ok(plugin_discovery_api::normalize_scan_settings(settings)
+        .unwrap_or_default()
+        .into())
+}
+
+/// Validates, deduplicates and saves the scan folders and timeout.
 pub fn save_plugin_scan_settings(
     directories: Vec<String>,
     timeout_seconds: u32,
 ) -> anyhow::Result<UiPluginScanSettings> {
-    let settings = plugin_discovery_api::update_scan_settings(ScanSettings {
-        directories: directories.into_iter().map(Into::into).collect(),
-        timeout_seconds: u64::from(timeout_seconds),
-    })?;
-    Ok(UiPluginScanSettings {
-        directories: settings
-            .directories
-            .into_iter()
-            .map(|path| path.to_string_lossy().into_owned())
-            .collect(),
-        timeout_seconds: u32::try_from(settings.timeout_seconds)?.clamp(1, 300),
-    })
+    let settings =
+        plugin_discovery_api::normalize_scan_settings(scan_settings(directories, timeout_seconds))?;
+    settings::store_plugin_scan(&settings.directories, settings.timeout_seconds)?;
+    Ok(settings.into())
 }
 
-/// Starts a worker and publishes progress events; never retains the project context.
+/// Saves the scan settings, then starts a worker that publishes progress events; never retains
+/// the project context.
 #[frb(sync)]
 pub fn scan_external_plugins(
     directories: Vec<String>,
@@ -177,14 +194,16 @@ pub fn scan_external_plugins(
     retry_quarantined: bool,
     sink: StreamSink<UiPluginScanEvent>,
 ) -> Result<(), String> {
-    plugin_discovery_api::start_scan(
-        ScanSettings {
-            directories: directories.into_iter().map(Into::into).collect(),
-            timeout_seconds: u64::from(timeout_seconds),
-        },
-        retry_quarantined,
-        move |event| sink.add(event.into()).is_ok(),
-    )
+    let settings =
+        plugin_discovery_api::normalize_scan_settings(scan_settings(directories, timeout_seconds))
+            .map_err(|error| error.to_string())?;
+    if let Err(error) = settings::store_plugin_scan(&settings.directories, settings.timeout_seconds)
+    {
+        tracing::warn!("Could not save the plugin scan settings: {error}");
+    }
+    plugin_discovery_api::start_scan(settings, retry_quarantined, move |event| {
+        sink.add(event.into()).is_ok()
+    })
     .map(|_| ())
     .map_err(|error| error.to_string())
 }
