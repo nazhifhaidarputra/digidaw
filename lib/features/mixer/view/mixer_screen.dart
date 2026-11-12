@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:karbeat/app/providers/mixer_state.dart';
 import 'package:karbeat/app/providers/project_provider.dart';
+import 'package:karbeat/core/l10n/localizer.dart';
 import 'package:karbeat/core/widgets/context_menu.dart';
 import 'package:karbeat/features/mixer/services/mixer_channel_targets.dart';
 import 'package:karbeat/features/mixer/services/routing_labels.dart';
@@ -106,7 +107,9 @@ class _MixerScreenState extends ConsumerState<MixerScreen> {
     final labels = RoutingLabels(mixer: store.mixer, tracks: store.tracks);
     return [
       DawContextAction(
-        title: 'Sidechain "${labels.channelName(source)}" to this channel…',
+        title: tr('mixer-sidechain-to-this-channel', {
+          'source': labels.channelName(source),
+        }),
         icon: Icons.call_merge,
         onTap: () => keySidechainFrom(
           context: context,
@@ -133,7 +136,7 @@ class _MixerScreenState extends ConsumerState<MixerScreen> {
           final colors = Theme.of(context).colorScheme;
           return Center(
             child: Text(
-              'No channels',
+              tr('mixer-no-channels'),
               style: TextStyle(
                 color: colors.onSurfaceVariant,
                 fontStyle: FontStyle.italic,
@@ -182,7 +185,11 @@ class _MixerScreenState extends ConsumerState<MixerScreen> {
                   final busCount = busIds.length + 1;
                   await ref
                       .read(mixerStateProvider.notifier)
-                      .createNewBusChannel(name: "Bus $busCount");
+                      .createNewBusChannel(
+                        name: tr('mixer-bus-default-name', {
+                          'number': busCount,
+                        }),
+                      );
                 },
                 child: Container(
                   width: 72,
@@ -202,7 +209,7 @@ class _MixerScreenState extends ConsumerState<MixerScreen> {
                       ),
                       const SizedBox(height: 6),
                       Text(
-                        'Add Bus',
+                        tr('mixer-add-bus'),
                         style: TextStyle(
                           color: colors.onSurfaceVariant,
                           fontSize: 10,
@@ -276,7 +283,7 @@ class _MixerScreenState extends ConsumerState<MixerScreen> {
                       child: selected == null
                           ? Center(
                               child: Text(
-                                'Select a channel to\nview effects',
+                                tr('mixer-select-channel-effects'),
                                 textAlign: TextAlign.center,
                                 style: TextStyle(
                                   color: colors.onSurfaceVariant,
@@ -305,7 +312,7 @@ class _MixerScreenState extends ConsumerState<MixerScreen> {
                       top: 12,
                       left: 16,
                       child: Text(
-                        "ROUTING MATRIX",
+                        tr('mixer-routing-matrix'),
                         style: TextStyle(
                           color: colors.onSurface.withValues(alpha: 0.16),
                           fontSize: 12,

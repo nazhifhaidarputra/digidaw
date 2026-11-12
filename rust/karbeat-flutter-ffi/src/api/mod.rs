@@ -5,6 +5,7 @@ pub mod automation;
 pub(crate) mod context;
 pub mod external_plugins;
 pub mod jobs;
+pub mod l10n;
 pub mod logging;
 pub mod mitigation;
 pub mod mixer;

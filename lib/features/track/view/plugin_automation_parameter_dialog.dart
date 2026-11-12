@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:karbeat/app/providers/automation_provider.dart';
+import 'package:karbeat/core/l10n/localizer.dart';
 import 'package:karbeat/src/rust/api/plugin.dart' as plugin_api;
 
 /// Opens the automatable parameter picker for a generator or effect plugin.
@@ -43,13 +44,16 @@ class _PluginAutomationParameterDialogState
 
   String _groupName(plugin_api.UiPluginParameter parameter) {
     final group = parameter.group.trim();
-    return group.isEmpty ? 'Other' : group;
+    return group.isEmpty ? tr('app-automation-other-group') : group;
   }
 
   String _metadata(plugin_api.UiPluginParameter parameter) {
     final type = parameter.paramType.name;
     if (parameter.choices.isNotEmpty) {
-      return '$type · ${parameter.choices.length} choices';
+      return tr('track-parameter-choices', {
+        'type': type,
+        'count': parameter.choices.length,
+      });
     }
     if (parameter.paramType == plugin_api.UiParameterType.bool) {
       return type;
@@ -89,14 +93,12 @@ class _PluginAutomationParameterDialogState
 
   Widget _buildCandidates(List<PluginAutomationCandidate> candidates) {
     if (candidates.isEmpty) {
-      return const Center(
-        child: Text('This plugin has no automatable parameters.'),
-      );
+      return Center(child: Text(tr('track-this-plugin-has-no-automatable')));
     }
 
     final filtered = candidates.where(_matches).toList(growable: false);
     if (filtered.isEmpty) {
-      return const Center(child: Text('No parameters match this search.'));
+      return Center(child: Text(tr('track-no-parameters-match-this-search')));
     }
 
     return ListView.builder(
@@ -132,7 +134,7 @@ class _PluginAutomationParameterDialogState
                 overflow: TextOverflow.ellipsis,
               ),
               trailing: candidate.alreadyAutomated
-                  ? const Text('Already automated')
+                  ? Text(tr('track-already-automated'))
                   : isSubmitting
                   ? const SizedBox.square(
                       dimension: 20,
@@ -155,7 +157,7 @@ class _PluginAutomationParameterDialogState
 
     return AlertDialog(
       title: Text(
-        'Add automation on ${widget.ownerName}',
+        tr('track-add-automation-on-owner', {'owner': widget.ownerName}),
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
       ),
@@ -166,8 +168,8 @@ class _PluginAutomationParameterDialogState
           children: [
             TextField(
               autofocus: true,
-              decoration: const InputDecoration(
-                hintText: 'Search parameters...',
+              decoration: InputDecoration(
+                hintText: tr('track-search-parameters'),
                 prefixIcon: Icon(Icons.search),
                 border: OutlineInputBorder(),
               ),
@@ -190,7 +192,7 @@ class _PluginAutomationParameterDialogState
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         Text(
-                          'Could not load plugin parameters.\n$error',
+                          '${tr('track-parameters-load-failed')}\n$error',
                           textAlign: TextAlign.center,
                         ),
                         const SizedBox(height: 12),
@@ -199,7 +201,7 @@ class _PluginAutomationParameterDialogState
                             pluginAutomationCandidatesProvider(widget.target),
                           ),
                           icon: const Icon(Icons.refresh),
-                          label: const Text('Retry'),
+                          label: Text(tr('common-retry')),
                         ),
                       ],
                     ),
@@ -213,7 +215,7 @@ class _PluginAutomationParameterDialogState
       actions: [
         TextButton(
           onPressed: () => Navigator.of(context).pop(),
-          child: const Text('Close'),
+          child: Text(tr('common-close')),
         ),
       ],
     );

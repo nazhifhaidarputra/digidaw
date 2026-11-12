@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:karbeat/app/providers/recording_state.dart';
 import 'package:karbeat/app/providers/transport_state.dart';
+import 'package:karbeat/core/l10n/localizer.dart';
 import 'package:karbeat/core/utils/clip_time_utils.dart';
 import 'package:karbeat/features/track/view/waveform_painter.dart';
 
@@ -76,7 +77,9 @@ class TrackRecordingGhost extends ConsumerWidget {
                         vertical: 2,
                       ),
                       child: Text(
-                        take.isStopping ? 'Saving…' : 'Recording',
+                        take.isStopping
+                            ? tr('settings-project-saving')
+                            : tr('track-recording'),
                         maxLines: 1,
                         overflow: TextOverflow.clip,
                         style: TextStyle(

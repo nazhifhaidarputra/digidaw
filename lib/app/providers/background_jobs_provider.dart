@@ -4,6 +4,7 @@ import 'package:fast_immutable_collections/fast_immutable_collections.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:freezed_annotation/freezed_annotation.dart';
 import 'package:karbeat/app/providers/notification_provider.dart';
+import 'package:karbeat/core/l10n/localizer.dart';
 import 'package:karbeat/core/utils/logger.dart';
 import 'package:karbeat/core/utils/result_type.dart';
 import 'package:karbeat/src/rust/api/jobs.dart';
@@ -54,7 +55,7 @@ class BackgroundJobCancelledException implements Exception {
   final int id;
 
   @override
-  String toString() => 'Background job $id was cancelled.';
+  String toString() => tr('app-job-cancelled', {'id': id});
 }
 
 /// The job finished with an error.
@@ -143,7 +144,7 @@ class BackgroundJobsNotifier extends Notifier<BackgroundJobsState> {
     if (event.state case UiJobState_Failed(
       :final message,
     ) when _unattendedKinds.contains(event.kind)) {
-      ref.notifyError(message, title: 'Background task failed');
+      ref.notifyError(message, title: tr('app-job-failed'));
     }
 
     final waiter = _waiters.remove(event.id);

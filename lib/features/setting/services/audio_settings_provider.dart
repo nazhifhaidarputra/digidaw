@@ -2,6 +2,7 @@ import 'package:fast_immutable_collections/fast_immutable_collections.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:karbeat/app/providers/telemetry_polling_suppression.dart';
 import 'package:karbeat/app/providers/notification_provider.dart';
+import 'package:karbeat/core/l10n/localizer.dart';
 import 'package:karbeat/core/utils/result_type.dart';
 import 'package:karbeat/features/setting/models/audio_settings_state.dart';
 import 'package:karbeat/features/setting/services/audio_dsp_preferences_service.dart';
@@ -60,7 +61,7 @@ class AudioSettingsNotifier extends Notifier<AudioSettingsState> {
         : AudioDspPreferencesService.defaultBlockSize;
     final fallbackReason = sampleRateValid && blockSizeValid
         ? null
-        : 'Unsupported saved DSP values were reset to defaults.';
+        : tr('settings-audio-reset-message');
 
     state = state.copyWith(
       supportedSampleRates: sampleRates,
@@ -74,7 +75,7 @@ class AudioSettingsNotifier extends Notifier<AudioSettingsState> {
     if (fallbackReason != null) {
       ref
           .read(notificationProvider.notifier)
-          .warn(fallbackReason, title: 'DSP settings reset');
+          .warn(fallbackReason, title: tr('settings-audio-reset-title'));
     }
     return Result.ok(null);
   }
@@ -106,7 +107,7 @@ class AudioSettingsNotifier extends Notifier<AudioSettingsState> {
     _initializationStarted = false;
     return ref.notifyErrorResult(
       error,
-      title: 'Could not initialize DSP settings',
+      title: tr('settings-audio-initialize-failed'),
     );
   }
 
@@ -127,7 +128,7 @@ class AudioSettingsNotifier extends Notifier<AudioSettingsState> {
       state = state.copyWith(isApplying: false);
       return ref.notifyErrorResult(
         error,
-        title: 'Could not apply DSP settings',
+        title: tr('settings-audio-apply-failed'),
       );
     }
 
@@ -147,7 +148,7 @@ class AudioSettingsNotifier extends Notifier<AudioSettingsState> {
     if (saved case Error<void>(error: final error)) {
       return ref.notifyErrorResult(
         error,
-        title: 'DSP settings applied but not saved',
+        title: tr('settings-audio-not-saved'),
       );
     }
     return Result.ok(null);

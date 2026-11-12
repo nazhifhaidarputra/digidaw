@@ -180,32 +180,32 @@ class _TimelineRulerBarState extends ConsumerState<_TimelineRulerBar> {
       title: marker.name,
       actions: [
         DawContextAction(
-          title: "Rename",
+          title: tr('common-rename'),
           icon: Icons.edit,
           onTap: () async {
             final name = await showRenameDialog(
               context,
-              title: "Rename Cue Marker",
-              label: "Marker name",
+              title: tr('track-rename-cue-marker'),
+              label: tr('track-marker-name'),
               currentName: marker.name,
             );
             if (name != null) await _timeline.renameCueMarker(marker, name);
           },
         ),
         DawContextAction(
-          title: "Change Color",
+          title: tr('track-change-color'),
           icon: Icons.color_lens,
           onTap: () async {
             final color = await showColorPickerDialog(
               context,
               marker.color.fromRGBorRGBAtoColor(),
-              title: "Cue Marker Color",
+              title: tr('track-cue-marker-color'),
             );
             if (color != null) await _timeline.recolorCueMarker(marker, color);
           },
         ),
         DawContextAction(
-          title: "Delete",
+          title: tr('common-delete'),
           icon: Icons.delete,
           isDestructive: true,
           onTap: () => _timeline.removeCueMarker(marker),
@@ -228,15 +228,15 @@ class _TimelineRulerBarState extends ConsumerState<_TimelineRulerBar> {
 
     return showDawContextMenu(
       context: context,
-      title: "Timeline",
+      title: tr('track-timeline'),
       actions: [
         DawContextAction(
-          title: "Add Cue Marker Here",
+          title: tr('track-add-cue-marker-here'),
           icon: Icons.bookmark_add,
           onTap: () => _timeline.addCueMarker(tick),
         ),
         DawContextAction(
-          title: "Set Loop Start Here",
+          title: tr('track-set-loop-start-here'),
           icon: Icons.first_page,
           onTap: () => _timeline.setLoopRegion(
             tick,
@@ -246,7 +246,7 @@ class _TimelineRulerBarState extends ConsumerState<_TimelineRulerBar> {
           ),
         ),
         DawContextAction(
-          title: "Set Loop End Here",
+          title: tr('track-set-loop-end-here'),
           icon: Icons.last_page,
           onTap: () => _timeline.setLoopRegion(
             region != null && region.startTick < tick
@@ -257,19 +257,19 @@ class _TimelineRulerBarState extends ConsumerState<_TimelineRulerBar> {
         ),
         if (selectionSpan != null)
           DawContextAction(
-            title: "Loop Selected Clips",
+            title: tr('track-loop-selected-clips'),
             icon: Icons.select_all,
             onTap: () =>
                 _timeline.setLoopRegion(selectionSpan.start, selectionSpan.end),
           ),
         if (region != null) ...[
           DawContextAction(
-            title: "Clear Loop Region",
+            title: tr('track-clear-loop-region'),
             icon: Icons.clear,
             onTap: _timeline.clearLoopRegion,
           ),
           DawContextAction(
-            title: "Export Loop Region…",
+            title: tr('track-export-loop-region'),
             icon: Icons.ios_share,
             onTap: () {
               ref
@@ -279,7 +279,7 @@ class _TimelineRulerBarState extends ConsumerState<_TimelineRulerBar> {
             },
           ),
           DawContextAction(
-            title: "Bounce Loop Region to New Source",
+            title: tr('track-bounce-loop-region-to-new'),
             icon: Icons.graphic_eq,
             onTap: _timeline.bounceLoopRegion,
           ),
@@ -460,7 +460,7 @@ class _CueMarkerFlag extends StatelessWidget {
         ? Colors.white
         : Colors.black;
     return Tooltip(
-      message: '${marker.name}\nDrag to move, right click for options',
+      message: '${marker.name}\n${tr('track-marker-tooltip')}',
       waitDuration: const Duration(milliseconds: 600),
       child: MouseRegion(
         cursor: SystemMouseCursors.click,

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:karbeat/app/providers/automation_provider.dart';
+import 'package:karbeat/core/l10n/localizer.dart';
 import 'package:karbeat/core/widgets/context_menu.dart';
 import 'package:karbeat/features/track/models/automation_lane_clipboard.dart';
 import 'package:karbeat/features/track/services/automation_editor_service.dart';
@@ -27,18 +28,18 @@ class AutomationLaneContextMenu extends ConsumerWidget {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        title: const Text('Remove automation?'),
+        title: Text(tr('track-remove-automation')),
         content: Text(
-          'Permanently remove “${entry.lane.label}” and all of its automation points?',
+          tr('track-remove-automation-message', {'lane': entry.lane.label}),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(dialogContext).pop(false),
-            child: const Text('Cancel'),
+            child: Text(tr('common-cancel')),
           ),
           FilledButton(
             onPressed: () => Navigator.of(dialogContext).pop(true),
-            child: const Text('Remove'),
+            child: Text(tr('common-remove')),
           ),
         ],
       ),
@@ -71,17 +72,20 @@ class AutomationLaneContextMenu extends ConsumerWidget {
     int pasteTick() => ref.read(automationEditorProvider).pasteTickFor(laneId);
 
     return ContextMenuWrapper(
-      title: 'Automation: ${entry.sourceName} › ${entry.lane.label}',
+      title: tr('track-automation-title', {
+        'sourceName': entry.sourceName,
+        'lane': entry.lane.label,
+      }),
       actions: [
         if (hasCurveClipboard)
           DawContextAction(
-            title: 'Paste curve',
+            title: tr('track-paste-curve'),
             icon: Icons.content_paste,
             onTap: () => editor.pasteCurve(laneId: laneId, atTick: pasteTick()),
           ),
         ...automationTemplateActions(
           ref: ref,
-          title: 'Insert template',
+          title: tr('track-insert-template'),
           onInsert: (template) => editor.insertTemplate(
             laneId: laneId,
             atTick: pasteTick(),
@@ -89,19 +93,21 @@ class AutomationLaneContextMenu extends ConsumerWidget {
           ),
         ),
         DawContextAction(
-          title: 'Manage curve templates…',
+          title: tr('track-manage-curve-templates'),
           icon: Icons.bookmarks_outlined,
           onTap: () => showAutomationTemplateManager(context),
         ),
         DawContextAction(
-          title: collapsed ? 'Expand lane' : 'Shrink lane',
+          title: collapsed ? tr('track-lane-expand') : tr('track-lane-shrink'),
           icon: collapsed ? Icons.unfold_more : Icons.unfold_less,
           onTap: () => ref
               .read(automationProvider.notifier)
               .toggleAutomationLaneCollapsed(laneId: entry.laneId),
         ),
         DawContextAction(
-          title: enabled ? 'Unlink automation' : 'Relink automation',
+          title: enabled
+              ? tr('track-automation-unlink')
+              : tr('track-automation-relink'),
           icon: enabled ? Icons.link_off : Icons.link,
           onTap: () => ref
               .read(automationProvider.notifier)
@@ -111,7 +117,7 @@ class AutomationLaneContextMenu extends ConsumerWidget {
               ),
         ),
         DawContextAction(
-          title: 'Remove automation',
+          title: tr('track-remove-automation-action'),
           icon: Icons.delete_outline,
           isDestructive: true,
           onTap: () => _confirmRemoval(context, ref),

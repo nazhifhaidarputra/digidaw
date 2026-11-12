@@ -1,5 +1,6 @@
 import 'package:fast_immutable_collections/fast_immutable_collections.dart';
 import 'package:flutter/painting.dart' show Color;
+import 'package:karbeat/core/l10n/localizer.dart';
 import 'package:karbeat/core/utils/color.dart';
 import 'package:karbeat/features/mixer/services/routing_labels.dart';
 import 'package:karbeat/src/rust/api/mixer.dart';
@@ -29,9 +30,9 @@ extension MixerChannelTargetLookup on UiMixerChannelTarget {
 
   /// "Track", "Bus" or "Master".
   String get kindLabel => switch (this) {
-    UiMixerChannelTarget_Track() => 'Track',
-    UiMixerChannelTarget_Bus() => 'Bus',
-    UiMixerChannelTarget_Master() => 'Master',
+    UiMixerChannelTarget_Track() => tr('app-automation-track'),
+    UiMixerChannelTarget_Bus() => tr('app-automation-bus'),
+    UiMixerChannelTarget_Master() => tr('app-automation-master'),
   };
 
   /// Track or bus ID; null for the master.

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:karbeat/app/providers/piano_roll_state.dart';
 import 'package:karbeat/app/providers/project_provider.dart';
+import 'package:karbeat/core/l10n/localizer.dart';
 import 'package:karbeat/src/rust/api/pattern.dart';
 
 /// Opens an editor for the velocity, fine pitch, and pan of the selected notes,
@@ -86,7 +87,7 @@ class _NotePropertiesDialogState extends ConsumerState<_NotePropertiesDialog> {
           SizedBox(
             width: 64,
             child: Text(
-              mixed ? 'Mixed' : format(value),
+              mixed ? tr('piano-roll-mixed') : format(value),
               textAlign: TextAlign.end,
               style: TextStyle(color: colors.onSurfaceVariant, fontSize: 12),
             ),
@@ -100,17 +101,19 @@ class _NotePropertiesDialogState extends ConsumerState<_NotePropertiesDialog> {
 
     return AlertDialog(
       title: Text(
-        count == 1 ? 'Note properties' : 'Note properties · $count notes',
+        count == 1
+            ? tr('piano-roll-note-properties-title')
+            : tr('piano-roll-note-properties-count', {'count': count}),
       ),
       content: SizedBox(
         width: 420,
         child: count == 0
-            ? const Text('This pattern has no notes.')
+            ? Text(tr('piano-roll-this-pattern-has-no-notes'))
             : Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   slider(
-                    label: 'Velocity',
+                    label: tr('piano-roll-velocity'),
                     value: _velocity ?? first!.velocity.toDouble(),
                     min: 1,
                     max: 127,
@@ -120,7 +123,7 @@ class _NotePropertiesDialogState extends ConsumerState<_NotePropertiesDialog> {
                     onChanged: (v) => setState(() => _velocity = v),
                   ),
                   slider(
-                    label: 'Pitch',
+                    label: tr('piano-roll-pitch'),
                     value: _pitch ?? first!.pitch,
                     min: -2,
                     max: 2,
@@ -131,7 +134,7 @@ class _NotePropertiesDialogState extends ConsumerState<_NotePropertiesDialog> {
                     onChanged: (v) => setState(() => _pitch = v),
                   ),
                   slider(
-                    label: 'Pan',
+                    label: tr('piano-roll-pan'),
                     value: _pan ?? first!.pan,
                     min: -1,
                     max: 1,
@@ -152,11 +155,11 @@ class _NotePropertiesDialogState extends ConsumerState<_NotePropertiesDialog> {
             _pitch = 0;
             _pan = 0;
           }),
-          child: const Text('Reset'),
+          child: Text(tr('common-reset')),
         ),
         TextButton(
           onPressed: () => Navigator.pop(context),
-          child: const Text('Cancel'),
+          child: Text(tr('common-cancel')),
         ),
         FilledButton(
           onPressed:
@@ -164,7 +167,7 @@ class _NotePropertiesDialogState extends ConsumerState<_NotePropertiesDialog> {
                   (_velocity == null && _pitch == null && _pan == null)
               ? null
               : () => _apply(targets),
-          child: const Text('Apply'),
+          child: Text(tr('common-apply')),
         ),
       ],
     );

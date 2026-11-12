@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:karbeat/app/providers/automation_provider.dart';
 import 'package:karbeat/app/providers/transport_state.dart';
 import 'package:karbeat/app/providers/workspace_state.dart';
+import 'package:karbeat/core/l10n/localizer.dart';
 import 'package:karbeat/features/track/models/automation_lane_editor.dart';
 import 'package:karbeat/features/track/services/automation_curve_evaluator.dart';
 import 'package:karbeat/features/track/services/automation_editor_service.dart';
@@ -733,8 +734,12 @@ class _AutomationLaneSlotState extends ConsumerState<AutomationLaneSlot> {
     return _positionedTooltip(
       handle.center,
       sampler.traits(point.curveType).tensionIsCount
-          ? 'Count ${sampler.tensionCount(point.tension)}'
-          : 'Tension ${point.tension.toStringAsFixed(2)}',
+          ? tr('track-tension-count', {
+              'count': sampler.tensionCount(point.tension),
+            })
+          : tr('track-tension-value', {
+              'tension': point.tension.toStringAsFixed(2),
+            }),
     );
   }
 

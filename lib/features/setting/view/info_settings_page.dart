@@ -2,13 +2,15 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:karbeat/app/providers/notification_provider.dart';
+import 'package:karbeat/core/l10n/localizer.dart';
 import 'package:karbeat/core/utils/result_type.dart';
 import 'package:karbeat/features/setting/services/app_info_service.dart';
 
 class InfoSettingsPage extends ConsumerWidget {
   const InfoSettingsPage({super.key});
 
-  static const supportUrl = 'https://github.com/nazhifhaidarputra/digidaw/issues';
+  static const supportUrl =
+      'https://github.com/nazhifhaidarputra/digidaw/issues';
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -24,45 +26,50 @@ class InfoSettingsPage extends ConsumerWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                'Info',
+                tr('settings-menu-info'),
                 key: const ValueKey('settings-page-info'),
                 style: Theme.of(context).textTheme.headlineSmall,
               ),
               const SizedBox(height: 8),
               Text(
-                'DigiDAW is a cross-platform digital audio workstation powered by Flutter and Rust.',
+                tr('settings-info-description'),
                 style: Theme.of(context).textTheme.bodyLarge,
               ),
               const SizedBox(height: 24),
               _InfoCard(
-                title: 'Application',
+                title: tr('settings-info-application'),
                 child: infoState.isLoading
                     ? const LinearProgressIndicator()
                     : infoState.errorMessage != null
                     ? Row(
                         children: [
-                          const Expanded(
-                            child: Text('Version information is unavailable.'),
+                          Expanded(
+                            child: Text(
+                              tr('settings-info-version-unavailable'),
+                            ),
                           ),
                           TextButton(
                             onPressed: () =>
                                 ref.invalidate(appPackageMetadataProvider),
-                            child: const Text('Retry'),
+                            child: Text(tr('common-retry')),
                           ),
                         ],
                       )
                     : Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          _InfoRow(label: 'Name', value: 'DigiDAW'),
                           _InfoRow(
-                            label: 'Version',
-                            value: infoState.version ?? 'Unknown',
+                            label: tr('settings-info-name'),
+                            value: 'DigiDAW',
                           ),
                           _InfoRow(
-                            label: 'Build',
+                            label: tr('settings-info-version'),
+                            value: infoState.version ?? tr('common-unknown'),
+                          ),
+                          _InfoRow(
+                            label: tr('settings-info-build'),
                             value: infoState.buildNumber?.isEmpty ?? true
-                                ? 'Not specified'
+                                ? tr('settings-info-not-specified')
                                 : infoState.buildNumber!,
                           ),
                         ],
@@ -70,19 +77,17 @@ class InfoSettingsPage extends ConsumerWidget {
               ),
               const SizedBox(height: 16),
               _InfoCard(
-                title: 'Report a bug',
+                title: tr('settings-info-report-bug'),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text(
-                      'Include your DigiDAW version, operating system, steps to reproduce, expected result, actual result, and relevant logs.',
-                    ),
+                    Text(tr('settings-info-report-bug-help')),
                     const SizedBox(height: 12),
                     Row(
                       children: [
                         const Expanded(child: SelectableText(supportUrl)),
                         IconButton(
-                          tooltip: 'Copy bug report URL',
+                          tooltip: tr('settings-info-copy-url'),
                           onPressed: () => _copySupportUrl(ref),
                           icon: const Icon(Icons.copy_outlined),
                         ),
@@ -93,7 +98,7 @@ class InfoSettingsPage extends ConsumerWidget {
               ),
               const SizedBox(height: 16),
               _InfoCard(
-                title: 'Open-source licenses',
+                title: tr('settings-info-licenses'),
                 child: Align(
                   alignment: Alignment.centerLeft,
                   child: OutlinedButton.icon(
@@ -102,7 +107,7 @@ class InfoSettingsPage extends ConsumerWidget {
                       applicationName: 'DigiDAW',
                     ),
                     icon: const Icon(Icons.article_outlined),
-                    label: const Text('View licenses'),
+                    label: Text(tr('settings-info-view-licenses')),
                   ),
                 ),
               ),
@@ -120,10 +125,12 @@ class InfoSettingsPage extends ConsumerWidget {
     if (result.isErr()) {
       ref
           .read(notificationProvider.notifier)
-          .error(result.err(), title: 'Could not copy URL');
+          .error(result.err(), title: tr('settings-info-copy-url-failed'));
       return;
     }
-    ref.read(notificationProvider.notifier).info('Bug report URL copied');
+    ref
+        .read(notificationProvider.notifier)
+        .info(tr('settings-info-url-copied'));
   }
 }
 

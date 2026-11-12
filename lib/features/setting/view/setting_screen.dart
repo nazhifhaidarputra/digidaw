@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:karbeat/core/l10n/localizer.dart';
 import 'package:karbeat/features/setting/models/setting_state.dart';
 import 'package:karbeat/features/setting/services/setting_provider.dart';
 import 'package:karbeat/features/setting/view/general_settings_page.dart';
@@ -70,12 +71,15 @@ class _SettingsHeader extends StatelessWidget {
       child: Row(
         children: [
           IconButton(
-            tooltip: 'Close settings',
+            tooltip: tr('settings-close'),
             onPressed: onClose,
             icon: const Icon(Icons.arrow_back),
           ),
           const SizedBox(width: 8),
-          Text('Settings', style: Theme.of(context).textTheme.titleLarge),
+          Text(
+            tr('settings-title'),
+            style: Theme.of(context).textTheme.titleLarge,
+          ),
         ],
       ),
     );
@@ -185,11 +189,7 @@ class _SettingsPlaceholder extends ConsumerWidget {
                     children: [
                       Icon(Icons.construction, color: colors.onSurfaceVariant),
                       const SizedBox(width: 12),
-                      Expanded(
-                        child: Text(
-                          'This settings page will be implemented in a later phase.',
-                        ),
-                      ),
+                      Expanded(child: Text(tr('settings-page-placeholder'))),
                     ],
                   ),
                 ),
@@ -203,15 +203,15 @@ class _SettingsPlaceholder extends ConsumerWidget {
 }
 
 String _labelFor(SettingMenu menu) => switch (menu) {
-  SettingMenu.general => 'General',
-  SettingMenu.hostAndDevices => 'Host & Devices',
-  SettingMenu.project => 'Project',
-  SettingMenu.appearance => 'Appearance',
-  SettingMenu.audio => 'Audio',
-  SettingMenu.keyBinding => 'Key Bindings',
-  SettingMenu.plugins => 'Plugins',
-  SettingMenu.log => 'Logs',
-  SettingMenu.info => 'Info',
+  SettingMenu.general => tr('settings-menu-general'),
+  SettingMenu.hostAndDevices => tr('settings-menu-host-devices'),
+  SettingMenu.project => tr('settings-menu-project'),
+  SettingMenu.appearance => tr('settings-menu-appearance'),
+  SettingMenu.audio => tr('settings-menu-audio'),
+  SettingMenu.keyBinding => tr('settings-menu-key-bindings'),
+  SettingMenu.plugins => tr('settings-menu-plugins'),
+  SettingMenu.log => tr('settings-menu-logs'),
+  SettingMenu.info => tr('settings-menu-info'),
 };
 
 IconData _iconFor(SettingMenu menu) => switch (menu) {
@@ -227,19 +227,13 @@ IconData _iconFor(SettingMenu menu) => switch (menu) {
 };
 
 String _descriptionFor(SettingMenu menu) => switch (menu) {
-  SettingMenu.general =>
-    'Configure application-wide behavior such as undo history retention.',
-  SettingMenu.hostAndDevices =>
-    'Choose the audio host and output device. Input devices are not supported yet.',
-  SettingMenu.project => 'Edit metadata stored with the current project.',
-  SettingMenu.appearance =>
-    'Personalize the application theme, colors, background, and typography.',
-  SettingMenu.audio => 'Configure DSP processing sample rate and block size.',
-  SettingMenu.keyBinding =>
-    'Review and customize application keyboard shortcuts.',
-  SettingMenu.plugins => 'Third-party plugin discovery and hosting settings.',
-  SettingMenu.log =>
-    'Configure diagnostics and inspect recent application logs.',
-  SettingMenu.info =>
-    'View application version, licenses, and bug-report information.',
+  SettingMenu.general => tr('settings-menu-general-description'),
+  SettingMenu.hostAndDevices => tr('settings-menu-host-devices-description'),
+  SettingMenu.project => tr('settings-menu-project-description'),
+  SettingMenu.appearance => tr('settings-menu-appearance-description'),
+  SettingMenu.audio => tr('settings-menu-audio-description'),
+  SettingMenu.keyBinding => tr('settings-menu-key-bindings-description'),
+  SettingMenu.plugins => tr('settings-menu-plugins-description'),
+  SettingMenu.log => tr('settings-menu-logs-description'),
+  SettingMenu.info => tr('settings-menu-info-description'),
 };

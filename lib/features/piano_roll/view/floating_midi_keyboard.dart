@@ -7,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:karbeat/app/providers/project_provider.dart';
 import 'package:karbeat/app/providers/notification_provider.dart';
 import 'package:karbeat/app/providers/workspace_state.dart';
+import 'package:karbeat/core/l10n/localizer.dart';
 import 'package:karbeat/shared/models/piano_key.dart';
 import 'package:karbeat/src/rust/api/project.dart';
 import 'package:karbeat/src/rust/api/audio.dart' as audio_api;
@@ -49,7 +50,7 @@ class _FloatingMidiKeyboardState extends ConsumerState<FloatingMidiKeyboard> {
   String _getGeneratorName(UiGeneratorInstance instance) {
     return instance.instanceType.when(
       plugin: (p) => p.label,
-      sampler: (assetId, rootNote) => "Sampler",
+      sampler: (assetId, rootNote) => tr('app-automation-sampler'),
     );
   }
 
@@ -215,7 +216,7 @@ class _FloatingMidiKeyboardState extends ConsumerState<FloatingMidiKeyboard> {
                         ),
                         const SizedBox(width: 8),
                         Text(
-                          "MIDI CONTROLLER",
+                          tr('piano-roll-midi-controller'),
                           style: TextStyle(
                             color: colors.onSurface,
                             fontSize: 12,
@@ -225,9 +226,10 @@ class _FloatingMidiKeyboardState extends ConsumerState<FloatingMidiKeyboard> {
                         ),
                         const Spacer(),
                         Tooltip(
-                          message:
-                              "Octave ${kState.baseOctave} · "
-                              "Key ${midiPitchClassName(kState.basePitchClass)}",
+                          message: tr('piano-roll-octave-key', {
+                            'octave': kState.baseOctave,
+                            'key': midiPitchClassName(kState.basePitchClass),
+                          }),
                           child: Container(
                             padding: const EdgeInsets.symmetric(
                               horizontal: 8,
@@ -270,7 +272,7 @@ class _FloatingMidiKeyboardState extends ConsumerState<FloatingMidiKeyboard> {
                   child: Row(
                     children: [
                       _buildStepControl(
-                        "OCTAVE",
+                        tr('piano-roll-octave'),
                         "${kState.baseOctave}",
                         () => workspaceNotifier.setMidiKeyboardOctave(
                           kState.baseOctave - 1,
@@ -286,7 +288,7 @@ class _FloatingMidiKeyboardState extends ConsumerState<FloatingMidiKeyboard> {
                       ),
                       const SizedBox(width: 12),
                       _buildStepControl(
-                        "RANGE",
+                        tr('piano-roll-range'),
                         "${kState.keyRange}",
                         () => workspaceNotifier.setMidiKeyboardRange(
                           kState.keyRange - 1,
@@ -311,7 +313,7 @@ class _FloatingMidiKeyboardState extends ConsumerState<FloatingMidiKeyboard> {
                               value: activeGeneratorId,
                               isExpanded: true,
                               hint: Text(
-                                "Select Synth",
+                                tr('piano-roll-select-synth'),
                                 style: TextStyle(
                                   color: colors.onSurfaceVariant,
                                   fontSize: 12,
@@ -430,7 +432,7 @@ class _FloatingMidiKeyboardState extends ConsumerState<FloatingMidiKeyboard> {
     return Column(
       children: [
         Text(
-          "KEY",
+          tr('piano-roll-key'),
           style: TextStyle(
             color: colors.onSurfaceVariant,
             fontSize: 10,

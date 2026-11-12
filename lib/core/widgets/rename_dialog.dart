@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:karbeat/core/l10n/localizer.dart';
 
 /// Asks for a new name and resolves with it trimmed, or null when cancelled,
 /// left empty, or unchanged from [currentName].
@@ -26,11 +27,11 @@ Future<String?> showRenameDialog(
       actions: [
         TextButton(
           onPressed: () => Navigator.pop(dialogContext),
-          child: const Text("Cancel"),
+          child: Text(tr('common-cancel')),
         ),
         ElevatedButton(
           onPressed: () => Navigator.pop(dialogContext, pendingName),
-          child: const Text("Rename"),
+          child: Text(tr('common-rename')),
         ),
       ],
     ),

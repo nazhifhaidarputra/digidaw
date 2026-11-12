@@ -2,8 +2,13 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:karbeat/core/l10n/localizer.dart';
 import 'package:karbeat/features/setting/models/general_settings_state.dart';
 import 'package:karbeat/features/setting/services/general_settings_provider.dart';
+import 'package:karbeat/features/setting/services/language_provider.dart';
+import 'package:karbeat/features/setting/view/language_change_dialog.dart';
+import 'package:karbeat/features/setting/view/language_flag.dart';
+import 'package:karbeat/src/rust/api/l10n.dart';
 
 class GeneralSettingsPage extends ConsumerWidget {
   const GeneralSettingsPage({super.key});
@@ -48,23 +53,31 @@ class GeneralSettingsPage extends ConsumerWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                'General',
+                tr('settings-menu-general'),
                 key: const ValueKey('settings-page-general'),
                 style: Theme.of(context).textTheme.headlineSmall,
               ),
               const SizedBox(height: 24),
+              const _LanguageSection(),
+              const SizedBox(height: 32),
               DropdownButtonFormField<int>(
                 key: ValueKey('history-limit-field-${selection.limit}'),
                 initialValue: selection.limit,
-                decoration: const InputDecoration(
-                  labelText: 'Maximum undo history entries',
+                decoration: InputDecoration(
+                  labelText: tr('settings-general-history-limit'),
                   border: OutlineInputBorder(),
                 ),
                 items: historyOptions
                     .map(
                       (value) => DropdownMenuItem(
                         value: value,
-                        child: Text(value == 0 ? 'Disabled' : '$value entries'),
+                        child: Text(
+                          value == 0
+                              ? tr('common-disabled')
+                              : tr('settings-general-history-entries', {
+                                  'count': value,
+                                }),
+                        ),
                       ),
                     )
                     .toList(growable: false),
@@ -81,20 +94,21 @@ class GeneralSettingsPage extends ConsumerWidget {
                       },
               ),
               const SizedBox(height: 12),
-              const Text(
-                'Lower values use less memory. Reducing the limit immediately removes the oldest undo and redo entries. Choosing Disabled clears both histories.',
-              ),
+              Text(tr('settings-general-history-help')),
               if (selection.busy) ...[
                 const SizedBox(height: 16),
                 const LinearProgressIndicator(),
               ],
               const SizedBox(height: 32),
-              Text('Auto save', style: Theme.of(context).textTheme.titleMedium),
+              Text(
+                tr('settings-general-auto-save'),
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
               const SizedBox(height: 8),
               SwitchListTile(
                 key: const ValueKey('auto-save-enabled-switch'),
                 contentPadding: EdgeInsets.zero,
-                title: const Text('Enable auto save'),
+                title: Text(tr('settings-general-auto-save-enable')),
                 value: autoSave.enabled,
                 onChanged: autoSave.busy
                     ? null
@@ -110,8 +124,8 @@ class GeneralSettingsPage extends ConsumerWidget {
                   'auto-save-interval-field-${autoSave.intervalSeconds}',
                 ),
                 initialValue: autoSave.intervalSeconds,
-                decoration: const InputDecoration(
-                  labelText: 'Auto save every',
+                decoration: InputDecoration(
+                  labelText: tr('settings-general-auto-save-interval'),
                   border: OutlineInputBorder(),
                 ),
                 items: intervalOptions
@@ -135,40 +149,38 @@ class GeneralSettingsPage extends ConsumerWidget {
                       },
               ),
               const SizedBox(height: 12),
-              const Text(
-                'Auto save writes a recovery copy of unsaved changes. It never overwrites your project file; after a crash, DigiDAW offers to restore the copy on the next launch.',
-              ),
+              Text(tr('settings-general-auto-save-help')),
               if (autoSave.busy) ...[
                 const SizedBox(height: 16),
                 const LinearProgressIndicator(),
               ],
               const SizedBox(height: 32),
-              Text('Folders', style: Theme.of(context).textTheme.titleMedium),
-              const SizedBox(height: 8),
-              const _DefaultFolderTile(
-                kind: DefaultFolder.project,
-                title: 'Default project folder',
-                unsetText:
-                    'Not set. Save and open dialogs start where the system chooses.',
+              Text(
+                tr('settings-general-folders'),
+                style: Theme.of(context).textTheme.titleMedium,
               ),
-              const _DefaultFolderTile(
+              const SizedBox(height: 8),
+              _DefaultFolderTile(
+                kind: DefaultFolder.project,
+                title: tr('settings-general-project-folder'),
+                unsetText: tr('settings-general-project-folder-unset'),
+              ),
+              _DefaultFolderTile(
                 kind: DefaultFolder.export,
-                title: 'Default export folder',
-                unsetText: 'Not set. Choose a folder for every export.',
+                title: tr('settings-general-export-folder'),
+                unsetText: tr('settings-general-export-folder-unset'),
               ),
               const SizedBox(height: 32),
               Text(
-                'Recent projects',
+                tr('settings-general-recent-projects'),
                 style: Theme.of(context).textTheme.titleMedium,
               ),
               const SizedBox(height: 8),
               SwitchListTile(
                 key: const ValueKey('show-recent-projects-switch'),
                 contentPadding: EdgeInsets.zero,
-                title: const Text('Show recent projects'),
-                subtitle: const Text(
-                  'Lists recently opened projects under Open recent in the Project menu. Hiding them keeps the list.',
-                ),
+                title: Text(tr('settings-general-recent-projects-show')),
+                subtitle: Text(tr('settings-general-recent-projects-help')),
                 value: showRecentProjects,
                 onChanged: (value) => unawaited(
                   ref
@@ -184,9 +196,10 @@ class GeneralSettingsPage extends ConsumerWidget {
   }
 
   static String _formatInterval(int seconds) {
-    if (seconds % 60 != 0) return '$seconds seconds';
-    final minutes = seconds ~/ 60;
-    return minutes == 1 ? '1 minute' : '$minutes minutes';
+    if (seconds % 60 != 0) {
+      return tr('settings-general-interval-seconds', {'count': seconds});
+    }
+    return tr('settings-general-interval-minutes', {'count': seconds ~/ 60});
   }
 }
 
@@ -228,7 +241,7 @@ class _DefaultFolderTile extends ConsumerWidget {
           Text(path ?? unsetText),
           if (folder.missing)
             Text(
-              'This folder no longer exists, so it is not used.',
+              tr('settings-general-folder-missing'),
               key: ValueKey('default-folder-${kind.name}-missing'),
               style: TextStyle(color: theme.colorScheme.error),
             ),
@@ -242,7 +255,7 @@ class _DefaultFolderTile extends ConsumerWidget {
             onPressed: folder.busy
                 ? null
                 : () => unawaited(notifier.chooseDefaultFolder(kind)),
-            child: const Text('Choose…'),
+            child: Text(tr('common-choose')),
           ),
           if (path != null)
             TextButton(
@@ -250,10 +263,140 @@ class _DefaultFolderTile extends ConsumerWidget {
               onPressed: folder.busy
                   ? null
                   : () => unawaited(notifier.setDefaultFolder(kind, null)),
-              child: const Text('Reset'),
+              child: Text(tr('common-reset')),
             ),
         ],
       ),
+    );
+  }
+}
+
+/// The value of the "System default" choice in the language selector.
+const _systemLanguage = '';
+
+/// Picks the app language, after a warning in the current and the new
+/// language.
+class _LanguageSection extends ConsumerStatefulWidget {
+  const _LanguageSection();
+
+  @override
+  ConsumerState<_LanguageSection> createState() => _LanguageSectionState();
+}
+
+class _LanguageSectionState extends ConsumerState<_LanguageSection> {
+  /// Bumped to rebuild the selector on its saved value after a choice.
+  int _resets = 0;
+
+  @override
+  Widget build(BuildContext context) {
+    final language = ref.watch(languageProvider);
+    final theme = Theme.of(context);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(tr('settings-language-title'), style: theme.textTheme.titleMedium),
+        const SizedBox(height: 12),
+        DropdownButtonFormField<String>(
+          key: ValueKey(
+            'language-field-${language.selected ?? 'system'}-$_resets',
+          ),
+          initialValue: language.selected ?? _systemLanguage,
+          isExpanded: true,
+          decoration: InputDecoration(
+            labelText: tr('settings-language-field'),
+            border: const OutlineInputBorder(),
+          ),
+          items: [
+            DropdownMenuItem(
+              key: const ValueKey('language-option-system'),
+              value: _systemLanguage,
+              child: Row(
+                children: [
+                  const Icon(Icons.computer, size: 18),
+                  const SizedBox(width: 12),
+                  Flexible(
+                    child: Text(
+                      tr('settings-language-system', {
+                        'language': language.system?.nativeName ?? '',
+                      }),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            for (final option in language.languages)
+              DropdownMenuItem(
+                key: ValueKey('language-option-${option.code}'),
+                value: option.code,
+                child: _LanguageLabel(language: option),
+              ),
+          ],
+          onChanged: language.isApplying || language.languages.isEmpty
+              ? null
+              : (value) {
+                  if (value != null) unawaited(_choose(value));
+                },
+        ),
+        const SizedBox(height: 12),
+        Text(tr('settings-language-help')),
+        if (language.isApplying) ...[
+          const SizedBox(height: 16),
+          const LinearProgressIndicator(),
+        ],
+      ],
+    );
+  }
+
+  Future<void> _choose(String value) async {
+    final state = ref.read(languageProvider);
+    final code = value == _systemLanguage ? null : value;
+    final target = code == null ? state.system : state.language(code);
+    if (code != state.selected && target != null) {
+      final confirmed = await showLanguageChangeDialog(
+        context,
+        current: state.active,
+        target: target,
+      );
+      if (confirmed) {
+        await ref.read(languageProvider.notifier).setLanguage(code);
+      }
+    }
+    // Show the saved choice again, whether the change happened or not.
+    if (mounted) setState(() => _resets++);
+  }
+}
+
+/// A language's flag and its name in itself, with its English name when that
+/// differs.
+class _LanguageLabel extends StatelessWidget {
+  const _LanguageLabel({required this.language});
+
+  final UiLanguage language;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Row(
+      children: [
+        LanguageFlag(language: language),
+        const SizedBox(width: 12),
+        Flexible(
+          child: Text.rich(
+            TextSpan(
+              text: language.nativeName,
+              children: [
+                if (language.englishName != language.nativeName)
+                  TextSpan(
+                    text: '  ${language.englishName}',
+                    style: TextStyle(color: theme.colorScheme.onSurfaceVariant),
+                  ),
+              ],
+            ),
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
+      ],
     );
   }
 }

@@ -4,6 +4,7 @@ import 'package:karbeat/app/providers/clip_placement_state.dart';
 import 'package:karbeat/app/providers/project_provider.dart';
 import 'package:karbeat/app/providers/transport_state.dart';
 import 'package:karbeat/app/providers/workspace_state.dart';
+import 'package:karbeat/core/l10n/localizer.dart';
 import 'package:karbeat/core/utils/clip_time_utils.dart';
 import 'package:karbeat/src/rust/api/project.dart';
 import 'package:karbeat/src/rust/api/track.dart' show UiResizeEdge;
@@ -173,7 +174,7 @@ class TrackGhostClip extends ConsumerWidget {
         ),
         child: Center(
           child: Text(
-            "Place Here",
+            tr('track-place-here'),
             style: TextStyle(
               color: colors.onPrimaryContainer,
               fontWeight: FontWeight.bold,

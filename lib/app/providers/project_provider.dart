@@ -4,6 +4,7 @@ import 'package:fast_immutable_collections/fast_immutable_collections.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:freezed_annotation/freezed_annotation.dart';
 import 'package:karbeat/app/providers/telemetry_polling_suppression.dart';
+import 'package:karbeat/core/l10n/localizer.dart';
 import 'package:karbeat/core/services/serializer_service.dart';
 import 'package:karbeat/app/providers/notification_provider.dart';
 import 'package:karbeat/core/utils/logger.dart';
@@ -153,7 +154,7 @@ class ProjectNotifier extends AsyncNotifier<ApplicationDataStore> {
       return result.hasError
           ? ref.notifyErrorResult(
               Exception(result.error.toString()),
-              title: 'Could not recover the project',
+              title: tr('app-project-recover-failed'),
             )
           : Result.ok(null);
     });
@@ -218,7 +219,7 @@ class ProjectNotifier extends AsyncNotifier<ApplicationDataStore> {
         AppLogger.error('Failed to load audio source: $error');
         return ref.notifyErrorResult<int>(
           error,
-          title: 'Could not load audio',
+          title: tr('app-project-audio-load-failed'),
           stackTrace: stackTrace,
         );
       }
@@ -230,7 +231,7 @@ class ProjectNotifier extends AsyncNotifier<ApplicationDataStore> {
   Future<Result<void>> removeAudioSource(int sourceId) {
     return _applyHistoryOperation(
       () => audio_api.removeAudioSource(ctx: dawContext, sourceId: sourceId),
-      errorTitle: 'Could not delete the audio source',
+      errorTitle: tr('app-project-source-delete-failed'),
     );
   }
 
@@ -239,7 +240,7 @@ class ProjectNotifier extends AsyncNotifier<ApplicationDataStore> {
   Future<Result<void>> removePattern(int patternId) {
     return _applyHistoryOperation(
       () => deletePattern(ctx: dawContext, patternId: patternId),
-      errorTitle: 'Could not delete the pattern',
+      errorTitle: tr('app-project-pattern-delete-failed'),
     );
   }
 
@@ -261,8 +262,8 @@ class ProjectNotifier extends AsyncNotifier<ApplicationDataStore> {
         ref
             .read(notificationProvider.notifier)
             .info(
-              "Project successfully saved to $path",
-              title: "Project saved",
+              tr('app-project-saved-message', {'path': path}),
+              title: tr('app-project-saved-title'),
             );
         return Result.ok(null);
       } catch (e) {
@@ -441,7 +442,7 @@ class ProjectNotifier extends AsyncNotifier<ApplicationDataStore> {
     if (operation case AsyncError(:final error, :final stackTrace)) {
       return ref.notifyErrorResult(
         error,
-        title: 'Could not update project information',
+        title: tr('app-project-info-update-failed'),
         stackTrace: stackTrace,
       );
     }
@@ -449,7 +450,7 @@ class ProjectNotifier extends AsyncNotifier<ApplicationDataStore> {
     if (!state.hasValue) {
       return ref.notifyErrorResult(
         StateError('Project state is unavailable'),
-        title: 'Could not update project information',
+        title: tr('app-project-info-update-failed'),
       );
     }
 
@@ -462,14 +463,14 @@ class ProjectNotifier extends AsyncNotifier<ApplicationDataStore> {
   Future<Result<void>> undoLastAction() {
     return _applyHistoryOperation(
       () => session_api.undo(ctx: dawContext),
-      errorTitle: 'Could not undo',
+      errorTitle: tr('app-project-undo-failed'),
     );
   }
 
   Future<Result<void>> redoLastAction() {
     return _applyHistoryOperation(
       () => session_api.redo(ctx: dawContext),
-      errorTitle: 'Could not redo',
+      errorTitle: tr('app-project-redo-failed'),
     );
   }
 
@@ -497,7 +498,7 @@ class ProjectNotifier extends AsyncNotifier<ApplicationDataStore> {
       if (refreshed case AsyncError(:final error, :final stackTrace)) {
         return ref.notifyErrorResult(
           error,
-          title: '$errorTitle: project refresh failed',
+          title: tr('app-project-refresh-failed', {'action': errorTitle}),
           stackTrace: stackTrace,
         );
       }
@@ -552,7 +553,7 @@ class ProjectNotifier extends AsyncNotifier<ApplicationDataStore> {
         generatorId: generatorId,
         displayName: displayName.isEmpty ? null : displayName,
       ),
-      title: 'Could not rename the instrument',
+      title: tr('app-project-instrument-rename-failed'),
     );
     if (result case AsyncData(:final value)) {
       upsertGenerator(generatorId, value);
@@ -570,7 +571,7 @@ class ProjectNotifier extends AsyncNotifier<ApplicationDataStore> {
         trimEnd: trimEnd,
       );
       return audio_api.getAudioSourceEnvelopes(ctx: dawContext);
-    }, title: 'Could not trim the audio');
+    }, title: tr('app-project-trim-failed'));
     if (result case AsyncData(:final value)) {
       upsertSourceEnvelopes(value);
     }
@@ -585,7 +586,7 @@ class ProjectNotifier extends AsyncNotifier<ApplicationDataStore> {
         sourceId: sourceId,
         envelope: envelope,
       ),
-      title: 'Could not edit the waveform envelope',
+      title: tr('app-project-envelope-edit-failed'),
     );
     if (result case AsyncData(:final value)) {
       upsertSourceEnvelopes({sourceId: value});

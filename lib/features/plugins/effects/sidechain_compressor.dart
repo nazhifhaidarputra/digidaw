@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:karbeat/core/l10n/localizer.dart';
 import 'package:karbeat/core/widgets/digidaw_plugin_widgets/widgets.dart';
 import 'package:karbeat/core/widgets/plugin_parameter_widget.dart';
 import 'package:karbeat/features/plugins/abstract_plugin_screen.dart';
@@ -98,7 +99,7 @@ class DigidawSidechainCompressorState
       builder: (context, constraints) {
         final wide = constraints.maxWidth >= 760;
         final routingPanel = SidechainSourcePanel(target: widget.target);
-        final dynamics = _section(context, 'DYNAMICS', [
+        final dynamics = _section(context, tr('plugins-section-dynamics'), [
           _knob(
             DigidawSidechainCompressorSpecs.compressorThreshold,
             suffix: ' dB',
@@ -114,7 +115,7 @@ class DigidawSidechainCompressorState
           ),
           _knob(DigidawSidechainCompressorSpecs.compressorKnee, suffix: ' dB'),
         ]);
-        final output = _section(context, 'OUTPUT & TIMING', [
+        final output = _section(context, tr('plugins-section-output-timing'), [
           _knob(
             DigidawSidechainCompressorSpecs.compressorMakeupGain,
             suffix: ' dB',

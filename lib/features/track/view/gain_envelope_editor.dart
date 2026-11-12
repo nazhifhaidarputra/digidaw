@@ -2,6 +2,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:karbeat/core/l10n/localizer.dart';
 import 'package:karbeat/core/widgets/context_menu.dart';
 import 'package:karbeat/features/track/services/curve_sampler.dart';
 import 'package:karbeat/features/track/services/gain_envelope_evaluator.dart';
@@ -327,7 +328,7 @@ class _GainEnvelopeEditorState extends ConsumerState<GainEnvelopeEditor> {
     final sampler = ref.read(curveSamplerProvider);
     return [
       DawContextAction.submenu(
-        title: 'Curve type',
+        title: tr('track-curve-type'),
         subtitle: automationCurveTypeLabel(current),
         icon: automationCurveTypeIcon(current),
         children: [
@@ -346,7 +347,7 @@ class _GainEnvelopeEditorState extends ConsumerState<GainEnvelopeEditor> {
       ),
       if (tension != 0 && sampler.traits(current).supportsTension)
         DawContextAction(
-          title: 'Reset tension',
+          title: tr('track-reset-tension'),
           icon: Icons.restart_alt,
           onTap: onResetTension,
         ),
@@ -370,7 +371,7 @@ class _GainEnvelopeEditorState extends ConsumerState<GainEnvelopeEditor> {
           onResetTension: () => _commit(withFade(fade.copyWith(tension: 0))),
         ),
         DawContextAction(
-          title: 'Remove ${title.toLowerCase()}',
+          title: tr('track-remove', {'title': title}),
           icon: Icons.delete_outline,
           isDestructive: true,
           onTap: () => _commit(withFade(fade.copyWith(length: 0))),
@@ -382,10 +383,10 @@ class _GainEnvelopeEditorState extends ConsumerState<GainEnvelopeEditor> {
   void _openSustainMenu() {
     showDawContextMenu(
       context: context,
-      title: 'Sustain',
+      title: tr('track-sustain'),
       actions: [
         DawContextAction(
-          title: 'Reset sustain',
+          title: tr('track-reset-sustain'),
           icon: Icons.restart_alt,
           onTap: () => _commit(_envelope.copyWith(sustain: 1)),
         ),
@@ -406,9 +407,12 @@ class _GainEnvelopeEditorState extends ConsumerState<GainEnvelopeEditor> {
 
     showDawContextMenu(
       context: context,
-      title: 'Envelope point',
+      title: tr('track-envelope-point'),
       header: Text(
-        'Gain ${(20 * math.log(math.max(point.gain, 1e-6)) / math.ln10).toStringAsFixed(1)} dB',
+        tr('track-envelope-gain', {
+          'decibels': (20 * math.log(math.max(point.gain, 1e-6)) / math.ln10)
+              .toStringAsFixed(1),
+        }),
         style: TextStyle(color: colors.onSurfaceVariant, fontSize: 12),
       ),
       actions: [
@@ -420,7 +424,7 @@ class _GainEnvelopeEditorState extends ConsumerState<GainEnvelopeEditor> {
           onResetTension: () => _commit(withPoint(point.copyWith(tension: 0))),
         ),
         DawContextAction(
-          title: 'Delete point',
+          title: tr('track-delete-point'),
           icon: Icons.delete_outline,
           isDestructive: true,
           onTap: () => _commit(withPoint(null)),
@@ -588,9 +592,9 @@ class _GainEnvelopeEditorState extends ConsumerState<GainEnvelopeEditor> {
             height: height,
             cursor: SystemMouseCursors.resizeLeftRight,
             shape: BoxShape.rectangle,
-            tooltip: 'Attack',
+            tooltip: tr('track-attack'),
             onMenu: () => _openStageMenu(
-              title: 'Attack',
+              title: tr('track-attack'),
               fade: envelope.fadeIn,
               withFade: (next) => envelope.copyWith(fadeIn: next),
             ),
@@ -607,9 +611,9 @@ class _GainEnvelopeEditorState extends ConsumerState<GainEnvelopeEditor> {
               height: height,
               cursor: SystemMouseCursors.resizeLeftRight,
               shape: BoxShape.rectangle,
-              tooltip: 'Decay',
+              tooltip: tr('track-decay'),
               onMenu: () => _openStageMenu(
-                title: 'Decay',
+                title: tr('track-decay'),
                 fade: envelope.decay,
                 withFade: (next) => envelope.copyWith(decay: next),
               ),
@@ -625,7 +629,7 @@ class _GainEnvelopeEditorState extends ConsumerState<GainEnvelopeEditor> {
             height: height,
             cursor: SystemMouseCursors.resizeUpDown,
             shape: BoxShape.rectangle,
-            tooltip: 'Sustain',
+            tooltip: tr('track-sustain'),
             onMenu: _openSustainMenu,
           ),
           sustainX,
@@ -638,9 +642,9 @@ class _GainEnvelopeEditorState extends ConsumerState<GainEnvelopeEditor> {
             height: height,
             cursor: SystemMouseCursors.resizeLeftRight,
             shape: BoxShape.rectangle,
-            tooltip: 'Release',
+            tooltip: tr('track-release'),
             onMenu: () => _openStageMenu(
-              title: 'Release',
+              title: tr('track-release'),
               fade: envelope.fadeOut,
               withFade: (next) => envelope.copyWith(fadeOut: next),
             ),

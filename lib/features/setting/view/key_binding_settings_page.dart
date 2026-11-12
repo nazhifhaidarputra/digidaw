@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:karbeat/core/input/input.dart';
 import 'package:karbeat/core/input/shortcut_models.dart';
+import 'package:karbeat/core/l10n/localizer.dart';
 
 class KeyBindingSettingsPage extends ConsumerStatefulWidget {
   const KeyBindingSettingsPage({super.key});
@@ -61,7 +62,7 @@ class _KeyBindingSettingsPageState
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                'Key Bindings',
+                tr('settings-menu-key-bindings'),
                 key: const ValueKey('settings-page-keyBinding'),
                 style: Theme.of(context).textTheme.headlineSmall,
               ),
@@ -72,8 +73,8 @@ class _KeyBindingSettingsPageState
                     child: TextField(
                       key: const ValueKey('shortcut-search'),
                       controller: _searchController,
-                      decoration: const InputDecoration(
-                        labelText: 'Search commands',
+                      decoration: InputDecoration(
+                        labelText: tr('settings-keys-search'),
                         prefixIcon: Icon(Icons.search),
                         border: OutlineInputBorder(),
                       ),
@@ -86,18 +87,18 @@ class _KeyBindingSettingsPageState
                         ? null
                         : _confirmResetAll,
                     icon: const Icon(Icons.restart_alt),
-                    label: const Text('Reset all'),
+                    label: Text(tr('settings-keys-reset-all')),
                   ),
                 ],
               ),
               const SizedBox(height: 20),
               if (visible.isEmpty)
-                const Text('No commands match this search.')
+                Text(tr('settings-keys-no-match'))
               else
                 ..._buildGroups(visible, active, shortcutState.overrides),
               const SizedBox(height: 16),
               Text(
-                '$shortcutSupportHint Escape cancels capture.',
+                tr('settings-keys-capture-hint', {'hint': shortcutSupportHint}),
                 style: Theme.of(context).textTheme.bodySmall,
               ),
             ],
@@ -163,16 +164,16 @@ class _KeyBindingSettingsPageState
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Reset all shortcuts?'),
-        content: const Text('Every command will return to its default chord.'),
+        title: Text(tr('settings-keys-reset-all-title')),
+        content: Text(tr('settings-keys-reset-all-message')),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('Cancel'),
+            child: Text(tr('common-cancel')),
           ),
           FilledButton(
             onPressed: () => Navigator.of(context).pop(true),
-            child: const Text('Reset all'),
+            child: Text(tr('settings-keys-reset-all')),
           ),
         ],
       ),
@@ -204,18 +205,23 @@ class _ShortcutRow extends StatelessWidget {
     return ListTile(
       key: ValueKey('shortcut-${shortcut.id}'),
       title: Text(shortcut.title),
-      subtitle: Text('Default: ${shortcutLabel(defaultChord)}'),
+      subtitle: Text(
+        tr('settings-keys-default', {'chord': shortcutLabel(defaultChord)}),
+      ),
       trailing: Wrap(
         crossAxisAlignment: WrapCrossAlignment.center,
         spacing: 8,
         children: [
           Text(shortcutLabel(activeChord)),
           IconButton(
-            tooltip: 'Reset ${shortcut.title}',
+            tooltip: tr('settings-keys-reset', {'command': shortcut.title}),
             onPressed: overridden ? onReset : null,
             icon: const Icon(Icons.restart_alt),
           ),
-          OutlinedButton(onPressed: onChange, child: const Text('Change')),
+          OutlinedButton(
+            onPressed: onChange,
+            child: Text(tr('settings-keys-change')),
+          ),
         ],
       ),
     );
@@ -268,7 +274,7 @@ class _ShortcutCaptureDialogState extends State<_ShortcutCaptureDialog> {
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
-      title: Text('Change ${widget.title}'),
+      title: Text(tr('settings-keys-change-title', {'command': widget.title})),
       content: Focus(
         autofocus: true,
         focusNode: _focusNode,
@@ -280,7 +286,7 @@ class _ShortcutCaptureDialogState extends State<_ShortcutCaptureDialog> {
             children: [
               const Icon(Icons.keyboard, size: 40),
               const SizedBox(height: 12),
-              const Text('Press the new shortcut'),
+              Text(tr('settings-keys-press')),
               if (_error != null) ...[
                 const SizedBox(height: 8),
                 Text(
@@ -296,7 +302,7 @@ class _ShortcutCaptureDialogState extends State<_ShortcutCaptureDialog> {
       actions: [
         TextButton(
           onPressed: () => Navigator.of(context).pop(),
-          child: const Text('Cancel'),
+          child: Text(tr('common-cancel')),
         ),
       ],
     );

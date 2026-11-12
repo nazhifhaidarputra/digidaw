@@ -3,17 +3,20 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:karbeat/app/providers/piano_roll_state.dart';
 import 'package:karbeat/app/providers/project_provider.dart';
+import 'package:karbeat/core/l10n/localizer.dart';
 import 'package:karbeat/src/rust/api/pattern.dart';
 
 /// Note parameters shown in the [NoteParamEditorPanel] lane.
 enum NoteParameter {
-  velocity('Velocity'),
-  pitch('Pitch'),
-  pan('Pan');
+  velocity,
+  pitch,
+  pan;
 
-  const NoteParameter(this.label);
-
-  final String label;
+  String get label => switch (this) {
+    NoteParameter.velocity => tr('piano-roll-velocity'),
+    NoteParameter.pitch => tr('piano-roll-pitch'),
+    NoteParameter.pan => tr('piano-roll-pan'),
+  };
 
   /// Whether the lane is centered on a neutral value rather than growing from 0.
   bool get isBipolar => this != NoteParameter.velocity;
@@ -157,8 +160,10 @@ class _NoteParamEditorPanelState extends ConsumerState<NoteParamEditorPanel> {
               Expanded(
                 child: Text(
                   selection.isEmpty
-                      ? 'Drag across the lane to draw values.'
-                      : 'Drawing edits the ${selection.length} selected notes.',
+                      ? tr('piano-roll-param-draw-hint')
+                      : tr('piano-roll-param-draw-selection', {
+                          'count': selection.length,
+                        }),
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
                     color: colors.onSurfaceVariant,

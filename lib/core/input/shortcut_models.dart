@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:freezed_annotation/freezed_annotation.dart';
+import 'package:karbeat/core/l10n/localizer.dart';
 
 part 'shortcut_models.freezed.dart';
 
@@ -22,16 +23,25 @@ enum ShortcutScope {
 class DawShortcut {
   const DawShortcut({
     required this.id,
-    required this.title,
-    required this.category,
+    required this.titleId,
+    required this.categoryId,
     required this.intent,
     required this.defaultKey,
     this.scope = ShortcutScope.global,
   });
 
   final String id;
-  final String title;
-  final String category;
+
+  /// Message id of the command's name, shown in menus and key bindings.
+  final String titleId;
+
+  /// Message id of the group the command is listed under.
+  final String categoryId;
+
+  String get title => tr(titleId);
+
+  String get category => tr(categoryId);
+
   final Intent intent;
   final SingleActivator defaultKey;
   final ShortcutScope scope;
@@ -94,13 +104,11 @@ class ShortcutConflictException implements Exception {
   final String conflictingTitle;
 
   @override
-  String toString() => 'Already assigned to $conflictingTitle.';
+  String toString() => tr('shortcuts-conflict', {'command': conflictingTitle});
 }
 
 /// Explains which chords [ShortcutChord.isSupported] accepts.
-const shortcutSupportHint =
-    'Use Ctrl, Alt, or Command with a non-modifier key, or press Delete or '
-    'Backspace.';
+String get shortcutSupportHint => tr('shortcuts-support-hint');
 
 class ShortcutValidationException implements Exception {
   const ShortcutValidationException(this.message);

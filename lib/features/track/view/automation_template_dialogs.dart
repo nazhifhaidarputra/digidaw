@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:karbeat/core/l10n/localizer.dart';
 import 'package:karbeat/features/track/models/automation_curve_template.dart';
 import 'package:karbeat/features/track/services/automation_template_service.dart';
 import 'package:karbeat/features/track/services/curve_sampler.dart';
@@ -63,8 +64,8 @@ class _TemplateNameDialogState extends State<_TemplateNameDialog> {
         child: TextField(
           controller: _controller,
           autofocus: true,
-          decoration: const InputDecoration(
-            labelText: 'Template name',
+          decoration: InputDecoration(
+            labelText: tr('track-template-name'),
             border: OutlineInputBorder(),
           ),
           onChanged: (_) => setState(() {}),
@@ -74,11 +75,11 @@ class _TemplateNameDialogState extends State<_TemplateNameDialog> {
       actions: [
         TextButton(
           onPressed: () => Navigator.of(context).pop(),
-          child: const Text('Cancel'),
+          child: Text(tr('common-cancel')),
         ),
         FilledButton(
           onPressed: isEmpty ? null : _submit,
-          child: const Text('Save'),
+          child: Text(tr('common-save')),
         ),
       ],
     );
@@ -103,7 +104,7 @@ class _TemplateManagerDialog extends ConsumerWidget {
     final library = ref.read(automationTemplatesProvider.notifier);
 
     return AlertDialog(
-      title: const Text('Curve templates'),
+      title: Text(tr('track-curve-templates')),
       contentPadding: const EdgeInsets.symmetric(vertical: 8),
       content: SizedBox(
         width: 380,
@@ -111,9 +112,7 @@ class _TemplateManagerDialog extends ConsumerWidget {
             ? Padding(
                 padding: const EdgeInsets.all(24),
                 child: Text(
-                  'No templates yet. Pick the Select tool, drag a range on an '
-                  'automation lane, then right-click it and choose '
-                  '"Save as template".',
+                  tr('track-templates-empty'),
                   style: TextStyle(color: colors.onSurfaceVariant),
                 ),
               )
@@ -130,20 +129,24 @@ class _TemplateManagerDialog extends ConsumerWidget {
                       ),
                       title: Text(template.name),
                       subtitle: Text(
-                        '${template.points.length} points, '
-                        '${(template.lengthTicks / 960).toStringAsFixed(2)} beats',
+                        tr('track-template-summary', {
+                          'points': template.points.length,
+                          'beats': (template.lengthTicks / 960).toStringAsFixed(
+                            2,
+                          ),
+                        }),
                       ),
                       trailing: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           IconButton(
-                            tooltip: 'Rename',
+                            tooltip: tr('common-rename'),
                             icon: const Icon(Icons.edit, size: 18),
                             onPressed: () async {
                               final name =
                                   await showAutomationTemplateNameDialog(
                                     context: context,
-                                    title: 'Rename template',
+                                    title: tr('track-rename-template'),
                                     initialName: template.name,
                                   );
                               if (name != null) {
@@ -152,7 +155,7 @@ class _TemplateManagerDialog extends ConsumerWidget {
                             },
                           ),
                           IconButton(
-                            tooltip: 'Delete',
+                            tooltip: tr('common-delete'),
                             icon: Icon(
                               Icons.delete_outline,
                               size: 18,
@@ -169,7 +172,7 @@ class _TemplateManagerDialog extends ConsumerWidget {
       actions: [
         TextButton(
           onPressed: () => Navigator.of(context).pop(),
-          child: const Text('Close'),
+          child: Text(tr('common-close')),
         ),
       ],
     );

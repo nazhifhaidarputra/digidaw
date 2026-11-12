@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:karbeat/app/providers/piano_roll_state.dart';
 import 'package:karbeat/app/providers/project_provider.dart';
 import 'package:karbeat/app/providers/workspace_state.dart';
+import 'package:karbeat/core/l10n/localizer.dart';
 import 'package:karbeat/features/plugins/services/plugin_ui_launcher.dart';
 import 'package:karbeat/features/source/services/audio_source_import.dart';
 import 'package:karbeat/features/source/services/audio_waveform_services.dart';
@@ -45,7 +46,7 @@ class SourceListScreen extends ConsumerWidget {
             child: Padding(
               padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
               child: Text(
-                "Instruments / Generators",
+                tr('source-instruments-generators'),
                 style: TextStyle(
                   color: colors.onSurfaceVariant,
                   fontSize: 12,
@@ -60,7 +61,7 @@ class SourceListScreen extends ConsumerWidget {
               child: Padding(
                 padding: const EdgeInsets.all(16.0),
                 child: Text(
-                  "No Instruments.",
+                  tr('source-no-instruments'),
                   style: TextStyle(
                     color: colors.onSurfaceVariant,
                     fontStyle: FontStyle.italic,
@@ -76,7 +77,7 @@ class SourceListScreen extends ConsumerWidget {
               final instanceType = gen.instanceType;
               final name = switch (instanceType) {
                 UiGeneratorInstanceType_Plugin(:final field0) => field0.label,
-                _ => "Sampler",
+                _ => tr('app-automation-sampler'),
               };
 
               final genInstance = switch (instanceType) {
@@ -86,7 +87,7 @@ class SourceListScreen extends ConsumerWidget {
 
               return _SourceTile(
                 title: name,
-                subtitle: "ID: $id",
+                subtitle: tr('mixer-effect-id', {'id': id}),
                 icon: Icons.piano,
                 color: colors.tertiary,
                 onTap: () async {
@@ -124,7 +125,7 @@ class SourceListScreen extends ConsumerWidget {
             child: Padding(
               padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
               child: Text(
-                "Audio Clips",
+                tr('source-audio-clips'),
                 style: TextStyle(
                   color: colors.onSurfaceVariant,
                   fontSize: 12,
@@ -141,7 +142,7 @@ class SourceListScreen extends ConsumerWidget {
                   child: Padding(
                     padding: const EdgeInsets.all(16.0),
                     child: Text(
-                      "No Audio Files.",
+                      tr('source-no-audio-files'),
                       style: TextStyle(
                         color: colors.onSurfaceVariant,
                         fontStyle: FontStyle.italic,
@@ -158,7 +159,10 @@ class SourceListScreen extends ConsumerWidget {
 
                   return _SourceTile(
                     title: source.name,
-                    subtitle: "ID: $id | ${source.sampleRate} Hz",
+                    subtitle: tr('source-audio-subtitle', {
+                      'id': id,
+                      'rate': source.sampleRate,
+                    }),
                     icon: Icons.audio_file,
                     color: colors.primary,
                     onTap: () {
@@ -208,7 +212,7 @@ class SourceListScreen extends ConsumerWidget {
               child: Padding(
                 padding: const EdgeInsets.all(16.0),
                 child: Text(
-                  "Error loading audio sources: $err",
+                  tr('source-audio-load-failed', {'error': err}),
                   style: TextStyle(color: colors.error),
                 ),
               ),
@@ -222,7 +226,7 @@ class SourceListScreen extends ConsumerWidget {
             child: Padding(
               padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
               child: Text(
-                "Patterns",
+                tr('source-patterns'),
                 style: TextStyle(
                   color: colors.onSurfaceVariant,
                   fontSize: 12,
@@ -237,7 +241,7 @@ class SourceListScreen extends ConsumerWidget {
               child: Padding(
                 padding: const EdgeInsets.all(16.0),
                 child: Text(
-                  "No Patterns.",
+                  tr('source-no-patterns'),
                   style: TextStyle(
                     color: colors.onSurfaceVariant,
                     fontStyle: FontStyle.italic,
@@ -252,7 +256,10 @@ class SourceListScreen extends ConsumerWidget {
               final pattern = patterns.values.elementAt(index);
               return _SourceTile(
                 title: pattern.name,
-                subtitle: "ID: $id | ${pattern.name}",
+                subtitle: tr('source-pattern-subtitle', {
+                  'id': id,
+                  'name': pattern.name,
+                }),
                 icon: Icons.music_note,
                 color: colors.secondary,
                 onTap: () {
@@ -335,7 +342,7 @@ class _SourceTile extends StatelessWidget {
               children: [
                 if (renameIcon)
                   IconButton(
-                    tooltip: 'Rename',
+                    tooltip: tr('common-rename'),
                     onPressed: onRename,
                     icon: Icon(Icons.edit, color: colors.onSurfaceVariant),
                   ),
@@ -348,35 +355,35 @@ class _SourceTile extends StatelessWidget {
                   },
                   itemBuilder: (context) => [
                     if (onPlace != null)
-                      const PopupMenuItem(
+                      PopupMenuItem(
                         value: 'place',
                         child: Row(
                           children: [
                             Icon(Icons.input),
                             SizedBox(width: 8),
-                            Text("Put in timeline"),
+                            Text(tr('source-put-in-timeline')),
                           ],
                         ),
                       ),
                     if (onRename != null)
-                      const PopupMenuItem(
+                      PopupMenuItem(
                         value: 'rename',
                         child: Row(
                           children: [
                             Icon(Icons.edit),
                             SizedBox(width: 8),
-                            Text("Rename"),
+                            Text(tr('common-rename')),
                           ],
                         ),
                       ),
                     if (onDelete != null)
-                      const PopupMenuItem(
+                      PopupMenuItem(
                         value: 'delete',
                         child: Row(
                           children: [
                             Icon(Icons.delete),
                             SizedBox(width: 8),
-                            Text("Delete"),
+                            Text(tr('common-delete')),
                           ],
                         ),
                       ),

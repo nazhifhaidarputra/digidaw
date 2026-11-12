@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:karbeat/app/providers/automation_provider.dart';
 import 'package:karbeat/app/providers/notification_provider.dart';
 import 'package:karbeat/app/providers/project_provider.dart';
+import 'package:karbeat/core/l10n/localizer.dart';
 import 'package:karbeat/core/utils/result_type.dart';
 import 'package:karbeat/features/track/models/automation_lane_clipboard.dart';
 import 'package:karbeat/features/track/models/automation_curve_template.dart';
@@ -320,7 +321,7 @@ class AutomationEditorNotifier extends Notifier<AutomationLaneEditorState> {
         .copyRange(laneId: laneId, startTick: range.$1, endTick: range.$2);
     if (points == null) return null;
     if (points.isEmpty || range.$2 <= range.$1) {
-      ref.notifyError('The selected range holds no automation curve');
+      ref.notifyError(tr('track-the-selected-range-holds-no'));
       return null;
     }
     return points;

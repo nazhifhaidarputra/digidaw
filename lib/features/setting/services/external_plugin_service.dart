@@ -1,5 +1,6 @@
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:karbeat/core/l10n/localizer.dart';
 import 'package:karbeat/core/utils/result_type.dart';
 import 'package:karbeat/src/rust/api/external_plugins.dart';
 import 'package:karbeat/src/rust/api/plugin.dart';
@@ -8,7 +9,9 @@ import 'package:karbeat/src/rust/api/project.dart';
 class ExternalPluginService {
   Future<Result<String?>> chooseDirectory() {
     return attemptAsync(
-      () => FilePicker.getDirectoryPath(dialogTitle: 'Choose plugin folder'),
+      () => FilePicker.getDirectoryPath(
+        dialogTitle: tr('settings-plugins-folder-choose'),
+      ),
     );
   }
 

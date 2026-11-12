@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:ui' show Brightness, Color;
 
 import 'package:fast_immutable_collections/fast_immutable_collections.dart';
+import 'package:karbeat/core/l10n/localizer.dart';
 import 'package:karbeat/core/utils/result_type.dart';
 import 'package:karbeat/features/setting/models/app_color_theme.dart';
 
@@ -15,7 +16,7 @@ class ColorThemeFormatException implements Exception {
   final IList<String> issues;
 
   @override
-  String toString() => 'Invalid color theme:\n${issues.join('\n')}';
+  String toString() => '${tr('settings-theme-invalid')}\n${issues.join('\n')}';
 }
 
 /// Parses and validates a JSON colour theme.
@@ -25,17 +26,19 @@ Result<AppColorTheme> parseColorTheme(String source) {
   final decoded = attempt<Object?>(() => jsonDecode(source));
   if (decoded case Error<Object?>(:final error)) {
     final reason = error is FormatException ? error.message : error.toString();
-    return _invalid(['The file is not valid JSON: $reason']);
+    return _invalid([
+      tr('settings-theme-invalid-json', {'reason': reason}),
+    ]);
   }
   final root = decoded.ok();
   if (root is! Map<String, dynamic>) {
-    return _invalid(['The theme must be a JSON object.']);
+    return _invalid([tr('settings-theme-not-object')]);
   }
 
   final issues = <String>[];
   for (final key in root.keys) {
     if (!const {'name', 'brightness', 'colors'}.contains(key)) {
-      issues.add('Unknown field "$key".');
+      issues.add(tr('settings-theme-unknown-field', {'field': key}));
     }
   }
 
@@ -45,8 +48,8 @@ Result<AppColorTheme> parseColorTheme(String source) {
   if (rawColors is! Map<String, dynamic>) {
     issues.add(
       rawColors == null
-          ? 'Missing "colors".'
-          : '"colors" must be an object of colour roles.',
+          ? tr('settings-theme-missing-field', {'field': 'colors'})
+          : tr('settings-theme-colors-not-object'),
     );
     return _invalid(issues);
   }
@@ -97,19 +100,19 @@ Result<AppColorTheme> _invalid(List<String> issues) {
 
 String _parseName(Object? value, List<String> issues) {
   if (value == null) {
-    issues.add('Missing "name".');
+    issues.add(tr('settings-theme-missing-field', {'field': 'name'}));
     return '';
   }
   if (value is! String) {
-    issues.add('"name" must be text.');
+    issues.add(tr('settings-theme-name-not-text'));
     return '';
   }
   final name = value.trim();
   if (name.isEmpty) {
-    issues.add('"name" must not be empty.');
+    issues.add(tr('settings-theme-name-empty'));
   } else if (name.length > maxColorThemeNameLength) {
     issues.add(
-      '"name" must be at most $maxColorThemeNameLength characters long.',
+      tr('settings-theme-name-too-long', {'maximum': maxColorThemeNameLength}),
     );
   }
   return name;
@@ -122,9 +125,9 @@ Brightness _parseBrightness(Object? value, List<String> issues) {
     case 'dark':
       return Brightness.dark;
     case null:
-      issues.add('Missing "brightness".');
+      issues.add(tr('settings-theme-missing-field', {'field': 'brightness'}));
     default:
-      issues.add('"brightness" must be "light" or "dark".');
+      issues.add(tr('settings-theme-brightness-invalid'));
   }
   return Brightness.dark;
 }
@@ -144,7 +147,7 @@ class _ColorReader {
   Color required(String role) {
     final color = optional(role);
     if (color == null && !_colors.containsKey(role)) {
-      _issues.add('Missing required colour "$role".');
+      _issues.add(tr('settings-theme-missing-color', {'role': role}));
     }
     return color ?? _placeholder;
   }
@@ -154,9 +157,7 @@ class _ColorReader {
     if (!_colors.containsKey(role)) return null;
     final value = _colors[role];
     if (value is! String || !_hexColor.hasMatch(value)) {
-      _issues.add(
-        'Colour "$role" must be written as "#RRGGBB" or "#RRGGBBAA".',
-      );
+      _issues.add(tr('settings-theme-color-invalid', {'role': role}));
       return null;
     }
     final digits = value.substring(1);
@@ -170,7 +171,7 @@ class _ColorReader {
   void reportUnknownRoles() {
     for (final role in _colors.keys) {
       if (!_knownRoles.contains(role)) {
-        _issues.add('Unknown colour "$role".');
+        _issues.add(tr('settings-theme-unknown-color', {'role': role}));
       }
     }
   }

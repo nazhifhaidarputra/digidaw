@@ -7,6 +7,7 @@ import 'package:karbeat/app/providers/project_provider.dart';
 import 'package:karbeat/app/providers/track_list_state.dart';
 import 'package:karbeat/app/providers/transport_state.dart';
 import 'package:karbeat/app/providers/workspace_state.dart';
+import 'package:karbeat/core/l10n/localizer.dart';
 import 'package:karbeat/core/utils/clip_time_utils.dart';
 import 'package:karbeat/core/widgets/rename_dialog.dart';
 import 'package:karbeat/features/source/services/audio_waveform_services.dart';
@@ -101,7 +102,7 @@ class _ClipProperties extends ConsumerWidget {
     final bpm = transport?.state?.bpm;
     final sampleRate = transport?.sampleRate;
     if (clip == null || bpm == null || sampleRate == null) {
-      return const Center(child: Text('This clip no longer exists.'));
+      return Center(child: Text(tr('track-this-clip-no-longer-exists')));
     }
 
     return Column(
@@ -159,8 +160,8 @@ class _ClipInfoHeader extends ConsumerWidget {
   Future<void> _rename(BuildContext context, WidgetRef ref) async {
     final name = await showRenameDialog(
       context,
-      title: 'Rename Clip',
-      label: 'New clip name',
+      title: tr('track-rename-clip'),
+      label: tr('track-new-clip-name'),
       currentName: clip.name,
     );
     if (name == null) return;
@@ -214,7 +215,7 @@ class _ClipInfoHeader extends ConsumerWidget {
                 ),
               ),
               IconButton(
-                tooltip: 'Rename',
+                tooltip: tr('common-rename'),
                 visualDensity: VisualDensity.compact,
                 onPressed: () => _rename(context, ref),
                 icon: const Icon(Icons.edit, size: 16),
@@ -224,11 +225,13 @@ class _ClipInfoHeader extends ConsumerWidget {
                 onPressed: onGoToParent,
                 icon: Icon(isAudio ? Icons.tune : Icons.piano, size: 16),
                 label: Text(
-                  isAudio ? 'Go to Audio Properties' : 'Go to Piano Roll',
+                  isAudio
+                      ? tr('track-go-to-audio-properties')
+                      : tr('track-go-to-piano-roll'),
                 ),
               ),
               IconButton(
-                tooltip: 'Close',
+                tooltip: tr('common-close'),
                 onPressed: () => Navigator.of(context).pop(),
                 icon: const Icon(Icons.close),
               ),
@@ -239,19 +242,28 @@ class _ClipInfoHeader extends ConsumerWidget {
             spacing: 28,
             runSpacing: 8,
             children: [
-              info('Type', isAudio ? 'Audio clip' : 'MIDI clip'),
-              info('Start (bar.beat)', _position(clip.startTimeInTicks)),
               info(
-                'Length',
-                '${(lengthTicks / _ticksPerBeat).toStringAsFixed(2)} beats · '
-                    '${seconds.toStringAsFixed(2)} s',
+                tr('mixer-info-type'),
+                isAudio ? tr('track-clip-audio') : tr('track-clip-midi'),
+              ),
+              info(tr('track-clip-start'), _position(clip.startTimeInTicks)),
+              info(
+                tr('track-clip-length'),
+                tr('track-clip-length-value', {
+                  'beats': (lengthTicks / _ticksPerBeat).toStringAsFixed(2),
+                  'seconds': seconds.toStringAsFixed(2),
+                }),
               ),
               info(
-                'Content offset',
-                '${(clip.offsetStartInTicks(bpm, sampleRate) / _ticksPerBeat).toStringAsFixed(2)} beats',
+                tr('track-clip-offset'),
+                tr('track-clip-beats', {
+                  'beats':
+                      (clip.offsetStartInTicks(bpm, sampleRate) / _ticksPerBeat)
+                          .toStringAsFixed(2),
+                }),
               ),
               if (clip.modulation?.looping.enabled ?? false)
-                info('Looping', 'On'),
+                info(tr('track-clip-looping'), tr('common-on')),
             ],
           ),
         ],
@@ -270,9 +282,7 @@ class _NoClipAutomation extends StatelessWidget {
       child: Padding(
         padding: const EdgeInsets.all(24),
         child: Text(
-          'Volume, pan, pitch, and loop automation apply to audio clips. A MIDI '
-          "clip plays through its track's instrument, so automate that with a "
-          'track automation lane.',
+          tr('track-clip-automation-audio-only'),
           textAlign: TextAlign.center,
           style: TextStyle(color: colors.onSurfaceVariant, fontSize: 13),
         ),
@@ -282,15 +292,21 @@ class _NoClipAutomation extends StatelessWidget {
 }
 
 enum _ClipParameter {
-  volume('Volume', Icons.volume_up),
-  pan('Pan', Icons.swap_horiz),
-  pitch('Pitch', Icons.graphic_eq),
-  loop('Loop', Icons.loop);
+  volume(Icons.volume_up),
+  pan(Icons.swap_horiz),
+  pitch(Icons.graphic_eq),
+  loop(Icons.loop);
 
-  const _ClipParameter(this.label, this.icon);
+  const _ClipParameter(this.icon);
 
-  final String label;
   final IconData icon;
+
+  String get label => switch (this) {
+    _ClipParameter.volume => tr('mixer-info-volume'),
+    _ClipParameter.pan => tr('mixer-info-pan'),
+    _ClipParameter.pitch => tr('track-clip-pitch'),
+    _ClipParameter.loop => tr('workspace-transport-loop'),
+  };
 }
 
 /// The clip's automation editor: one parameter at a time, drawn over the clip's
@@ -388,7 +404,7 @@ class _ClipAutomationSectionState
     fromFraction: (fraction) => fraction * 2 - 1,
     format: (value) {
       final percent = (value.abs() * 100).round();
-      if (percent == 0) return 'Center';
+      if (percent == 0) return tr('track-pan-center');
       return '$percent ${value < 0 ? 'L' : 'R'}';
     },
     parse: (text) {
@@ -401,7 +417,7 @@ class _ClipAutomationSectionState
       ClipCurveGridLine(0, 'C', major: true),
       ClipCurveGridLine(-1, 'L'),
     ],
-    valueHint: 'Pan, -100 (left) to 100 (right)',
+    valueHint: tr('track-pan-hint'),
   );
 
   ClipCurveScale _pitchScale(ColorScheme colors) => ClipCurveScale(
@@ -428,7 +444,7 @@ class _ClipAutomationSectionState
       ClipCurveGridLine(-1200, '-12'),
       ClipCurveGridLine(-2400, '-24'),
     ],
-    valueHint: 'Pitch in semitones',
+    valueHint: tr('track-pitch-hint'),
   );
 
   /// Loop times in octaves, so every halving is the same height. Long repeats
@@ -473,7 +489,7 @@ class _ClipAutomationSectionState
           if (beats * _samplesPerBeat >= bottom)
             ClipCurveGridLine(beats * _samplesPerBeat, label),
       ],
-      valueHint: 'Loop time in milliseconds',
+      valueHint: tr('track-loop-time-hint'),
     );
   }
 
@@ -504,12 +520,12 @@ class _ClipAutomationSectionState
     final text = await showDialog<String>(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        title: const Text('Loop time'),
+        title: Text(tr('track-loop-time')),
         content: TextField(
           controller: controller,
           autofocus: true,
-          decoration: const InputDecoration(
-            labelText: 'Milliseconds',
+          decoration: InputDecoration(
+            labelText: tr('track-milliseconds'),
             border: OutlineInputBorder(),
           ),
           onSubmitted: (value) => Navigator.pop(dialogContext, value),
@@ -517,11 +533,11 @@ class _ClipAutomationSectionState
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(dialogContext),
-            child: const Text('Cancel'),
+            child: Text(tr('common-cancel')),
           ),
           ElevatedButton(
             onPressed: () => Navigator.pop(dialogContext, controller.text),
-            child: const Text('Set'),
+            child: Text(tr('track-set')),
           ),
         ],
       ),
@@ -571,34 +587,34 @@ class _ClipAutomationSectionState
     final beat = _samplesPerBeat;
     return switch (_parameter) {
       _ClipParameter.volume => [
-        _chip('Clear', Icons.delete_outline, () {
+        _chip(tr('common-clear'), Icons.delete_outline, () {
           _commitEnvelope(identityEnvelope);
         }),
       ],
       _ClipParameter.pan => [
-        _chip('Left to right', Icons.east, () {
+        _chip(tr('track-shape-left-to-right'), Icons.east, () {
           _commit(_modulation.copyWith(pan: _shape([(0, -1), (1, 1)])));
         }),
-        _chip('Right to left', Icons.west, () {
+        _chip(tr('track-shape-right-to-left'), Icons.west, () {
           _commit(_modulation.copyWith(pan: _shape([(0, 1), (1, -1)])));
         }),
-        _chip('Clear', Icons.delete_outline, () {
+        _chip(tr('common-clear'), Icons.delete_outline, () {
           _commit(_modulation.copyWith(pan: const []));
         }),
       ],
       _ClipParameter.pitch => [
-        _chip('Rise an octave', Icons.north_east, () {
+        _chip(tr('track-shape-rise-octave'), Icons.north_east, () {
           _commit(_modulation.copyWith(pitch: _shape([(0, 0), (1, 1200)])));
         }),
-        _chip('Fall an octave', Icons.south_east, () {
+        _chip(tr('track-shape-fall-octave'), Icons.south_east, () {
           _commit(_modulation.copyWith(pitch: _shape([(0, 0), (1, -1200)])));
         }),
-        _chip('Clear', Icons.delete_outline, () {
+        _chip(tr('common-clear'), Icons.delete_outline, () {
           _commit(_modulation.copyWith(pitch: const []));
         }),
       ],
       _ClipParameter.loop => [
-        _chip('Stutter roll', Icons.fast_forward, () {
+        _chip(tr('track-shape-stutter-roll'), Icons.fast_forward, () {
           _applyLoopShape(
             _shape([
               (0, beat),
@@ -608,13 +624,13 @@ class _ClipAutomationSectionState
             ], curveType: AutomationCurveTypeDto.step),
           );
         }),
-        _chip('Smooth speed-up', Icons.trending_down, () {
+        _chip(tr('track-shape-speed-up'), Icons.trending_down, () {
           _applyLoopShape(_shape([(0, beat), (1, beat / 16)]));
         }),
-        _chip('Slow down', Icons.trending_up, () {
+        _chip(tr('track-shape-slow-down'), Icons.trending_up, () {
           _applyLoopShape(_shape([(0, beat / 16), (1, beat)]));
         }),
-        _chip('Clear curve', Icons.delete_outline, () {
+        _chip(tr('track-shape-clear-curve'), Icons.delete_outline, () {
           _commit(
             _modulation.copyWith(
               looping: _modulation.looping.copyWith(curve: const []),
@@ -637,18 +653,18 @@ class _ClipAutomationSectionState
         ),
         const SizedBox(width: 4),
         Text(
-          'Loop this clip',
+          tr('track-loop-clip'),
           style: TextStyle(color: colors.onSurface, fontSize: 13),
         ),
         const SizedBox(width: 20),
         Text(
-          'Loop time',
+          tr('track-loop-time'),
           style: TextStyle(color: colors.onSurfaceVariant, fontSize: 12),
         ),
         const SizedBox(width: 8),
         if (curveDrives)
           Text(
-            'Follows the curve',
+            tr('track-loop-follows-curve'),
             style: TextStyle(color: colors.primary, fontSize: 12),
           )
         else ...[
@@ -673,7 +689,10 @@ class _ClipAutomationSectionState
             items: [
               for (final (label, _) in _loopNoteValues)
                 DropdownMenuItem(value: label, child: Text(label)),
-              const DropdownMenuItem(value: 'custom', child: Text('Custom...')),
+              DropdownMenuItem(
+                value: 'custom',
+                child: Text(tr('track-custom')),
+              ),
             ],
           ),
           const SizedBox(width: 8),
@@ -687,18 +706,9 @@ class _ClipAutomationSectionState
   }
 
   String get _hint => switch (_parameter) {
-    _ClipParameter.volume =>
-      'Drag the Attack, Decay, Sustain, and Release handles to shape the fade. '
-          'Double-click to add a point, and drag a ring between two points to '
-          'bend that segment. Right-click a point for its curve.',
-    _ClipParameter.loop =>
-      'Each repeat lasts the loop time where it starts, so a falling line '
-          'speeds up the stutter. Drag a ring to bend a segment. Shift-drag '
-          'moves a point freely off the note values.',
-    _ =>
-      'Double-click to add a point, double-click a point to delete it. Drag a '
-          'ring to bend a segment, double-click it to straighten. Right-click a '
-          'point for its value and curve. Shift-drag moves a point freely.',
+    _ClipParameter.volume => tr('track-hint-volume'),
+    _ClipParameter.loop => tr('track-hint-loop'),
+    _ => tr('track-hint-curve'),
   };
 
   Widget _buildEditor(ColorScheme colors) {

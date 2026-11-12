@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:karbeat/app/app_theme.dart';
+import 'package:karbeat/core/l10n/localizer.dart';
 import 'package:karbeat/features/setting/models/app_color_theme.dart';
 import 'package:karbeat/features/setting/models/appearance_settings_state.dart';
 import 'package:karbeat/features/setting/services/appearance_asset_service.dart';
@@ -45,13 +46,13 @@ class AppearanceSettingsPage extends ConsumerWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                'Appearance',
+                tr('settings-menu-appearance'),
                 key: const ValueKey('settings-page-appearance'),
                 style: Theme.of(context).textTheme.headlineSmall,
               ),
               const SizedBox(height: 24),
               Text(
-                'Color theme',
+                tr('settings-appearance-color-theme'),
                 style: Theme.of(context).textTheme.titleMedium,
               ),
               const SizedBox(height: 8),
@@ -81,38 +82,36 @@ class AppearanceSettingsPage extends ConsumerWidget {
                     key: const ValueKey('choose-color-theme'),
                     onPressed: () => unawaited(notifier.chooseColorThemeFile()),
                     icon: const Icon(Icons.palette_outlined),
-                    label: const Text('Load JSON theme'),
+                    label: Text(tr('settings-appearance-load-theme')),
                   ),
                 ],
               ),
               if (usesColorTheme) ...[
                 const SizedBox(height: 12),
-                const Text(
-                  'The selected color theme sets its own brightness and colors. Choose Default to use the theme mode and accent palette.',
-                ),
+                Text(tr('settings-appearance-color-theme-help')),
               ],
               const SizedBox(height: 28),
               Text(
-                'Theme mode',
+                tr('settings-appearance-theme-mode'),
                 style: Theme.of(context).textTheme.titleMedium,
               ),
               const SizedBox(height: 8),
               SegmentedButton<AppThemeMode>(
-                segments: const [
+                segments: [
                   ButtonSegment(
                     value: AppThemeMode.system,
                     icon: Icon(Icons.brightness_auto),
-                    label: Text('System'),
+                    label: Text(tr('settings-appearance-mode-system')),
                   ),
                   ButtonSegment(
                     value: AppThemeMode.light,
                     icon: Icon(Icons.light_mode_outlined),
-                    label: Text('Light'),
+                    label: Text(tr('settings-appearance-mode-light')),
                   ),
                   ButtonSegment(
                     value: AppThemeMode.dark,
                     icon: Icon(Icons.dark_mode_outlined),
-                    label: Text('Dark'),
+                    label: Text(tr('settings-appearance-mode-dark')),
                   ),
                 ],
                 selected: {appearance.themeMode},
@@ -124,7 +123,7 @@ class AppearanceSettingsPage extends ConsumerWidget {
               ),
               const SizedBox(height: 28),
               Text(
-                'Accent palette',
+                tr('settings-appearance-accent'),
                 style: Theme.of(context).textTheme.titleMedium,
               ),
               const SizedBox(height: 8),
@@ -152,13 +151,13 @@ class AppearanceSettingsPage extends ConsumerWidget {
               ),
               const SizedBox(height: 32),
               Text(
-                'Workspace background',
+                tr('settings-appearance-background'),
                 style: Theme.of(context).textTheme.titleMedium,
               ),
               const SizedBox(height: 8),
               Text(
                 appearance.backgroundPath == null
-                    ? 'Default background'
+                    ? tr('settings-appearance-background-default')
                     : _fileName(appearance.backgroundPath!),
                 key: const ValueKey('background-file-name'),
                 overflow: TextOverflow.ellipsis,
@@ -173,7 +172,7 @@ class AppearanceSettingsPage extends ConsumerWidget {
                     onPressed: () =>
                         unawaited(notifier.chooseBackgroundImage()),
                     icon: const Icon(Icons.image_outlined),
-                    label: const Text('Choose image'),
+                    label: Text(tr('settings-appearance-background-choose')),
                   ),
                   OutlinedButton.icon(
                     key: const ValueKey('clear-background'),
@@ -181,7 +180,7 @@ class AppearanceSettingsPage extends ConsumerWidget {
                         ? null
                         : () => unawaited(notifier.clearBackgroundImage()),
                     icon: const Icon(Icons.restart_alt),
-                    label: const Text('Use default'),
+                    label: Text(tr('settings-audio-metronome-use-default')),
                   ),
                 ],
               ),
@@ -189,7 +188,9 @@ class AppearanceSettingsPage extends ConsumerWidget {
               DropdownButtonFormField<AppBackgroundFit>(
                 key: const ValueKey('background-fit'),
                 initialValue: appearance.backgroundFit,
-                decoration: const InputDecoration(labelText: 'Image fit'),
+                decoration: InputDecoration(
+                  labelText: tr('settings-appearance-background-fit'),
+                ),
                 items: AppBackgroundFit.values
                     .map(
                       (fit) => DropdownMenuItem(
@@ -203,7 +204,11 @@ class AppearanceSettingsPage extends ConsumerWidget {
                 },
               ),
               const SizedBox(height: 16),
-              Text('Dark overlay: ${(appearance.overlay * 100).round()}%'),
+              Text(
+                tr('settings-appearance-overlay', {
+                  'percent': (appearance.overlay * 100).round(),
+                }),
+              ),
               Slider(
                 key: const ValueKey('background-overlay'),
                 value: appearance.overlay,
@@ -217,13 +222,13 @@ class AppearanceSettingsPage extends ConsumerWidget {
               ),
               const SizedBox(height: 28),
               Text(
-                'Application font',
+                tr('settings-appearance-font'),
                 style: Theme.of(context).textTheme.titleMedium,
               ),
               const SizedBox(height: 8),
               Text(
                 appearance.fontPath == null
-                    ? 'System font'
+                    ? tr('settings-appearance-font-system')
                     : _fileName(appearance.fontPath!),
                 key: const ValueKey('font-file-name'),
                 overflow: TextOverflow.ellipsis,
@@ -237,7 +242,7 @@ class AppearanceSettingsPage extends ConsumerWidget {
                     key: const ValueKey('choose-font'),
                     onPressed: () => unawaited(notifier.chooseCustomFont()),
                     icon: const Icon(Icons.font_download_outlined),
-                    label: const Text('Choose TTF or OTF'),
+                    label: Text(tr('settings-appearance-font-choose')),
                   ),
                   OutlinedButton.icon(
                     key: const ValueKey('clear-font'),
@@ -245,17 +250,15 @@ class AppearanceSettingsPage extends ConsumerWidget {
                         ? null
                         : () => unawaited(notifier.clearCustomFont()),
                     icon: const Icon(Icons.restart_alt),
-                    label: const Text('Use system font'),
+                    label: Text(tr('settings-appearance-font-use-system')),
                   ),
                 ],
               ),
               const SizedBox(height: 24),
-              const Card(
+              Card(
                 child: Padding(
                   padding: EdgeInsets.all(20),
-                  child: Text(
-                    'Custom assets stay at their original file location. If a file is moved or deleted, DigiDAW safely restores the default.',
-                  ),
+                  child: Text(tr('settings-appearance-assets-help')),
                 ),
               ),
             ],
@@ -295,12 +298,12 @@ class _ColorThemeMenu extends StatelessWidget {
       key: const ValueKey('color-theme-menu'),
       initialValue: selected,
       isExpanded: true,
-      decoration: const InputDecoration(labelText: 'Theme'),
+      decoration: InputDecoration(labelText: tr('settings-appearance-theme')),
       items: [
-        const DropdownMenuItem(
+        DropdownMenuItem(
           key: ValueKey('color-theme-default'),
           value: null,
-          child: _ColorThemeLabel(name: 'Default'),
+          child: _ColorThemeLabel(name: tr('common-default')),
         ),
         for (final entry in themes)
           DropdownMenuItem(
@@ -314,7 +317,7 @@ class _ColorThemeMenu extends StatelessWidget {
                   ? Builder(
                       builder: (menuContext) => IconButton(
                         key: ValueKey('remove-color-theme-${entry.source}'),
-                        tooltip: 'Remove theme',
+                        tooltip: tr('settings-appearance-theme-remove'),
                         visualDensity: VisualDensity.compact,
                         icon: const Icon(Icons.close, size: 18),
                         onPressed: () {
@@ -331,7 +334,7 @@ class _ColorThemeMenu extends StatelessWidget {
       ],
       // The closed menu shows the active theme without its remove button.
       selectedItemBuilder: (context) => [
-        const _ColorThemeLabel(name: 'Default'),
+        _ColorThemeLabel(name: tr('common-default')),
         for (final entry in themes)
           _ColorThemeLabel(name: entry.theme.name, color: entry.theme.primary),
       ],
@@ -390,21 +393,23 @@ Future<void> _removeColorTheme(
     context: context,
     builder: (dialogContext) => AlertDialog(
       key: const ValueKey('remove-color-theme-dialog'),
-      title: const Text('Remove color theme?'),
+      title: Text(tr('settings-appearance-theme-remove-title')),
       content: Text(
-        '“$name” will be removed from the theme menu.'
-        '${active ? ' It is the active theme, so DigiDAW switches back to the Default theme.' : ''}\n\n'
-        'The file ${_fileName(source)} is not deleted. You can load it again with Load JSON theme.',
+        tr('settings-appearance-theme-remove-message', {
+          'name': name,
+          'active': active ? 'yes' : 'no',
+          'file': _fileName(source),
+        }),
       ),
       actions: [
         TextButton(
           onPressed: () => Navigator.of(dialogContext).pop(false),
-          child: const Text('Cancel'),
+          child: Text(tr('common-cancel')),
         ),
         FilledButton(
           key: const ValueKey('confirm-remove-color-theme'),
           onPressed: () => Navigator.of(dialogContext).pop(true),
-          child: const Text('Remove'),
+          child: Text(tr('common-remove')),
         ),
       ],
     ),
@@ -414,25 +419,25 @@ Future<void> _removeColorTheme(
 }
 
 String _paletteLabel(AppColorPalette palette) => switch (palette) {
-  AppColorPalette.purple => 'Purple',
-  AppColorPalette.blue => 'Blue',
-  AppColorPalette.teal => 'Teal',
-  AppColorPalette.orange => 'Orange',
-  AppColorPalette.red => 'Red',
-  AppColorPalette.green => 'Green',
-  AppColorPalette.pink => 'Pink',
-  AppColorPalette.cyan => 'Cyan',
-  AppColorPalette.indigo => 'Indigo',
-  AppColorPalette.amber => 'Amber',
-  AppColorPalette.lime => 'Lime',
-  AppColorPalette.magenta => 'Magenta',
-  AppColorPalette.graphite => 'Graphite',
+  AppColorPalette.purple => tr('settings-appearance-palette-purple'),
+  AppColorPalette.blue => tr('settings-appearance-palette-blue'),
+  AppColorPalette.teal => tr('settings-appearance-palette-teal'),
+  AppColorPalette.orange => tr('settings-appearance-palette-orange'),
+  AppColorPalette.red => tr('settings-appearance-palette-red'),
+  AppColorPalette.green => tr('settings-appearance-palette-green'),
+  AppColorPalette.pink => tr('settings-appearance-palette-pink'),
+  AppColorPalette.cyan => tr('settings-appearance-palette-cyan'),
+  AppColorPalette.indigo => tr('settings-appearance-palette-indigo'),
+  AppColorPalette.amber => tr('settings-appearance-palette-amber'),
+  AppColorPalette.lime => tr('settings-appearance-palette-lime'),
+  AppColorPalette.magenta => tr('settings-appearance-palette-magenta'),
+  AppColorPalette.graphite => tr('settings-appearance-palette-graphite'),
 };
 
 String _backgroundFitLabel(AppBackgroundFit fit) => switch (fit) {
-  AppBackgroundFit.cover => 'Cover',
-  AppBackgroundFit.contain => 'Contain',
-  AppBackgroundFit.fill => 'Fill',
+  AppBackgroundFit.cover => tr('settings-appearance-fit-cover'),
+  AppBackgroundFit.contain => tr('settings-appearance-fit-contain'),
+  AppBackgroundFit.fill => tr('settings-appearance-fit-fill'),
 };
 
 String _fileName(String path) {

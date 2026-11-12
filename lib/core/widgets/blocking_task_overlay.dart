@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:karbeat/app/providers/blocking_task_provider.dart';
+import 'package:karbeat/core/l10n/localizer.dart';
 
 /// Covers [child] with a modal spinner while [blockingTaskProvider] has an
 /// active task, absorbing pointer, keyboard, and back-navigation input.
@@ -141,7 +142,7 @@ class _BlockingBarrier extends StatelessWidget {
                     if (pendingCount > 0) ...[
                       const SizedBox(height: 4),
                       Text(
-                        '$pendingCount more queued',
+                        tr('common-more-queued', {'count': pendingCount}),
                         style: TextStyle(
                           color: colors.onSurfaceVariant,
                           fontSize: 11,

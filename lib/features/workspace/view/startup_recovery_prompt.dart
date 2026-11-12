@@ -4,6 +4,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:karbeat/app/providers/crash_recovery_provider.dart';
+import 'package:karbeat/core/l10n/localizer.dart';
 import 'package:karbeat/features/workspace/services/project_file_actions.dart';
 import 'package:karbeat/src/rust/api/mitigation.dart' as mitigation_api;
 
@@ -52,10 +53,10 @@ class CrashRecoveryDialog extends ConsumerWidget {
       key: const ValueKey('crash-recovery-dialog'),
       title: Text(
         state.previousSessionUnclean
-            ? 'DigiDAW did not close properly'
+            ? tr('workspace-recovery-unclean-title')
             : state.previousSessionForced
-            ? 'DigiDAW was force closed'
-            : 'Crash reports',
+            ? tr('workspace-recovery-forced-title')
+            : tr('workspace-recovery-reports-title'),
       ),
       content: SizedBox(
         width: 560,
@@ -70,15 +71,14 @@ class CrashRecoveryDialog extends ConsumerWidget {
               ],
               if (state.crashReports.isNotEmpty) ...[
                 Text(
-                  'Crash reports stay on this computer. Export one to share it '
-                  'when reporting a bug.',
+                  tr('workspace-recovery-reports-help'),
                   style: Theme.of(context).textTheme.bodySmall,
                 ),
                 const SizedBox(height: 8),
                 for (final report in state.crashReports)
                   _CrashReportTile(report: report),
               ] else if (recovery == null)
-                const Text('There is nothing left to recover.'),
+                Text(tr('workspace-recovery-nothing')),
             ],
           ),
         ),
@@ -89,7 +89,7 @@ class CrashRecoveryDialog extends ConsumerWidget {
             onPressed: state.isBusy
                 ? null
                 : () => unawaited(notifier.dismissReports()),
-            child: const Text('Delete reports'),
+            child: Text(tr('workspace-recovery-delete-reports')),
           ),
         FilledButton(
           onPressed: state.isBusy
@@ -98,7 +98,7 @@ class CrashRecoveryDialog extends ConsumerWidget {
                   notifier.dismiss();
                   Navigator.of(context).pop();
                 },
-          child: const Text('Close'),
+          child: Text(tr('common-close')),
         ),
       ],
     );
@@ -127,12 +127,12 @@ class _RecoveryCard extends ConsumerWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              'Unsaved work was auto saved',
+              tr('workspace-recovery-auto-saved'),
               style: Theme.of(context).textTheme.titleSmall,
             ),
             const SizedBox(height: 4),
             Text(
-              '"$name" from $savedAt'
+              '${tr('workspace-recovery-saved-from', {'name': name, 'time': savedAt})}'
               '${recovery.originalPath == null ? '' : '\n${recovery.originalPath}'}',
             ),
             const SizedBox(height: 12),
@@ -143,12 +143,12 @@ class _RecoveryCard extends ConsumerWidget {
                   onPressed: busy
                       ? null
                       : () => unawaited(notifier.discardRecovery()),
-                  child: const Text('Discard'),
+                  child: Text(tr('workspace-recovery-discard')),
                 ),
                 const SizedBox(width: 8),
                 FilledButton.tonal(
                   onPressed: busy ? null : () => unawaited(notifier.recover()),
-                  child: const Text('Recover'),
+                  child: Text(tr('workspace-recovery-recover')),
                 ),
               ],
             ),
@@ -178,11 +178,11 @@ class _CrashReportTile extends ConsumerWidget {
         '${_formatMillis(report.occurredAtMillis)} · v${report.appVersion}',
       ),
       trailing: IconButton(
-        tooltip: 'Export report',
+        tooltip: tr('workspace-recovery-export-report'),
         icon: const Icon(Icons.download),
         onPressed: () async {
           final destination = await FilePicker.saveFile(
-            dialogTitle: 'Export crash report',
+            dialogTitle: tr('workspace-recovery-export-dialog'),
             fileName: '${report.id}.json',
             type: FileType.custom,
             allowedExtensions: const ['json'],

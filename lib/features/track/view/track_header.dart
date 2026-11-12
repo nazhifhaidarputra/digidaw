@@ -4,6 +4,7 @@ import 'package:karbeat/app/providers/project_provider.dart';
 import 'package:karbeat/app/providers/mixer_state.dart';
 import 'package:karbeat/app/providers/recording_state.dart';
 import 'package:karbeat/app/providers/track_list_state.dart';
+import 'package:karbeat/core/l10n/localizer.dart';
 import 'package:karbeat/core/utils/color.dart';
 import 'package:karbeat/core/widgets/color_picker_dialog.dart';
 // import 'package:karbeat/core/utils/color.dart';
@@ -124,24 +125,24 @@ class TrackHeader extends ConsumerWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            "Name: ${track.name}",
+            tr('track-info-name', {'name': track.name}),
             style: TextStyle(color: colors.onSurface, fontSize: 13),
           ),
           const SizedBox(height: 4),
           Text(
-            "Type: ${track.trackType.name.toUpperCase()}",
+            tr('track-info-type', {'type': track.trackType.name}),
             style: TextStyle(color: colors.onSurface, fontSize: 13),
           ),
           const SizedBox(height: 4),
           Text(
-            "ID: ${track.id}",
+            tr('mixer-effect-id', {'id': track.id}),
             style: TextStyle(color: colors.onSurface, fontSize: 13),
           ),
           const SizedBox(height: 8),
           Row(
             children: [
               Text(
-                "Color: ",
+                tr('mixer-color'),
                 style: TextStyle(color: colors.onSurface, fontSize: 13),
               ),
               Container(
@@ -161,7 +162,7 @@ class TrackHeader extends ConsumerWidget {
             generatorId != null &&
             generatorPlugin != null)
           DawContextAction(
-            title: "Go to plugin screen",
+            title: tr('track-go-to-plugin-screen'),
             icon: Icons.open_in_new,
             onTap: () async {
               await openPluginInterface(
@@ -176,7 +177,7 @@ class TrackHeader extends ConsumerWidget {
           ),
         if (generatorId != null && generatorPlugin != null)
           DawContextAction(
-            title: "Rename instrument...",
+            title: tr('track-rename-instrument'),
             icon: Icons.edit,
             onTap: () => renameGeneratorWithDialog(
               context,
@@ -187,12 +188,12 @@ class TrackHeader extends ConsumerWidget {
           ),
         if (track.trackType == UiTrackType.midi)
           DawContextAction(
-            title: "Change instrument...",
+            title: tr('track-change-instrument'),
             icon: Icons.swap_horiz,
             onTap: () => showPluginBrowserDialog(
               context: context,
               pluginType: KarbeatPluginType.generator,
-              actionLabel: 'Replace',
+              actionLabel: tr('track-replace'),
               onAdd: (plugin) => ref
                   .read(trackListStateProvider.notifier)
                   .replaceTrackGenerator(
@@ -203,7 +204,7 @@ class TrackHeader extends ConsumerWidget {
           ),
         if (track.generatorId != null)
           DawContextAction(
-            title: "Add automation on...",
+            title: tr('track-add-automation-on'),
             icon: Icons.timeline,
             onTap: () => showPluginAutomationParameterDialog(
               context: context,
@@ -213,7 +214,7 @@ class TrackHeader extends ConsumerWidget {
           ),
         if (isAudioTrack) ...[
           DawContextAction.submenu(
-            title: "Input channel",
+            title: tr('track-input-channel'),
             icon: Icons.input,
             subtitle: _inputLabel(track.input),
             children: [
@@ -229,8 +230,8 @@ class TrackHeader extends ConsumerWidget {
           ),
           DawContextAction(
             title: track.input.monitor
-                ? "Stop monitoring input"
-                : "Monitor input",
+                ? tr('track-monitor-stop')
+                : tr('track-monitor-start'),
             icon: track.input.monitor ? Icons.hearing_disabled : Icons.hearing,
             onTap: () => ref
                 .read(trackListStateProvider.notifier)
@@ -241,12 +242,12 @@ class TrackHeader extends ConsumerWidget {
           ),
         ],
         DawContextAction(
-          title: collapsed ? "Expand lane" : "Shrink lane",
+          title: collapsed ? tr('track-lane-expand') : tr('track-lane-shrink'),
           icon: collapsed ? Icons.unfold_more : Icons.unfold_less,
           onTap: toggleCollapsed,
         ),
         DawContextAction(
-          title: "Rename",
+          title: tr('common-rename'),
           icon: Icons.edit,
           onTap: () {
             final textController = TextEditingController(text: track.name);
@@ -254,12 +255,12 @@ class TrackHeader extends ConsumerWidget {
             showDialog<String>(
               context: context,
               builder: (ctx) => AlertDialog(
-                title: const Text("Rename Track"),
+                title: Text(tr('track-rename-track')),
                 content: TextField(
                   controller: textController,
                   autofocus: true,
-                  decoration: const InputDecoration(
-                    labelText: "New track name",
+                  decoration: InputDecoration(
+                    labelText: tr('track-new-track-name'),
                     border: OutlineInputBorder(),
                   ),
                   onSubmitted: (value) {
@@ -269,11 +270,11 @@ class TrackHeader extends ConsumerWidget {
                 actions: [
                   TextButton(
                     onPressed: () => Navigator.pop(ctx),
-                    child: const Text("Cancel"),
+                    child: Text(tr('common-cancel')),
                   ),
                   ElevatedButton(
                     onPressed: () => Navigator.pop(ctx, textController.text),
-                    child: const Text("Rename"),
+                    child: Text(tr('common-rename')),
                   ),
                 ],
               ),
@@ -292,7 +293,7 @@ class TrackHeader extends ConsumerWidget {
           },
         ),
         DawContextAction(
-          title: "Change Color",
+          title: tr('track-change-color'),
           icon: Icons.color_lens,
           onTap: () {
             final currentColor = track.color.fromRGBorRGBAtoColor();
@@ -300,7 +301,7 @@ class TrackHeader extends ConsumerWidget {
             showColorPickerDialog(
               context,
               currentColor,
-              title: "Select Track Color",
+              title: tr('track-select-track-color'),
             ).then((selectedColor) {
               if (selectedColor != null &&
                   selectedColor.toARGB32() != currentColor.toARGB32()) {
@@ -315,7 +316,7 @@ class TrackHeader extends ConsumerWidget {
           },
         ),
         DawContextAction(
-          title: "Move Up",
+          title: tr('track-move-up'),
           icon: Icons.arrow_upward,
           onTap: () async {
             AppLogger.info("Move Up requested for track ID: ${track.id}");
@@ -328,7 +329,7 @@ class TrackHeader extends ConsumerWidget {
           },
         ),
         DawContextAction(
-          title: "Move Down",
+          title: tr('track-move-down'),
           icon: Icons.arrow_downward,
           onTap: () async {
             AppLogger.info("Move Down requested for track ID: ${track.id}");
@@ -341,7 +342,7 @@ class TrackHeader extends ConsumerWidget {
           },
         ),
         DawContextAction(
-          title: "Delete Track",
+          title: tr('track-delete-track'),
           icon: Icons.delete,
           isDestructive: true,
           onTap: () async {
@@ -413,7 +414,7 @@ class TrackHeader extends ConsumerWidget {
                           child: MouseRegion(
                             cursor: SystemMouseCursors.grab,
                             child: Semantics(
-                              label: 'Reorder ${track.name}',
+                              label: tr('track-reorder', {'track': track.name}),
                               button: true,
                               child: SizedBox(
                                 width: 20,
@@ -495,11 +496,11 @@ class TrackHeader extends ConsumerWidget {
                                   ChannelToggleButton(
                                     label: 'R',
                                     tooltip: switch (take) {
-                                      null => 'Arm for recording',
-                                      TrackTake(startSamples: null) =>
-                                        'Armed: records when playback starts. Click to disarm.',
-                                      _ =>
-                                        'Recording. Click to stop and keep the take.',
+                                      null => tr('track-arm'),
+                                      TrackTake(startSamples: null) => tr(
+                                        'track-armed',
+                                      ),
+                                      _ => tr('track-recording-active'),
                                     },
                                     isActive: take != null,
                                     // A take waiting for playback shows lighter than one recording.
@@ -521,7 +522,9 @@ class TrackHeader extends ConsumerWidget {
                               children: [
                                 ChannelToggleButton(
                                   label: 'M',
-                                  tooltip: isMuted ? 'Unmute' : 'Mute',
+                                  tooltip: isMuted
+                                      ? tr('mixer-unmute')
+                                      : tr('mixer-mute'),
                                   isActive: isMuted,
                                   activeColor: colors.error,
                                   onTap: () => ref
@@ -535,7 +538,9 @@ class TrackHeader extends ConsumerWidget {
                                 ),
                                 ChannelToggleButton(
                                   label: 'S',
-                                  tooltip: isSoloed ? 'Unsolo' : 'Solo',
+                                  tooltip: isSoloed
+                                      ? tr('mixer-unsolo')
+                                      : tr('mixer-solo'),
                                   isActive: isSoloed,
                                   activeColor: colors.tertiary,
                                   onTap: () => ref
@@ -596,8 +601,8 @@ class _ScaleDownColumn extends StatelessWidget {
 String _inputLabel(UiTrackInput input) {
   final first = input.firstChannel + 1;
   return input.channels >= 2
-      ? 'Ch $first+${first + 1} (stereo)'
-      : 'Ch $first (mono)';
+      ? tr('track-input-stereo', {'first': first, 'second': first + 1})
+      : tr('track-input-mono', {'channel': first});
 }
 
 /// Inputs a track can take from a device with [deviceChannels] channels: each
@@ -628,7 +633,7 @@ class _TrackLevelMeter extends ConsumerWidget {
       ),
     );
     return Semantics(
-      label: '$trackName output level',
+      label: tr('track-output-level', {'trackName': trackName}),
       value: '${magnitudeToDb(magnitude).toStringAsFixed(1)} dB',
       child: DbLevelMeter(magnitude: magnitude, axis: Axis.horizontal),
     );
@@ -650,7 +655,7 @@ class LaneCollapseToggle extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Tooltip(
-      message: collapsed ? 'Expand lane' : 'Shrink lane',
+      message: collapsed ? tr('track-lane-expand') : tr('track-lane-shrink'),
       child: InkWell(
         onTap: onPressed,
         borderRadius: BorderRadius.circular(4),

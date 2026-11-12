@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:karbeat/app/providers/notification_provider.dart';
+import 'package:karbeat/core/l10n/localizer.dart';
 import 'package:karbeat/core/utils/log_models.dart';
 import 'package:karbeat/core/utils/result_type.dart';
 import 'package:karbeat/features/setting/services/log_export_service.dart';
@@ -67,15 +68,12 @@ class _LogSettingsPageState extends ConsumerState<LogSettingsPage> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                'Logs',
+                tr('settings-menu-logs'),
                 key: const ValueKey('settings-page-log'),
                 style: Theme.of(context).textTheme.headlineSmall,
               ),
               const SizedBox(height: 8),
-              const Text(
-                'This viewer contains Flutter application logs and Rust '
-                'audio-engine logs. Each entry is labelled with its source.',
-              ),
+              Text(tr('settings-logs-description')),
               const SizedBox(height: 20),
               Wrap(
                 spacing: 12,
@@ -88,8 +86,8 @@ class _LogSettingsPageState extends ConsumerState<LogSettingsPage> {
                       isExpanded: true,
                       key: const ValueKey('capture-log-level'),
                       initialValue: logState.minimumLevel,
-                      decoration: const InputDecoration(
-                        labelText: 'Capture level',
+                      decoration: InputDecoration(
+                        labelText: tr('settings-logs-capture-level'),
                         border: OutlineInputBorder(),
                       ),
                       items: _levelItems(),
@@ -110,15 +108,19 @@ class _LogSettingsPageState extends ConsumerState<LogSettingsPage> {
                       isExpanded: true,
                       key: const ValueKey('log-retention'),
                       initialValue: logState.maximumEntries,
-                      decoration: const InputDecoration(
-                        labelText: 'Retained entries',
+                      decoration: InputDecoration(
+                        labelText: tr('settings-logs-retained'),
                         border: OutlineInputBorder(),
                       ),
                       items: const [50, 100, 250, 500, 1000, 2000]
                           .map(
                             (value) => DropdownMenuItem(
                               value: value,
-                              child: Text('$value entries'),
+                              child: Text(
+                                tr('settings-general-history-entries', {
+                                  'count': value,
+                                }),
+                              ),
                             ),
                           )
                           .toList(growable: false),
@@ -145,8 +147,8 @@ class _LogSettingsPageState extends ConsumerState<LogSettingsPage> {
                     child: TextField(
                       key: const ValueKey('log-search'),
                       controller: _searchController,
-                      decoration: const InputDecoration(
-                        labelText: 'Search logs',
+                      decoration: InputDecoration(
+                        labelText: tr('settings-logs-search'),
                         prefixIcon: Icon(Icons.search),
                         border: OutlineInputBorder(),
                       ),
@@ -158,8 +160,8 @@ class _LogSettingsPageState extends ConsumerState<LogSettingsPage> {
                       isExpanded: true,
                       key: const ValueKey('display-log-level'),
                       initialValue: _displayMinimum,
-                      decoration: const InputDecoration(
-                        labelText: 'Display level',
+                      decoration: InputDecoration(
+                        labelText: tr('settings-logs-display-level'),
                         border: OutlineInputBorder(),
                       ),
                       items: _levelItems(),
@@ -176,12 +178,15 @@ class _LogSettingsPageState extends ConsumerState<LogSettingsPage> {
                       isExpanded: true,
                       key: const ValueKey('display-log-source'),
                       initialValue: _displaySource,
-                      decoration: const InputDecoration(
-                        labelText: 'Source',
+                      decoration: InputDecoration(
+                        labelText: tr('settings-logs-source'),
                         border: OutlineInputBorder(),
                       ),
                       items: [
-                        const DropdownMenuItem(value: null, child: Text('All')),
+                        DropdownMenuItem(
+                          value: null,
+                          child: Text(tr('settings-logs-source-all')),
+                        ),
                         for (final source in AppLogSource.values)
                           DropdownMenuItem(
                             value: source,
@@ -212,7 +217,9 @@ class _LogSettingsPageState extends ConsumerState<LogSettingsPage> {
                     },
                     icon: Icon(_displayPaused ? Icons.play_arrow : Icons.pause),
                     label: Text(
-                      _displayPaused ? 'Resume display' : 'Pause display',
+                      _displayPaused
+                          ? tr('settings-logs-resume')
+                          : tr('settings-logs-pause'),
                     ),
                   ),
                   OutlinedButton.icon(
@@ -220,7 +227,7 @@ class _LogSettingsPageState extends ConsumerState<LogSettingsPage> {
                         ? null
                         : () => _copyVisible(visibleEntries),
                     icon: const Icon(Icons.copy_outlined),
-                    label: const Text('Copy filtered'),
+                    label: Text(tr('settings-logs-copy')),
                   ),
                   OutlinedButton.icon(
                     key: const ValueKey('export-filtered-logs'),
@@ -228,19 +235,23 @@ class _LogSettingsPageState extends ConsumerState<LogSettingsPage> {
                         ? null
                         : () => _exportVisible(visibleEntries),
                     icon: const Icon(Icons.download_outlined),
-                    label: const Text('Export filtered'),
+                    label: Text(tr('settings-logs-export')),
                   ),
                   OutlinedButton.icon(
                     onPressed: logState.entries.isEmpty ? null : _confirmClear,
                     icon: const Icon(Icons.delete_outline),
-                    label: const Text('Clear'),
+                    label: Text(tr('common-clear')),
                   ),
                 ],
               ),
               const SizedBox(height: 12),
               Text(
-                '${visibleEntries.length} shown • ${logState.entries.length}/${logState.maximumEntries} captured'
-                '${_displayPaused ? ' • display paused' : ''}',
+                tr('settings-logs-count', {
+                  'shown': visibleEntries.length,
+                  'captured': logState.entries.length,
+                  'maximum': logState.maximumEntries,
+                  'paused': _displayPaused ? 'yes' : 'no',
+                }),
                 key: const ValueKey('log-count'),
               ),
               const SizedBox(height: 8),
@@ -254,7 +265,7 @@ class _LogSettingsPageState extends ConsumerState<LogSettingsPage> {
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: visibleEntries.isEmpty
-                    ? const Center(child: Text('No matching log entries.'))
+                    ? Center(child: Text(tr('settings-logs-empty')))
                     : ListView.separated(
                         padding: const EdgeInsets.all(8),
                         itemCount: visibleEntries.length,
@@ -291,9 +302,9 @@ class _LogSettingsPageState extends ConsumerState<LogSettingsPage> {
     if (result.isErr()) {
       ref
           .read(notificationProvider.notifier)
-          .error(result.err(), title: 'Could not copy logs');
+          .error(result.err(), title: tr('settings-logs-copy-failed'));
     } else {
-      ref.read(notificationProvider.notifier).info('Filtered logs copied');
+      ref.read(notificationProvider.notifier).info(tr('settings-logs-copied'));
     }
   }
 
@@ -303,11 +314,11 @@ class _LogSettingsPageState extends ConsumerState<LogSettingsPage> {
     if (result.isErr()) {
       ref
           .read(notificationProvider.notifier)
-          .error(result.err(), title: 'Could not export logs');
+          .error(result.err(), title: tr('settings-logs-export-failed'));
     } else {
       ref
           .read(notificationProvider.notifier)
-          .info('Logs exported to ${result.ok()}');
+          .info(tr('settings-logs-exported', {'path': result.ok() ?? ''}));
     }
   }
 
@@ -315,18 +326,16 @@ class _LogSettingsPageState extends ConsumerState<LogSettingsPage> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Clear captured logs?'),
-        content: const Text(
-          'This removes all entries from the in-memory viewer.',
-        ),
+        title: Text(tr('settings-logs-clear-title')),
+        content: Text(tr('settings-logs-clear-message')),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('Cancel'),
+            child: Text(tr('common-cancel')),
           ),
           FilledButton(
             onPressed: () => Navigator.of(context).pop(true),
-            child: const Text('Clear logs'),
+            child: Text(tr('settings-logs-clear-confirm')),
           ),
         ],
       ),

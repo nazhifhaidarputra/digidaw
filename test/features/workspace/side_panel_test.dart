@@ -35,10 +35,13 @@ void main() {
 
     final group = DawToolbarMenuGroup(
       id: ToolbarMenuContextGroup.project,
-      title: 'Project',
+      titleId: 'app-menu-project',
       icon: Icons.work,
       actions: [
-        DawToolbarMenuAction('Save Project', shortcutId: 'workspace.save'),
+        DawToolbarMenuAction(
+          'app-menu-save-project',
+          shortcutId: 'workspace.save',
+        ),
       ],
     );
 

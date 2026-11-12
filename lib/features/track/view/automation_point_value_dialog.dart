@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:karbeat/core/l10n/localizer.dart';
 import 'package:karbeat/features/track/services/curve_sampler.dart';
 import 'package:karbeat/src/rust/api/automation.dart';
 
@@ -82,22 +83,27 @@ class _AutomationPointValueDialogState
     final value = _parsed;
 
     return AlertDialog(
-      title: Text('Set value: ${lane.label}'),
+      title: Text(tr('track-set-value-title', {'lane': lane.label})),
       content: SizedBox(
         width: 260,
         child: TextField(
           controller: _controller,
           autofocus: true,
           decoration: InputDecoration(
-            labelText:
-                'Value (${sampler.valueText(lane.id, 0)} to '
-                '${sampler.valueText(lane.id, 1)})',
+            labelText: tr('track-point-value-range', {
+              'minimum': sampler.valueText(lane.id, 0),
+              'maximum': sampler.valueText(lane.id, 1),
+            }),
             border: const OutlineInputBorder(),
             // Out-of-range values are clamped by the parameter.
             helperText: value == null
                 ? null
-                : 'Sets ${sampler.valueText(lane.id, value)}',
-            errorText: value == null ? 'Not a value of ${lane.label}' : null,
+                : tr('track-point-value-sets', {
+                    'value': sampler.valueText(lane.id, value),
+                  }),
+            errorText: value == null
+                ? tr('track-point-value-invalid', {'lane': lane.label})
+                : null,
           ),
           onChanged: (_) => setState(() {}),
           onSubmitted: (_) => _submit(),
@@ -106,11 +112,11 @@ class _AutomationPointValueDialogState
       actions: [
         TextButton(
           onPressed: () => Navigator.of(context).pop(),
-          child: const Text('Cancel'),
+          child: Text(tr('common-cancel')),
         ),
         FilledButton(
           onPressed: value == null ? null : _submit,
-          child: const Text('Set'),
+          child: Text(tr('track-set')),
         ),
       ],
     );

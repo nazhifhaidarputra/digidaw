@@ -4,9 +4,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:karbeat/core/utils/result_type.dart';
 import 'package:karbeat/features/setting/models/general_settings_state.dart';
+import 'package:karbeat/features/setting/models/language_state.dart';
 import 'package:karbeat/features/setting/services/general_settings_provider.dart';
+import 'package:karbeat/features/setting/services/language_provider.dart';
 import 'package:karbeat/features/setting/services/settings_service.dart';
 import 'package:karbeat/features/setting/view/general_settings_page.dart';
+import 'package:karbeat/src/rust/api/l10n.dart';
 import 'package:karbeat/src/rust/api/mitigation.dart';
 import 'package:karbeat/src/rust/api/settings.dart';
 
@@ -94,14 +97,73 @@ class _FakeSettingsService extends SettingsService {
   Future<bool> folderExists(String path) async => existing.contains(path);
 }
 
+class _RecordingLanguageNotifier extends LanguageNotifier {
+  _RecordingLanguageNotifier(this.initial);
+
+  final LanguageState initial;
+  final setCalls = <String?>[];
+
+  @override
+  LanguageState build() => initial;
+
+  @override
+  Future<Result<void>> setLanguage(String? code) async {
+    setCalls.add(code);
+    state = state.copyWith(
+      selected: code,
+      active: code == null ? state.system : state.language(code),
+    );
+    return Result.ok(null);
+  }
+}
+
+UiLanguage _language(String code, String native, String english, String flag) {
+  return UiLanguage(
+    code: code,
+    nativeName: native,
+    englishName: english,
+    flag: flag,
+  );
+}
+
+final _english = _language('en-US', 'English (US)', 'English (US)', 'us');
+final _japanese = _language('ja-JP', '日本語', 'Japanese', 'jp');
+
+final _languages = [
+  _english,
+  _language('id-ID', 'Bahasa Indonesia', 'Indonesian', 'id'),
+  _japanese,
+  _language('fr-FR', 'Français', 'French', 'fr'),
+  _language('es-ES', 'Español (España)', 'Spanish (Spain)', 'es'),
+  _language('pt-PT', 'Português (Portugal)', 'Portuguese (Portugal)', 'pt'),
+  _language('nl-NL', 'Nederlands', 'Dutch', 'nl'),
+  _language('ko-KR', '한국어', 'Korean', 'kr'),
+  _language('zh-CN', '简体中文', 'Chinese (Simplified)', 'cn'),
+  _language('it-IT', 'Italiano', 'Italian', 'it'),
+  _language('de-DE', 'Deutsch', 'German', 'de'),
+].lock;
+
+LanguageState _languageState({String? selected}) => LanguageState(
+  languages: _languages,
+  selected: selected,
+  active: selected == null
+      ? _english
+      : _languages.firstWhere((language) => language.code == selected),
+  system: _english,
+);
+
 Future<_RecordingGeneralSettingsNotifier> _pumpPage(
   WidgetTester tester,
-  GeneralSettingsState initial,
-) async {
+  GeneralSettingsState initial, {
+  _RecordingLanguageNotifier? language,
+}) async {
   final notifier = _RecordingGeneralSettingsNotifier(initial);
   await tester.pumpWidget(
     ProviderScope(
-      overrides: [generalSettingsProvider.overrideWith(() => notifier)],
+      overrides: [
+        generalSettingsProvider.overrideWith(() => notifier),
+        if (language != null) languageProvider.overrideWith(() => language),
+      ],
       child: MaterialApp(
         theme: ThemeData.dark(),
         home: const Scaffold(body: GeneralSettingsPage()),
@@ -242,5 +304,117 @@ void main() {
 
     expect(notifier.showRecentCalls, [false]);
     expect(tester.widget<SwitchListTile>(toggle).value, isFalse);
+  });
+
+  group('language selector', () {
+    Future<void> openSelector(WidgetTester tester) async {
+      // Tall enough for the whole menu, which builds only visible items.
+      tester.view.physicalSize = const Size(1200, 2400);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      await tester.pump();
+      await tester.tap(find.byType(DropdownButtonFormField<String>));
+      await tester.pumpAndSettle();
+    }
+
+    Future<void> choose(WidgetTester tester, String code) async {
+      await openSelector(tester);
+      await tester.tap(find.byKey(ValueKey('language-option-$code')).last);
+      await tester.pumpAndSettle();
+    }
+
+    testWidgets('lists the system default and every language with its flag', (
+      tester,
+    ) async {
+      final language = _RecordingLanguageNotifier(_languageState());
+      await _pumpPage(tester, const GeneralSettingsState(), language: language);
+
+      expect(find.text('System default (English (US))'), findsOneWidget);
+      await openSelector(tester);
+
+      expect(
+        find.byKey(const ValueKey('language-option-system')),
+        findsWidgets,
+      );
+      for (final option in _languages) {
+        expect(
+          find.byKey(ValueKey('language-option-${option.code}')),
+          findsWidgets,
+        );
+        expect(
+          find.byKey(ValueKey('language-flag-${option.flag}')),
+          findsWidgets,
+        );
+      }
+    });
+
+    testWidgets('warns in the current and the new language; cancel keeps it', (
+      tester,
+    ) async {
+      final language = _RecordingLanguageNotifier(_languageState());
+      await _pumpPage(tester, const GeneralSettingsState(), language: language);
+
+      await choose(tester, 'ja-JP');
+
+      expect(
+        find.byKey(const ValueKey('language-change-dialog')),
+        findsOneWidget,
+      );
+      expect(
+        find.text(
+          'You are going to change your app language. Remember where the '
+          'menu is so that you are not lost in translation. Are you sure you '
+          'want to change your language?',
+        ),
+        findsOneWidget,
+      );
+      expect(
+        find.descendant(
+          of: find.byKey(const ValueKey('language-change-target-message')),
+          matching: find.textContaining('アプリの言語を変更しようとしています'),
+        ),
+        findsOneWidget,
+      );
+
+      await tester.tap(find.byKey(const ValueKey('language-change-cancel')));
+      await tester.pumpAndSettle();
+
+      expect(language.setCalls, isEmpty);
+      expect(find.text('System default (English (US))'), findsOneWidget);
+    });
+
+    testWidgets('confirming saves the chosen language', (tester) async {
+      final language = _RecordingLanguageNotifier(_languageState());
+      await _pumpPage(tester, const GeneralSettingsState(), language: language);
+
+      await choose(tester, 'ja-JP');
+      await tester.tap(find.byKey(const ValueKey('language-change-confirm')));
+      await tester.pumpAndSettle();
+
+      expect(language.setCalls, ['ja-JP']);
+    });
+
+    testWidgets('going back to the system default also asks first', (
+      tester,
+    ) async {
+      final language = _RecordingLanguageNotifier(
+        _languageState(selected: 'ja-JP'),
+      );
+      await _pumpPage(tester, const GeneralSettingsState(), language: language);
+
+      await choose(tester, 'system');
+      expect(
+        find.byKey(const ValueKey('language-change-current-message')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('language-change-target-message')),
+        findsOneWidget,
+      );
+      await tester.tap(find.byKey(const ValueKey('language-change-confirm')));
+      await tester.pumpAndSettle();
+
+      expect(language.setCalls, [null]);
+    });
   });
 }

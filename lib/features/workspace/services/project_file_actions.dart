@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:karbeat/app/providers/blocking_task_provider.dart';
 import 'package:karbeat/app/providers/project_provider.dart';
+import 'package:karbeat/core/l10n/localizer.dart';
 import 'package:karbeat/features/setting/models/general_settings_state.dart';
 import 'package:karbeat/features/setting/services/general_settings_provider.dart';
 import 'package:karbeat/features/workspace/services/project_file_dialogs.dart';
@@ -32,7 +33,7 @@ Future<bool> saveCurrentProject(WidgetRef ref, {bool saveAs = false}) async {
   final saved = await ref
       .read(blockingTaskProvider.notifier)
       .run(
-        label: 'Saving project...',
+        label: tr('workspace-saving-project'),
         task: () => project.saveProject(savePath),
       );
   return saved.isOk();
@@ -41,7 +42,7 @@ Future<bool> saveCurrentProject(WidgetRef ref, {bool saveAs = false}) async {
 /// Name shown for a project in the window title and prompts: the file name
 /// of [filePath], or "Untitled" when the project has never been saved.
 String projectDisplayName(String? filePath) {
-  return filePath?.split(RegExp(r'[/\\]')).last ?? 'Untitled';
+  return filePath?.split(RegExp(r'[/\\]')).last ?? tr('workspace-untitled');
 }
 
 /// Whether the current project has no unsaved changes, reported by the engine
@@ -76,7 +77,10 @@ Future<Null> openProject(BuildContext context, WidgetRef ref) async {
   // Await the Rust Shadow Load & Swap behind the global blocking overlay.
   await ref
       .read(blockingTaskProvider.notifier)
-      .run(label: 'Loading project...', task: () => project.loadProject(path));
+      .run(
+        label: tr('workspace-loading-project'),
+        task: () => project.loadProject(path),
+      );
 }
 
 /// Opens the recent project at [path], after the unsaved changes prompt.
@@ -89,7 +93,10 @@ Future<void> openRecentProject(
   final project = ref.read(projectProvider.notifier);
   await ref
       .read(blockingTaskProvider.notifier)
-      .run(label: 'Loading project...', task: () => project.loadProject(path));
+      .run(
+        label: tr('workspace-loading-project'),
+        task: () => project.loadProject(path),
+      );
 }
 
 /// The default project folder, when it is set and still exists.

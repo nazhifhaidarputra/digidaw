@@ -5,6 +5,7 @@ import 'dart:ui' show AppExitType;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:karbeat/app/providers/project_provider.dart';
+import 'package:karbeat/core/l10n/localizer.dart';
 import 'package:karbeat/core/utils/logger.dart';
 import 'package:karbeat/core/utils/result_type.dart';
 import 'package:karbeat/features/workspace/services/project_file_actions.dart';
@@ -98,26 +99,23 @@ class _UnsavedChangesDialog extends StatelessWidget {
   Widget build(BuildContext context) {
     return AlertDialog(
       key: const ValueKey('unsaved-changes-dialog'),
-      title: const Text('Unsaved changes'),
-      content: Text(
-        'Save the changes to "$projectName" before closing it? '
-        'Unsaved changes will be lost.',
-      ),
+      title: Text(tr('workspace-unsaved-title')),
+      content: Text(tr('workspace-unsaved-message', {'name': projectName})),
       actions: [
         TextButton(
           onPressed: () =>
               Navigator.of(context).pop(_UnsavedChangesChoice.cancel),
-          child: const Text('Cancel'),
+          child: Text(tr('common-cancel')),
         ),
         TextButton(
           onPressed: () =>
               Navigator.of(context).pop(_UnsavedChangesChoice.discard),
-          child: const Text("Don't save"),
+          child: Text(tr('workspace-unsaved-discard')),
         ),
         FilledButton(
           onPressed: () =>
               Navigator.of(context).pop(_UnsavedChangesChoice.save),
-          child: const Text('Save'),
+          child: Text(tr('common-save')),
         ),
       ],
     );

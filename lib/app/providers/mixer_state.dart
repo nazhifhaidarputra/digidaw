@@ -5,6 +5,7 @@ import 'package:flutter/painting.dart' show Color;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:freezed_annotation/freezed_annotation.dart';
 import 'package:karbeat/app/providers/telemetry_polling_suppression.dart';
+import 'package:karbeat/core/l10n/localizer.dart';
 import 'package:karbeat/core/utils/color.dart';
 import 'package:karbeat/core/utils/logger.dart';
 import 'package:karbeat/core/utils/result_type.dart';
@@ -676,11 +677,11 @@ extension MixerService on MixerNotifier {
         );
         _notifications.error(
           result.error!,
-          title: 'Could not save channel template',
+          title: tr('app-mixer-template-save-failed'),
         );
         return Result.error(Exception(result.error.toString()));
       }
-      _notifications.info('Saved channel template to $path');
+      _notifications.info(tr('app-mixer-template-saved', {'path': path}));
       return Result.ok(null);
     });
   }
@@ -713,17 +714,17 @@ extension MixerService on MixerNotifier {
         );
         _notifications.error(
           result.error!,
-          title: 'Could not load channel template',
+          title: tr('app-mixer-template-load-failed'),
         );
         return Result.error(Exception(result.error.toString()));
       }
       final skipped = result.requireValue;
       if (skipped.isEmpty) {
-        _notifications.info('Loaded channel template');
+        _notifications.info(tr('app-mixer-template-loaded'));
       } else {
         _notifications.warn(
-          'Skipped unavailable plugins: ${skipped.join(', ')}',
-          title: 'Loaded channel template',
+          tr('app-mixer-template-skipped', {'plugins': skipped.join(', ')}),
+          title: tr('app-mixer-template-loaded'),
         );
       }
       return Result.ok(null);

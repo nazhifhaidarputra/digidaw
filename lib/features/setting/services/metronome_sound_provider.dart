@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:karbeat/app/providers/notification_provider.dart';
+import 'package:karbeat/core/l10n/localizer.dart';
 import 'package:karbeat/core/utils/result_type.dart';
 import 'package:karbeat/src/rust/api/audio.dart' as audio_api;
 import 'package:karbeat/src/rust/api/project.dart';
@@ -23,7 +24,7 @@ class MetronomeSoundService {
   Future<Result<String?>> pickSound() {
     return attemptAsync(() async {
       final result = await FilePicker.pickFiles(
-        dialogTitle: 'Choose metronome sound',
+        dialogTitle: tr('settings-audio-metronome-dialog'),
         type: FileType.audio,
       );
       return result?.files.single.path;
@@ -73,7 +74,7 @@ class MetronomeSoundNotifier extends Notifier<String?> {
       _initializationStarted = false;
       return ref.notifyErrorResult(
         error,
-        title: 'Could not load the metronome sound setting',
+        title: tr('settings-audio-metronome-setting-load-failed'),
       );
     }
     final path = loaded.ok();
@@ -87,8 +88,8 @@ class MetronomeSoundNotifier extends Notifier<String?> {
       ref
           .read(notificationProvider.notifier)
           .warn(
-            'The saved metronome sound is unavailable. The default click is being used.',
-            title: 'Metronome sound unavailable',
+            tr('settings-audio-metronome-unavailable-message'),
+            title: tr('settings-audio-metronome-unavailable-title'),
           );
       return _service.savePath(null);
     }
@@ -101,18 +102,21 @@ class MetronomeSoundNotifier extends Notifier<String?> {
     if (picked case Error<String?>(error: final error)) {
       return ref.notifyErrorResult(
         error,
-        title: 'Could not choose metronome sound',
+        title: tr('settings-audio-metronome-choose-failed'),
       );
     }
     final path = picked.ok();
     if (path == null) return Result.ok(null);
-    return _applyAndSave(path, failureTitle: 'Could not load metronome sound');
+    return _applyAndSave(
+      path,
+      failureTitle: tr('settings-audio-metronome-load-failed'),
+    );
   }
 
   Future<Result<void>> useDefaultSound() {
     return _applyAndSave(
       null,
-      failureTitle: 'Could not restore the default metronome sound',
+      failureTitle: tr('settings-audio-metronome-restore-failed'),
     );
   }
 
@@ -136,7 +140,7 @@ class MetronomeSoundNotifier extends Notifier<String?> {
     if (saved case Error<void>(error: final error)) {
       return ref.notifyErrorResult(
         error,
-        title: 'Metronome sound changed but not saved',
+        title: tr('settings-audio-metronome-not-saved'),
       );
     }
     return Result.ok(null);

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:karbeat/app/providers/mixer_state.dart';
 import 'package:karbeat/app/providers/project_provider.dart';
+import 'package:karbeat/core/l10n/localizer.dart';
 import 'package:karbeat/core/widgets/context_menu.dart';
 import 'package:karbeat/features/mixer/services/mixer_channel_targets.dart';
 import 'package:karbeat/features/mixer/view/sidechain_input_dialog.dart';
@@ -64,7 +65,7 @@ class MixerEffectRack extends ConsumerWidget {
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
-                    '${rack.name} Effects',
+                    tr('mixer-rack-effects', {'name': rack.name}),
                     style: TextStyle(
                       color: colors.onSurface,
                       fontWeight: FontWeight.bold,
@@ -84,7 +85,7 @@ class MixerEffectRack extends ConsumerWidget {
             child: effects.isEmpty
                 ? Center(
                     child: Text(
-                      'No effects',
+                      tr('mixer-no-effects'),
                       style: TextStyle(
                         color: colors.onSurfaceVariant,
                         fontStyle: FontStyle.italic,
@@ -134,7 +135,7 @@ class MixerEffectRack extends ConsumerWidget {
                 target: target,
               ),
               icon: const Icon(Icons.add, size: 16),
-              label: const Text('Add Effect'),
+              label: Text(tr('mixer-add-effect-button')),
             ),
           ),
         ],
@@ -201,12 +202,12 @@ class _EffectRackItem extends ConsumerWidget {
       title: effect.name,
       actions: [
         DawContextAction(
-          title: 'Open plugin',
+          title: tr('mixer-open-plugin'),
           icon: Icons.open_in_new,
           onTap: () => _openPlugin(context, ref),
         ),
         DawContextAction(
-          title: 'Sidechain input…',
+          title: tr('mixer-sidechain-input'),
           icon: Icons.alt_route,
           onTap: () => showSidechainInputDialog(
             context: context,
@@ -216,7 +217,7 @@ class _EffectRackItem extends ConsumerWidget {
           ),
         ),
         DawContextAction(
-          title: 'Add automation on...',
+          title: tr('mixer-add-automation-on'),
           icon: Icons.timeline,
           onTap: () => showPluginAutomationParameterDialog(
             context: context,
@@ -225,12 +226,14 @@ class _EffectRackItem extends ConsumerWidget {
           ),
         ),
         DawContextAction(
-          title: enabled ? 'Bypass effect' : 'Enable effect',
+          title: enabled
+              ? tr('mixer-effect-bypass')
+              : tr('mixer-effect-enable'),
           icon: enabled ? Icons.power_off : Icons.power_settings_new,
           onTap: () => _setBypass(ref, enabled),
         ),
         DawContextAction(
-          title: 'Remove effect',
+          title: tr('mixer-remove-effect'),
           icon: Icons.delete_outline,
           isDestructive: true,
           onTap: () => _remove(ref),
@@ -248,7 +251,9 @@ class _EffectRackItem extends ConsumerWidget {
           dense: true,
           contentPadding: const EdgeInsets.only(left: 4, right: 4),
           leading: IconButton(
-            tooltip: enabled ? 'Bypass effect' : 'Enable effect',
+            tooltip: enabled
+                ? tr('mixer-effect-bypass')
+                : tr('mixer-effect-enable'),
             visualDensity: VisualDensity.compact,
             onPressed: () => _setBypass(ref, enabled),
             icon: Icon(
@@ -268,7 +273,9 @@ class _EffectRackItem extends ConsumerWidget {
             ),
           ),
           subtitle: Text(
-            enabled ? 'ID: ${effect.id}' : 'Bypassed · ID: ${effect.id}',
+            enabled
+                ? tr('mixer-effect-id', {'id': effect.id})
+                : tr('mixer-effect-bypassed-id', {'id': effect.id}),
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             style: TextStyle(color: colors.onSurfaceVariant),
@@ -277,7 +284,7 @@ class _EffectRackItem extends ConsumerWidget {
             mainAxisSize: MainAxisSize.min,
             children: [
               IconButton(
-                tooltip: 'Remove effect',
+                tooltip: tr('mixer-remove-effect'),
                 visualDensity: VisualDensity.compact,
                 onPressed: () => _remove(ref),
                 icon: Icon(Icons.close, color: colors.error, size: 16),

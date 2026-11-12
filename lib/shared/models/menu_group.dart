@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:karbeat/app/providers/blocking_task_provider.dart';
 import 'package:karbeat/app/providers/project_provider.dart';
 import 'package:karbeat/app/providers/workspace_state.dart';
+import 'package:karbeat/core/l10n/localizer.dart';
 import 'package:karbeat/features/setting/services/general_settings_provider.dart';
 import 'package:karbeat/features/setting/view/setting_screen.dart';
 import 'package:karbeat/features/source/services/audio_source_import.dart';
@@ -15,7 +16,9 @@ import 'package:karbeat/shared/enums/global.dart';
 /// Toolbar Menu Group
 class DawToolbarMenuGroup {
   final ToolbarMenuContextGroup id;
-  final String title;
+
+  /// Message id of the menu's name.
+  final String titleId;
   final IconData icon;
 
   /// Define list of actions with type [DawToolbarMenuAction]
@@ -23,15 +26,18 @@ class DawToolbarMenuGroup {
 
   DawToolbarMenuGroup({
     required this.id,
-    required this.title,
+    required this.titleId,
     required this.icon,
     required this.actions,
   });
+
+  String get title => tr(titleId);
 }
 
 /// Model for toolbar menu action
 class DawToolbarMenuAction {
-  final String title;
+  /// Message id of the action's name.
+  final String titleId;
 
   /// ID of the shortcut in the shortcut catalog whose active chord is shown as
   /// a hint. The displayed key follows the user's remapping in settings.
@@ -51,13 +57,15 @@ class DawToolbarMenuAction {
   final DawToolbarSubmenuBuilder? submenu;
 
   DawToolbarMenuAction(
-    this.title, {
+    this.titleId, {
     this.shortcutId,
     this.isDestructive = false,
     this.callback,
     this.isVisible,
     this.submenu,
   });
+
+  String get title => tr(titleId);
 }
 
 typedef DawToolbarMenuActionCallback = void Function(BuildContext, WidgetRef);
@@ -76,31 +84,31 @@ class DawToolbarMenuGroupFactory {
   static DawToolbarMenuGroup createProjectMenuGroup() => DawToolbarMenuGroup(
     id: ToolbarMenuContextGroup.project,
     icon: Icons.work,
-    title: "Project",
+    titleId: 'app-menu-project',
     actions: [
       DawToolbarMenuAction(
-        'New project',
+        'app-menu-new-project',
         shortcutId: 'workspace.newProject',
         callback: (context, ref) async {
           await newProject(context, ref);
         },
       ),
       DawToolbarMenuAction(
-        'Open project',
+        'app-menu-open-project',
         shortcutId: 'workspace.openProject',
         callback: (context, ref) async {
           await openProject(context, ref);
         },
       ),
       DawToolbarMenuAction(
-        'Open recent',
+        'app-menu-open-recent',
         isVisible: (ref) => ref.watch(
           generalSettingsProvider.select((state) => state.showRecentProjects),
         ),
         submenu: (run) => [RecentProjectsMenuItems(run: run)],
       ),
       DawToolbarMenuAction(
-        'Save Project',
+        'app-menu-save-project',
         shortcutId: 'workspace.save',
         callback: (context, ref) async {
           // Untitled projects fall back to Save As.
@@ -108,26 +116,26 @@ class DawToolbarMenuGroupFactory {
         },
       ),
       DawToolbarMenuAction(
-        'Save As...',
+        'app-menu-save-as',
         shortcutId: 'workspace.saveAs',
         callback: (context, ref) async {
           await saveCurrentProject(ref, saveAs: true);
         },
       ),
       DawToolbarMenuAction(
-        'Import Audio',
+        'app-menu-import-audio',
         shortcutId: 'workspace.importAudio',
         callback: (context, ref) => importAudioSource(context, ref),
       ),
       DawToolbarMenuAction(
-        'Export Project',
+        'app-menu-export-project',
         shortcutId: 'workspace.export',
         callback: (context, ref) async {
           ref.read(workspaceStateProvider.notifier).openExportPanel();
         },
       ),
       DawToolbarMenuAction(
-        'Settings',
+        'app-menu-settings',
         shortcutId: 'workspace.openSettings',
         callback: (context, ref) {
           Navigator.of(context, rootNavigator: true).push(
@@ -138,7 +146,7 @@ class DawToolbarMenuGroupFactory {
         },
       ),
       DawToolbarMenuAction(
-        'Quit DigiDAW',
+        'app-menu-quit',
         isDestructive: true,
         callback: (context, ref) => quitApplication(context, ref),
       ),
@@ -148,20 +156,20 @@ class DawToolbarMenuGroupFactory {
   static DawToolbarMenuGroup createEditMenuGroup() => DawToolbarMenuGroup(
     id: ToolbarMenuContextGroup.edit,
     icon: Icons.edit,
-    title: 'Edit',
+    titleId: 'app-menu-edit',
     actions: [
-      DawToolbarMenuAction('Undo', shortcutId: 'workspace.undo'),
-      DawToolbarMenuAction('Redo', shortcutId: 'workspace.redo'),
+      DawToolbarMenuAction('app-menu-undo', shortcutId: 'workspace.undo'),
+      DawToolbarMenuAction('app-menu-redo', shortcutId: 'workspace.redo'),
     ],
   );
 
   static DawToolbarMenuGroup createViewMenuGroup() => DawToolbarMenuGroup(
     id: ToolbarMenuContextGroup.view,
-    title: 'View',
+    titleId: 'app-menu-view',
     icon: Icons.visibility,
     actions: [
-      DawToolbarMenuAction('Zoom in'),
-      DawToolbarMenuAction('Zoom out'),
+      DawToolbarMenuAction('app-menu-zoom-in'),
+      DawToolbarMenuAction('app-menu-zoom-out'),
     ],
   );
 }

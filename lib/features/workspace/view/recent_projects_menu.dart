@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:karbeat/app/providers/notification_provider.dart';
+import 'package:karbeat/core/l10n/localizer.dart';
 import 'package:karbeat/core/utils/result_type.dart';
 import 'package:karbeat/features/workspace/services/project_file_actions.dart';
 import 'package:karbeat/features/workspace/services/recent_projects_service.dart';
@@ -49,12 +50,12 @@ class RecentProjectsMenuItems extends ConsumerWidget {
               ),
           ],
           AsyncError() => [
-            const MenuItemButton(child: Text('Could not read recent projects')),
+            MenuItemButton(child: Text(tr('workspace-recent-read-failed'))),
           ],
           AsyncData() => [
-            const MenuItemButton(child: Text('No recent projects')),
+            MenuItemButton(child: Text(tr('workspace-recent-empty'))),
           ],
-          _ => [const MenuItemButton(child: Text('Loading…'))],
+          _ => [MenuItemButton(child: Text(tr('common-loading')))],
         },
         const Divider(height: 9),
         MenuItemButton(
@@ -62,7 +63,7 @@ class RecentProjectsMenuItems extends ConsumerWidget {
           onPressed: listed == null || listed.isEmpty
               ? null
               : () => run((context, ref) => _forgetAll(ref)),
-          child: const Text('Clear Recently Opened'),
+          child: Text(tr('workspace-recent-clear')),
         ),
       ],
     );
@@ -75,7 +76,7 @@ Future<void> _forgetAll(WidgetRef ref) async {
   if (cleared case Error(:final error)) {
     ref
         .read(notificationProvider.notifier)
-        .error(error, title: 'Could not clear the recent projects');
+        .error(error, title: tr('workspace-recent-clear-failed'));
   }
 }
 
@@ -89,19 +90,19 @@ Future<void> _offerToForget(
   final forget = await showDialog<bool>(
     context: context,
     builder: (context) => AlertDialog(
-      title: const Text('Project not found'),
+      title: Text(tr('workspace-recent-missing-title')),
       content: Text(
-        '"${project.label}" no longer exists. Remove it from Open recent?',
+        tr('workspace-recent-missing-message', {'name': project.label}),
       ),
       actions: [
         TextButton(
           onPressed: () => Navigator.of(context).pop(false),
-          child: const Text('Cancel'),
+          child: Text(tr('common-cancel')),
         ),
         FilledButton(
           key: const ValueKey('recent-project-forget'),
           onPressed: () => Navigator.of(context).pop(true),
-          child: const Text('Remove'),
+          child: Text(tr('common-remove')),
         ),
       ],
     ),
@@ -113,6 +114,6 @@ Future<void> _offerToForget(
   if (removed case Error(:final error)) {
     ref
         .read(notificationProvider.notifier)
-        .error(error, title: 'Could not remove the recent project');
+        .error(error, title: tr('workspace-recent-remove-failed'));
   }
 }

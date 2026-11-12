@@ -4,6 +4,7 @@ import 'package:karbeat/app/providers/automation_provider.dart';
 import 'package:karbeat/app/providers/mixer_state.dart';
 import 'package:karbeat/app/providers/notification_provider.dart';
 import 'package:karbeat/app/providers/project_provider.dart';
+import 'package:karbeat/core/l10n/localizer.dart';
 import 'package:karbeat/core/utils/logger.dart';
 import 'package:karbeat/core/widgets/channel_toggle_button.dart';
 import 'package:karbeat/core/widgets/context_menu.dart';
@@ -261,7 +262,7 @@ class _MixerChannelStripState extends ConsumerState<MixerChannelStrip> {
                 SizedBox(
                   width: 14,
                   child: Semantics(
-                    label: '$name output level',
+                    label: tr('mixer-output-level', {'name': name}),
                     value: '${magnitudeToDb(magnitude).toStringAsFixed(1)} dB',
                     child: DbLevelMeter(magnitude: magnitude, showScale: true),
                   ),
@@ -377,7 +378,7 @@ List<DawContextAction> _normalizedValueActions({
 
   return [
     DawContextAction(
-      title: 'Copy normalized value',
+      title: tr('mixer-copy-normalized-value'),
       icon: Icons.copy,
       onTap: () => ref
           .read(automationEditorProvider.notifier)
@@ -387,7 +388,9 @@ List<DawContextAction> _normalizedValueActions({
       :final normalizedValue,
     ))
       DawContextAction(
-        title: 'Paste normalized value (${normalizedValue.toStringAsFixed(2)})',
+        title: tr('mixer-paste-normalized-value', {
+          'normalizedValue': normalizedValue.toStringAsFixed(2),
+        }),
         icon: Icons.content_paste,
         onTap: () => onChanged(min + normalizedValue * (max - min)),
       ),
@@ -458,7 +461,10 @@ class _PanKnob extends ConsumerWidget {
               ),
               onAddAutomation: () async {
                 AppLogger.info(
-                  "Create automation for ${spec.name} (ID: ${spec.id})",
+                  tr('mixer-automation-create', {
+                    'name': spec.name,
+                    'id': spec.id,
+                  }),
                 );
                 ref
                     .read(automationProvider.notifier)
@@ -470,7 +476,10 @@ class _PanKnob extends ConsumerWidget {
               },
               onRemoveAutomation: () {
                 AppLogger.info(
-                  "remove automation for ${spec.name} (ID: ${spec.id})",
+                  tr('mixer-automation-remove', {
+                    'name': spec.name,
+                    'id': spec.id,
+                  }),
                 );
                 ref
                     .read(automationProvider.notifier)
@@ -551,7 +560,10 @@ class _VolumeFader extends ConsumerWidget {
             ),
             onAddAutomation: () async {
               AppLogger.info(
-                "Create automation for ${spec.name} (ID: ${spec.id})",
+                tr('mixer-automation-create', {
+                  'name': spec.name,
+                  'id': spec.id,
+                }),
               );
               ref
                   .read(automationProvider.notifier)
@@ -563,7 +575,10 @@ class _VolumeFader extends ConsumerWidget {
             },
             onRemoveAutomation: () async {
               AppLogger.info(
-                "Remove automation for ${spec.name} (ID: ${spec.id})",
+                tr('mixer-automation-remove', {
+                  'name': spec.name,
+                  'id': spec.id,
+                }),
               );
               ref
                   .read(automationProvider.notifier)

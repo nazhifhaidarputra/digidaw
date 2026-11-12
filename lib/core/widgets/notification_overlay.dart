@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:karbeat/app/providers/notification_provider.dart';
+import 'package:karbeat/core/l10n/localizer.dart';
 import 'package:karbeat/shared/models/user_notification.dart';
 
 /// Places user-facing notifications above [child] at the bottom-right edge.
@@ -107,16 +108,20 @@ class _NotificationBox extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
     final (accent, icon, defaultTitle) = switch (event.type) {
-      UserNotificationType.info => (colors.primary, Icons.info_outline, 'Info'),
+      UserNotificationType.info => (
+        colors.primary,
+        Icons.info_outline,
+        tr('common-notification-info'),
+      ),
       UserNotificationType.warn => (
         colors.tertiary,
         Icons.warning_amber_rounded,
-        'Warning',
+        tr('common-notification-warning'),
       ),
       UserNotificationType.error => (
         colors.error,
         Icons.error_outline,
-        'Error',
+        tr('common-notification-error'),
       ),
     };
 
@@ -172,7 +177,7 @@ class _NotificationBox extends StatelessWidget {
                     if (pendingCount > 0) ...[
                       const SizedBox(height: 5),
                       Text(
-                        '$pendingCount more',
+                        tr('common-more', {'count': pendingCount}),
                         style: TextStyle(
                           color: colors.onSurfaceVariant,
                           fontSize: 10,
@@ -184,7 +189,7 @@ class _NotificationBox extends StatelessWidget {
               ),
               Semantics(
                 button: true,
-                label: 'Dismiss notification',
+                label: tr('common-notification-dismiss'),
                 child: IconButton(
                   key: const ValueKey('dismiss-notification'),
                   onPressed: onDismiss,

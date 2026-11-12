@@ -5,6 +5,7 @@ import 'dart:ui' as ui;
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/widgets.dart';
+import 'package:karbeat/core/l10n/localizer.dart';
 import 'package:karbeat/core/utils/result_type.dart';
 import 'package:karbeat/src/rust/api/project.dart' show encodeCoverArt;
 
@@ -24,7 +25,7 @@ const coverImageExtensions = ['jpg', 'jpeg', 'png', 'webp', 'bmp', 'gif'];
 Future<Result<ui.Image?>> pickCoverSource() {
   return attemptAsync(() async {
     final picked = await FilePicker.pickFiles(
-      dialogTitle: 'Choose a cover image',
+      dialogTitle: tr('settings-project-cover-dialog'),
       type: FileType.custom,
       allowedExtensions: coverImageExtensions,
     );

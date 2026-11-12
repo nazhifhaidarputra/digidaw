@@ -4,6 +4,7 @@ import 'package:fast_immutable_collections/fast_immutable_collections.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:karbeat/app/providers/project_provider.dart';
 import 'package:karbeat/app/providers/notification_provider.dart';
+import 'package:karbeat/core/l10n/localizer.dart';
 import 'package:karbeat/core/utils/logger.dart';
 import 'package:karbeat/core/utils/result_type.dart';
 import 'package:karbeat/shared/enums/global.dart';
@@ -785,7 +786,7 @@ class PianoRollNotifier extends Notifier<PianoRollStateData> {
     AppLogger.error('Could not duplicate notes: ${result.error}');
     return ref.notifyErrorResult(
       result.error ?? Exception('Unknown error'),
-      title: 'Could not duplicate notes',
+      title: tr('piano-roll-notes-action-failed', {'action': 'duplicate'}),
     );
   }
 
@@ -945,7 +946,7 @@ class PianoRollNotifier extends Notifier<PianoRollStateData> {
     AppLogger.error('Could not $action notes: ${result.error}');
     return ref.notifyErrorResult(
       result.error ?? Exception('Unknown error'),
-      title: 'Could not $action notes',
+      title: tr('piano-roll-notes-action-failed', {'action': action}),
     );
   }
 
@@ -1076,7 +1077,7 @@ class PianoRollNotifier extends Notifier<PianoRollStateData> {
     final generatorId = state.previewGeneratorId;
     if (patternId == null || generatorId == null) {
       return ref.notifyErrorResult(
-        Exception('Choose a generator to play this pattern'),
+        Exception(tr('piano-roll-choose-generator')),
       );
     }
     final result = await AsyncValue.guard(() async {
@@ -1087,7 +1088,7 @@ class PianoRollNotifier extends Notifier<PianoRollStateData> {
         generatorId: generatorId,
       );
     });
-    return _transportResult(result, 'play the pattern');
+    return _transportResult(result, 'play');
   }
 
   /// Stops pattern playback and rewinds to the start of the pattern.
@@ -1095,7 +1096,7 @@ class PianoRollNotifier extends Notifier<PianoRollStateData> {
     final result = await AsyncValue.guard(
       () => transport_api.stopPatternPlayback(ctx: _ctx),
     );
-    return _transportResult(result, 'stop the pattern');
+    return _transportResult(result, 'stop');
   }
 
   /// Moves the pattern playhead, whether or not the pattern is playing.
@@ -1104,7 +1105,7 @@ class PianoRollNotifier extends Notifier<PianoRollStateData> {
       () =>
           transport_api.setPatternPlayhead(ctx: _ctx, samples: max(0, samples)),
     );
-    return _transportResult(result, 'move the pattern playhead');
+    return _transportResult(result, 'seek');
   }
 
   /// Loops pattern playback over [region], or the whole pattern when null.
@@ -1116,7 +1117,7 @@ class PianoRollNotifier extends Notifier<PianoRollStateData> {
     state = state.copyWith(loopRegion: valid);
     final result = await AsyncValue.guard(() => _sendLoopRegion(valid));
     if (result.hasError) state = state.copyWith(loopRegion: previous);
-    return _transportResult(result, 'set the loop region');
+    return _transportResult(result, 'loop');
   }
 
   Future<void> _sendLoopRegion(PatternLoopRegion? region) =>
@@ -1128,10 +1129,10 @@ class PianoRollNotifier extends Notifier<PianoRollStateData> {
 
   Result<void> _transportResult(AsyncValue<void> result, String action) {
     if (!result.hasError) return Result.ok(null);
-    AppLogger.error('Could not $action: ${result.error}');
+    AppLogger.error('Pattern transport $action failed: ${result.error}');
     return ref.notifyErrorResult(
       result.error ?? Exception('Unknown error'),
-      title: 'Could not $action',
+      title: tr('piano-roll-transport-failed', {'action': action}),
     );
   }
 }

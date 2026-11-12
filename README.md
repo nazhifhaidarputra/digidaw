@@ -20,6 +20,7 @@ The project is desktop-first today: **Linux x64 is the only released platform**.
 - **Reliability**: Auto-save, crash recovery, local crash reports, diagnostic logging, and a startup recovery prompt.
 - **Customization**: Light, dark, and Catppuccin themes, plus configurable keyboard shortcuts.
 - **Sample browsing**: A browser panel for dragging and dropping audio samples into the arrangement.
+- **Languages**: English, Indonesian, Japanese, French, Spanish, Portuguese, Dutch, Korean, Simplified Chinese, Italian, and German, chosen in Settings → General.
 
 ## Installation
 
@@ -107,6 +108,7 @@ _(Want to contribute? Check out our developer notes below!)_
 - [GitHub Issues](https://github.com/nazhifhaidarputra/digidaw/issues): report bugs and request features
 - [Crash Error Code Guide](docs/CODE_ERROR_GUIDE.md): what each crash report code means
 - [Audio Plugin Manifest Info](assets/manifests/audio-plugins/PLUGIN_MANIFEST_INFO.md): how first-party plugin manifests are written
+- [Translating DigiDAW](rust/karbeat-l10n/README.md): how to translate the app, add messages, and add a language
 
 Comprehensive user and developer documentation is still being drafted.
 

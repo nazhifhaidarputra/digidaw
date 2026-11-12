@@ -8,6 +8,7 @@ import 'package:karbeat/app/providers/project_provider.dart';
 import 'package:karbeat/app/providers/track_list_state.dart';
 import 'package:karbeat/app/providers/transport_state.dart';
 import 'package:karbeat/app/providers/workspace_state.dart';
+import 'package:karbeat/core/l10n/localizer.dart';
 import 'package:karbeat/core/widgets/background_jobs_indicator.dart';
 import 'package:karbeat/core/widgets/fine_grained_input.dart';
 import 'package:karbeat/features/track/view/performance_monitor.dart';
@@ -295,7 +296,7 @@ class DefaultControlPanel extends ConsumerWidget {
             value: WorkspaceView.trackList,
             child: ListTile(
               leading: Icon(Icons.view_list, color: colors.primary),
-              title: Text("Tracks"),
+              title: Text(tr('workspace-view-tracks')),
               contentPadding: EdgeInsets.zero,
             ),
           ),
@@ -303,7 +304,7 @@ class DefaultControlPanel extends ConsumerWidget {
             value: WorkspaceView.pianoRoll,
             child: ListTile(
               leading: Icon(Icons.piano, color: colors.primary),
-              title: Text("Piano Roll"),
+              title: Text(tr('workspace-view-piano-roll')),
               contentPadding: EdgeInsets.zero,
             ),
           ),
@@ -311,7 +312,7 @@ class DefaultControlPanel extends ConsumerWidget {
             value: WorkspaceView.mixer,
             child: ListTile(
               leading: Icon(Icons.tune, color: colors.primary),
-              title: Text("Mixer"),
+              title: Text(tr('workspace-view-mixer')),
               contentPadding: EdgeInsets.zero,
             ),
           ),
@@ -319,7 +320,7 @@ class DefaultControlPanel extends ConsumerWidget {
             value: WorkspaceView.source,
             child: ListTile(
               leading: Icon(Icons.group_work, color: colors.primary),
-              title: Text("Source"),
+              title: Text(tr('workspace-view-source')),
               contentPadding: EdgeInsets.zero,
             ),
           ),
@@ -335,7 +336,9 @@ class DefaultControlPanel extends ConsumerWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           ControlPanelToolbarItem(
-            name: isSongPlaying ? "Pause" : "Play",
+            name: isSongPlaying
+                ? tr('workspace-transport-pause')
+                : tr('workspace-transport-play'),
             icon: isSongPlaying ? Icons.pause : Icons.play_arrow,
             color: colors.primary,
             isActive: isSongPlaying,
@@ -354,13 +357,13 @@ class DefaultControlPanel extends ConsumerWidget {
             },
           ),
           ControlPanelToolbarItem(
-            name: "Stop",
+            name: tr('workspace-transport-stop'),
             icon: Icons.stop,
             color: colors.error,
             onTap: () => ref.read(transportProvider.notifier).stop(),
           ),
           ControlPanelToolbarItem(
-            name: "Loop",
+            name: tr('workspace-transport-loop'),
             icon: Icons.loop,
             color: colors.tertiary,
             isActive: transportState?.isLooping ?? false,
@@ -374,7 +377,7 @@ class DefaultControlPanel extends ConsumerWidget {
       Row(
         children: [
           ControlPanelToolbarItem(
-            name: "Snap to Grid",
+            name: tr('workspace-snap-to-grid'),
             icon: Icons.grid_on,
             color: colors.secondary,
             isActive: workspaceState.snapToGrid,
@@ -383,7 +386,7 @@ class DefaultControlPanel extends ConsumerWidget {
           ),
           const SizedBox(width: 8),
           ControlPanelToolbarItem(
-            name: "Follow Playhead",
+            name: tr('workspace-follow-playhead'),
             icon: Icons.keyboard_double_arrow_right,
             color: colors.secondary,
             isActive: workspaceState.followPlayhead,
@@ -393,7 +396,7 @@ class DefaultControlPanel extends ConsumerWidget {
           ),
           const SizedBox(width: 8),
           ControlPanelToolbarItem(
-            name: "Metronome",
+            name: tr('workspace-metronome'),
             icon: MdiIcons.metronome,
             color: colors.secondary,
             isActive: transportState?.isMetronomeActive ?? false,
@@ -402,7 +405,7 @@ class DefaultControlPanel extends ConsumerWidget {
           ),
           const SizedBox(width: 8),
           ControlPanelToolbarItem(
-            name: "MIDI KB",
+            name: tr('workspace-midi-keyboard'),
             icon: Icons.piano,
             color: colors.primary,
             isActive: workspaceState.showMidiKeyboard,
@@ -445,7 +448,7 @@ class DefaultControlPanel extends ConsumerWidget {
             value: ToolSelection.panSelect,
             child: ListTile(
               leading: Icon(Icons.pan_tool_alt, color: colors.secondary),
-              title: const Text("Pan/Select"),
+              title: Text(tr('workspace-tool-pan-select')),
               contentPadding: EdgeInsets.zero,
             ),
           ),
@@ -453,7 +456,7 @@ class DefaultControlPanel extends ConsumerWidget {
             value: ToolSelection.slice,
             child: ListTile(
               leading: Icon(Icons.content_cut, color: colors.secondary),
-              title: const Text("Slice"),
+              title: Text(tr('workspace-tool-slice')),
               contentPadding: EdgeInsets.zero,
             ),
           ),
@@ -461,7 +464,7 @@ class DefaultControlPanel extends ConsumerWidget {
             value: ToolSelection.draw,
             child: ListTile(
               leading: Icon(Icons.edit, color: colors.secondary),
-              title: const Text("Draw"),
+              title: Text(tr('workspace-tool-draw')),
               contentPadding: EdgeInsets.zero,
             ),
           ),
@@ -469,7 +472,7 @@ class DefaultControlPanel extends ConsumerWidget {
             value: ToolSelection.move,
             child: ListTile(
               leading: Icon(Icons.open_with, color: colors.secondary),
-              title: const Text("Move"),
+              title: Text(tr('workspace-tool-move')),
               contentPadding: EdgeInsets.zero,
             ),
           ),
@@ -477,7 +480,7 @@ class DefaultControlPanel extends ConsumerWidget {
             value: ToolSelection.delete,
             child: ListTile(
               leading: Icon(Icons.delete, color: colors.error),
-              title: const Text("Delete"),
+              title: Text(tr('workspace-tool-delete')),
               contentPadding: EdgeInsets.zero,
             ),
           ),
@@ -485,7 +488,7 @@ class DefaultControlPanel extends ConsumerWidget {
             value: ToolSelection.select,
             child: ListTile(
               leading: Icon(Icons.crop_free, color: colors.secondary),
-              title: const Text("Range Select"),
+              title: Text(tr('workspace-tool-range-select')),
               contentPadding: EdgeInsets.zero,
             ),
           ),
@@ -493,7 +496,7 @@ class DefaultControlPanel extends ConsumerWidget {
             value: ToolSelection.resize,
             child: ListTile(
               leading: Icon(MdiIcons.arrowLeftRight, color: colors.secondary),
-              title: const Text("Resize"),
+              title: Text(tr('workspace-tool-resize')),
               contentPadding: EdgeInsets.zero,
             ),
           ),
@@ -509,13 +512,13 @@ class DefaultControlPanel extends ConsumerWidget {
   String _getViewName(WorkspaceView view) {
     switch (view) {
       case WorkspaceView.trackList:
-        return "Tracks";
+        return tr('workspace-view-tracks');
       case WorkspaceView.pianoRoll:
-        return "Piano Roll";
+        return tr('workspace-view-piano-roll');
       case WorkspaceView.mixer:
-        return "Mixer";
+        return tr('workspace-view-mixer');
       case WorkspaceView.source:
-        return "Source";
+        return tr('workspace-view-source');
     }
   }
 
@@ -536,21 +539,21 @@ class DefaultControlPanel extends ConsumerWidget {
   String _getToolName(ToolSelection tool) {
     switch (tool) {
       case ToolSelection.panSelect:
-        return "Pan/Select";
+        return tr('workspace-tool-pan-select');
       case ToolSelection.slice:
-        return "Cut";
+        return tr('workspace-tool-cut');
       case ToolSelection.draw:
-        return "Draw";
+        return tr('workspace-tool-draw');
       case ToolSelection.move:
-        return "Move";
+        return tr('workspace-tool-move');
       case ToolSelection.delete:
-        return "Delete";
+        return tr('workspace-tool-delete');
       case ToolSelection.select:
-        return "Select";
+        return tr('workspace-tool-select');
       case ToolSelection.resize:
-        return "Resize";
+        return tr('workspace-tool-resize');
       default:
-        return "Pan/Select";
+        return tr('workspace-tool-pan-select');
     }
   }
 
@@ -605,7 +608,7 @@ class DefaultControlPanel extends ConsumerWidget {
             VerticalDivider(color: colors.outlineVariant, width: dividerWidth),
             _buildInfoText(
               context,
-              "SIG",
+              tr('workspace-readout-signature'),
               "4/4",
               isSmallScreen,
               width: infoFieldWidth,
@@ -632,6 +635,10 @@ class DefaultControlPanel extends ConsumerWidget {
         children: [
           Text(
             label,
+            // Translated labels can be longer than the English abbreviations.
+            maxLines: 1,
+            softWrap: false,
+            overflow: TextOverflow.fade,
             style: TextStyle(
               color: colors.onSurfaceVariant,
               fontSize: isSmallScreen ? 6 : 8,
@@ -685,7 +692,7 @@ class _TransportReadout extends ConsumerWidget {
       children: [
         DefaultControlPanel._buildInfoText(
           context,
-          "BAR",
+          tr('workspace-readout-bar'),
           bar.toString(),
           isSmallScreen,
           width: infoFieldWidth,
@@ -693,7 +700,7 @@ class _TransportReadout extends ConsumerWidget {
         SizedBox(width: isSmallScreen ? 6 : 10),
         DefaultControlPanel._buildInfoText(
           context,
-          "BEAT",
+          tr('workspace-readout-beat'),
           beat.toString(),
           isSmallScreen,
           width: infoFieldWidth,
@@ -701,7 +708,7 @@ class _TransportReadout extends ConsumerWidget {
         VerticalDivider(color: colors.outlineVariant, width: dividerWidth),
         DefaultControlPanel._buildInfoText(
           context,
-          "TIME",
+          tr('workspace-readout-time'),
           formatTimeFromSamples(samples, sampleRate),
           isSmallScreen,
           width: timeFieldWidth,
