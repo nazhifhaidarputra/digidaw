@@ -2128,7 +2128,7 @@ dependencies = [
 
 [[package]]
 name = "karbeat-analysis"
-version = "0.8.2"
+version = "0.9.0"
 dependencies = [
  "anyhow",
  "beat-this",
@@ -2144,7 +2144,7 @@ dependencies = [
 
 [[package]]
 name = "karbeat-audio"
-version = "0.8.2"
+version = "0.9.0"
 dependencies = [
  "anyhow",
  "atomic-wait",
@@ -2191,7 +2191,7 @@ dependencies = [
 
 [[package]]
 name = "karbeat-clap"
-version = "0.8.2"
+version = "0.9.0"
 dependencies = [
  "clack-common",
  "clack-extensions",
@@ -2208,7 +2208,7 @@ dependencies = [
 
 [[package]]
 name = "karbeat-core"
-version = "0.8.2"
+version = "0.9.0"
 dependencies = [
  "anyhow",
  "bytemuck",
@@ -2242,7 +2242,7 @@ dependencies = [
 
 [[package]]
 name = "karbeat-core-api"
-version = "0.8.2"
+version = "0.9.0"
 dependencies = [
  "anyhow",
  "bytemuck",
@@ -2283,7 +2283,7 @@ dependencies = [
 
 [[package]]
 name = "karbeat-dsp"
-version = "0.8.2"
+version = "0.9.0"
 dependencies = [
  "crossfire",
  "dasp",
@@ -2303,7 +2303,7 @@ dependencies = [
 
 [[package]]
 name = "karbeat-host"
-version = "0.8.2"
+version = "0.9.0"
 dependencies = [
  "async-executor",
  "futures-lite",
@@ -2313,7 +2313,7 @@ dependencies = [
 
 [[package]]
 name = "karbeat-host-api"
-version = "0.8.2"
+version = "0.9.0"
 dependencies = [
  "async-executor",
  "futures-lite",
@@ -2338,7 +2338,7 @@ dependencies = [
 
 [[package]]
 name = "karbeat-l10n"
-version = "0.8.2"
+version = "0.9.0"
 dependencies = [
  "fluent",
  "fluent-syntax",
@@ -2349,7 +2349,7 @@ dependencies = [
 
 [[package]]
 name = "karbeat-lv2"
-version = "0.8.2"
+version = "0.9.0"
 dependencies = [
  "futures-lite",
  "glib",
@@ -2370,7 +2370,7 @@ dependencies = [
 
 [[package]]
 name = "karbeat-macros"
-version = "0.8.2"
+version = "0.9.0"
 dependencies = [
  "heck",
  "proc-macro2",
@@ -2381,7 +2381,7 @@ dependencies = [
 
 [[package]]
 name = "karbeat-plugin-api"
-version = "0.8.2"
+version = "0.9.0"
 dependencies = [
  "hashbrown 0.17.1",
  "heck",
@@ -2395,7 +2395,7 @@ dependencies = [
 
 [[package]]
 name = "karbeat-plugin-types"
-version = "0.8.2"
+version = "0.9.0"
 dependencies = [
  "karbeat-utils",
  "num-traits",
@@ -2405,7 +2405,7 @@ dependencies = [
 
 [[package]]
 name = "karbeat-plugins"
-version = "0.8.2"
+version = "0.9.0"
 dependencies = [
  "fastrand",
  "hashbrown 0.17.1",
@@ -2425,7 +2425,7 @@ dependencies = [
 
 [[package]]
 name = "karbeat-rb"
-version = "0.8.2"
+version = "0.9.0"
 dependencies = [
  "bindgen",
  "pkg-config",
@@ -2434,7 +2434,7 @@ dependencies = [
 
 [[package]]
 name = "karbeat-settings"
-version = "0.8.2"
+version = "0.9.0"
 dependencies = [
  "serde",
  "tempfile",
@@ -2445,7 +2445,7 @@ dependencies = [
 
 [[package]]
 name = "karbeat-signalsmith"
-version = "0.8.2"
+version = "0.9.0"
 dependencies = [
  "bindgen",
  "cc",
@@ -2454,7 +2454,7 @@ dependencies = [
 
 [[package]]
 name = "karbeat-utils"
-version = "0.8.2"
+version = "0.9.0"
 dependencies = [
  "base64",
  "bytemuck",
@@ -2469,7 +2469,7 @@ dependencies = [
 
 [[package]]
 name = "karbeat-vst3"
-version = "0.8.2"
+version = "0.9.0"
 dependencies = [
  "futures-lite",
  "glib",
@@ -2488,7 +2488,7 @@ dependencies = [
 
 [[package]]
 name = "karbeat_flutter_ffi"
-version = "0.8.2"
+version = "0.9.0"
 dependencies = [
  "anyhow",
  "bytemuck",
