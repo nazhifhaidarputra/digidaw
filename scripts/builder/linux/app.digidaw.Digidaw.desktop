@@ -1,0 +1,11 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=DigiDAW
+Comment=Digital audio workstation
+Exec=digidaw
+Icon=app.digidaw.Digidaw
+StartupNotify=true
+StartupWMClass=app.digidaw.Digidaw
+Categories=AudioVideo;Audio;
+Terminal=false

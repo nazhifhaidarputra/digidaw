@@ -72,13 +72,17 @@ jobs:
       - name: Build Linux release bundle
         run: ./scripts/builder/build_linux.sh
 
-      - name: Name and checksum archive
-        id: package
-        run: |
-          archive="dist/digidaw-${{ steps.version.outputs.version }}-linux-x64.tar.gz"
-          mv dist/Digidaw-linux-x64.tar.gz "${archive}"
-          (cd dist && sha256sum "$(basename "${archive}")" > "$(basename "${archive}").sha256")
-          echo "archive=${archive}" >> "$GITHUB_OUTPUT"
+      # The packages can be downloaded from the run's summary page before the release is published.
+      - name: Upload packages
+        uses: actions/upload-artifact@v4
+        with:
+          name: digidaw-${{ steps.version.outputs.version }}-linux-x64
+          path: |
+            dist/*.tar.gz*
+            dist/*.deb*
+            dist/*.rpm*
+            dist/*.AppImage*
+          if-no-files-found: error
 
       - name: Write release notes
         run: |
@@ -86,12 +90,21 @@ jobs:
           Linux x64 only — other platforms have not been tested yet.
 
           ### Installing
-          Extract the archive into a folder and run `./install.sh` from it. It installs the
-          libraries DigiDAW needs (GTK 3, ALSA, FFTW, libsamplerate) with your package manager,
-          then adds DigiDAW to your app menu and a `digidaw` command.
+          Pick one; each file has a `.sha256` checksum next to it.
 
-          To remove it, run `~/.local/share/digidaw/uninstall.sh` (or `./uninstall.sh` from the
-          archive). Add `--purge` to also delete settings and crash recovery data.
+          - **Debian, Ubuntu and derivatives:** `sudo apt install ./digidaw_<version>-1_amd64.deb`
+          - **Fedora:** `sudo dnf install ./digidaw-<version>-1.x86_64.rpm`
+          - **openSUSE:** `sudo zypper install ./digidaw-<version>-1.x86_64.rpm`
+          - **Any distribution, without installing:** `chmod +x DigiDAW-<version>-x86_64.AppImage`, then run it.
+            It needs GTK 3 and ALSA from the system, which every desktop has.
+          - **Any distribution, per user:** extract `digidaw-<version>-linux-x64.tar.gz` into a folder and
+            run `./install.sh` from it. It installs the libraries DigiDAW needs (GTK 3, ALSA, FFTW,
+            libsamplerate, lilv) with your package manager, then adds DigiDAW to your app menu and a
+            `digidaw` command. To remove it, run `~/.local/share/digidaw/uninstall.sh`; add `--purge`
+            to also delete settings and crash recovery data.
+
+          The .deb and .rpm install DigiDAW to `/opt/digidaw` with a `digidaw` command, and pull in the
+          libraries it needs. Remove them with your package manager.
 
           PipeWire (with its JACK compatibility layer) or JACK is recommended for low-latency audio.
 
@@ -106,6 +119,10 @@ jobs:
           body_path: dist/NOTES.md
           generate_release_notes: true
           prerelease: ${{ steps.version.outputs.prerelease }}
+          fail_on_unmatched_files: true
           files: |
-            ${{ steps.package.outputs.archive }}
-            ${{ steps.package.outputs.archive }}.sha256
+            dist/*.tar.gz
+            dist/*.deb
+            dist/*.rpm
+            dist/*.AppImage
+            dist/*.sha256

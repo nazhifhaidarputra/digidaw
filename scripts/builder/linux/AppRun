@@ -1,0 +1,6 @@
+#!/bin/sh
+# Starts DigiDAW from the mounted AppImage. The libraries the AppImage carries (FFTW,
+# libsamplerate, lilv and lilv's own) come first; GTK 3 and ALSA come from the system.
+HERE="$(dirname "$(readlink -f "$0")")"
+export LD_LIBRARY_PATH="$HERE/usr/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+exec "$HERE/usr/lib/digidaw/karbeat" "$@"
