@@ -1,3 +1,15 @@
+# Builds the Windows release and packages it into dist\:
+#
+#   digidaw-<version>-windows-x64-setup.exe   installer into Program Files\DigiDAW
+#   digidaw-<version>-windows-x64.zip         the same bundle, to run without installing
+#
+# each with a .sha256 next to it. The bundle carries the Visual C++ runtime DLLs, so it runs on a
+# Windows without the Visual C++ Redistributable. The installer needs Inno Setup 6; without it only
+# the zip is built, unless -RequireInstaller is given (as the release workflow does).
+param(
+    [switch]$RequireInstaller
+)
+
 $ErrorActionPreference = "Stop"
 
 # The paths below (rust\, build\, dist\) are relative to the repository root.
@@ -115,16 +127,75 @@ Write-Host "==> [Windows Build] Compiling Flutter Windows Release..." -Foregroun
 flutter build windows --release
 Assert-LastExitCode "flutter build windows"
 
-Write-Host "==> [Windows Build] Archiving Release Bundle..." -ForegroundColor Cyan
-$BuildDir = "build\windows\x64\runner\Release"
-$DistDir = "dist"
+$BuildDir = Join-Path $RepoRoot "build\windows\x64\runner\Release"
+$DistDir = Join-Path $RepoRoot "dist"
 if (-not (Test-Path $DistDir)) {
     New-Item -ItemType Directory -Path $DistDir | Out-Null
 }
 
 # The vcpkg DLLs (rubberband and its dependencies) are installed next to the exe by
-# windows/CMakeLists.txt.
+# windows/runner/CMakeLists.txt. The Visual C++ runtime is added here, app-locally, from the
+# redistributable folder of the Visual Studio that built the app, so the versions match.
+Write-Host "==> [Windows Build] Bundling the Visual C++ runtime..." -ForegroundColor Cyan
+$RedistRoot = $env:VCToolsRedistDir
+if (-not $RedistRoot -and (Test-Path -LiteralPath $vswherePath)) {
+    $visualStudioPath = & $vswherePath -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
+    $msvcRedist = Join-Path $visualStudioPath "VC\Redist\MSVC"
+    if (Test-Path -LiteralPath $msvcRedist) {
+        $RedistRoot = Get-ChildItem -LiteralPath $msvcRedist -Directory |
+            Where-Object { $_.Name -match '^\d+(\.\d+)+$' } |
+            Sort-Object { [version]$_.Name } -Descending |
+            Select-Object -First 1 -ExpandProperty FullName
+    }
+}
+$CrtDir = if ($RedistRoot) {
+    Get-ChildItem -LiteralPath (Join-Path $RedistRoot "x64") -Directory -Filter "Microsoft.VC*.CRT" -ErrorAction SilentlyContinue |
+        Sort-Object Name -Descending |
+        Select-Object -First 1 -ExpandProperty FullName
+}
+if (-not $CrtDir) {
+    Write-Error "The Visual C++ runtime redistributable (x64\Microsoft.VC*.CRT) was not found. Install the MSVC build tools with Visual Studio."
+}
+Copy-Item -Path (Join-Path $CrtDir "*.dll") -Destination $BuildDir -Force
+Write-Host "    Copied the runtime from $CrtDir"
 
-Compress-Archive -Path "$BuildDir\*" -DestinationPath "$DistDir\Digidaw-windows-x64.zip" -Force
+$Version = (Select-String -Path (Join-Path $RepoRoot "pubspec.yaml") -Pattern '^version:\s*([^\s+]+)').Matches[0].Groups[1].Value
+if (-not $Version) {
+    Write-Error "Could not read the version from pubspec.yaml."
+}
 
-Write-Host "==> SUCCESS: Built $DistDir\Digidaw-windows-x64.zip" -ForegroundColor Green
+# Writes a checksum in the format `sha256sum -c` reads, without a BOM or CRLF.
+function Write-Checksum([string]$File) {
+    $hash = (Get-FileHash -LiteralPath $File -Algorithm SHA256).Hash.ToLower()
+    $name = Split-Path -Leaf $File
+    [IO.File]::WriteAllText("$File.sha256", "$hash  $name`n")
+}
+
+Get-ChildItem -LiteralPath $DistDir -Filter "digidaw-*-windows-x64*" | Remove-Item -Force
+
+Write-Host "==> [Windows Build] Archiving Release Bundle..." -ForegroundColor Cyan
+$Archive = Join-Path $DistDir "digidaw-$Version-windows-x64.zip"
+Compress-Archive -Path "$BuildDir\*" -DestinationPath $Archive -Force
+Write-Checksum $Archive
+
+Write-Host "==> [Windows Build] Building the installer..." -ForegroundColor Cyan
+$Iscc = (Get-Command ISCC.exe -ErrorAction SilentlyContinue).Source
+if (-not $Iscc) {
+    $Iscc = @(
+        (Join-Path ${env:ProgramFiles(x86)} "Inno Setup 6\ISCC.exe"),
+        (Join-Path $env:ProgramFiles "Inno Setup 6\ISCC.exe")
+    ) | Where-Object { Test-Path -LiteralPath $_ } | Select-Object -First 1
+}
+if ($Iscc) {
+    & $Iscc "/DAppVersion=$Version" "/DBundleDir=$BuildDir" "/DOutputDir=$DistDir" (Join-Path $RepoRoot "scripts\installer\digidaw.iss")
+    Assert-LastExitCode "Inno Setup"
+    $Installer = Join-Path $DistDir "digidaw-$Version-windows-x64-setup.exe"
+    Write-Checksum $Installer
+    Write-Host "==> SUCCESS: Built $Installer" -ForegroundColor Green
+} elseif ($RequireInstaller) {
+    Write-Error "Inno Setup 6 (ISCC.exe) is required to build the installer."
+} else {
+    Write-Host "WARNING: Inno Setup 6 was not found, so no installer was built. Install it from https://jrsoftware.org/isdl.php." -ForegroundColor Yellow
+}
+
+Write-Host "==> SUCCESS: Built $Archive" -ForegroundColor Green

@@ -1,8 +1,9 @@
 # Installation
 
-DigiDAW is currently released for **Linux x64 only**, as it is the only platform that has been tested so far. Windows and Android builds are possible from source but are not released yet.
+DigiDAW is released for **Linux x64** and **Windows x64**. Android builds are possible from source but are not released yet.
 
 - [Installing a release](#installing-a-release)
+- [Installing on Windows](#installing-on-windows)
 - [Uninstalling](#uninstalling)
 - [Building from source](#building-from-source)
 
@@ -94,6 +95,25 @@ Install the new release the same way as the old one: the .deb or .rpm with your 
 
 ---
 
+## Installing on Windows
+
+Windows 10 or 11, 64-bit. Each release has two Windows files, each with a `.sha256` next to it:
+
+| File | Installs to |
+| --- | --- |
+| `digidaw-<version>-windows-x64-setup.exe` | `C:\Program Files\DigiDAW`, for all users |
+| `digidaw-<version>-windows-x64.zip` | Nowhere: extract it and run `karbeat.exe` |
+
+Both carry everything DigiDAW needs: the app, Rubber Band, and the Visual C++ runtime, so you do not need to install the Visual C++ Redistributable.
+
+The installer puts every file of the app in one folder, adds DigiDAW to the Start menu (and, if you choose, the desktop), and asks for administrator rights because it writes to Program Files. To update, run the installer of the new release: it replaces the old version in place. To uninstall, use **Settings → Apps → Installed apps → DigiDAW → Uninstall**.
+
+The releases are not signed yet, so Windows SmartScreen may warn the first time you run them. Choose **More info → Run anyway**.
+
+Your settings and crash recovery data are kept in `%APPDATA%\app.digidaw\karbeat`, and uninstalling keeps them. Delete that folder to remove them too.
+
+---
+
 ## Uninstalling
 
 | Installed from | Remove with |
@@ -146,6 +166,16 @@ To package the last build again without rebuilding, for example after changing t
 ```
 
 Set `PACKAGE_FORMATS` to build only some formats, for example `PACKAGE_FORMATS="rpm appimage" ./scripts/builder/package_linux.sh`.
+
+### Building a Windows release
+
+On Windows, install Visual Studio Build Tools with **Desktop development with C++**, [LLVM](https://github.com/llvm/llvm-project/releases) (for `clang.exe` and `libclang.dll`), [vcpkg](https://github.com/microsoft/vcpkg) with `VCPKG_ROOT` set, and [Inno Setup 6](https://jrsoftware.org/isdl.php) for the installer. Then run, from Windows PowerShell:
+
+```powershell
+.\scripts\builder\build_windows.ps1
+```
+
+It writes `digidaw-<version>-windows-x64-setup.exe` and `digidaw-<version>-windows-x64.zip` to `dist\`. Without Inno Setup it builds only the zip; pass `-RequireInstaller` to fail instead. The installer is defined in `scripts\installer\digidaw.iss`.
 
 ### Running for development
 
