@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:karbeat/app/providers/blocking_task_provider.dart';
 import 'package:karbeat/app/providers/notification_provider.dart';
 import 'package:karbeat/app/providers/project_provider.dart';
+import 'package:karbeat/core/l10n/localizer.dart';
 import 'package:karbeat/core/utils/logger.dart';
 import 'package:karbeat/features/source/services/audio_waveform_services.dart';
 
@@ -20,7 +21,7 @@ Future<void> importAudioSource(BuildContext context, WidgetRef ref) async {
     AppLogger.error('Could not select an audio file: $error');
     notifications.error(
       error,
-      title: 'Could not select audio',
+      title: tr('source-could-not-select-audio'),
       stackTrace: stackTrace,
     );
     return;
@@ -33,7 +34,7 @@ Future<void> importAudioSource(BuildContext context, WidgetRef ref) async {
   final importResult = await ref
       .read(blockingTaskProvider.notifier)
       .run(
-        label: 'Loading audio...',
+        label: tr('source-loading-audio'),
         task: () => projectNotifier.loadAudioSource(path),
       );
 

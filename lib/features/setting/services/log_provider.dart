@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:karbeat/app/providers/notification_provider.dart';
+import 'package:karbeat/core/l10n/localizer.dart';
 import 'package:karbeat/core/utils/log_models.dart';
 import 'package:karbeat/core/utils/logger.dart';
 import 'package:karbeat/core/utils/result_type.dart';
@@ -37,7 +38,7 @@ class LogNotifier extends Notifier<AppLogState> {
       _initializationStarted = false;
       return ref.notifyErrorResult(
         error,
-        title: 'Could not load logging settings',
+        title: tr('settings-logs-load-failed'),
       );
     }
 
@@ -98,10 +99,7 @@ class LogNotifier extends Notifier<AppLogState> {
       maximumEntries: maximumEntries,
     ));
     if (saved case Error<void>(error: final error)) {
-      return ref.notifyErrorResult(
-        error,
-        title: 'Logging setting applied but not saved',
-      );
+      return ref.notifyErrorResult(error, title: tr('settings-logs-not-saved'));
     }
     return Result.ok(null);
   }

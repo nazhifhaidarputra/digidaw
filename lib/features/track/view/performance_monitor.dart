@@ -3,6 +3,7 @@ import 'dart:collection';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:karbeat/app/providers/transport_state.dart';
+import 'package:karbeat/core/l10n/localizer.dart';
 import 'package:karbeat/src/rust/api/monitor.dart'; // Your generated FFI
 
 class DawPerformanceMonitor extends ConsumerStatefulWidget {
@@ -121,7 +122,7 @@ class _DawPerformanceMonitorState extends ConsumerState<DawPerformanceMonitor> {
                 style: labelStyle,
               ),
               Tooltip(
-                message: 'Plugin delay compensation',
+                message: tr('track-plugin-delay-compensation'),
                 child: Text(
                   "PDC: ${formatPdcLatency(_pdcLatencySamples, sampleRate)}",
                   style: labelStyle,

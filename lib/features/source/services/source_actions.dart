@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:karbeat/app/providers/clip_placement_state.dart';
 import 'package:karbeat/app/providers/piano_roll_state.dart';
 import 'package:karbeat/app/providers/project_provider.dart';
+import 'package:karbeat/core/l10n/localizer.dart';
 import 'package:karbeat/src/rust/api/project.dart';
 import 'package:karbeat/src/rust/api/track.dart';
 
@@ -22,13 +23,13 @@ Future<void> renameGeneratorWithDialog(
   final newName = await showDialog<String>(
     context: context,
     builder: (dialogContext) => AlertDialog(
-      title: Text("Rename ${plugin.name}"),
+      title: Text(tr('source-rename', {'plugin': plugin.name})),
       content: TextFormField(
         initialValue: current,
         autofocus: true,
         decoration: InputDecoration(
-          labelText: "Instrument name",
-          helperText: "Empty shows ${plugin.name}",
+          labelText: tr('source-instrument-name'),
+          helperText: tr('source-empty-shows', {'plugin': plugin.name}),
           border: const OutlineInputBorder(),
         ),
         onChanged: (value) => pendingName = value,
@@ -37,11 +38,11 @@ Future<void> renameGeneratorWithDialog(
       actions: [
         TextButton(
           onPressed: () => Navigator.pop(dialogContext),
-          child: const Text("Cancel"),
+          child: Text(tr('common-cancel')),
         ),
         ElevatedButton(
           onPressed: () => Navigator.pop(dialogContext, pendingName),
-          child: const Text("Rename"),
+          child: Text(tr('common-rename')),
         ),
       ],
     ),
@@ -62,12 +63,12 @@ Future<void> renamePatternWithDialog(
   final newName = await showDialog<String>(
     context: context,
     builder: (dialogContext) => AlertDialog(
-      title: const Text("Rename Pattern"),
+      title: Text(tr('source-rename-pattern')),
       content: TextFormField(
         initialValue: currentName,
         autofocus: true,
-        decoration: const InputDecoration(
-          labelText: "New pattern name",
+        decoration: InputDecoration(
+          labelText: tr('source-new-pattern-name'),
           border: OutlineInputBorder(),
         ),
         onChanged: (value) => pendingName = value,
@@ -76,11 +77,11 @@ Future<void> renamePatternWithDialog(
       actions: [
         TextButton(
           onPressed: () => Navigator.pop(dialogContext),
-          child: const Text("Cancel"),
+          child: Text(tr('common-cancel')),
         ),
         ElevatedButton(
           onPressed: () => Navigator.pop(dialogContext, pendingName),
-          child: const Text("Rename"),
+          child: Text(tr('common-rename')),
         ),
       ],
     ),
@@ -120,28 +121,24 @@ Future<void> deleteAudioSourceWithConfirm(
   final tracks =
       ref.read(projectProvider).value?.tracks.values ?? const <UiTrack>[];
   final clipCount = audioSourceClipCount(tracks, sourceId);
-  final clipText = switch (clipCount) {
-    0 => 'No clip on the timeline uses it.',
-    1 => '1 clip that plays it will be removed from the timeline.',
-    _ => '$clipCount clips that play it will be removed from the timeline.',
-  };
+  final clipText = tr('source-delete-clip-count', {'count': clipCount});
 
   final confirmed = await showDialog<bool>(
     context: context,
     builder: (dialogContext) => AlertDialog(
-      title: const Text('Delete audio source?'),
+      title: Text(tr('source-delete-audio-source')),
       content: Text(
-        '“$name” will be removed from the project. $clipText\n\n'
-        'The audio file on disk is not deleted, and you can undo this.',
+        '${tr('source-delete-removed', {'name': name, 'clips': clipText})}\n\n'
+        '${tr('source-delete-audio-kept')}',
       ),
       actions: [
         TextButton(
           onPressed: () => Navigator.of(dialogContext).pop(false),
-          child: const Text('Cancel'),
+          child: Text(tr('common-cancel')),
         ),
         FilledButton(
           onPressed: () => Navigator.of(dialogContext).pop(true),
-          child: const Text('Delete'),
+          child: Text(tr('common-delete')),
         ),
       ],
     ),
@@ -178,28 +175,24 @@ Future<void> deletePatternWithConfirm(
   final tracks =
       ref.read(projectProvider).value?.tracks.values ?? const <UiTrack>[];
   final clipCount = patternClipCount(tracks, patternId);
-  final clipText = switch (clipCount) {
-    0 => 'No clip on the timeline uses it.',
-    1 => '1 clip that plays it will be removed from the timeline.',
-    _ => '$clipCount clips that play it will be removed from the timeline.',
-  };
+  final clipText = tr('source-delete-clip-count', {'count': clipCount});
 
   final confirmed = await showDialog<bool>(
     context: context,
     builder: (dialogContext) => AlertDialog(
-      title: const Text('Delete pattern?'),
+      title: Text(tr('source-delete-pattern')),
       content: Text(
-        '“$name” will be removed from the project. $clipText\n\n'
-        'You can undo this.',
+        '${tr('source-delete-removed', {'name': name, 'clips': clipText})}\n\n'
+        '${tr('source-delete-undo')}',
       ),
       actions: [
         TextButton(
           onPressed: () => Navigator.of(dialogContext).pop(false),
-          child: const Text('Cancel'),
+          child: Text(tr('common-cancel')),
         ),
         FilledButton(
           onPressed: () => Navigator.of(dialogContext).pop(true),
-          child: const Text('Delete'),
+          child: Text(tr('common-delete')),
         ),
       ],
     ),

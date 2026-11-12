@@ -6,6 +6,7 @@ import 'package:freezed_annotation/freezed_annotation.dart';
 import 'package:karbeat/app/providers/notification_provider.dart';
 import 'package:karbeat/app/providers/project_provider.dart';
 import 'package:karbeat/app/providers/track_list_state.dart';
+import 'package:karbeat/core/l10n/localizer.dart';
 import 'package:karbeat/core/utils/result_type.dart';
 import 'package:karbeat/features/setting/services/host_devices_settings_provider.dart';
 import 'package:karbeat/src/rust/api/project.dart';
@@ -83,7 +84,7 @@ class RecordingNotifier extends Notifier<RecordingState> {
     } catch (error, stackTrace) {
       return ref.notifyErrorResult(
         error,
-        title: 'Could not arm the track',
+        title: tr('app-recording-arm-failed'),
         stackTrace: stackTrace,
       );
     }
@@ -95,8 +96,8 @@ class RecordingNotifier extends Notifier<RecordingState> {
       ref
           .read(notificationProvider.notifier)
           .info(
-            'Audio input was off, so it was turned on. Change the input device in Settings.',
-            title: 'Audio input on',
+            tr('app-recording-input-on-message'),
+            title: tr('app-recording-input-on-title'),
           );
     }
     return Result.ok(null);
@@ -112,8 +113,8 @@ class RecordingNotifier extends Notifier<RecordingState> {
       ref
           .read(notificationProvider.notifier)
           .warn(
-            'Select an audio track to record on.',
-            title: 'Nothing to record',
+            tr('app-recording-nothing-message'),
+            title: tr('app-recording-nothing-title'),
           );
       return Future.value(Result.ok(null));
     }
@@ -139,7 +140,7 @@ class RecordingNotifier extends Notifier<RecordingState> {
     } catch (error, stackTrace) {
       return ref.notifyErrorResult(
         error,
-        title: 'Could not save the recording',
+        title: tr('app-recording-save-failed'),
         stackTrace: stackTrace,
       );
     } finally {
@@ -165,7 +166,7 @@ class RecordingNotifier extends Notifier<RecordingState> {
     } catch (error, stackTrace) {
       return ref.notifyErrorResult(
         error,
-        title: 'Could not save the recordings',
+        title: tr('app-recordings-save-failed'),
         stackTrace: stackTrace,
       );
     } finally {

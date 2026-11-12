@@ -36,6 +36,7 @@ fn saved_preferences_load_back() {
     store
         .update_preferences(|preferences| {
             preferences.general.history_limit = 250;
+            preferences.general.language = Some("ja-JP".into());
             preferences.audio.output_device = Some("hw:1".into());
             preferences.appearance.theme_mode = ThemeMode::Light;
             preferences.appearance.color_theme = ColorThemeChoice::Source("/themes/a.json".into());
@@ -67,6 +68,7 @@ fn missing_fields_take_their_defaults() {
     assert_eq!(general.history_limit, 25);
     assert!(general.auto_save_enabled);
     assert_eq!(general.auto_save_interval_seconds, 300);
+    assert_eq!(general.language, None);
     assert_eq!(store.preferences().logs, LogSettings::default());
 }
 

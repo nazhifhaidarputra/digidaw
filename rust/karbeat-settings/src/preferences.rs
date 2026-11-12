@@ -67,6 +67,8 @@ pub struct GeneralSettings {
     pub default_export_folder: Option<PathBuf>,
     /// Whether the project menu lists recently opened projects.
     pub show_recent_projects: bool,
+    /// BCP 47 code of the user interface language; `None` follows the system language.
+    pub language: Option<String>,
 }
 
 impl Default for GeneralSettings {
@@ -78,6 +80,7 @@ impl Default for GeneralSettings {
             default_project_folder: None,
             default_export_folder: None,
             show_recent_projects: true,
+            language: None,
         }
     }
 }

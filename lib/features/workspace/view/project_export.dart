@@ -9,6 +9,7 @@ import 'package:karbeat/app/providers/notification_provider.dart';
 import 'package:karbeat/app/providers/project_provider.dart';
 import 'package:karbeat/app/providers/timeline_state.dart';
 import 'package:karbeat/core/constants/audio_format.dart';
+import 'package:karbeat/core/l10n/localizer.dart';
 import 'package:karbeat/core/widgets/shortcut_focus_anchor.dart';
 import 'package:karbeat/features/workspace/services/export_service.dart';
 import 'package:karbeat/features/workspace/services/project_file_dialogs.dart';
@@ -100,7 +101,7 @@ class _ProjectExportPanelState extends ConsumerState<ProjectExportPanel> {
     if (exportDirectory == null) {
       ref
           .read(notificationProvider.notifier)
-          .warn('Please select an export directory first.');
+          .warn(tr('workspace-export-choose-directory'));
       return;
     }
 
@@ -151,7 +152,7 @@ class _ProjectExportPanelState extends ConsumerState<ProjectExportPanel> {
       if (!_cancelRequested) {
         ref
             .read(notificationProvider.notifier)
-            .error(e, title: 'Export failed');
+            .error(e, title: tr('workspace-export-failed'));
       }
     } finally {
       if (mounted) {
@@ -233,7 +234,7 @@ class _ProjectExportPanelState extends ConsumerState<ProjectExportPanel> {
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       Text(
-                        "Export Project",
+                        tr('workspace-export-title'),
                         style: TextStyle(
                           color: colors.onSurface,
                           fontSize: 18,
@@ -258,7 +259,7 @@ class _ProjectExportPanelState extends ConsumerState<ProjectExportPanel> {
                     child: ListView(
                       children: [
                         // File Name
-                        _buildSectionTitle("File Name"),
+                        _buildSectionTitle(tr('workspace-export-file-name')),
                         TextField(
                           controller: _nameController,
                           style: TextStyle(color: colors.onSurface),
@@ -274,7 +275,7 @@ class _ProjectExportPanelState extends ConsumerState<ProjectExportPanel> {
                         const SizedBox(height: 16),
 
                         // Directory
-                        _buildSectionTitle("Export Location"),
+                        _buildSectionTitle(tr('workspace-export-location')),
                         TextField(
                           readOnly: true,
                           style: TextStyle(
@@ -283,7 +284,7 @@ class _ProjectExportPanelState extends ConsumerState<ProjectExportPanel> {
                                 : colors.onSurface,
                           ),
                           decoration: InputDecoration(
-                            hintText: "Select Directory...",
+                            hintText: tr('workspace-export-select-directory'),
                             hintStyle: TextStyle(
                               color: colors.onSurfaceVariant,
                             ),
@@ -325,7 +326,9 @@ class _ProjectExportPanelState extends ConsumerState<ProjectExportPanel> {
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  _buildSectionTitle("Format"),
+                                  _buildSectionTitle(
+                                    tr('workspace-export-format'),
+                                  ),
                                   _buildDropdown<SupportedAudioFormat>(
                                     value: exportState.selectedFormat,
                                     items: SupportedAudioFormat.values,
@@ -344,7 +347,9 @@ class _ProjectExportPanelState extends ConsumerState<ProjectExportPanel> {
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  _buildSectionTitle("Sample Rate"),
+                                  _buildSectionTitle(
+                                    tr('workspace-export-sample-rate'),
+                                  ),
                                   _buildDropdown<SampleRate>(
                                     value: exportState.selectedSampleRate,
                                     items:
@@ -374,7 +379,9 @@ class _ProjectExportPanelState extends ConsumerState<ProjectExportPanel> {
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  _buildSectionTitle("Bit Depth / Bitrate"),
+                                  _buildSectionTitle(
+                                    tr('workspace-export-bit-depth'),
+                                  ),
                                   _buildDropdown<BitDepthDTO>(
                                     value: exportState.selectedBitDepth,
                                     items: switch (exportState.selectedFormat) {
@@ -413,14 +420,23 @@ class _ProjectExportPanelState extends ConsumerState<ProjectExportPanel> {
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  _buildSectionTitle("Tail Handling"),
+                                  _buildSectionTitle(
+                                    tr('workspace-export-tail'),
+                                  ),
                                   _buildDropdown<TailHandling>(
                                     value: exportState.tailHandling,
                                     items: TailHandling.values,
-                                    itemLabel: (t) => t.name.replaceAll(
-                                      RegExp(r'(?<!^)(?=[A-Z])'),
-                                      ' ',
-                                    ),
+                                    itemLabel: (tail) => switch (tail) {
+                                      TailHandling.cutRemainder => tr(
+                                        'workspace-export-tail-cut',
+                                      ),
+                                      TailHandling.leaveRemainder => tr(
+                                        'workspace-export-tail-leave',
+                                      ),
+                                      TailHandling.wrapRemainder => tr(
+                                        'workspace-export-tail-wrap',
+                                      ),
+                                    },
                                     onChanged: (val) {
                                       if (val != null) {
                                         exportNotifier.updateTailHandling(val);
@@ -433,11 +449,9 @@ class _ProjectExportPanelState extends ConsumerState<ProjectExportPanel> {
                           ],
                         ),
                         const SizedBox(height: 16),
-                        _buildSectionTitle("Range"),
+                        _buildSectionTitle(tr('workspace-export-range')),
                         Tooltip(
-                          message:
-                              'A loop region export starts mid-song: notes '
-                              'that began before it stay silent.',
+                          message: tr('workspace-export-range-help'),
                           child: _buildDropdown<ExportRangeMode>(
                             value: hasLoopRegion
                                 ? exportState.rangeMode
@@ -471,7 +485,7 @@ class _ProjectExportPanelState extends ConsumerState<ProjectExportPanel> {
                                     },
                             ),
                             Text(
-                              "Open folder after export",
+                              tr('workspace-export-open-folder'),
                               style: TextStyle(color: colors.onSurfaceVariant),
                             ),
                           ],
@@ -482,7 +496,9 @@ class _ProjectExportPanelState extends ConsumerState<ProjectExportPanel> {
                         // Progress Bar
                         if (_isExporting) ...[
                           Text(
-                            "Rendering: ${(_exportProgress * 100).toInt()}%",
+                            tr('workspace-export-rendering', {
+                              'percent': (_exportProgress * 100).toInt(),
+                            }),
                             style: TextStyle(
                               color: colors.onSurfaceVariant,
                               fontSize: 12,
@@ -520,7 +536,11 @@ class _ProjectExportPanelState extends ConsumerState<ProjectExportPanel> {
                             : _cancelRequested
                             ? null
                             : _cancelExport,
-                        child: Text(_isExporting ? "Cancel Export" : "Cancel"),
+                        child: Text(
+                          _isExporting
+                              ? tr('workspace-export-cancel')
+                              : tr('common-cancel'),
+                        ),
                       ),
                       const SizedBox(width: 16),
                       ElevatedButton(
@@ -542,7 +562,7 @@ class _ProjectExportPanelState extends ConsumerState<ProjectExportPanel> {
                                   color: colors.onPrimary,
                                 ),
                               )
-                            : const Text("Export Audio"),
+                            : Text(tr('workspace-export-start')),
                       ),
                     ],
                   ),

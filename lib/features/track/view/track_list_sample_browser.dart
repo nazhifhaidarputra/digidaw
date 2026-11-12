@@ -47,7 +47,7 @@ class SampleBrowserPanel extends ConsumerWidget {
       if (!context.mounted) return;
       ref
           .read(notificationProvider.notifier)
-          .error(result.error!, title: 'Unable to preview sample');
+          .error(result.error!, title: tr('track-unable-to-preview-sample'));
       AppLogger.error(
         'Failed to preview browser sample: ${result.error}',
         stackTrace: result.stackTrace,
@@ -113,13 +113,13 @@ class SampleBrowserPanel extends ConsumerWidget {
                 children: [
                   Expanded(
                     child: Text(
-                      'Sample Browser',
+                      tr('track-sample-browser'),
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(color: colors.onSurface, fontSize: 12),
                     ),
                   ),
                   IconButton(
-                    tooltip: 'Add sample directory',
+                    tooltip: tr('track-add-sample-directory'),
                     padding: EdgeInsets.zero,
                     visualDensity: VisualDensity.compact,
                     onPressed: state.isLoadingDirectory
@@ -133,7 +133,7 @@ class SampleBrowserPanel extends ConsumerWidget {
                     ),
                   ),
                   IconButton(
-                    tooltip: 'Close sample browser',
+                    tooltip: tr('track-close-sample-browser'),
                     padding: EdgeInsets.zero,
                     visualDensity: VisualDensity.compact,
                     onPressed: () => unawaited(_close(ref)),
@@ -159,7 +159,7 @@ class SampleBrowserPanel extends ConsumerWidget {
                           ),
                           const SizedBox(height: 10),
                           Text(
-                            'Add a directory to browse audio samples.',
+                            tr('track-sample-browser-empty'),
                             textAlign: TextAlign.center,
                             style: TextStyle(
                               color: colors.onSurfaceVariant,
@@ -174,7 +174,7 @@ class SampleBrowserPanel extends ConsumerWidget {
                                       .read(workspaceStateProvider.notifier)
                                       .addSampleDirectory(),
                             icon: const Icon(Icons.add, size: 16),
-                            label: const Text('Add directory'),
+                            label: Text(tr('track-add-directory')),
                           ),
                         ],
                       ),

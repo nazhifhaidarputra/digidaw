@@ -1,5 +1,6 @@
 import 'package:flex_color_picker/flex_color_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:karbeat/core/l10n/localizer.dart';
 
 /// Shows the DAW color picker and resolves with the chosen color, or null
 /// when cancelled.
@@ -46,19 +47,19 @@ Future<Color?> showColorPickerDialog(
                 borderRadius: 18,
                 hasBorder: true,
                 heading: Text(
-                  'Choose a color',
+                  tr('common-color-choose'),
                   style: Theme.of(context).textTheme.titleSmall,
                 ),
                 subheading: Text(
-                  'Choose a shade',
+                  tr('common-color-shade'),
                   style: Theme.of(context).textTheme.titleSmall,
                 ),
                 wheelSubheading: Text(
-                  'Fine tune',
+                  tr('common-color-fine-tune'),
                   style: Theme.of(context).textTheme.titleSmall,
                 ),
                 opacitySubheading: Text(
-                  'Opacity',
+                  tr('common-color-opacity'),
                   style: Theme.of(context).textTheme.titleSmall,
                 ),
               ),
@@ -67,11 +68,11 @@ Future<Color?> showColorPickerDialog(
           actions: [
             TextButton(
               onPressed: () => Navigator.of(ctx).pop(),
-              child: const Text("Cancel"),
+              child: Text(tr('common-cancel')),
             ),
             FilledButton(
               onPressed: () => Navigator.of(ctx).pop(selectedColor),
-              child: const Text("Select"),
+              child: Text(tr('common-select')),
             ),
           ],
         );

@@ -920,3 +920,20 @@ pub(crate) fn store_plugin_scan(
         Ok(())
     })
 }
+
+// =======================================
+// Language
+// =======================================
+
+/// The saved language code; `None` follows the system. `l10n` checks it is a known language.
+pub(crate) fn stored_language() -> anyhow::Result<Option<String>> {
+    read(|store| store.preferences().general.language.clone())
+}
+
+/// Saves a language code already checked by `l10n`; `None` follows the system.
+pub(crate) fn store_language(code: Option<String>) -> anyhow::Result<()> {
+    write(|store| {
+        store.update_preferences(|preferences| preferences.general.language = code)?;
+        Ok(())
+    })
+}

@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:karbeat/app/providers/notification_provider.dart';
 import 'package:karbeat/app/providers/project_provider.dart';
+import 'package:karbeat/core/l10n/localizer.dart';
 import 'package:karbeat/core/utils/result_type.dart';
 import 'package:karbeat/features/setting/services/cover_art_service.dart';
 import 'package:karbeat/features/setting/services/project_settings_provider.dart';
@@ -121,7 +122,10 @@ class _ProjectSettingsPageState extends ConsumerState<ProjectSettingsPage> {
     final picked = await pickCoverSource();
     switch (picked) {
       case Error(:final error):
-        notifications.error(error, title: 'Could not open the image');
+        notifications.error(
+          error,
+          title: tr('settings-project-image-open-failed'),
+        );
       case Ok(value: final image?):
         if (mounted) await _cropAndStage(image);
         image.dispose();
@@ -142,7 +146,7 @@ class _ProjectSettingsPageState extends ConsumerState<ProjectSettingsPage> {
       case Error(:final error):
         ref
             .read(notificationProvider.notifier)
-            .error(error, title: 'Could not save the cover');
+            .error(error, title: tr('settings-project-cover-save-failed'));
     }
   }
 
@@ -171,7 +175,7 @@ class _ProjectSettingsPageState extends ConsumerState<ProjectSettingsPage> {
       if (savedMetadata != null) _applyMetadata(savedMetadata);
       ref
           .read(notificationProvider.notifier)
-          .info('Project information updated');
+          .info(tr('settings-project-updated'));
     }
   }
 
@@ -193,7 +197,7 @@ class _ProjectSettingsPageState extends ConsumerState<ProjectSettingsPage> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Project',
+                  tr('settings-menu-project'),
                   key: const ValueKey('settings-page-project'),
                   style: Theme.of(context).textTheme.headlineSmall,
                 ),
@@ -220,37 +224,37 @@ class _ProjectSettingsPageState extends ConsumerState<ProjectSettingsPage> {
                   const SizedBox(height: 24),
                   _field(
                     controller: _titleController,
-                    label: 'Title',
+                    label: tr('settings-project-title'),
                     maximum: 120,
                     validator: (value) => value == null || value.trim().isEmpty
-                        ? 'Title is required'
+                        ? tr('settings-project-title-required')
                         : null,
                   ),
                   _field(
                     controller: _authorController,
-                    label: 'Author',
+                    label: tr('settings-project-author'),
                     maximum: 120,
-                    helperText: 'Separate multiple artists with ;',
+                    helperText: tr('settings-project-author-help'),
                   ),
                   _field(
                     controller: _genreController,
-                    label: 'Genre',
+                    label: tr('settings-project-genre'),
                     maximum: 80,
                   ),
                   _field(
                     controller: _versionController,
-                    label: 'Project version',
+                    label: tr('settings-project-version'),
                     maximum: 64,
                   ),
                   _field(
                     controller: _descriptionController,
-                    label: 'Description',
+                    label: tr('settings-project-description'),
                     maximum: 4000,
                     maxLines: 6,
                   ),
                   InputDecorator(
-                    decoration: const InputDecoration(
-                      labelText: 'Created at',
+                    decoration: InputDecoration(
+                      labelText: tr('settings-project-created-at'),
                       border: OutlineInputBorder(),
                     ),
                     child: SelectableText(_sourceMetadata!.createdAt),
@@ -265,7 +269,11 @@ class _ProjectSettingsPageState extends ConsumerState<ProjectSettingsPage> {
                             child: CircularProgressIndicator(strokeWidth: 2),
                           )
                         : const Icon(Icons.save_outlined),
-                    label: Text(_saving ? 'Saving…' : 'Save project info'),
+                    label: Text(
+                      _saving
+                          ? tr('settings-project-saving')
+                          : tr('settings-project-save'),
+                    ),
                   ),
                 ],
               ],
@@ -355,10 +363,13 @@ class _CoverField extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('Cover art', style: Theme.of(context).textTheme.titleSmall),
+              Text(
+                tr('settings-project-cover'),
+                style: Theme.of(context).textTheme.titleSmall,
+              ),
               const SizedBox(height: 4),
               Text(
-                'Square image embedded into exported audio',
+                tr('settings-project-cover-help'),
                 style: TextStyle(color: colors.onSurfaceVariant, fontSize: 12),
               ),
               const SizedBox(height: 12),
@@ -375,14 +386,18 @@ class _CoverField extends StatelessWidget {
                             child: CircularProgressIndicator(strokeWidth: 2),
                           )
                         : const Icon(Icons.image_outlined),
-                    label: Text(path == null ? 'Choose image…' : 'Replace…'),
+                    label: Text(
+                      path == null
+                          ? tr('settings-project-cover-choose')
+                          : tr('settings-project-cover-replace'),
+                    ),
                   ),
                   if (path != null)
                     TextButton.icon(
                       key: const ValueKey('remove-project-cover'),
                       onPressed: enabled ? onRemove : null,
                       icon: const Icon(Icons.delete_outline),
-                      label: const Text('Remove'),
+                      label: Text(tr('common-remove')),
                     ),
                 ],
               ),
@@ -406,12 +421,16 @@ class _ProjectChangedBanner extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialBanner(
-      content: const Text(
-        'The current project changed while this form has unsaved edits.',
-      ),
+      content: Text(tr('settings-project-changed-banner')),
       actions: [
-        TextButton(onPressed: onKeepEditing, child: const Text('Keep edits')),
-        TextButton(onPressed: onReload, child: const Text('Reload project')),
+        TextButton(
+          onPressed: onKeepEditing,
+          child: Text(tr('settings-project-keep-edits')),
+        ),
+        TextButton(
+          onPressed: onReload,
+          child: Text(tr('settings-project-reload')),
+        ),
       ],
     );
   }

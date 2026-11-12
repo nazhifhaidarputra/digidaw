@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:karbeat/app/providers/background_jobs_provider.dart';
 import 'package:karbeat/app/providers/crash_recovery_provider.dart';
@@ -11,6 +12,8 @@ import 'package:karbeat/app/providers/notification_provider.dart';
 import 'package:karbeat/app/providers/workspace_state.dart';
 import 'package:karbeat/core/input/input.dart';
 import 'package:karbeat/core/input/text_input_shortcut_manager.dart';
+import 'package:karbeat/core/l10n/fluent_localizer.dart';
+import 'package:karbeat/core/l10n/localizer.dart';
 import 'package:karbeat/core/services/crash_report_service.dart';
 import 'package:karbeat/core/services/rust_log_bridge.dart';
 import 'package:karbeat/core/services/tempo_model_installer.dart';
@@ -25,6 +28,7 @@ import 'package:karbeat/features/setting/services/appearance_settings_provider.d
 import 'package:karbeat/features/setting/services/audio_settings_provider.dart';
 import 'package:karbeat/features/setting/services/general_settings_provider.dart';
 import 'package:karbeat/features/setting/services/host_devices_settings_provider.dart';
+import 'package:karbeat/features/setting/services/language_provider.dart';
 import 'package:karbeat/features/setting/services/log_provider.dart';
 import 'package:karbeat/features/setting/services/metronome_sound_provider.dart';
 import 'package:karbeat/features/setting/services/plugin_settings_provider.dart';
@@ -126,6 +130,7 @@ class _KarbeatAppState extends ConsumerState<KarbeatApp> {
     try {
       // Settings live in Rust, so the library loads before anything reads them.
       await RustLib.init();
+      L10n.localizer = FluentLocalizer();
       if (!mounted) return;
       await _openSettings();
       if (!mounted) return;
@@ -198,20 +203,37 @@ class _KarbeatAppState extends ConsumerState<KarbeatApp> {
     }
   }
 
-  /// Opens the settings store under the application-support directory and
-  /// warns about settings files that had to be reset.
+  /// Opens the settings store under the application-support directory,
+  /// activates the saved language and warns about settings files that had to
+  /// be reset.
   Future<void> _openSettings() async {
     final support = await getApplicationSupportDirectory();
     final recovered = await openSettings(supportDir: support.path);
+    if (!mounted) return;
+    await ref.read(languageProvider.notifier).initialize();
     for (final file in recovered) {
       ref
           .read(notificationProvider.notifier)
           .warn(
-            'Settings in ${file.file} could not be read (${file.reason}). '
-            'Defaults are used; the old file was kept as ${file.backup}.',
-            title: 'Settings reset',
+            tr('app-settings-reset-message', {
+              'file': file.file,
+              'reason': file.reason,
+              'backup': file.backup,
+            }),
+            title: tr('app-settings-reset-title'),
           );
     }
+  }
+
+  /// Rebuilds every widget once, so each `tr` call in a build method shows
+  /// the new language. Widget state and open routes are kept.
+  void _rebuildForLanguage() {
+    void markNeedsBuild(Element element) {
+      element.markNeedsBuild();
+      element.visitChildren(markNeedsBuild);
+    }
+
+    (context as Element).visitChildren(markNeedsBuild);
   }
 
   @override
@@ -239,6 +261,24 @@ class _KarbeatAppState extends ConsumerState<KarbeatApp> {
         customTheme ??
         AppTheme.dark(appearance.palette, fontFamily: appearance.fontFamily);
     final themeMode = AppTheme.themeMode(appearance.themeMode);
+    final language = ref.watch(
+      languageProvider.select(
+        (state) => (
+          active: state.active?.code,
+          codes: state.languages.map((language) => language.code).toList(),
+        ),
+      ),
+    );
+    ref.listen(languageProvider.select((state) => state.active?.code), (
+      previous,
+      next,
+    ) {
+      if (previous != null && previous != next) _rebuildForLanguage();
+    });
+    final locale = _locale(language.active);
+    final supportedLocales = language.codes.isEmpty
+        ? const [Locale('en', 'US')]
+        : [for (final code in language.codes) ?_locale(code)];
 
     // Handle Rust Initialization Errors
     if (_rustError != null) {
@@ -248,6 +288,9 @@ class _KarbeatAppState extends ConsumerState<KarbeatApp> {
         darkTheme: darkTheme,
         themeMode: themeMode,
         debugShowCheckedModeBanner: false,
+        locale: locale,
+        supportedLocales: supportedLocales,
+        localizationsDelegates: GlobalMaterialLocalizations.delegates,
         builder: _notificationBuilder,
         home: ErrorInitScreen(err: _rustError!, stack: _rustStackTrace!),
       );
@@ -261,6 +304,9 @@ class _KarbeatAppState extends ConsumerState<KarbeatApp> {
         darkTheme: darkTheme,
         themeMode: themeMode,
         debugShowCheckedModeBanner: false,
+        locale: locale,
+        supportedLocales: supportedLocales,
+        localizationsDelegates: GlobalMaterialLocalizations.delegates,
         builder: _notificationBuilder,
         home: const LoadingScreen(),
       );
@@ -288,6 +334,9 @@ class _KarbeatAppState extends ConsumerState<KarbeatApp> {
         darkTheme: darkTheme,
         themeMode: themeMode,
         debugShowCheckedModeBanner: false,
+        locale: locale,
+        supportedLocales: supportedLocales,
+        localizationsDelegates: GlobalMaterialLocalizations.delegates,
         builder: _notificationBuilder,
         home: switch (projectPhase) {
           (error: final err?, stack: final stack, ready: _) => ErrorInitScreen(
@@ -298,6 +347,16 @@ class _KarbeatAppState extends ConsumerState<KarbeatApp> {
           _ => const LoadingScreen(),
         },
       ),
+    );
+  }
+
+  /// The Flutter locale of a language code such as `zh-CN`.
+  static Locale? _locale(String? code) {
+    if (code == null) return null;
+    final parts = code.split('-');
+    return Locale.fromSubtags(
+      languageCode: parts.first,
+      countryCode: parts.skip(1).firstOrNull,
     );
   }
 

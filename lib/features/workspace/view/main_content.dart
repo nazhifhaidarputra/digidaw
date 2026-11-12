@@ -9,6 +9,7 @@ import 'package:karbeat/app/providers/notification_provider.dart';
 import 'package:karbeat/app/providers/piano_roll_state.dart';
 import 'package:karbeat/app/providers/project_provider.dart';
 import 'package:karbeat/app/providers/workspace_state.dart';
+import 'package:karbeat/core/l10n/localizer.dart';
 import 'package:karbeat/features/workspace/view/control_panel.dart';
 import 'package:karbeat/features/mixer/view/mixer_screen.dart';
 import 'package:karbeat/features/piano_roll/view/piano_roll_screen.dart';
@@ -93,7 +94,7 @@ class _MainContentState extends ConsumerState<MainContent>
       AppLogger.error('Could not update mixer telemetry subscription: $error');
       ref
           .read(notificationProvider.notifier)
-          .error(error, title: 'Mixer telemetry unavailable');
+          .error(error, title: tr('workspace-mixer-telemetry-unavailable'));
     }
   }
 

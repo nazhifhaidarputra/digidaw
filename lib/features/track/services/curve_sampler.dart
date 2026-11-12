@@ -2,13 +2,13 @@ import 'dart:typed_data';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:karbeat/app/providers/project_provider.dart';
+import 'package:karbeat/core/l10n/localizer.dart';
 import 'package:karbeat/core/utils/result_type.dart';
 import 'package:karbeat/src/rust/api/automation.dart';
 import 'package:karbeat/src/rust/api/project.dart';
 
 /// Tooltip of the handle that bends a curve segment.
-const String tensionHandleTooltip =
-    'Drag to bend the curve, double-click to reset';
+String get tensionHandleTooltip => tr('track-tension-handle-tooltip');
 
 /// Direction in which raising tension moves a segment's midpoint, so dragging
 /// up always raises the curve: `1` or `-1`. Count-driven curves simply get more

@@ -8,6 +8,7 @@ import 'package:karbeat/core/input/intents/track_list/track_list_intent.dart';
 import 'package:karbeat/core/input/intents/workspace/intent.dart';
 import 'package:karbeat/core/input/shortcut_models.dart';
 import 'package:karbeat/core/input/shortcut_preferences_service.dart';
+import 'package:karbeat/core/l10n/localizer.dart';
 import 'package:karbeat/core/utils/result_type.dart';
 import 'package:karbeat/shared/enums/global.dart';
 
@@ -56,7 +57,7 @@ class ShortcutManagerNotifier extends Notifier<ShortcutManagerState> {
     final loaded = await ref.read(shortcutPreferencesServiceProvider).load();
     if (loaded case Error<IMap<String, ShortcutChord>>(error: final error)) {
       _initializationStarted = false;
-      return ref.notifyErrorResult(error, title: 'Could not load shortcuts');
+      return ref.notifyErrorResult(error, title: tr('shortcuts-load-failed'));
     }
 
     final knownIds = ref
@@ -72,15 +73,15 @@ class ShortcutManagerNotifier extends Notifier<ShortcutManagerState> {
         _initializationStarted = false;
         return ref.notifyErrorResult(
           reset.err(),
-          title: 'Could not reset conflicting shortcuts',
+          title: tr('shortcuts-reset-conflicts-failed'),
         );
       }
       state = const ShortcutManagerState(isInitialized: true);
       ref
           .read(notificationProvider.notifier)
           .warn(
-            'Saved shortcuts contained a conflict and were reset to defaults.',
-            title: 'Shortcut settings reset',
+            tr('shortcuts-reset-message'),
+            title: tr('shortcuts-reset-title'),
           );
       return Result.ok(null);
     }
@@ -94,9 +95,7 @@ class ShortcutManagerNotifier extends Notifier<ShortcutManagerState> {
 
   Future<Result<void>> remap(String id, ShortcutChord chord) async {
     if (!chord.isSupported) {
-      return Result.error(
-        const ShortcutValidationException(shortcutSupportHint),
-      );
+      return Result.error(ShortcutValidationException(shortcutSupportHint));
     }
     final shortcut = shortcutById(id);
     if (shortcut == null) {
@@ -178,7 +177,7 @@ class ShortcutManagerNotifier extends Notifier<ShortcutManagerState> {
         .read(shortcutPreferencesServiceProvider)
         .save(overrides);
     if (saved case Error<void>(error: final error)) {
-      return ref.notifyErrorResult(error, title: 'Could not save shortcuts');
+      return ref.notifyErrorResult(error, title: tr('shortcuts-save-failed'));
     }
     state = state.copyWith(overrides: overrides, isInitialized: true);
     return Result.ok(null);

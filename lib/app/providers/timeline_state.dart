@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:karbeat/app/providers/notification_provider.dart';
 import 'package:karbeat/app/providers/project_provider.dart';
 import 'package:karbeat/app/providers/telemetry_polling_suppression.dart';
+import 'package:karbeat/core/l10n/localizer.dart';
 import 'package:karbeat/core/utils/color.dart';
 import 'package:karbeat/core/utils/result_type.dart';
 import 'package:karbeat/features/source/services/audio_waveform_services.dart';
@@ -45,14 +46,14 @@ class TimelineNotifier extends Notifier<void> {
         ctx: _project.dawContext,
         region: UiLoopRegion(startTick: start < 0 ? 0 : start, endTick: end),
       ),
-      title: 'Could not set the loop region',
+      title: tr('app-timeline-loop-set-failed'),
     );
   }
 
   Future<Result<void>> clearLoopRegion() {
     return _apply(
       () => timeline_api.setLoopRegion(ctx: _project.dawContext, region: null),
-      title: 'Could not clear the loop region',
+      title: tr('app-timeline-loop-clear-failed'),
     );
   }
 
@@ -63,7 +64,7 @@ class TimelineNotifier extends Notifier<void> {
         tick: tick < 0 ? 0 : tick,
         name: name,
       ),
-      title: 'Could not add the cue marker',
+      title: tr('app-timeline-cue-add-failed'),
     );
   }
 
@@ -83,7 +84,7 @@ class TimelineNotifier extends Notifier<void> {
     return _apply(
       () =>
           timeline_api.removeCueMarker(ctx: _project.dawContext, id: marker.id),
-      title: 'Could not remove the cue marker',
+      title: tr('app-timeline-cue-remove-failed'),
     );
   }
 
@@ -96,7 +97,7 @@ class TimelineNotifier extends Notifier<void> {
       render.suppressesTelemetryPolling(
         ref.read(telemetryPollingSuppressionProvider.notifier),
       ),
-      title: 'Could not bounce the loop region',
+      title: tr('app-timeline-bounce-failed'),
     );
     switch (result) {
       case AsyncData(:final value):
@@ -104,8 +105,8 @@ class TimelineNotifier extends Notifier<void> {
         ref
             .read(notificationProvider.notifier)
             .info(
-              'The loop region is now in the source list.',
-              title: 'Bounced to a new source',
+              tr('app-timeline-bounced-message'),
+              title: tr('app-timeline-bounced-title'),
             );
         return Result.ok(value);
       case AsyncError(:final error):
@@ -129,7 +130,7 @@ class TimelineNotifier extends Notifier<void> {
         tick: tick ?? marker.tick,
         color: color ?? marker.color,
       ),
-      title: 'Could not edit the cue marker',
+      title: tr('app-timeline-cue-edit-failed'),
     );
   }
 

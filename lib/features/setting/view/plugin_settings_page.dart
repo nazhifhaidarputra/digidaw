@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:karbeat/core/l10n/localizer.dart';
 import 'package:karbeat/features/setting/services/plugin_settings_provider.dart';
 
 class PluginSettingsPage extends ConsumerWidget {
@@ -31,24 +32,22 @@ class PluginSettingsPage extends ConsumerWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                'Plugins',
+                tr('settings-menu-plugins'),
                 key: const ValueKey('settings-page-plugins'),
                 style: Theme.of(context).textTheme.headlineSmall,
               ),
               const SizedBox(height: 8),
-              const Text(
-                'DigiDAW loads the cached catalog at startup. Scans run only when requested and probe each plugin in an isolated helper process.',
-              ),
+              Text(tr('settings-plugins-description')),
               const SizedBox(height: 28),
               Text(
-                'Additional scan folders',
+                tr('settings-plugins-additional-folders'),
                 style: Theme.of(context).textTheme.titleMedium,
               ),
               const SizedBox(height: 8),
               if (!state.isInitialized)
                 const LinearProgressIndicator()
               else if (state.directories.isEmpty)
-                const Text('No additional folders configured.')
+                Text(tr('settings-plugins-no-additional-folders'))
               else
                 ...state.directories.map(
                   (directory) => _DirectoryTile(
@@ -72,18 +71,16 @@ class PluginSettingsPage extends ConsumerWidget {
                         child: CircularProgressIndicator(strokeWidth: 2),
                       )
                     : const Icon(Icons.create_new_folder_outlined),
-                label: const Text('Add folder'),
+                label: Text(tr('settings-plugins-add-folder')),
               ),
               const SizedBox(height: 28),
               Text(
-                'System scan folders',
+                tr('settings-plugins-system-folders'),
                 style: Theme.of(context).textTheme.titleMedium,
               ),
               const SizedBox(height: 8),
               if (state.defaultDirectories.isEmpty)
-                const Text(
-                  'No standard folders are available on this platform.',
-                )
+                Text(tr('settings-plugins-no-system-folders'))
               else
                 ...state.defaultDirectories.map(
                   (directory) => _DirectoryTile(
@@ -95,15 +92,19 @@ class PluginSettingsPage extends ConsumerWidget {
               DropdownButtonFormField<int>(
                 key: ValueKey('plugin-scan-timeout-${state.timeoutSeconds}'),
                 initialValue: state.timeoutSeconds,
-                decoration: const InputDecoration(
-                  labelText: 'Per-plugin timeout',
+                decoration: InputDecoration(
+                  labelText: tr('settings-plugins-timeout'),
                   border: OutlineInputBorder(),
                 ),
                 items: timeoutOptions
                     .map(
                       (seconds) => DropdownMenuItem(
                         value: seconds,
-                        child: Text('$seconds seconds'),
+                        child: Text(
+                          tr('settings-general-interval-seconds', {
+                            'count': seconds,
+                          }),
+                        ),
                       ),
                     )
                     .toList(growable: false),
@@ -132,7 +133,11 @@ class PluginSettingsPage extends ConsumerWidget {
                             child: CircularProgressIndicator(strokeWidth: 2),
                           )
                         : const Icon(Icons.search),
-                    label: Text(state.isScanning ? 'Scanning…' : 'Scan now'),
+                    label: Text(
+                      state.isScanning
+                          ? tr('settings-plugins-scanning')
+                          : tr('settings-plugins-scan-now'),
+                    ),
                   ),
                   OutlinedButton.icon(
                     key: const ValueKey('cancel-plugin-scan'),
@@ -144,7 +149,9 @@ class PluginSettingsPage extends ConsumerWidget {
                         : null,
                     icon: const Icon(Icons.stop_circle_outlined),
                     label: Text(
-                      state.isCancelling ? 'Cancelling…' : 'Cancel scan',
+                      state.isCancelling
+                          ? tr('settings-plugins-cancelling')
+                          : tr('settings-plugins-cancel-scan'),
                     ),
                   ),
                   OutlinedButton.icon(
@@ -153,7 +160,7 @@ class PluginSettingsPage extends ConsumerWidget {
                         ? () => unawaited(notifier.retryFailures())
                         : null,
                     icon: const Icon(Icons.refresh),
-                    label: const Text('Retry failed/quarantined plugins'),
+                    label: Text(tr('settings-plugins-retry-failed')),
                   ),
                 ],
               ),
@@ -167,10 +174,12 @@ class PluginSettingsPage extends ConsumerWidget {
                 const SizedBox(height: 8),
                 Text(
                   state.total == 0
-                      ? 'Preparing scan…'
-                      : '${state.completed} of ${state.total} modules · '
-                            '${state.discoveredCount} '
-                            'plugin${state.discoveredCount == 1 ? '' : 's'} discovered',
+                      ? tr('settings-plugins-preparing')
+                      : tr('settings-plugins-progress', {
+                          'completed': state.completed,
+                          'total': state.total,
+                          'count': state.discoveredCount,
+                        }),
                 ),
                 if (state.currentPath != null)
                   Text(
@@ -184,8 +193,12 @@ class PluginSettingsPage extends ConsumerWidget {
                 const SizedBox(height: 16),
                 Text(
                   state.lastScanCancelled
-                      ? 'Scan cancelled. ${state.discoveredCount} plugins were retained.'
-                      : 'Scan complete. ${state.discoveredCount} plugins discovered.',
+                      ? tr('settings-plugins-scan-cancelled', {
+                          'count': state.discoveredCount,
+                        })
+                      : tr('settings-plugins-scan-complete', {
+                          'count': state.discoveredCount,
+                        }),
                   key: const ValueKey('plugin-scan-summary'),
                 ),
               ],
@@ -200,7 +213,11 @@ class PluginSettingsPage extends ConsumerWidget {
                 const SizedBox(height: 12),
                 ExpansionTile(
                   tilePadding: EdgeInsets.zero,
-                  title: Text('${state.failures.length} scan failures'),
+                  title: Text(
+                    tr('settings-plugins-failures', {
+                      'count': state.failures.length,
+                    }),
+                  ),
                   children: state.failures
                       .map(
                         (failure) => ListTile(
@@ -214,13 +231,19 @@ class PluginSettingsPage extends ConsumerWidget {
               ],
               const SizedBox(height: 28),
               Text(
-                'External catalog',
+                tr('settings-plugins-external-catalog'),
                 style: Theme.of(context).textTheme.titleMedium,
               ),
               const SizedBox(height: 8),
               Text(
-                '${state.externalPlugins.where((entry) => entry.available).length} available, '
-                '${state.externalPlugins.where((entry) => !entry.available).length} unavailable',
+                tr('settings-plugins-catalog-summary', {
+                  'available': state.externalPlugins
+                      .where((entry) => entry.available)
+                      .length,
+                  'unavailable': state.externalPlugins
+                      .where((entry) => !entry.available)
+                      .length,
+                }),
               ),
             ],
           ),
@@ -251,7 +274,7 @@ class _DirectoryTile extends StatelessWidget {
       title: Text(directory, overflow: TextOverflow.ellipsis),
       trailing: removable
           ? IconButton(
-              tooltip: 'Remove folder',
+              tooltip: tr('settings-plugins-remove-folder'),
               onPressed: onRemove,
               icon: const Icon(Icons.close),
             )

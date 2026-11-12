@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:freezed_annotation/freezed_annotation.dart';
 import 'package:karbeat/app/providers/notification_provider.dart';
 import 'package:karbeat/app/providers/project_provider.dart';
+import 'package:karbeat/core/l10n/localizer.dart';
 import 'package:karbeat/core/utils/logger.dart';
 import 'package:karbeat/core/utils/result_type.dart';
 import 'package:karbeat/src/rust/api/mitigation.dart';
@@ -50,7 +51,7 @@ class CrashRecoveryNotifier extends Notifier<CrashRecoveryState> {
     if (supportDir case Error(error: final error)) {
       return ref.notifyErrorResult(
         error,
-        title: 'Crash recovery is unavailable',
+        title: tr('app-crash-recovery-unavailable'),
       );
     }
 
@@ -64,7 +65,7 @@ class CrashRecoveryNotifier extends Notifier<CrashRecoveryState> {
     if (configured case Error(error: final error)) {
       return ref.notifyErrorResult(
         error,
-        title: 'Crash recovery is unavailable',
+        title: tr('app-crash-recovery-unavailable'),
       );
     }
 
@@ -114,7 +115,7 @@ class CrashRecoveryNotifier extends Notifier<CrashRecoveryState> {
     if (discarded case Error(error: final error)) {
       return ref.notifyErrorResult(
         error,
-        title: 'Could not discard the recovered project',
+        title: tr('app-crash-discard-failed'),
       );
     }
     state = state.copyWith(recovery: null);
@@ -127,11 +128,17 @@ class CrashRecoveryNotifier extends Notifier<CrashRecoveryState> {
       () => exportCrashReport(id: id, destination: destination),
     );
     if (exported case Error(error: final error)) {
-      return ref.notifyErrorResult(error, title: 'Could not export the report');
+      return ref.notifyErrorResult(
+        error,
+        title: tr('app-crash-report-export-failed'),
+      );
     }
     ref
         .read(notificationProvider.notifier)
-        .info('Crash report exported to $destination', title: 'Report saved');
+        .info(
+          tr('app-crash-report-exported', {'path': destination}),
+          title: tr('app-crash-report-saved'),
+        );
     return Result.ok(null);
   }
 
@@ -144,7 +151,7 @@ class CrashRecoveryNotifier extends Notifier<CrashRecoveryState> {
       if (removed case Error(error: final error)) {
         return ref.notifyErrorResult(
           error,
-          title: 'Could not delete crash reports',
+          title: tr('app-crash-reports-delete-failed'),
         );
       }
       state = state.copyWith(crashReports: state.crashReports.remove(report));

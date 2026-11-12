@@ -24,10 +24,21 @@ jobs:
       - uses: actions/checkout@v4
 
       # build_linux.sh installs the build packages itself but refuses to run without an audio server.
+      # The runner's DNS and the Ubuntu mirrors fail now and then, so apt retries each download
+      # (build_linux.sh's apt-get too, through the config file) and the install is tried three times.
       - name: Install PipeWire
+        timeout-minutes: 15
         run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends pipewire
+          printf 'Acquire::Retries "3";\nAcquire::http::Timeout "30";\nAcquire::https::Timeout "30";\n' \
+            | sudo tee /etc/apt/apt.conf.d/80-ci-retries >/dev/null
+          for attempt in 1 2 3; do
+            if sudo apt-get update && sudo apt-get install -y --no-install-recommends pipewire; then
+              exit 0
+            fi
+            echo "::warning::Installing PipeWire failed (attempt ${attempt} of 3); retrying in 60 s"
+            sleep 60
+          done
+          exit 1
 
       - uses: dtolnay/rust-toolchain@stable
 

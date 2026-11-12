@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:karbeat/app/providers/telemetry_polling_suppression.dart';
 import 'package:karbeat/app/providers/project_provider.dart';
 import 'package:karbeat/app/providers/notification_provider.dart';
+import 'package:karbeat/core/l10n/localizer.dart';
 import 'package:karbeat/core/utils/logger.dart';
 import 'package:karbeat/core/widgets/plugin_parameter_widget.dart';
 import 'package:karbeat/src/rust/api/automation.dart';
@@ -159,7 +160,7 @@ abstract class AbstractPluginScreenState<T extends AbstractPluginScreen>
       ref.read(notificationProvider.notifier).error(e);
       if (!mounted) return;
       setState(() {
-        errorMessage = 'Failed to load plugin parameters: $e';
+        errorMessage = tr('plugins-parameters-load-failed', {'error': '$e'});
         isLoading = false;
       });
     }

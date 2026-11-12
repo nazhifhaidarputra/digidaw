@@ -206,12 +206,12 @@ class _InteractiveClipState extends ConsumerState<_InteractiveClip> {
     final newName = await showDialog<String>(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        title: const Text("Rename Clip"),
+        title: Text(tr('track-rename-clip')),
         content: TextFormField(
           initialValue: pendingName,
           autofocus: true,
-          decoration: const InputDecoration(
-            labelText: "New clip name",
+          decoration: InputDecoration(
+            labelText: tr('track-new-clip-name'),
             border: OutlineInputBorder(),
           ),
           onChanged: (value) => pendingName = value,
@@ -220,11 +220,11 @@ class _InteractiveClipState extends ConsumerState<_InteractiveClip> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(dialogContext),
-            child: const Text("Cancel"),
+            child: Text(tr('common-cancel')),
           ),
           ElevatedButton(
             onPressed: () => Navigator.pop(dialogContext, pendingName),
-            child: const Text("Rename"),
+            child: Text(tr('common-rename')),
           ),
         ],
       ),
@@ -628,47 +628,51 @@ class _InteractiveClipState extends ConsumerState<_InteractiveClip> {
     final interactiveChild = ContextMenuWrapper(
       title: widget.clip.name,
       actions: [
-        DawContextAction(title: "Rename", icon: Icons.edit, onTap: _renameClip),
+        DawContextAction(
+          title: tr('common-rename'),
+          icon: Icons.edit,
+          onTap: _renameClip,
+        ),
         if (widget.clip.source is! UiClipSource_None)
           DawContextAction(
-            title: "Go to Clip Information",
+            title: tr('track-go-to-clip-information'),
             icon: Icons.info_outline,
             onTap: _openClipInformation,
           ),
         if (widget.clip.source case UiClipSource_Midi(:final patternId))
           DawContextAction(
-            title: "Go to Piano Roll",
+            title: tr('track-go-to-piano-roll'),
             icon: Icons.piano,
             onTap: () => _openInPianoRoll(patternId),
           ),
         if (widget.clip.source case UiClipSource_Audio(:final sourceId))
           DawContextAction(
-            title: "Go to Audio Properties",
+            title: tr('track-go-to-audio-properties'),
             icon: Icons.audio_file,
             onTap: () => _openAudioProperties(sourceId),
           ),
         DawContextAction(
           title: widget.isSelected && widget.selectedClipIds.length > 1
-              ? "Set Loop Region to Selection"
-              : "Set Loop Region to Clip",
+              ? tr('track-loop-to-selection')
+              : tr('track-loop-to-clip'),
           icon: Icons.loop,
           onTap: _loopClips,
         ),
         if (widget.clip.source is! UiClipSource_None)
           DawContextAction(
-            title: "Make unique",
+            title: tr('track-make-unique'),
             icon: Icons.call_split,
             onTap: _makeUnique,
           ),
         if (widget.clip.source is UiClipSource_Audio) ...[
           envelopeViewAction(
             ClipEnvelopeView.waveform,
-            "Show waveform envelope",
+            tr('track-show-waveform-envelope'),
             Icons.graphic_eq,
           ),
           envelopeViewAction(
             ClipEnvelopeView.clip,
-            "Show clip envelope",
+            tr('track-show-clip-envelope'),
             Icons.show_chart,
           ),
         ],

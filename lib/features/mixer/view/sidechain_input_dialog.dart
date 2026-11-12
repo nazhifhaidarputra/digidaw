@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:karbeat/app/providers/notification_provider.dart';
+import 'package:karbeat/core/l10n/localizer.dart';
 import 'package:karbeat/core/utils/result_type.dart';
 import 'package:karbeat/features/plugins/services/sidechain_support.dart';
 import 'package:karbeat/features/plugins/widgets/sidechain_source_panel.dart';
@@ -50,7 +51,9 @@ class _SidechainInputDialogState extends ConsumerState<_SidechainInputDialog> {
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
     return AlertDialog(
-      title: Text('Sidechain: ${widget.pluginName}'),
+      title: Text(
+        tr('mixer-sidechain-title', {'pluginName': widget.pluginName}),
+      ),
       titleTextStyle: TextStyle(
         color: colors.onSurface,
         fontSize: 16,
@@ -69,8 +72,7 @@ class _SidechainInputDialogState extends ConsumerState<_SidechainInputDialog> {
               ),
               Ok(value: true) => SingleChildScrollView(child: panel),
               Ok() => Text(
-                'This plugin has no sidechain input. Add a sidechain-capable '
-                'plugin, such as a sidechain compressor, and key that one.',
+                tr('mixer-sidechain-plugin-no-input'),
                 style: TextStyle(color: colors.onSurfaceVariant),
               ),
               // Routing still works when the plugin does have an aux input.
@@ -91,7 +93,7 @@ class _SidechainInputDialogState extends ConsumerState<_SidechainInputDialog> {
       actions: [
         TextButton(
           onPressed: () => Navigator.pop(context),
-          child: const Text('Close'),
+          child: Text(tr('common-close')),
         ),
       ],
     );
@@ -115,15 +117,14 @@ class _SupportWarningState extends ConsumerState<_SupportWarning> {
     Future.microtask(
       () => ref
           .read(notificationProvider.notifier)
-          .error(widget.error, title: 'Could not read plugin inputs'),
+          .error(widget.error, title: tr('mixer-could-not-read-plugin-inputs')),
     );
   }
 
   @override
   Widget build(BuildContext context) {
     return Text(
-      'Could not confirm this plugin has a sidechain input. Routing a source '
-      'here only has an effect if it does.',
+      tr('mixer-sidechain-plugin-unconfirmed'),
       style: TextStyle(color: Theme.of(context).colorScheme.error),
     );
   }

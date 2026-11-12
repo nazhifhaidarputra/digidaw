@@ -1,6 +1,7 @@
 import 'package:file_picker/file_picker.dart' as picker;
 import 'package:file_selector/file_selector.dart';
 import 'package:flutter/foundation.dart';
+import 'package:karbeat/core/l10n/localizer.dart';
 
 /// Native file extension for DigiDAW projects.
 const dgdawProjectExtension = 'dgdaw';
@@ -9,27 +10,27 @@ const dgdawProjectExtension = 'dgdaw';
 const karbeatProjectExtension = 'karbeat';
 
 /// Project save filter. The description is shown by the desktop file dialog.
-const dgdawProjectTypeGroup = XTypeGroup(
-  label: 'Digidaw Project (.dgdaw)',
-  extensions: <String>[dgdawProjectExtension],
+XTypeGroup get dgdawProjectTypeGroup => XTypeGroup(
+  label: tr('workspace-file-type-project'),
+  extensions: const <String>[dgdawProjectExtension],
 );
 
 /// Legacy project filter, kept so old `.karbeat` projects can still be opened.
-const karbeatProjectTypeGroup = XTypeGroup(
-  label: 'Karbeat Project (.karbeat)',
-  extensions: <String>[karbeatProjectExtension],
+XTypeGroup get karbeatProjectTypeGroup => XTypeGroup(
+  label: tr('workspace-file-type-karbeat-project'),
+  extensions: const <String>[karbeatProjectExtension],
 );
 
 /// File extension for mixer channel templates.
 const channelTemplateExtension = 'effch';
 
 /// Channel template save filter.
-const channelTemplateTypeGroup = XTypeGroup(
-  label: 'Channel Template (.effch)',
-  extensions: <String>[channelTemplateExtension],
+XTypeGroup get channelTemplateTypeGroup => XTypeGroup(
+  label: tr('workspace-file-type-channel-template'),
+  extensions: const <String>[channelTemplateExtension],
 );
 
-const _projectOpenTypeGroups = <XTypeGroup>[
+List<XTypeGroup> get _projectOpenTypeGroups => [
   dgdawProjectTypeGroup,
   karbeatProjectTypeGroup,
 ];
@@ -75,7 +76,7 @@ Future<String?> pickProjectFileToOpen({String? initialDirectory}) async {
   final file = await openFile(
     acceptedTypeGroups: _projectOpenTypeGroups,
     initialDirectory: initialDirectory,
-    confirmButtonText: 'Open',
+    confirmButtonText: tr('workspace-file-open'),
   );
   if (file == null) return null;
   final path = file.path;
@@ -98,10 +99,10 @@ Future<String?> pickProjectFileToSave({String? initialDirectory}) async {
   }
 
   final location = await getSaveLocation(
-    acceptedTypeGroups: const <XTypeGroup>[dgdawProjectTypeGroup],
+    acceptedTypeGroups: <XTypeGroup>[dgdawProjectTypeGroup],
     initialDirectory: initialDirectory,
     suggestedName: 'untitled.$dgdawProjectExtension',
-    confirmButtonText: 'Save',
+    confirmButtonText: tr('common-save'),
   );
   if (location == null) return null;
   return withFileExtension(location.path, dgdawProjectExtension);
@@ -111,9 +112,10 @@ Future<String?> pickProjectFileToSave({String? initialDirectory}) async {
 XTypeGroup audioExportTypeGroup(String extension) {
   final normalizedExtension = extension.toLowerCase();
   return XTypeGroup(
-    label:
-        '${normalizedExtension.toUpperCase()} Audio '
-        '(.$normalizedExtension)',
+    label: tr('workspace-file-type-audio', {
+      'format': normalizedExtension.toUpperCase(),
+      'extension': normalizedExtension,
+    }),
     extensions: <String>[normalizedExtension],
   );
 }
@@ -143,7 +145,7 @@ Future<String?> pickAudioExportFileToSave({
     acceptedTypeGroups: <XTypeGroup>[audioExportTypeGroup(normalizedExtension)],
     initialDirectory: initialDirectory,
     suggestedName: suggestedName,
-    confirmButtonText: 'Export',
+    confirmButtonText: tr('workspace-file-export'),
   );
   if (location == null) return null;
   return withFileExtension(location.path, normalizedExtension);
@@ -175,9 +177,9 @@ Future<String?> pickChannelTemplateFileToSave(String channelName) async {
   }
 
   final location = await getSaveLocation(
-    acceptedTypeGroups: const <XTypeGroup>[channelTemplateTypeGroup],
+    acceptedTypeGroups: <XTypeGroup>[channelTemplateTypeGroup],
     suggestedName: suggestedName,
-    confirmButtonText: 'Save',
+    confirmButtonText: tr('common-save'),
   );
   if (location == null) return null;
   return withFileExtension(location.path, channelTemplateExtension);
@@ -196,8 +198,8 @@ Future<String?> pickChannelTemplateFileToOpen() async {
   }
 
   final file = await openFile(
-    acceptedTypeGroups: const <XTypeGroup>[channelTemplateTypeGroup],
-    confirmButtonText: 'Open',
+    acceptedTypeGroups: <XTypeGroup>[channelTemplateTypeGroup],
+    confirmButtonText: tr('workspace-file-open'),
   );
   return file?.path;
 }

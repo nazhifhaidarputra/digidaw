@@ -221,8 +221,8 @@ class _ClipRenderer extends ConsumerWidget {
       case UiClipSource_Audio(:final sourceId):
         final handle = waveformMap[sourceId];
         if (handle == null) {
-          return const Center(
-            child: Text("Loading...", style: TextStyle(fontSize: 8)),
+          return Center(
+            child: Text(tr('common-loading'), style: TextStyle(fontSize: 8)),
           );
         }
 

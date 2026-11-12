@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:karbeat/app/providers/project_provider.dart';
 import 'package:karbeat/app/providers/track_list_state.dart';
+import 'package:karbeat/core/l10n/localizer.dart';
 import 'package:karbeat/features/mixer/services/mixer_channel_targets.dart';
 import 'package:karbeat/features/mixer/view/channel_output_chip.dart';
 import 'package:karbeat/features/mixer/view/mixer_channel_context_menu.dart';
@@ -56,7 +57,7 @@ class MixerChannelSidePanel extends ConsumerWidget {
                   ),
                 ),
                 IconButton(
-                  tooltip: 'Close channel panel',
+                  tooltip: tr('track-close-channel-panel'),
                   visualDensity: VisualDensity.compact,
                   padding: EdgeInsets.zero,
                   iconSize: 16,

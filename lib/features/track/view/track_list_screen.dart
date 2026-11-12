@@ -8,6 +8,7 @@ import 'package:karbeat/app/providers/timeline_state.dart';
 import 'package:karbeat/app/providers/track_list_state.dart';
 import 'package:karbeat/app/providers/transport_state.dart';
 import 'package:karbeat/app/providers/workspace_state.dart';
+import 'package:karbeat/core/l10n/localizer.dart';
 import 'package:karbeat/core/widgets/scroll_physics/unclamped_never_scrollable_physics.dart';
 import 'package:karbeat/core/widgets/rainbow_sparkle.dart';
 import 'package:karbeat/features/mixer/view/mixer_channel_context_menu.dart';

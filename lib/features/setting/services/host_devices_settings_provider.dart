@@ -1,6 +1,7 @@
 import 'package:fast_immutable_collections/fast_immutable_collections.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:karbeat/app/providers/notification_provider.dart';
+import 'package:karbeat/core/l10n/localizer.dart';
 import 'package:karbeat/core/utils/result_type.dart';
 import 'package:karbeat/features/setting/models/host_devices_settings_state.dart';
 import 'package:karbeat/features/setting/services/audio_discovery_service.dart';
@@ -44,7 +45,7 @@ class HostDevicesSettingsNotifier extends Notifier<HostDevicesSettingsState> {
         _initializationStarted = false;
         return ref.notifyErrorResult(
           error,
-          title: 'Could not load output settings',
+          title: tr('settings-host-output-load-failed'),
         );
       }
       state = state.copyWith(
@@ -58,7 +59,10 @@ class HostDevicesSettingsNotifier extends Notifier<HostDevicesSettingsState> {
           selectedInputDeviceId: input.deviceId,
         );
       } else {
-        ref.notifyError(input.err(), title: 'Could not load input settings');
+        ref.notifyError(
+          input.err(),
+          title: tr('settings-host-input-load-failed'),
+        );
       }
     }
     state = state.copyWith(isLoadingHosts: true, discoveryError: null);
@@ -73,13 +77,13 @@ class HostDevicesSettingsNotifier extends Notifier<HostDevicesSettingsState> {
       );
       return ref.notifyErrorResult(
         error,
-        title: 'Could not discover audio hosts',
+        title: tr('settings-host-discover-hosts-failed'),
       );
     }
     var fallbackReason = state.fallbackReason;
     if (state.selectedHostName != null &&
         !hosts.ok().any((host) => host.hostName == state.selectedHostName)) {
-      fallbackReason = 'The saved audio host is unavailable.';
+      fallbackReason = tr('settings-host-saved-host-unavailable');
       state = state.copyWith(
         selectedHostName: null,
         selectedOutputDeviceId: null,
@@ -97,7 +101,7 @@ class HostDevicesSettingsNotifier extends Notifier<HostDevicesSettingsState> {
         !state.availableOutputDevices.any(
           (device) => device.deviceId == state.selectedOutputDeviceId,
         )) {
-      fallbackReason = 'The saved output device is unavailable.';
+      fallbackReason = tr('settings-host-saved-output-unavailable');
       state = state.copyWith(
         selectedOutputDeviceId: null,
         fallbackReason: fallbackReason,
@@ -107,8 +111,10 @@ class HostDevicesSettingsNotifier extends Notifier<HostDevicesSettingsState> {
       ref
           .read(notificationProvider.notifier)
           .warn(
-            '$fallbackReason Using the system default output.',
-            title: 'Audio output fallback',
+            tr('settings-host-output-fallback-message', {
+              'reason': fallbackReason,
+            }),
+            title: tr('settings-host-output-fallback-title'),
           );
     }
     await reloadInputDevices();
@@ -142,7 +148,10 @@ class HostDevicesSettingsNotifier extends Notifier<HostDevicesSettingsState> {
       deviceId: state.selectedInputDeviceId,
     ));
     if (saved case Error<void>(error: final error)) {
-      ref.notifyError(error, title: 'Audio input turned on but not saved');
+      ref.notifyError(
+        error,
+        title: tr('settings-host-input-enabled-not-saved'),
+      );
     }
   }
 
@@ -182,8 +191,8 @@ class HostDevicesSettingsNotifier extends Notifier<HostDevicesSettingsState> {
     ref
         .read(notificationProvider.notifier)
         .warn(
-          'The saved input device is unavailable. Using the system default input.',
-          title: 'Audio input fallback',
+          tr('settings-host-input-fallback-message'),
+          title: tr('settings-host-input-fallback-title'),
         );
   }
 
@@ -206,7 +215,7 @@ class HostDevicesSettingsNotifier extends Notifier<HostDevicesSettingsState> {
           state.copyWith(isApplyingInput: false);
       return ref.notifyErrorResult(
         error,
-        title: 'Could not change audio input',
+        title: tr('settings-host-input-change-failed'),
       );
     }
     state = state.copyWith(
@@ -220,7 +229,7 @@ class HostDevicesSettingsNotifier extends Notifier<HostDevicesSettingsState> {
     if (saved case Error<void>(error: final error)) {
       return ref.notifyErrorResult(
         error,
-        title: 'Audio input changed but not saved',
+        title: tr('settings-host-input-not-saved'),
       );
     }
     return Result.ok(null);
@@ -276,7 +285,7 @@ class HostDevicesSettingsNotifier extends Notifier<HostDevicesSettingsState> {
       );
       return ref.notifyErrorResult(
         error,
-        title: 'Could not discover output devices',
+        title: tr('settings-host-discover-outputs-failed'),
       );
     }
     state = state.copyWith(
@@ -305,7 +314,7 @@ class HostDevicesSettingsNotifier extends Notifier<HostDevicesSettingsState> {
           state.copyWith(isApplyingSelection: false);
       return ref.notifyErrorResult(
         error,
-        title: 'Could not change audio output',
+        title: tr('settings-host-output-change-failed'),
       );
     }
     state = state.copyWith(
@@ -319,7 +328,7 @@ class HostDevicesSettingsNotifier extends Notifier<HostDevicesSettingsState> {
     if (saved case Error<void>(error: final error)) {
       return ref.notifyErrorResult(
         error,
-        title: 'Audio output changed but not saved',
+        title: tr('settings-host-output-not-saved'),
       );
     }
     return Result.ok(null);

@@ -12,6 +12,7 @@ import 'api/audio_settings.dart';
 import 'api/automation.dart';
 import 'api/external_plugins.dart';
 import 'api/jobs.dart';
+import 'api/l10n.dart';
 import 'api/logging.dart';
 import 'api/mitigation.dart';
 import 'api/mixer.dart';
@@ -684,6 +685,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<UiInputDeviceInfo> dco_decode_list_ui_input_device_info(dynamic raw);
 
   @protected
+  List<UiL10nArg> dco_decode_list_ui_l_10_n_arg(dynamic raw);
+
+  @protected
+  List<UiLanguage> dco_decode_list_ui_language(dynamic raw);
+
+  @protected
   List<UiNote> dco_decode_list_ui_note(dynamic raw);
 
   @protected
@@ -1149,6 +1156,18 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   UiJobTarget dco_decode_ui_job_target(dynamic raw);
+
+  @protected
+  UiL10nArg dco_decode_ui_l_10_n_arg(dynamic raw);
+
+  @protected
+  UiL10nValue dco_decode_ui_l_10_n_value(dynamic raw);
+
+  @protected
+  UiLanguage dco_decode_ui_language(dynamic raw);
+
+  @protected
+  UiLanguageState dco_decode_ui_language_state(dynamic raw);
 
   @protected
   UiLogLevel dco_decode_ui_log_level(dynamic raw);
@@ -2058,6 +2077,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  List<UiL10nArg> sse_decode_list_ui_l_10_n_arg(SseDeserializer deserializer);
+
+  @protected
+  List<UiLanguage> sse_decode_list_ui_language(SseDeserializer deserializer);
+
+  @protected
   List<UiNote> sse_decode_list_ui_note(SseDeserializer deserializer);
 
   @protected
@@ -2639,6 +2664,18 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   UiJobTarget sse_decode_ui_job_target(SseDeserializer deserializer);
+
+  @protected
+  UiL10nArg sse_decode_ui_l_10_n_arg(SseDeserializer deserializer);
+
+  @protected
+  UiL10nValue sse_decode_ui_l_10_n_value(SseDeserializer deserializer);
+
+  @protected
+  UiLanguage sse_decode_ui_language(SseDeserializer deserializer);
+
+  @protected
+  UiLanguageState sse_decode_ui_language_state(SseDeserializer deserializer);
 
   @protected
   UiLogLevel sse_decode_ui_log_level(SseDeserializer deserializer);
@@ -3735,6 +3772,18 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_list_ui_l_10_n_arg(
+    List<UiL10nArg> self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_list_ui_language(
+    List<UiLanguage> self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_list_ui_note(List<UiNote> self, SseSerializer serializer);
 
   @protected
@@ -4435,6 +4484,21 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_ui_job_target(UiJobTarget self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_ui_l_10_n_arg(UiL10nArg self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_ui_l_10_n_value(UiL10nValue self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_ui_language(UiLanguage self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_ui_language_state(
+    UiLanguageState self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_ui_log_level(UiLogLevel self, SseSerializer serializer);

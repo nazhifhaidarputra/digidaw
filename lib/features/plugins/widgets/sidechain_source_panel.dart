@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:karbeat/app/providers/mixer_state.dart';
 import 'package:karbeat/app/providers/project_provider.dart';
 import 'package:karbeat/app/providers/notification_provider.dart';
+import 'package:karbeat/core/l10n/localizer.dart';
 import 'package:karbeat/src/rust/api/mixer.dart' as mixer_api;
 import 'package:karbeat/src/rust/api/plugin.dart' as plugin_api;
 
@@ -101,7 +102,7 @@ class _SidechainSourcePanelState extends ConsumerState<SidechainSourcePanel> {
       if (!mounted) return;
       setState(() {
         _loading = false;
-        _error = 'Could not load sidechain sources: $error';
+        _error = tr('plugins-sidechain-load-failed', {'error': '$error'});
       });
     }
   }
@@ -114,10 +115,10 @@ class _SidechainSourcePanelState extends ConsumerState<SidechainSourcePanel> {
   };
 
   String _sourceType(mixer_api.UiRoutingNode source) => switch (source) {
-    mixer_api.UiRoutingNode_Track() => 'Track',
-    mixer_api.UiRoutingNode_Bus() => 'Bus',
-    mixer_api.UiRoutingNode_Master() => 'Master',
-    mixer_api.UiRoutingNode_PluginSidechain() => 'Sidechain',
+    mixer_api.UiRoutingNode_Track() => tr('app-automation-track'),
+    mixer_api.UiRoutingNode_Bus() => tr('app-automation-bus'),
+    mixer_api.UiRoutingNode_Master() => tr('app-automation-master'),
+    mixer_api.UiRoutingNode_PluginSidechain() => tr('plugins-sidechain'),
   };
 
   void _replaceSource(int index, mixer_api.UiSidechainSource source) {
@@ -165,7 +166,10 @@ class _SidechainSourcePanelState extends ConsumerState<SidechainSourcePanel> {
       if (!mounted) return;
       setState(() {
         _replaceSource(index, previous);
-        _error = 'Could not update ${previous.name}: $error';
+        _error = tr('plugins-sidechain-update-failed', {
+          'name': previous.name,
+          'error': '$error',
+        });
       });
     } finally {
       if (mounted) {
@@ -196,7 +200,12 @@ class _SidechainSourcePanelState extends ConsumerState<SidechainSourcePanel> {
     } catch (error) {
       ref.read(notificationProvider.notifier).error(error);
       if (!mounted) return;
-      setState(() => _error = 'Could not update ${source.name}: $error');
+      setState(
+        () => _error = tr('plugins-sidechain-update-failed', {
+          'name': source.name,
+          'error': '$error',
+        }),
+      );
       await _load();
     } finally {
       if (mounted) {
@@ -230,7 +239,7 @@ class _SidechainSourcePanelState extends ConsumerState<SidechainSourcePanel> {
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
-                  'SIDECHAIN SOURCES',
+                  tr('plugins-sidechain-sources'),
                   style: TextStyle(
                     color: colors.primary,
                     fontSize: 13,
@@ -240,7 +249,7 @@ class _SidechainSourcePanelState extends ConsumerState<SidechainSourcePanel> {
                 ),
               ),
               IconButton(
-                tooltip: 'Refresh sources',
+                tooltip: tr('plugins-refresh-sources'),
                 onPressed: _loading ? null : _load,
                 icon: const Icon(Icons.refresh, size: 18),
               ),
@@ -262,7 +271,7 @@ class _SidechainSourcePanelState extends ConsumerState<SidechainSourcePanel> {
             Padding(
               padding: const EdgeInsets.symmetric(vertical: 12),
               child: Text(
-                'No valid track or bus sources are available.',
+                tr('plugins-sidechain-no-sources'),
                 style: TextStyle(color: colors.onSurfaceVariant),
               ),
             )
@@ -304,9 +313,9 @@ class _SidechainSourcePanelState extends ConsumerState<SidechainSourcePanel> {
                             ),
                           ),
                           Tooltip(
-                            message: 'Tap the source before its fader',
+                            message: tr('plugins-tap-the-source-before-its'),
                             child: FilterChip(
-                              label: const Text('PRE'),
+                              label: Text(tr('plugins-pre')),
                               labelStyle: const TextStyle(fontSize: 10),
                               visualDensity: VisualDensity.compact,
                               selected:

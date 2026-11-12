@@ -1,4 +1,5 @@
 import 'package:fast_immutable_collections/fast_immutable_collections.dart';
+import 'package:karbeat/core/l10n/localizer.dart';
 import 'package:karbeat/src/rust/api/mixer.dart';
 import 'package:karbeat/src/rust/api/plugin.dart';
 import 'package:karbeat/src/rust/api/project.dart';
@@ -12,10 +13,10 @@ class RoutingLabels {
 
   String channelName(UiRoutingNode node) => switch (node) {
     UiRoutingNode_Track(:final field0) =>
-      tracks[field0]?.name ?? 'Track $field0',
+      tracks[field0]?.name ?? tr('mixer-track-fallback', {'number': field0}),
     UiRoutingNode_Bus(:final field0) =>
-      mixer.buses[field0]?.name ?? 'Bus $field0',
-    UiRoutingNode_Master() => 'Master',
+      mixer.buses[field0]?.name ?? tr('mixer-bus-fallback', {'number': field0}),
+    UiRoutingNode_Master() => tr('app-automation-master'),
     UiRoutingNode_PluginSidechain(:final field0) => sidechainName(field0),
   };
 
@@ -58,7 +59,7 @@ class RoutingLabels {
   /// "Lead · Sidechain Compressor" for a sidechain into [plugin].
   String sidechainName(UiPluginTarget plugin) {
     final owner = sidechainOwner(plugin);
-    if (owner == null) return 'Instrument sidechain';
+    if (owner == null) return tr('mixer-instrument-sidechain');
     final effectId = switch (plugin) {
       UiPluginTarget_TrackEffect(:final effectId) => effectId,
       UiPluginTarget_BusEffect(:final effectId) => effectId,
@@ -68,7 +69,7 @@ class RoutingLabels {
     final effect = effectsOf(
       owner,
     ).where((effect) => effect.id == effectId).firstOrNull;
-    final pluginName = effect?.name ?? 'Instrument';
+    final pluginName = effect?.name ?? tr('mixer-instrument');
     return '${channelName(owner)} · $pluginName';
   }
 }

@@ -4,6 +4,7 @@ import 'dart:collection';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:freezed_annotation/freezed_annotation.dart';
 import 'package:karbeat/app/providers/notification_provider.dart';
+import 'package:karbeat/core/l10n/localizer.dart';
 import 'package:karbeat/core/utils/logger.dart';
 import 'package:karbeat/core/utils/result_type.dart';
 
@@ -57,9 +58,10 @@ class BlockingTaskTimeoutException implements Exception {
   final Duration timeout;
 
   @override
-  String toString() =>
-      '"$label" did not finish within ${timeout.inSeconds} s and was '
-      'released; it continues in the background.';
+  String toString() => tr('app-blocking-timeout-message', {
+    'task': label,
+    'seconds': timeout.inSeconds,
+  });
 }
 
 /// The mailbox was disposed before the task could start.
@@ -69,7 +71,7 @@ class BlockingTaskCancelledException implements Exception {
   final String label;
 
   @override
-  String toString() => '"$label" was cancelled before it started.';
+  String toString() => tr('app-blocking-cancelled', {'task': label});
 }
 
 /// Global mailbox for asynchronous operations that must block the UI while
@@ -202,7 +204,7 @@ class BlockingTaskNotifier extends Notifier<BlockingTaskState> {
         if (!_disposed) {
           ref
               .read(notificationProvider.notifier)
-              .warn(error.toString(), title: 'Operation timed out');
+              .warn(error.toString(), title: tr('app-blocking-timeout-title'));
         }
         settled.complete(Result.error(error));
       });
@@ -215,7 +217,7 @@ class BlockingTaskNotifier extends Notifier<BlockingTaskState> {
     if (!_disposed) {
       ref
           .read(notificationProvider.notifier)
-          .error(error, title: 'Operation failed');
+          .error(error, title: tr('app-blocking-failed'));
     }
     return Result.error(error);
   }

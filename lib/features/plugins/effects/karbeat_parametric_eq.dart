@@ -3,6 +3,7 @@ import 'dart:math';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
+import 'package:karbeat/core/l10n/localizer.dart';
 import 'package:karbeat/core/widgets/digidaw_plugin_widgets/widgets.dart';
 import 'package:karbeat/core/widgets/plugin_parameter_widget.dart';
 import 'package:karbeat/features/plugins/abstract_plugin_screen.dart';
@@ -642,14 +643,14 @@ class KarbeatParametricEqState
 
             // Parameter controls
             _buildParamControl(
-              "Freq",
+              tr('plugins-eq-frequency'),
               band.freq,
               specs.freq,
               (v) => _updateBandParam(i, 0, v),
               suffix: "Hz",
             ),
             _buildParamControl(
-              "Gain",
+              tr('plugins-eq-gain'),
               band.gain,
               specs.gain,
               (v) => _updateBandParam(i, 1, v),
@@ -733,7 +734,7 @@ class KarbeatParametricEqState
           FittedBox(
             fit: BoxFit.scaleDown,
             child: Text(
-              "MASTER",
+              tr('plugins-eq-master'),
               style: TextStyle(
                 color: colors.onSurface,
                 fontSize: 12,

@@ -5,6 +5,7 @@ import 'package:karbeat/app/providers/clip_placement_state.dart';
 import 'package:karbeat/app/providers/piano_roll_state.dart';
 import 'package:karbeat/app/providers/project_provider.dart';
 import 'package:karbeat/app/providers/workspace_state.dart';
+import 'package:karbeat/core/l10n/localizer.dart';
 import 'package:karbeat/core/widgets/context_menu.dart';
 import 'package:karbeat/features/plugins/services/plugin_ui_launcher.dart';
 import 'package:karbeat/features/source/services/audio_waveform_services.dart';
@@ -43,7 +44,7 @@ class SourceListPanel extends ConsumerWidget {
       target: UiPluginTarget.generator(id),
       registryId: registryId,
       instanceId: id,
-      pluginName: instance?.label ?? 'Sampler',
+      pluginName: instance?.label ?? tr('app-automation-sampler'),
     );
   }
 
@@ -97,9 +98,9 @@ class SourceListPanel extends ConsumerWidget {
           controller: scrollController,
           padding: const EdgeInsets.only(bottom: 16),
           children: [
-            _sectionHeader(context, 'Instruments'),
+            _sectionHeader(context, tr('source-instruments')),
             if (generators.isEmpty)
-              _emptyHint(context, 'No instruments.')
+              _emptyHint(context, tr('source-no-instruments'))
             else
               ...generators.entries.map((entry) {
                 final id = entry.key;
@@ -111,8 +112,8 @@ class SourceListPanel extends ConsumerWidget {
                 return _SourcePanelTile(
                   icon: Icons.piano,
                   color: colors.tertiary,
-                  title: plugin?.label ?? 'Sampler',
-                  subtitle: 'ID: $id',
+                  title: plugin?.label ?? tr('app-automation-sampler'),
+                  subtitle: tr('mixer-effect-id', {'id': id}),
                   onTap: () => _openGenerator(context, ref, id, generator),
                   renameIcon: plugin != null,
                   onRename: plugin == null
@@ -122,11 +123,11 @@ class SourceListPanel extends ConsumerWidget {
                 );
               }),
             _divider(context),
-            _sectionHeader(context, 'Audio Clips'),
+            _sectionHeader(context, tr('source-audio-clips')),
             audioSourcesAsync.when(
               data: (audioSources) {
                 if (audioSources.isEmpty) {
-                  return _emptyHint(context, 'No audio files.');
+                  return _emptyHint(context, tr('source-no-audio-files'));
                 }
                 return Column(
                   children: [
@@ -135,8 +136,10 @@ class SourceListPanel extends ConsumerWidget {
                         icon: Icons.audio_file,
                         color: colors.primary,
                         title: entry.value.name,
-                        subtitle:
-                            'ID: ${entry.key} | ${entry.value.sampleRate} Hz',
+                        subtitle: tr('source-audio-subtitle', {
+                          'id': entry.key,
+                          'rate': entry.value.sampleRate,
+                        }),
                         onTap: () => _openAudioSource(
                           context,
                           entry.key,
@@ -164,15 +167,15 @@ class SourceListPanel extends ConsumerWidget {
               error: (error, _) => Padding(
                 padding: const EdgeInsets.all(16),
                 child: Text(
-                  'Error loading audio sources: $error',
+                  tr('source-audio-load-failed', {'error': error}),
                   style: TextStyle(color: colors.error, fontSize: 12),
                 ),
               ),
             ),
             _divider(context),
-            _sectionHeader(context, 'Patterns'),
+            _sectionHeader(context, tr('source-patterns')),
             if (patterns.isEmpty)
-              _emptyHint(context, 'No patterns.')
+              _emptyHint(context, tr('source-no-patterns'))
             else
               ...patterns.entries.map((entry) {
                 final id = entry.key;
@@ -181,7 +184,7 @@ class SourceListPanel extends ConsumerWidget {
                   icon: Icons.music_note,
                   color: colors.secondary,
                   title: pattern.name,
-                  subtitle: 'ID: $id',
+                  subtitle: tr('mixer-effect-id', {'id': id}),
                   onTap: () => _openPattern(ref, id),
                   onPlace: () =>
                       _placeSource(ref, id: id, type: UiSourceType.midi),
@@ -278,7 +281,7 @@ class _SourcePanelTile extends StatelessWidget {
       ),
       trailing: renameIcon
           ? IconButton(
-              tooltip: 'Rename',
+              tooltip: tr('common-rename'),
               padding: EdgeInsets.zero,
               visualDensity: VisualDensity.compact,
               onPressed: onRename,
@@ -287,7 +290,7 @@ class _SourcePanelTile extends StatelessWidget {
           : onPlace == null
           ? null
           : IconButton(
-              tooltip: 'Put in timeline',
+              tooltip: tr('source-put-in-timeline'),
               padding: EdgeInsets.zero,
               visualDensity: VisualDensity.compact,
               onPressed: onPlace,
@@ -300,15 +303,19 @@ class _SourcePanelTile extends StatelessWidget {
     final actions = [
       if (onPlace != null)
         DawContextAction(
-          title: 'Put in timeline',
+          title: tr('source-put-in-timeline'),
           icon: Icons.input,
           onTap: onPlace!,
         ),
       if (onRename != null)
-        DawContextAction(title: 'Rename', icon: Icons.edit, onTap: onRename!),
+        DawContextAction(
+          title: tr('common-rename'),
+          icon: Icons.edit,
+          onTap: onRename!,
+        ),
       if (onDelete != null)
         DawContextAction(
-          title: 'Delete',
+          title: tr('common-delete'),
           icon: Icons.delete,
           isDestructive: true,
           onTap: onDelete!,

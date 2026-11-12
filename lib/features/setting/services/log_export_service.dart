@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:fast_immutable_collections/fast_immutable_collections.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:karbeat/core/l10n/localizer.dart';
 import 'package:karbeat/core/utils/log_models.dart';
 import 'package:karbeat/core/utils/result_type.dart';
 
@@ -10,7 +11,7 @@ class LogExportService {
   Future<Result<String?>> export(IList<AppLogEntry> entries) {
     return attemptAsync(() async {
       final path = await FilePicker.saveFile(
-        dialogTitle: 'Export DigiDAW logs',
+        dialogTitle: tr('settings-logs-export-dialog'),
         fileName: 'digidaw.log',
         type: FileType.custom,
         allowedExtensions: const ['log', 'txt'],

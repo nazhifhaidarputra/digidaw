@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:fast_immutable_collections/fast_immutable_collections.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:karbeat/core/l10n/localizer.dart';
 import 'package:karbeat/core/utils/result_type.dart';
 import 'package:karbeat/features/workspace/models/browser_panel_state.dart';
 import 'package:karbeat/src/rust/api/settings.dart' as settings_api;
@@ -23,7 +24,7 @@ class SampleBrowserService {
   Future<Result<String?>> pickDirectory() {
     return attemptAsync(
       () => FilePicker.getDirectoryPath(
-        dialogTitle: 'Add sample source directory',
+        dialogTitle: tr('workspace-sample-folder-dialog'),
       ),
     );
   }

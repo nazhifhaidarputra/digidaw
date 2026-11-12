@@ -1,6 +1,7 @@
 import 'package:fast_immutable_collections/fast_immutable_collections.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:karbeat/app/providers/notification_provider.dart';
+import 'package:karbeat/core/l10n/localizer.dart';
 import 'package:karbeat/core/utils/result_type.dart';
 import 'package:karbeat/features/setting/models/general_settings_state.dart';
 import 'package:karbeat/features/setting/services/settings_service.dart';
@@ -37,7 +38,10 @@ class GeneralSettingsNotifier extends Notifier<GeneralSettingsState> {
         isApplyingHistoryLimit: false,
         isInitialized: false,
       );
-      return ref.notifyErrorResult(error, title: 'Could not load settings');
+      return ref.notifyErrorResult(
+        error,
+        title: tr('settings-general-load-failed'),
+      );
     }
 
     final applied = await service.applyHistoryLimit(context, loaded.ok());
@@ -49,7 +53,7 @@ class GeneralSettingsNotifier extends Notifier<GeneralSettingsState> {
       );
       return ref.notifyErrorResult(
         error,
-        title: 'Could not apply history limit',
+        title: tr('settings-general-history-apply-failed'),
       );
     }
 
@@ -69,7 +73,7 @@ class GeneralSettingsNotifier extends Notifier<GeneralSettingsState> {
       state = state.copyWith(isApplyingAutoSave: false);
       return ref.notifyErrorResult(
         error,
-        title: 'Could not load auto save settings',
+        title: tr('settings-general-auto-save-load-failed'),
       );
     }
 
@@ -78,7 +82,7 @@ class GeneralSettingsNotifier extends Notifier<GeneralSettingsState> {
       state = state.copyWith(isApplyingAutoSave: false);
       return ref.notifyErrorResult(
         error,
-        title: 'Could not apply auto save settings',
+        title: tr('settings-general-auto-save-apply-failed'),
       );
     }
 
@@ -109,7 +113,7 @@ class GeneralSettingsNotifier extends Notifier<GeneralSettingsState> {
     if (context == null) {
       return ref.notifyErrorResult(
         StateError('General settings have not been initialized'),
-        title: 'Could not update auto save',
+        title: tr('settings-general-auto-save-update-failed'),
       );
     }
     if (state.isApplyingAutoSave) {
@@ -121,7 +125,10 @@ class GeneralSettingsNotifier extends Notifier<GeneralSettingsState> {
     final applied = await service.applyAutoSaveSettings(context, settings);
     if (applied case Error<UiAutoSaveSettings>(error: final error)) {
       state = state.copyWith(isApplyingAutoSave: false);
-      return ref.notifyErrorResult(error, title: 'Could not update auto save');
+      return ref.notifyErrorResult(
+        error,
+        title: tr('settings-general-auto-save-update-failed'),
+      );
     }
 
     _publishAutoSave(applied.ok());
@@ -129,7 +136,7 @@ class GeneralSettingsNotifier extends Notifier<GeneralSettingsState> {
     if (saved case Error<void>(error: final error)) {
       return ref.notifyErrorResult(
         error,
-        title: 'Auto save applied but not saved',
+        title: tr('settings-general-auto-save-not-saved'),
       );
     }
     return Result.ok(null);
@@ -148,7 +155,7 @@ class GeneralSettingsNotifier extends Notifier<GeneralSettingsState> {
     if (context == null) {
       return ref.notifyErrorResult(
         StateError('General settings have not been initialized'),
-        title: 'Could not update history limit',
+        title: tr('settings-general-history-update-failed'),
       );
     }
     if (state.isApplyingHistoryLimit) {
@@ -162,7 +169,7 @@ class GeneralSettingsNotifier extends Notifier<GeneralSettingsState> {
       state = state.copyWith(isApplyingHistoryLimit: false);
       return ref.notifyErrorResult(
         error,
-        title: 'Could not update history limit',
+        title: tr('settings-general-history-update-failed'),
       );
     }
 
@@ -175,7 +182,7 @@ class GeneralSettingsNotifier extends Notifier<GeneralSettingsState> {
     if (saved case Error<void>(error: final error)) {
       return ref.notifyErrorResult(
         error,
-        title: 'History limit applied but not saved',
+        title: tr('settings-general-history-not-saved'),
       );
     }
     return Result.ok(null);
@@ -186,13 +193,16 @@ class GeneralSettingsNotifier extends Notifier<GeneralSettingsState> {
     final service = ref.read(settingsServiceProvider);
     final picked = await service.pickFolder(
       dialogTitle: switch (kind) {
-        DefaultFolder.project => 'Choose default project folder',
-        DefaultFolder.export => 'Choose default export folder',
+        DefaultFolder.project => tr('settings-general-project-folder-choose'),
+        DefaultFolder.export => tr('settings-general-export-folder-choose'),
       },
       initialDirectory: state.usableFolder(kind),
     );
     if (picked case Error<String?>(error: final error)) {
-      return ref.notifyErrorResult(error, title: 'Could not choose a folder');
+      return ref.notifyErrorResult(
+        error,
+        title: tr('settings-general-folder-choose-failed'),
+      );
     }
     final folder = picked.ok();
     if (folder == null) return Result.ok(null);
@@ -219,7 +229,10 @@ class GeneralSettingsNotifier extends Notifier<GeneralSettingsState> {
         await _publishStored(settings);
         return Result.ok(null);
       case Error(:final error):
-        return ref.notifyErrorResult(error, title: 'Could not save the folder');
+        return ref.notifyErrorResult(
+          error,
+          title: tr('settings-general-folder-save-failed'),
+        );
     }
   }
 
@@ -234,7 +247,7 @@ class GeneralSettingsNotifier extends Notifier<GeneralSettingsState> {
       state = state.copyWith(showRecentProjects: previous);
       return ref.notifyErrorResult(
         error,
-        title: 'Could not save the recent projects setting',
+        title: tr('settings-general-recent-projects-save-failed'),
       );
     }
     return Result.ok(null);

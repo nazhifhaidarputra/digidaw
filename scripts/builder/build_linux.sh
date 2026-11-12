@@ -108,16 +108,11 @@ flutter pub get
 echo -e "\033[1;36m==> [Linux Build] Compiling Flutter Linux Release...\033[0m"
 flutter build linux --release
 
-echo -e "\033[1;36m==> [Linux Build] Archiving Release Bundle...\033[0m"
 BUILD_DIR="build/linux/x64/release/bundle"
-DIST_DIR="dist"
-mkdir -p "$DIST_DIR"
-if ldd "$BUILD_DIR/lib/libkarbeat_flutter_ffi.so" | grep -q librubberband; then
+if ldd "$BUILD_DIR/lib/libkarbeat_flutter_ffi.so" 2>/dev/null | grep -q librubberband; then
     echo -e "\033[1;31m==> ERROR: The bundle links a shared Rubber Band instead of the static one.\033[0m"
     exit 1
 fi
-cp "$(dirname "$0")/../installer/install_linux.sh" "$BUILD_DIR/install.sh"
-cp "$(dirname "$0")/../installer/uninstall_linux.sh" "$BUILD_DIR/uninstall.sh"
-tar -czvf "$DIST_DIR/Digidaw-linux-x64.tar.gz" -C "$BUILD_DIR" .
 
-echo -e "\033[1;32m==> SUCCESS: Built $DIST_DIR/Digidaw-linux-x64.tar.gz\033[0m"
+# Writes the archive, .deb, .rpm and AppImage to dist/.
+"$(dirname "$0")/package_linux.sh" "$BUILD_DIR"

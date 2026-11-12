@@ -4,6 +4,7 @@ import 'package:fast_immutable_collections/fast_immutable_collections.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:karbeat/app/providers/notification_provider.dart';
 import 'package:karbeat/app/providers/project_provider.dart';
+import 'package:karbeat/core/l10n/localizer.dart';
 import 'package:karbeat/core/utils/logger.dart';
 import 'package:karbeat/core/utils/result_type.dart';
 import 'package:karbeat/features/plugins/services/audio_plugins_service.dart';
@@ -57,7 +58,7 @@ class PluginSettingsNotifier extends Notifier<PluginSettingsState> {
     AppLogger.error('Failed to initialize plugin settings: $error');
     return ref.notifyErrorResult(
       error,
-      title: 'Could not initialize plugin settings',
+      title: tr('settings-plugins-initialize-failed'),
     );
   }
 
@@ -69,7 +70,7 @@ class PluginSettingsNotifier extends Notifier<PluginSettingsState> {
     if (selected case Error<String?>(error: final error)) {
       return ref.notifyErrorResult(
         error,
-        title: 'Could not choose plugin folder',
+        title: tr('settings-plugins-folder-choose-failed'),
       );
     }
     final directory = selected.ok();
@@ -119,7 +120,7 @@ class PluginSettingsNotifier extends Notifier<PluginSettingsState> {
       AppLogger.error('Failed to save plugin scan settings: $error');
       return ref.notifyErrorResult(
         error,
-        title: 'Could not save plugin settings',
+        title: tr('settings-plugins-save-failed'),
       );
     }
     final applied = saved.ok();
@@ -241,7 +242,11 @@ class PluginSettingsNotifier extends Notifier<PluginSettingsState> {
     );
     ref
         .read(notificationProvider.notifier)
-        .error(error, title: 'Plugin scan failed', stackTrace: stackTrace);
+        .error(
+          error,
+          title: tr('settings-plugins-scan-failed'),
+          stackTrace: stackTrace,
+        );
   }
 
   Future<Result<void>> cancelScan() async {
@@ -257,7 +262,7 @@ class PluginSettingsNotifier extends Notifier<PluginSettingsState> {
       state = state.copyWith(isCancelling: false);
       return ref.notifyErrorResult(
         error,
-        title: 'Could not cancel plugin scan',
+        title: tr('settings-plugins-cancel-failed'),
       );
     }
     if (!cancelled.ok()) {

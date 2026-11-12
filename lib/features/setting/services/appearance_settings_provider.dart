@@ -5,6 +5,7 @@ import 'dart:ui' as ui;
 import 'package:fast_immutable_collections/fast_immutable_collections.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:karbeat/app/providers/notification_provider.dart';
+import 'package:karbeat/core/l10n/localizer.dart';
 import 'package:karbeat/core/utils/logger.dart';
 import 'package:karbeat/core/utils/result_type.dart';
 import 'package:karbeat/features/setting/models/app_color_theme.dart';
@@ -111,7 +112,7 @@ class AppearanceSettingsNotifier extends Notifier<AppearanceSettingsState> {
       _initializationStarted = false;
       return ref.notifyErrorResult(
         error,
-        title: 'Could not load appearance settings',
+        title: tr('settings-appearance-load-failed'),
       );
     }
 
@@ -124,8 +125,8 @@ class AppearanceSettingsNotifier extends Notifier<AppearanceSettingsState> {
         ref
             .read(notificationProvider.notifier)
             .warn(
-              'The saved background image is unavailable. The default background is being used.',
-              title: 'Background image unavailable',
+              tr('settings-appearance-background-unavailable-message'),
+              title: tr('settings-appearance-background-unavailable-title'),
             );
         backgroundPath = null;
       }
@@ -139,8 +140,8 @@ class AppearanceSettingsNotifier extends Notifier<AppearanceSettingsState> {
         ref
             .read(notificationProvider.notifier)
             .warn(
-              'The saved custom font is unavailable. The system font is being used.',
-              title: 'Custom font unavailable',
+              tr('settings-appearance-font-unavailable-message'),
+              title: tr('settings-appearance-font-unavailable-title'),
             );
         fontPath = null;
         fontFamily = null;
@@ -175,10 +176,10 @@ class AppearanceSettingsNotifier extends Notifier<AppearanceSettingsState> {
       ref
           .read(notificationProvider.notifier)
           .warn(
-            unavailableThemes == 1
-                ? 'A saved color theme file is unavailable or no longer valid. It was removed from the theme menu.'
-                : '$unavailableThemes saved color theme files are unavailable or no longer valid. They were removed from the theme menu.',
-            title: 'Color theme unavailable',
+            tr('settings-appearance-theme-unavailable-message', {
+              'count': unavailableThemes,
+            }),
+            title: tr('settings-appearance-theme-unavailable-title'),
           );
     }
     var themeSource = appearance.colorThemeSource;
@@ -222,7 +223,7 @@ class AppearanceSettingsNotifier extends Notifier<AppearanceSettingsState> {
     if (source != null && !state.colorThemes.containsKey(source)) {
       return ref.notifyErrorResult(
         Exception('The color theme is not loaded.'),
-        title: 'Could not apply color theme',
+        title: tr('settings-appearance-theme-apply-failed'),
       );
     }
     return _persist(state.copyWith(colorThemeSource: source));
@@ -237,14 +238,17 @@ class AppearanceSettingsNotifier extends Notifier<AppearanceSettingsState> {
     if (picked case Error<String?>(error: final error)) {
       return ref.notifyErrorResult(
         error,
-        title: 'Could not choose color theme',
+        title: tr('settings-appearance-theme-choose-failed'),
       );
     }
     final path = picked.ok();
     if (path == null) return Result.ok(null);
     final loaded = await _loadColorTheme(path);
     if (loaded case Error<AppColorTheme>(error: final error)) {
-      return ref.notifyErrorResult(error, title: 'Could not load color theme');
+      return ref.notifyErrorResult(
+        error,
+        title: tr('settings-appearance-theme-load-failed'),
+      );
     }
 
     final paths = state.customColorThemePaths;
@@ -265,7 +269,7 @@ class AppearanceSettingsNotifier extends Notifier<AppearanceSettingsState> {
     if (!state.customColorThemePaths.contains(source)) {
       return ref.notifyErrorResult(
         Exception('Only color themes loaded from a file can be removed.'),
-        title: 'Could not remove color theme',
+        title: tr('settings-appearance-theme-remove-failed'),
       );
     }
     final active = state.colorThemeSource;
@@ -302,7 +306,7 @@ class AppearanceSettingsNotifier extends Notifier<AppearanceSettingsState> {
     if (picked case Error<String?>(error: final error)) {
       return ref.notifyErrorResult(
         error,
-        title: 'Could not choose background image',
+        title: tr('settings-appearance-background-choose-failed'),
       );
     }
     final path = picked.ok();
@@ -318,14 +322,20 @@ class AppearanceSettingsNotifier extends Notifier<AppearanceSettingsState> {
     final assets = ref.read(appearanceAssetServiceProvider);
     final picked = await assets.pickFontFile();
     if (picked case Error<String?>(error: final error)) {
-      return ref.notifyErrorResult(error, title: 'Could not choose font');
+      return ref.notifyErrorResult(
+        error,
+        title: tr('settings-appearance-font-choose-failed'),
+      );
     }
     final path = picked.ok();
     if (path == null) return Result.ok(null);
     final family = 'DigiDAWCustomFont${DateTime.now().microsecondsSinceEpoch}';
     final loaded = await assets.loadFont(path, family);
     if (loaded case Error<void>(error: final error)) {
-      return ref.notifyErrorResult(error, title: 'Could not load font');
+      return ref.notifyErrorResult(
+        error,
+        title: tr('settings-appearance-font-load-failed'),
+      );
     }
     return _persist(
       state.copyWith(customFontPath: path, customFontFamily: family),
@@ -354,7 +364,7 @@ class AppearanceSettingsNotifier extends Notifier<AppearanceSettingsState> {
     if (saved case Error<void>(error: final error)) {
       return ref.notifyErrorResult(
         error,
-        title: 'Appearance changed but not saved',
+        title: tr('settings-appearance-not-saved'),
       );
     }
     return Result.ok(null);

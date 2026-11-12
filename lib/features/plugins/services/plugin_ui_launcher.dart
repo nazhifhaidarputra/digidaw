@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:karbeat/app/providers/telemetry_polling_suppression.dart';
 import 'package:karbeat/app/providers/notification_provider.dart';
 import 'package:karbeat/app/providers/project_provider.dart';
+import 'package:karbeat/core/l10n/localizer.dart';
 import 'package:karbeat/core/utils/logger.dart';
 import 'package:karbeat/core/utils/result_type.dart';
 import 'package:karbeat/features/plugins/plugin_registry.dart';
@@ -108,5 +109,5 @@ void _notifyEditorFailure(WidgetRef ref, Exception error) {
   AppLogger.error('Could not open plugin interface: $error');
   ref
       .read(notificationProvider.notifier)
-      .error(error, title: 'Could not open plugin interface');
+      .error(error, title: tr('plugins-could-not-open-plugin-interface'));
 }

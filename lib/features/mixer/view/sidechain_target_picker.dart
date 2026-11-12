@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:karbeat/app/providers/project_provider.dart';
+import 'package:karbeat/core/l10n/localizer.dart';
 import 'package:karbeat/core/utils/result_type.dart';
 import 'package:karbeat/features/mixer/services/routing_labels.dart';
 import 'package:karbeat/features/plugins/services/sidechain_support.dart';
@@ -70,7 +71,9 @@ class _SidechainTargetPicker extends ConsumerWidget {
     ];
 
     return AlertDialog(
-      title: Text('Sidechain ${labels.channelName(source)} into…'),
+      title: Text(
+        tr('mixer-sidechain-into', {'source': labels.channelName(source)}),
+      ),
       titleTextStyle: TextStyle(
         color: colors.onSurface,
         fontSize: 16,
@@ -80,7 +83,7 @@ class _SidechainTargetPicker extends ConsumerWidget {
         width: 420,
         child: sections.isEmpty
             ? Text(
-                'A channel cannot key its own plugins.',
+                tr('mixer-sidechain-self'),
                 style: TextStyle(color: colors.onSurfaceVariant),
               )
             : SingleChildScrollView(
@@ -93,7 +96,7 @@ class _SidechainTargetPicker extends ConsumerWidget {
       actions: [
         TextButton(
           onPressed: () => Navigator.pop(context),
-          child: const Text('Cancel'),
+          child: Text(tr('common-cancel')),
         ),
       ],
     );
@@ -127,7 +130,7 @@ class _ChannelSection extends StatelessWidget {
             Padding(
               padding: const EdgeInsets.symmetric(vertical: 6),
               child: Text(
-                'No effects. Add a sidechain-capable plugin to this channel.',
+                tr('mixer-sidechain-no-effects'),
                 style: TextStyle(color: colors.outline, fontSize: 12),
               ),
             )
@@ -170,12 +173,15 @@ class _TargetTileState extends ConsumerState<_TargetTile> {
       future: _support,
       builder: (context, snapshot) {
         final (subtitle, selectable) = switch (snapshot.data) {
-          _ when widget.alreadyKeyed => ('Already keyed', false),
-          null => ('Checking inputs…', false),
-          Ok(value: true) => ('Sidechain input', true),
-          Ok() => ('No sidechain input', false),
+          _ when widget.alreadyKeyed => (
+            tr('mixer-sidechain-already-keyed'),
+            false,
+          ),
+          null => (tr('mixer-sidechain-checking'), false),
+          Ok(value: true) => (tr('mixer-sidechain-has-input'), true),
+          Ok() => (tr('mixer-sidechain-no-input'), false),
           // The pick still works if the plugin does have an aux input.
-          Error() => ('Could not confirm a sidechain input', true),
+          Error() => (tr('mixer-sidechain-unconfirmed'), true),
         };
         return ListTile(
           dense: true,

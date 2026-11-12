@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:karbeat/app/providers/mixer_state.dart';
 import 'package:karbeat/app/providers/project_provider.dart';
+import 'package:karbeat/core/l10n/localizer.dart';
 import 'package:karbeat/core/widgets/context_menu.dart';
 import 'package:karbeat/features/mixer/services/mixer_channel_targets.dart';
 import 'package:karbeat/features/mixer/services/routing_labels.dart';
@@ -77,25 +78,30 @@ class MixerChannelContextMenu extends ConsumerWidget {
 
     final effectCount = channel.effects.length;
     final info = [
-      ('Name', name),
-      ('Type', target.kindLabel),
-      if (target.channelId case final id?) ('ID', '$id'),
-      ('Volume', formatChannelVolume(channel.volume)),
-      ('Pan', formatChannelPan(channel.pan)),
+      (tr('mixer-info-name'), name),
+      (tr('mixer-info-type'), target.kindLabel),
+      if (target.channelId case final id?) (tr('mixer-info-id'), '$id'),
+      (tr('mixer-info-volume'), formatChannelVolume(channel.volume)),
+      (tr('mixer-info-pan'), formatChannelPan(channel.pan)),
       (
-        'State',
+        tr('mixer-info-state'),
         [
-          if (channel.mute) 'Muted',
-          if (channel.solo) 'Soloed',
-          if (!channel.mute && !channel.solo) 'Active',
+          if (channel.mute) tr('mixer-state-muted'),
+          if (channel.solo) tr('mixer-state-soloed'),
+          if (!channel.mute && !channel.solo) tr('mixer-state-active'),
         ].join(', '),
       ),
       if (!isMaster)
         (
-          'Output',
-          output == null ? 'None' : labels.channelName(output.destination),
+          tr('mixer-info-output'),
+          output == null
+              ? tr('common-none')
+              : labels.channelName(output.destination),
         ),
-      ('Effects', effectCount == 0 ? 'None' : '$effectCount'),
+      (
+        tr('mixer-info-effects'),
+        effectCount == 0 ? tr('common-none') : '$effectCount',
+      ),
     ];
     final infoStyle = TextStyle(color: colors.onSurface, fontSize: 13);
 
@@ -107,12 +113,15 @@ class MixerChannelContextMenu extends ConsumerWidget {
           for (final (label, value) in info)
             Padding(
               padding: const EdgeInsets.only(bottom: 4),
-              child: Text('$label: $value', style: infoStyle),
+              child: Text(
+                tr('mixer-label-value', {'label': label, 'value': value}),
+                style: infoStyle,
+              ),
             ),
           if (color != null)
             Row(
               children: [
-                Text('Color: ', style: infoStyle),
+                Text(tr('mixer-color'), style: infoStyle),
                 Container(
                   width: 14,
                   height: 14,
@@ -127,7 +136,7 @@ class MixerChannelContextMenu extends ConsumerWidget {
       ),
       actions: [
         DawContextAction(
-          title: channel.mute ? 'Unmute' : 'Mute',
+          title: channel.mute ? tr('mixer-unmute') : tr('mixer-mute'),
           icon: channel.mute ? Icons.volume_up : Icons.volume_off,
           onTap: () => mixer.setChannelParam(
             target: target,
@@ -135,7 +144,7 @@ class MixerChannelContextMenu extends ConsumerWidget {
           ),
         ),
         DawContextAction(
-          title: channel.solo ? 'Unsolo' : 'Solo',
+          title: channel.solo ? tr('mixer-unsolo') : tr('mixer-solo'),
           icon: Icons.headphones,
           onTap: () => mixer.setChannelParam(
             target: target,
@@ -143,14 +152,14 @@ class MixerChannelContextMenu extends ConsumerWidget {
           ),
         ),
         DawContextAction(
-          title: 'Add effect…',
+          title: tr('mixer-add-effect'),
           icon: Icons.add,
           onTap: () =>
               showAddEffectDialog(context: context, ref: ref, target: target),
         ),
         if (effectCount > 0)
           DawContextAction(
-            title: 'Save channel template…',
+            title: tr('mixer-save-channel-template'),
             icon: Icons.save_alt,
             onTap: () async {
               final path = await pickChannelTemplateFileToSave(name);
@@ -159,7 +168,7 @@ class MixerChannelContextMenu extends ConsumerWidget {
             },
           ),
         DawContextAction(
-          title: 'Load channel template…',
+          title: tr('mixer-load-channel-template'),
           icon: Icons.file_open,
           onTap: () async {
             final path = await pickChannelTemplateFileToOpen();
@@ -177,13 +186,13 @@ class MixerChannelContextMenu extends ConsumerWidget {
           ),
         if (!isMaster) ...[
           DawContextAction(
-            title: 'Routing…',
+            title: tr('mixer-routing'),
             icon: Icons.account_tree,
             onTap: () => showRoutingDialog(context: context, source: node),
           ),
           if (output?.destination == master)
             DawContextAction(
-              title: 'Unlink from master',
+              title: tr('mixer-unlink-from-master'),
               icon: Icons.link_off,
               onTap: () => mixer.removeRouting(
                 source: node,
@@ -193,7 +202,7 @@ class MixerChannelContextMenu extends ConsumerWidget {
             )
           else
             DawContextAction(
-              title: 'Route to master',
+              title: tr('mixer-route-to-master'),
               icon: Icons.link,
               onTap: () => mixer.updateRoutingCall(
                 src: node,
@@ -203,7 +212,7 @@ class MixerChannelContextMenu extends ConsumerWidget {
               ),
             ),
           DawContextAction(
-            title: 'Sidechain this channel into…',
+            title: tr('mixer-sidechain-this-channel-into'),
             icon: Icons.alt_route,
             onTap: () =>
                 keySidechainFrom(context: context, ref: ref, source: node),
@@ -212,7 +221,7 @@ class MixerChannelContextMenu extends ConsumerWidget {
         ...extraActions,
         if (target case UiMixerChannelTarget_Bus(:final field0))
           DawContextAction(
-            title: 'Delete Bus',
+            title: tr('mixer-delete-bus'),
             icon: Icons.delete,
             isDestructive: true,
             onTap: () => mixer.removeBus(busId: field0),

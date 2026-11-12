@@ -66,7 +66,10 @@ class ContextPanel extends ConsumerWidget {
                     action: action,
                     items: submenu(
                       (callback) => onAction(
-                        DawToolbarMenuAction(action.title, callback: callback),
+                        DawToolbarMenuAction(
+                          action.titleId,
+                          callback: callback,
+                        ),
                       ),
                     ),
                   );

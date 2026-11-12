@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:karbeat/core/l10n/localizer.dart';
 import 'package:karbeat/features/setting/services/audio_settings_provider.dart';
 import 'package:karbeat/features/setting/services/metronome_sound_provider.dart';
 
@@ -27,27 +28,27 @@ class AudioSettingsPage extends ConsumerWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                'Audio',
+                tr('settings-menu-audio'),
                 key: const ValueKey('settings-page-audio'),
                 style: Theme.of(context).textTheme.headlineSmall,
               ),
               const SizedBox(height: 8),
-              const Text(
-                'DSP settings control the dedicated processing worker. Device stream values are read-only and may differ safely.',
-              ),
+              Text(tr('settings-audio-description')),
               const SizedBox(height: 24),
               DropdownButtonFormField<int>(
                 key: ValueKey('dsp-sample-rate-${state.draftSampleRate}'),
                 initialValue: state.draftSampleRate,
-                decoration: const InputDecoration(
-                  labelText: 'DSP sample rate',
+                decoration: InputDecoration(
+                  labelText: tr('settings-audio-sample-rate'),
                   border: OutlineInputBorder(),
                 ),
                 items: state.supportedSampleRates
                     .map(
                       (rate) => DropdownMenuItem(
                         value: rate,
-                        child: Text('$rate Hz'),
+                        child: Text(
+                          tr('settings-audio-hertz', {'value': rate}),
+                        ),
                       ),
                     )
                     .toList(growable: false),
@@ -61,15 +62,17 @@ class AudioSettingsPage extends ConsumerWidget {
               DropdownButtonFormField<int>(
                 key: ValueKey('dsp-block-size-${state.draftBlockSize}'),
                 initialValue: state.draftBlockSize,
-                decoration: const InputDecoration(
-                  labelText: 'DSP block size',
+                decoration: InputDecoration(
+                  labelText: tr('settings-audio-block-size'),
                   border: OutlineInputBorder(),
                 ),
                 items: state.supportedBlockSizes
                     .map(
                       (size) => DropdownMenuItem(
                         value: size,
-                        child: Text('$size frames'),
+                        child: Text(
+                          tr('settings-audio-frames', {'count': size}),
+                        ),
                       ),
                     )
                     .toList(growable: false),
@@ -81,7 +84,9 @@ class AudioSettingsPage extends ConsumerWidget {
               ),
               const SizedBox(height: 12),
               Text(
-                'One DSP block represents approximately ${latencyMs.toStringAsFixed(2)} ms. Smaller blocks reduce processing latency but increase CPU scheduling pressure.',
+                tr('settings-audio-block-latency', {
+                  'milliseconds': latencyMs.toStringAsFixed(2),
+                }),
               ),
               const SizedBox(height: 20),
               Wrap(
@@ -98,13 +103,17 @@ class AudioSettingsPage extends ConsumerWidget {
                             child: CircularProgressIndicator(strokeWidth: 2),
                           )
                         : const Icon(Icons.check),
-                    label: Text(state.isApplying ? 'Applying…' : 'Apply'),
+                    label: Text(
+                      state.isApplying
+                          ? tr('settings-audio-applying')
+                          : tr('common-apply'),
+                    ),
                   ),
                   OutlinedButton(
                     onPressed: !state.hasPendingChanges || state.isApplying
                         ? null
                         : notifier.revertDraft,
-                    child: const Text('Revert'),
+                    child: Text(tr('settings-audio-revert')),
                   ),
                 ],
               ),
@@ -114,13 +123,13 @@ class AudioSettingsPage extends ConsumerWidget {
               ],
               const SizedBox(height: 28),
               Text(
-                'Metronome sound',
+                tr('settings-audio-metronome'),
                 style: Theme.of(context).textTheme.titleMedium,
               ),
               const SizedBox(height: 8),
               Text(
                 metronomeSound == null
-                    ? 'Default click'
+                    ? tr('settings-audio-metronome-default')
                     : _fileName(metronomeSound),
                 key: const ValueKey('metronome-sound-name'),
                 overflow: TextOverflow.ellipsis,
@@ -134,7 +143,7 @@ class AudioSettingsPage extends ConsumerWidget {
                     key: const ValueKey('choose-metronome-sound'),
                     onPressed: () => unawaited(metronomeNotifier.chooseSound()),
                     icon: const Icon(Icons.audio_file_outlined),
-                    label: const Text('Choose sound'),
+                    label: Text(tr('settings-audio-metronome-choose')),
                   ),
                   OutlinedButton.icon(
                     key: const ValueKey('clear-metronome-sound'),
@@ -142,29 +151,41 @@ class AudioSettingsPage extends ConsumerWidget {
                         ? null
                         : () => unawaited(metronomeNotifier.useDefaultSound()),
                     icon: const Icon(Icons.restart_alt),
-                    label: const Text('Use default'),
+                    label: Text(tr('settings-audio-metronome-use-default')),
                   ),
                 ],
               ),
               const SizedBox(height: 8),
-              const Text(
-                'Your sound plays as recorded on offbeats and one octave higher on the downbeat. Each beat cuts off what is left of the previous one.',
-              ),
+              Text(tr('settings-audio-metronome-help')),
               const SizedBox(height: 28),
               Text(
-                'Device stream (read-only)',
+                tr('settings-audio-device-stream'),
                 style: Theme.of(context).textTheme.titleMedium,
               ),
               const SizedBox(height: 8),
               if (actual == null)
-                const Text('The active device stream is starting.')
+                Text(tr('settings-audio-device-stream-starting'))
               else ...[
-                Text('Output: ${actual.deviceName}'),
-                Text('Device sample rate: ${actual.sampleRate} Hz'),
                 Text(
-                  'Device callback buffer: ${actual.callbackBufferSize} frames',
+                  tr('settings-audio-device-output', {
+                    'device': actual.deviceName,
+                  }),
                 ),
-                Text('Channels: ${actual.channels}'),
+                Text(
+                  tr('settings-audio-device-sample-rate', {
+                    'value': actual.sampleRate,
+                  }),
+                ),
+                Text(
+                  tr('settings-audio-device-buffer', {
+                    'count': actual.callbackBufferSize,
+                  }),
+                ),
+                Text(
+                  tr('settings-audio-device-channels', {
+                    'count': actual.channels,
+                  }),
+                ),
               ],
             ],
           ),

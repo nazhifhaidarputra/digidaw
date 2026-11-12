@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:karbeat/core/l10n/localizer.dart';
 import 'package:karbeat/features/track/services/curve_sampler.dart';
 import 'package:karbeat/features/track/view/track_header.dart';
 import 'package:karbeat/src/rust/api/automation.dart';
@@ -95,7 +96,10 @@ class AutomationLaneHeader extends ConsumerWidget {
                     fontSize: 12,
                   ),
                   Text(
-                    "$minText to $maxText",
+                    tr('track-lane-range', {
+                      'minimum': minText,
+                      'maximum': maxText,
+                    }),
                     style: TextStyle(
                       color: colors.onSurfaceVariant,
                       fontSize: 9,
@@ -141,7 +145,10 @@ class AutomationLaneTitle extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
     return Tooltip(
-      message: '$sourceName › ${lane.label}',
+      message: tr('track-automation-source-lane', {
+        'sourceName': sourceName,
+        'lane': lane.label,
+      }),
       waitDuration: const Duration(milliseconds: 500),
       child: Text.rich(
         TextSpan(

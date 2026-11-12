@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:karbeat/app/providers/mixer_state.dart';
 import 'package:karbeat/app/providers/project_provider.dart';
+import 'package:karbeat/core/l10n/localizer.dart';
 import 'package:karbeat/features/mixer/services/routing_labels.dart';
 import 'package:karbeat/features/mixer/view/sidechain_target_picker.dart';
 import 'package:karbeat/src/rust/api/mixer.dart';
@@ -95,7 +96,9 @@ class _RoutingDialog extends ConsumerWidget {
         .toList();
 
     return AlertDialog(
-      title: Text('Routing · ${labels.channelName(source)}'),
+      title: Text(
+        tr('mixer-routing-title', {'source': labels.channelName(source)}),
+      ),
       titleTextStyle: TextStyle(
         color: colors.onSurface,
         fontSize: 16,
@@ -108,7 +111,7 @@ class _RoutingDialog extends ConsumerWidget {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              const _SectionHeader(title: 'OUTPUT'),
+              _SectionHeader(title: tr('mixer-output')),
               Row(
                 children: [
                   Expanded(
@@ -126,9 +129,9 @@ class _RoutingDialog extends ConsumerWidget {
                             value: node,
                             child: Text(labels.channelName(node)),
                           ),
-                        const DropdownMenuItem<UiRoutingNode?>(
+                        DropdownMenuItem<UiRoutingNode?>(
                           value: null,
-                          child: Text('None (unlinked)'),
+                          child: Text(tr('mixer-none-unlinked')),
                         ),
                       ],
                       onChanged: (node) => _setOutput(ref, node),
@@ -137,8 +140,10 @@ class _RoutingDialog extends ConsumerWidget {
                   const SizedBox(width: 8),
                   IconButton(
                     tooltip: output == null
-                        ? 'Link to master'
-                        : 'Unlink from ${labels.channelName(output.destination)}',
+                        ? tr('mixer-link-to-master')
+                        : tr('mixer-unlink-from', {
+                            'name': labels.channelName(output.destination),
+                          }),
                     icon: Icon(output == null ? Icons.link : Icons.link_off),
                     onPressed: () => _setOutput(
                       ref,
@@ -151,17 +156,16 @@ class _RoutingDialog extends ConsumerWidget {
                 Padding(
                   padding: const EdgeInsets.only(top: 6),
                   child: Text(
-                    'Unlinked: this channel is heard only through its sends '
-                    'and sidechains.',
+                    tr('mixer-unlinked-help'),
                     style: TextStyle(color: colors.tertiary, fontSize: 11),
                   ),
                 ),
               const SizedBox(height: 20),
               _SectionHeader(
-                title: 'SENDS',
+                title: tr('mixer-sends'),
                 action: PopupMenuButton<UiRoutingNode>(
                   enabled: sendChoices.isNotEmpty,
-                  tooltip: 'Add send',
+                  tooltip: tr('mixer-add-send'),
                   onSelected: (node) => _mixer(ref).updateRoutingCall(
                     src: source,
                     dest: node,
@@ -175,11 +179,11 @@ class _RoutingDialog extends ConsumerWidget {
                         child: Text(labels.channelName(node)),
                       ),
                   ],
-                  child: const _AddLabel(label: 'Add send'),
+                  child: _AddLabel(label: tr('mixer-add-send')),
                 ),
               ),
               if (sends.isEmpty)
-                const _EmptyLabel(text: 'No sends.')
+                _EmptyLabel(text: tr('mixer-no-sends'))
               else
                 for (final send in sends)
                   _RouteRow(
@@ -203,18 +207,14 @@ class _RoutingDialog extends ConsumerWidget {
                   ),
               const SizedBox(height: 20),
               _SectionHeader(
-                title: 'SIDECHAINS',
+                title: tr('mixer-sidechains'),
                 action: InkWell(
                   onTap: () => _addSidechain(context, ref),
-                  child: const _AddLabel(label: 'Add sidechain'),
+                  child: _AddLabel(label: tr('mixer-add-sidechain')),
                 ),
               ),
               if (sidechains.isEmpty)
-                const _EmptyLabel(
-                  text:
-                      'Not keying any plugin. Add one to duck another '
-                      'channel from this signal.',
-                )
+                _EmptyLabel(text: tr('mixer-no-sidechains-help'))
               else
                 for (final sidechain in sidechains)
                   if (sidechain.destination case UiRoutingNode_PluginSidechain(
@@ -245,7 +245,7 @@ class _RoutingDialog extends ConsumerWidget {
       actions: [
         TextButton(
           onPressed: () => Navigator.pop(context),
-          child: const Text('Close'),
+          child: Text(tr('common-close')),
         ),
       ],
     );
@@ -383,9 +383,9 @@ class _RouteRowState extends State<_RouteRow> {
                 ),
               ),
               Tooltip(
-                message: 'Tap the signal before the source fader',
+                message: tr('mixer-pre-fader-help'),
                 child: FilterChip(
-                  label: const Text('PRE'),
+                  label: Text(tr('mixer-pre')),
                   labelStyle: const TextStyle(fontSize: 10),
                   visualDensity: VisualDensity.compact,
                   selected: preFader,
@@ -396,7 +396,7 @@ class _RouteRowState extends State<_RouteRow> {
                 ),
               ),
               IconButton(
-                tooltip: 'Remove',
+                tooltip: tr('common-remove'),
                 icon: Icon(Icons.close, size: 18, color: colors.error),
                 onPressed: widget.onRemove,
               ),

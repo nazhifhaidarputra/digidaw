@@ -1,3 +1,4 @@
+import 'package:karbeat/core/l10n/localizer.dart';
 import 'package:karbeat/src/rust/api/project.dart' show BitDepthDTO;
 
 enum BitPerSample { b8, b16, b24, b32 }
@@ -6,11 +7,13 @@ enum TailHandling { cutRemainder, leaveRemainder, wrapRemainder }
 
 /// Part of the song an export renders.
 enum ExportRangeMode {
-  wholeSong('Whole song'),
-  loopRegion('Loop region');
+  wholeSong,
+  loopRegion;
 
-  final String label;
-  const ExportRangeMode(this.label);
+  String get label => switch (this) {
+    ExportRangeMode.wholeSong => tr('workspace-export-range-whole-song'),
+    ExportRangeMode.loopRegion => tr('workspace-export-range-loop'),
+  };
 }
 
 enum SupportedAudioFormat { wav, mp3, ogg, flac }

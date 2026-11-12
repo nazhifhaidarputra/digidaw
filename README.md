@@ -2,7 +2,7 @@
 
 DigiDAW (formerly "Karbeat") is a clean, simple, and minimal Digital Audio Workstation (DAW). It pairs a Flutter frontend with a Rust audio engine, so the interface stays flexible while the real-time audio path stays predictable.
 
-The project is desktop-first today: **Linux x64 is the only released platform**. Windows and Android can be built from source, but are not released yet. macOS and iOS are not supported yet. Mobile is the long-term target, and the UI will be reworked for touch before mobile releases.
+The project is desktop-first today: **Linux x64 and Windows x64 are released**. Android can be built from source, but is not released yet. macOS and iOS are not supported yet. Mobile is the long-term target, and the UI will be reworked for touch before mobile releases.
 
 ## Features
 
@@ -20,6 +20,7 @@ The project is desktop-first today: **Linux x64 is the only released platform**.
 - **Reliability**: Auto-save, crash recovery, local crash reports, diagnostic logging, and a startup recovery prompt.
 - **Customization**: Light, dark, and Catppuccin themes, plus configurable keyboard shortcuts.
 - **Sample browsing**: A browser panel for dragging and dropping audio samples into the arrangement.
+- **Languages**: English, Indonesian, Japanese, French, Spanish, Portuguese, Dutch, Korean, Simplified Chinese, Italian, and German, chosen in Settings → General.
 
 ## Installation
 
@@ -107,6 +108,7 @@ _(Want to contribute? Check out our developer notes below!)_
 - [GitHub Issues](https://github.com/nazhifhaidarputra/digidaw/issues): report bugs and request features
 - [Crash Error Code Guide](docs/CODE_ERROR_GUIDE.md): what each crash report code means
 - [Audio Plugin Manifest Info](assets/manifests/audio-plugins/PLUGIN_MANIFEST_INFO.md): how first-party plugin manifests are written
+- [Translating DigiDAW](rust/karbeat-l10n/README.md): how to translate the app, add messages, and add a language
 
 Comprehensive user and developer documentation is still being drafted.
 
@@ -114,7 +116,7 @@ Comprehensive user and developer documentation is still being drafted.
 
 Thank you for your interest in DigiDAW! Here are a few things to keep in mind:
 
-- **Current Focus**: **Linux** is the primary development and release platform. Windows and Android build from source, but need more testing before they are released.
+- **Current Focus**: **Linux** is the primary development platform. Linux and Windows are released; Android builds from source, but needs more testing before it is released.
 - **Future Platforms**: macOS and iOS support will follow after the desktop core and mobile UI are ready. The UI needs a dedicated touch-first pass before mobile releases.
 - **Plugin Host Support**: VST3 and CLAP are hosted on Windows and Linux, and LV2 on Linux. AU support is planned for macOS. Android plugin hosting is still being explored.
 - **Plugin Development**: First-party plugins live in `rust/karbeat-plugins` and implement the `AudioPlugin` trait from the Karbeat Plugin API. Their manifests live in `assets/manifests/audio-plugins/`, and the generated Flutter bindings come from those manifests.

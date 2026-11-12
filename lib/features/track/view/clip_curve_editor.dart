@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:karbeat/core/l10n/localizer.dart';
 import 'package:karbeat/core/widgets/context_menu.dart';
 import 'package:karbeat/features/track/services/curve_sampler.dart';
 import 'package:karbeat/features/track/view/automation_point_context_menu.dart';
@@ -275,8 +276,12 @@ class _ClipCurveEditorState extends ConsumerState<ClipCurveEditor> {
   /// Text of the tension being dragged: the count for count-driven curves.
   String _tensionText(CurveSampler sampler, UiCurvePoint point) =>
       sampler.traits(point.curveType).tensionIsCount
-      ? 'Count ${sampler.tensionCount(point.tension)}'
-      : 'Tension ${point.tension.toStringAsFixed(2)}';
+      ? tr('track-tension-count', {
+          'count': sampler.tensionCount(point.tension),
+        })
+      : tr('track-tension-value', {
+          'tension': point.tension.toStringAsFixed(2),
+        });
 
   /// One ring per segment whose curve responds to tension, on the curve at the
   /// segment's midpoint.
@@ -382,7 +387,7 @@ class _ClipCurveEditorState extends ConsumerState<ClipCurveEditor> {
     final text = await showDialog<String>(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        title: const Text('Set value'),
+        title: Text(tr('track-set-value')),
         content: TextField(
           controller: controller,
           autofocus: true,
@@ -395,11 +400,11 @@ class _ClipCurveEditorState extends ConsumerState<ClipCurveEditor> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(dialogContext),
-            child: const Text('Cancel'),
+            child: Text(tr('common-cancel')),
           ),
           ElevatedButton(
             onPressed: () => Navigator.pop(dialogContext, controller.text),
-            child: const Text('Set'),
+            child: Text(tr('track-set')),
           ),
         ],
       ),
@@ -416,19 +421,19 @@ class _ClipCurveEditorState extends ConsumerState<ClipCurveEditor> {
     final colors = Theme.of(context).colorScheme;
     showDawContextMenu(
       context: context,
-      title: 'Curve point',
+      title: tr('track-curve-point'),
       header: Text(
         widget.scale.format(point.value),
         style: TextStyle(color: colors.onSurfaceVariant, fontSize: 12),
       ),
       actions: [
         DawContextAction(
-          title: 'Set value',
+          title: tr('track-set-value'),
           icon: Icons.edit,
           onTap: () => _typeValue(index),
         ),
         DawContextAction.submenu(
-          title: 'Curve type',
+          title: tr('track-curve-type'),
           subtitle: automationCurveTypeLabel(point.curveType),
           icon: automationCurveTypeIcon(point.curveType),
           children: [
@@ -452,13 +457,13 @@ class _ClipCurveEditorState extends ConsumerState<ClipCurveEditor> {
             sampler.traits(point.curveType).supportsTension)
           DawContextAction(
             title: sampler.traits(point.curveType).tensionIsCount
-                ? 'Reset count'
-                : 'Reset tension',
+                ? tr('track-reset-count')
+                : tr('track-reset-tension'),
             icon: Icons.restart_alt,
             onTap: () => _replacePoint(index, point.copyWith(tension: 0)),
           ),
         DawContextAction(
-          title: 'Delete point',
+          title: tr('track-delete-point'),
           icon: Icons.delete_outline,
           isDestructive: true,
           onTap: () => _deletePoint(index),
@@ -520,7 +525,7 @@ class _ClipCurveEditorState extends ConsumerState<ClipCurveEditor> {
               if (points.isEmpty)
                 Center(
                   child: Text(
-                    'Double-click to add the first point',
+                    tr('track-curve-add-first-point'),
                     style: TextStyle(
                       color: colors.onSurfaceVariant,
                       fontSize: 12,

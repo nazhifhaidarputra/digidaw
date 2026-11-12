@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:karbeat/core/l10n/localizer.dart';
 import 'package:karbeat/core/utils/result_type.dart';
 import 'package:karbeat/features/plugins/models/plugin_browser_entry.dart';
 import 'package:karbeat/features/plugins/services/audio_plugins_service.dart';
@@ -14,7 +15,7 @@ Future<void> showPluginBrowserDialog({
   required BuildContext context,
   required KarbeatPluginType pluginType,
   required AddPluginCallback onAdd,
-  String actionLabel = 'Add Plugin',
+  String? actionLabel,
 }) {
   return showDialog<void>(
     context: context,
@@ -31,14 +32,14 @@ class PluginBrowserDialog extends ConsumerStatefulWidget {
     super.key,
     required this.pluginType,
     required this.onAdd,
-    this.actionLabel = 'Add Plugin',
+    this.actionLabel,
   });
 
   final KarbeatPluginType pluginType;
   final AddPluginCallback onAdd;
 
   /// Label of the confirm button, such as "Replace" when swapping a plugin.
-  final String actionLabel;
+  final String? actionLabel;
 
   @override
   ConsumerState<PluginBrowserDialog> createState() =>
@@ -55,8 +56,8 @@ class _PluginBrowserDialogState extends ConsumerState<PluginBrowserDialog> {
   Widget build(BuildContext context) {
     final pluginState = ref.watch(audioPluginProvider);
     final title = widget.pluginType == KarbeatPluginType.generator
-        ? 'Instrument Browser'
-        : 'Effect Browser';
+        ? tr('plugins-instrument-browser')
+        : tr('plugins-effect-browser');
 
     return AlertDialog(
       title: Text(title),
@@ -70,9 +71,9 @@ class _PluginBrowserDialogState extends ConsumerState<PluginBrowserDialog> {
               key: const ValueKey('plugin-browser-search'),
               autofocus: true,
               enabled: !_isAdding,
-              decoration: const InputDecoration(
+              decoration: InputDecoration(
                 prefixIcon: Icon(Icons.search),
-                labelText: 'Search plugins',
+                labelText: tr('plugins-search-plugins'),
                 border: OutlineInputBorder(),
               ),
               onChanged: (value) => setState(() => _query = value),
@@ -89,8 +90,8 @@ class _PluginBrowserDialogState extends ConsumerState<PluginBrowserDialog> {
                     _query,
                   );
                   if (entries.isEmpty) {
-                    return const Center(
-                      child: Text('No matching plugins found.'),
+                    return Center(
+                      child: Text(tr('plugins-no-matching-plugins-found')),
                     );
                   }
                   return ListView.separated(
@@ -133,8 +134,8 @@ class _PluginBrowserDialogState extends ConsumerState<PluginBrowserDialog> {
                                 'plugin-favorite-${entry.favoriteKey}',
                               ),
                               tooltip: favorite
-                                  ? 'Remove from favorites'
-                                  : 'Add to favorites',
+                                  ? tr('plugins-favorite-remove')
+                                  : tr('plugins-favorite-add'),
                               onPressed: _isAdding || favoritePending
                                   ? null
                                   : () => unawaited(
@@ -185,7 +186,7 @@ class _PluginBrowserDialogState extends ConsumerState<PluginBrowserDialog> {
       actions: [
         TextButton(
           onPressed: _isAdding ? null : () => Navigator.pop(context),
-          child: const Text('Cancel'),
+          child: Text(tr('common-cancel')),
         ),
         FilledButton.icon(
           key: const ValueKey('add-selected-plugin'),
@@ -198,7 +199,11 @@ class _PluginBrowserDialogState extends ConsumerState<PluginBrowserDialog> {
                   child: CircularProgressIndicator(strokeWidth: 2),
                 )
               : const Icon(Icons.add),
-          label: Text(_isAdding ? 'Adding…' : widget.actionLabel),
+          label: Text(
+            _isAdding
+                ? tr('plugins-adding')
+                : widget.actionLabel ?? tr('plugins-add-plugin'),
+          ),
         ),
       ],
     );

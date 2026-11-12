@@ -1,6 +1,7 @@
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
+import 'package:karbeat/core/l10n/localizer.dart';
 import 'package:karbeat/features/setting/services/cover_art_service.dart';
 
 /// Lets the user pan and zoom an image inside a square frame.
@@ -67,7 +68,7 @@ class _CoverCropDialogState extends State<CoverCropDialog> {
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
     return AlertDialog(
-      title: const Text('Crop cover'),
+      title: Text(tr('settings-cover-crop-title')),
       content: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -103,7 +104,7 @@ class _CoverCropDialogState extends State<CoverCropDialog> {
           ),
           const SizedBox(height: 12),
           Text(
-            'Drag to move, scroll or pinch to zoom',
+            tr('settings-cover-crop-help'),
             style: TextStyle(color: colors.onSurfaceVariant, fontSize: 12),
           ),
         ],
@@ -111,12 +112,12 @@ class _CoverCropDialogState extends State<CoverCropDialog> {
       actions: [
         TextButton(
           onPressed: () => Navigator.of(context).pop(),
-          child: const Text('Cancel'),
+          child: Text(tr('common-cancel')),
         ),
         FilledButton(
           key: const ValueKey('cover-crop-confirm'),
           onPressed: _confirm,
-          child: const Text('Use image'),
+          child: Text(tr('settings-cover-crop-use')),
         ),
       ],
     );

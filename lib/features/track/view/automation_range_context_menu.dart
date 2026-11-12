@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:karbeat/core/l10n/localizer.dart';
 import 'package:karbeat/core/widgets/context_menu.dart';
 import 'package:karbeat/features/track/models/automation_curve_template.dart';
 import 'package:karbeat/features/track/models/automation_lane_clipboard.dart';
@@ -26,30 +27,30 @@ Future<void> showAutomationRangeContextMenu({
 
   await showDawContextMenu(
     context: context,
-    title: 'Range: ${lane.label}',
+    title: tr('track-range', {'lane': lane.label}),
     header: Text(
-      'Ticks ${range.$1} to ${range.$2}',
+      tr('track-range-ticks', {'start': range.$1, 'end': range.$2}),
       style: TextStyle(color: colors.onSurfaceVariant, fontSize: 12),
     ),
     actions: [
       DawContextAction(
-        title: 'Copy curve',
+        title: tr('track-copy-curve'),
         icon: Icons.copy,
         onTap: () => editor.copySelection(laneId),
       ),
       DawContextAction(
-        title: 'Cut curve',
+        title: tr('track-cut-curve'),
         icon: Icons.content_cut,
         onTap: () => editor.cutSelection(laneId),
       ),
       DawContextAction(
-        title: 'Save as template…',
+        title: tr('track-save-as-template'),
         icon: Icons.bookmark_add_outlined,
         onTap: () => saveRequested = true,
       ),
       if (editorState.clipboard is AutomationLanePointClipboardCurve)
         DawContextAction(
-          title: 'Paste curve to fit range',
+          title: tr('track-paste-curve-to-fit-range'),
           icon: Icons.content_paste,
           onTap: () => editor.pasteCurve(
             laneId: laneId,
@@ -59,7 +60,7 @@ Future<void> showAutomationRangeContextMenu({
         ),
       ...automationTemplateActions(
         ref: ref,
-        title: 'Insert template to fit range',
+        title: tr('track-insert-template-to-fit-range'),
         onInsert: (template) => editor.insertTemplate(
           laneId: laneId,
           atTick: range.$1,
@@ -68,12 +69,12 @@ Future<void> showAutomationRangeContextMenu({
         ),
       ),
       DawContextAction(
-        title: 'Clear selection',
+        title: tr('track-clear-selection'),
         icon: Icons.deselect,
         onTap: editor.clearSelection,
       ),
       DawContextAction(
-        title: 'Delete points in range',
+        title: tr('track-delete-points-in-range'),
         icon: Icons.delete_outline,
         isDestructive: true,
         onTap: () => editor.deleteSelection(laneId),
@@ -84,7 +85,7 @@ Future<void> showAutomationRangeContextMenu({
   if (saveRequested && context.mounted) {
     final name = await showAutomationTemplateNameDialog(
       context: context,
-      title: 'Save curve as template',
+      title: tr('track-save-curve-as-template'),
       initialName: lane.label,
     );
     if (name != null) await editor.saveSelectionAsTemplate(laneId, name);
@@ -103,12 +104,15 @@ List<DawContextAction> automationTemplateActions({
   return [
     DawContextAction.submenu(
       title: title,
-      subtitle: '${templates.length} saved',
+      subtitle: tr('track-templates-saved', {'count': templates.length}),
       icon: Icons.bookmarks_outlined,
       children: [
         for (final template in templates)
           DawContextAction(
-            title: '${template.name} (${template.points.length} points)',
+            title: tr('track-template-points', {
+              'template': template.name,
+              'pointsCount': template.points.length,
+            }),
             icon: Icons.show_chart,
             onTap: () => onInsert(template),
           ),

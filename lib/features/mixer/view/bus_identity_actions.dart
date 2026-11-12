@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:karbeat/app/providers/mixer_state.dart';
+import 'package:karbeat/core/l10n/localizer.dart';
 import 'package:karbeat/core/widgets/color_picker_dialog.dart';
 import 'package:karbeat/core/widgets/context_menu.dart';
 import 'package:karbeat/core/widgets/rename_dialog.dart';
@@ -16,13 +17,13 @@ List<DawContextAction> busIdentityActions({
 }) {
   return [
     DawContextAction(
-      title: 'Rename Bus',
+      title: tr('mixer-rename-bus'),
       icon: Icons.edit,
       onTap: () async {
         final newName = await showRenameDialog(
           context,
-          title: 'Rename Bus',
-          label: 'New bus name',
+          title: tr('mixer-rename-bus'),
+          label: tr('mixer-new-bus-name'),
           currentName: name,
         );
         if (newName == null) return;
@@ -32,13 +33,13 @@ List<DawContextAction> busIdentityActions({
       },
     ),
     DawContextAction(
-      title: 'Change Color',
+      title: tr('mixer-change-color'),
       icon: Icons.color_lens,
       onTap: () async {
         final selected = await showColorPickerDialog(
           context,
           color,
-          title: 'Select Bus Color',
+          title: tr('mixer-select-bus-color'),
         );
         if (selected == null || selected.toARGB32() == color.toARGB32()) {
           return;

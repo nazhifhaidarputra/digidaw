@@ -10,6 +10,7 @@ import 'package:karbeat/app/providers/piano_roll_state.dart';
 import 'package:karbeat/app/providers/notification_provider.dart';
 import 'package:karbeat/app/providers/project_provider.dart';
 import 'package:karbeat/app/providers/transport_state.dart';
+import 'package:karbeat/core/l10n/localizer.dart';
 import 'package:karbeat/core/widgets/context_menu.dart';
 import 'package:karbeat/core/widgets/overlap_shade.dart';
 import 'package:karbeat/features/piano_roll/view/scrollable_virtual_keyboard.dart';
@@ -669,13 +670,15 @@ class PianoRollScreenState extends ConsumerState<PianoRollScreen> {
         mainAxisSize: MainAxisSize.min,
         children: [
           Text(
-            "No Pattern Selected",
+            tr('piano-roll-no-pattern-selected'),
             style: TextStyle(color: colors.onSurface),
           ),
           const SizedBox(height: 12),
           DropdownButton<int>(
             hint: Text(
-              entries.isEmpty ? "No Patterns Available" : "Choose a Pattern",
+              entries.isEmpty
+                  ? tr('piano-roll-no-patterns')
+                  : tr('piano-roll-choose-pattern'),
               style: TextStyle(color: colors.onSurfaceVariant),
             ),
             menuMaxHeight: 320,
@@ -740,7 +743,7 @@ class PianoRollScreenState extends ConsumerState<PianoRollScreen> {
     if (pattern == null) {
       return Center(
         child: Text(
-          "Pattern not found",
+          tr('piano-roll-pattern-not-found'),
           style: TextStyle(color: colors.onSurface),
         ),
       );
@@ -1116,7 +1119,9 @@ class PianoRollScreenState extends ConsumerState<PianoRollScreen> {
                                                         ref: ref,
                                                       ),
                                                       DawContextAction(
-                                                        title: "Paste",
+                                                        title: tr(
+                                                          'piano-roll-paste',
+                                                        ),
                                                         icon: Icons.paste,
                                                         onTap: () {
                                                           if (_lastInteractionPos ==
@@ -1375,7 +1380,7 @@ class PianoRollScreenState extends ConsumerState<PianoRollScreen> {
                                     FloatingContextPanel(
                                       actions: [
                                         DawContextAction(
-                                          title: "More…",
+                                          title: tr('piano-roll-more'),
                                           icon: Icons.more_horiz,
                                           onTap: () => showDawContextMenu(
                                             context: context,
@@ -1389,7 +1394,7 @@ class PianoRollScreenState extends ConsumerState<PianoRollScreen> {
                                           ),
                                         ),
                                         DawContextAction(
-                                          title: "Delete",
+                                          title: tr('common-delete'),
                                           onTap: () {
                                             ref
                                                 .read(
@@ -1408,7 +1413,7 @@ class PianoRollScreenState extends ConsumerState<PianoRollScreen> {
                                           },
                                         ),
                                         DawContextAction(
-                                          title: "Copy",
+                                          title: tr('piano-roll-copy'),
                                           onTap: () async {
                                             await ref
                                                 .read(
@@ -1422,7 +1427,7 @@ class PianoRollScreenState extends ConsumerState<PianoRollScreen> {
                                           },
                                         ),
                                         DawContextAction(
-                                          title: "Cut",
+                                          title: tr('piano-roll-cut'),
                                           onTap: () async {
                                             await ref
                                                 .read(
@@ -1440,8 +1445,9 @@ class PianoRollScreenState extends ConsumerState<PianoRollScreen> {
                                             .read(pianoRollProvider.notifier)
                                             .clearNoteSelection();
                                       },
-                                      title:
-                                          "${selectedNoteIds.length} Note(s)",
+                                      title: tr('piano-roll-notes-count', {
+                                        'count': selectedNoteIds.length,
+                                      }),
                                     ),
                                   // Same draggable playhead as the song timeline,
                                   // reading and seeking the pattern position.
@@ -1520,12 +1526,12 @@ class _PianoRollBottomPanelView extends StatelessWidget {
             child: Row(
               children: [
                 _BottomPanelTab(
-                  label: 'Keyboard',
+                  label: tr('piano-roll-keyboard'),
                   selected: selectedPanel == _PianoRollBottomPanel.keyboard,
                   onTap: () => onPanelChanged(_PianoRollBottomPanel.keyboard),
                 ),
                 _BottomPanelTab(
-                  label: 'Note parameters',
+                  label: tr('piano-roll-note-parameters'),
                   selected:
                       selectedPanel == _PianoRollBottomPanel.noteParameters,
                   onTap: () =>
@@ -1669,16 +1675,16 @@ class _PianoRollToolbar extends ConsumerWidget {
                   ? notifier.togglePatternPlayback
                   : null,
               tooltip: previewGeneratorId == null
-                  ? 'Choose a generator to play this pattern'
+                  ? tr('piano-roll-choose-generator')
                   : isPatternPlaying
-                  ? 'Pause (Space)'
-                  : 'Play pattern (Space)',
+                  ? tr('piano-roll-pause')
+                  : tr('piano-roll-play'),
               iconSize: 24,
             ),
             IconButton(
               icon: Icon(Icons.stop, color: colors.onSurfaceVariant),
               onPressed: notifier.stopPatternPlayback,
-              tooltip: 'Stop and rewind',
+              tooltip: tr('piano-roll-stop-and-rewind'),
               iconSize: 22,
             ),
             const SizedBox(width: 4),
@@ -1687,7 +1693,7 @@ class _PianoRollToolbar extends ConsumerWidget {
 
             // Pattern name, with a scrollable selector to switch patterns in place.
             Tooltip(
-              message: 'Switch pattern',
+              message: tr('piano-roll-switch-pattern'),
               child: DropdownButton<int>(
                 value: patterns.containsKey(patternId) ? patternId : null,
                 hint: Text(
@@ -1735,7 +1741,7 @@ class _PianoRollToolbar extends ConsumerWidget {
             // Tool buttons
             _ToolButton(
               icon: Icons.near_me,
-              label: 'Grab (Alt+1)',
+              label: tr('piano-roll-grab-alt-1'),
               isActive: selectedTool == PianoRollToolSelection.grab,
               onTap: () => ref
                   .read(pianoRollProvider.notifier)
@@ -1743,7 +1749,7 @@ class _PianoRollToolbar extends ConsumerWidget {
             ),
             _ToolButton(
               icon: Icons.edit,
-              label: 'Draw: stamps the last selection (Alt+2)',
+              label: tr('piano-roll-draw-stamps-the-last-selection'),
               isActive: selectedTool == PianoRollToolSelection.draw,
               onTap: () => ref
                   .read(pianoRollProvider.notifier)
@@ -1751,7 +1757,7 @@ class _PianoRollToolbar extends ConsumerWidget {
             ),
             _ToolButton(
               icon: Icons.delete,
-              label: 'Delete (Alt+3)',
+              label: tr('piano-roll-delete-alt-3'),
               isActive: selectedTool == PianoRollToolSelection.delete,
               onTap: () => ref
                   .read(pianoRollProvider.notifier)
@@ -1759,7 +1765,7 @@ class _PianoRollToolbar extends ConsumerWidget {
             ),
             _ToolButton(
               icon: Icons.crop_free,
-              label: 'Select (Alt+4)',
+              label: tr('piano-roll-select-alt-4'),
               isActive: selectedTool == PianoRollToolSelection.select,
               onTap: () => ref
                   .read(pianoRollProvider.notifier)
@@ -1767,7 +1773,7 @@ class _PianoRollToolbar extends ConsumerWidget {
             ),
             _ToolButton(
               icon: Icons.settings_ethernet,
-              label: 'Select region: drag the ruler to loop (Alt+5)',
+              label: tr('piano-roll-select-region-drag-the-ruler'),
               isActive: selectedTool == PianoRollToolSelection.selectRegion,
               onTap: () => notifier.selectPianoRollTool(
                 PianoRollToolSelection.selectRegion,
@@ -1775,21 +1781,21 @@ class _PianoRollToolbar extends ConsumerWidget {
             ),
             _ToolButton(
               icon: Icons.content_cut,
-              label: 'Slice (Alt+6)',
+              label: tr('piano-roll-slice-alt-6'),
               isActive: selectedTool == PianoRollToolSelection.slice,
               onTap: () =>
                   notifier.selectPianoRollTool(PianoRollToolSelection.slice),
             ),
             _ToolButton(
               icon: Icons.swap_horiz,
-              label: 'Stretch selected notes (Alt+9)',
+              label: tr('piano-roll-stretch-selected-notes-alt-9'),
               isActive: selectedTool == PianoRollToolSelection.stretch,
               onTap: () =>
                   notifier.selectPianoRollTool(PianoRollToolSelection.stretch),
             ),
             _ToolButton(
               icon: Icons.pan_tool,
-              label: 'Pan (Alt+7)',
+              label: tr('piano-roll-pan-alt-7'),
               isActive: selectedTool == PianoRollToolSelection.pan,
               onTap: () => ref
                   .read(pianoRollProvider.notifier)
@@ -1797,7 +1803,7 @@ class _PianoRollToolbar extends ConsumerWidget {
             ),
             _ToolButton(
               icon: Icons.zoom_in,
-              label: 'Zoom (Alt+8)',
+              label: tr('piano-roll-zoom-alt-8'),
               isActive: selectedTool == PianoRollToolSelection.zoom,
               onTap: () => ref
                   .read(pianoRollProvider.notifier)
@@ -1811,25 +1817,25 @@ class _PianoRollToolbar extends ConsumerWidget {
             IconButton(
               icon: Icon(Icons.zoom_in, color: colors.onSurfaceVariant),
               onPressed: onZoomIn,
-              tooltip: 'Zoom In',
+              tooltip: tr('piano-roll-zoom-in'),
               iconSize: 20,
             ),
             IconButton(
               icon: Icon(Icons.zoom_out, color: colors.onSurfaceVariant),
               onPressed: onZoomOut,
-              tooltip: 'Zoom Out',
+              tooltip: tr('piano-roll-zoom-out'),
               iconSize: 20,
             ),
             IconButton(
               icon: Icon(Icons.unfold_less, color: colors.onSurfaceVariant),
               onPressed: () => notifier.scaleKeyHeight(1 / 1.15),
-              tooltip: 'Shorter note rows (Alt+scroll)',
+              tooltip: tr('piano-roll-shorter-note-rows-alt-scroll'),
               iconSize: 20,
             ),
             IconButton(
               icon: Icon(Icons.unfold_more, color: colors.onSurfaceVariant),
               onPressed: () => notifier.scaleKeyHeight(1.15),
-              tooltip: 'Taller note rows (Alt+scroll)',
+              tooltip: tr('piano-roll-taller-note-rows-alt-scroll'),
               iconSize: 20,
             ),
             IconButton(
@@ -1839,14 +1845,14 @@ class _PianoRollToolbar extends ConsumerWidget {
                 title: pianoRollNoteActionsTitle(ref.read(pianoRollProvider)),
                 actions: pianoRollNoteActions(context: context, ref: ref),
               ),
-              tooltip: 'Note tools: quantize, legato, chop, transpose…',
+              tooltip: tr('piano-roll-note-tools-quantize-legato-chop'),
               iconSize: 20,
             ),
             const SizedBox(width: 8),
 
             // Grid: the lines drawn behind the notes.
             Text(
-              'Grid ',
+              tr('piano-roll-grid-label'),
               style: TextStyle(color: colors.onSurfaceVariant, fontSize: 12),
             ),
             DropdownButton<GridSize>(
@@ -1864,9 +1870,9 @@ class _PianoRollToolbar extends ConsumerWidget {
 
             // Step: what drawing, moving, and resizing snap to.
             Tooltip(
-              message: 'Snap step for drawing and moving notes',
+              message: tr('piano-roll-snap-step-for-drawing-and'),
               child: Text(
-                'Step ',
+                tr('piano-roll-step-label'),
                 style: TextStyle(color: colors.onSurfaceVariant, fontSize: 12),
               ),
             ),
@@ -1876,9 +1882,9 @@ class _PianoRollToolbar extends ConsumerWidget {
               style: TextStyle(color: colors.onSurface, fontSize: 12),
               underline: const SizedBox(),
               items: [
-                const DropdownMenuItem<GridSize?>(
+                DropdownMenuItem<GridSize?>(
                   value: null,
-                  child: Text('Grid'),
+                  child: Text(tr('piano-roll-grid')),
                 ),
                 for (final size in GridSize.values)
                   DropdownMenuItem<GridSize?>(
@@ -1894,20 +1900,23 @@ class _PianoRollToolbar extends ConsumerWidget {
 
             // Generator dropdown
             Text(
-              'Generator: ',
+              tr('piano-roll-generator-label'),
               style: TextStyle(color: colors.onSurfaceVariant, fontSize: 12),
             ),
             DropdownButton<int?>(
               value: previewGeneratorId,
               hint: Text(
-                'Select',
+                tr('workspace-tool-select'),
                 style: TextStyle(color: colors.onSurfaceVariant),
               ),
               dropdownColor: colors.surfaceContainerHigh,
               style: TextStyle(color: colors.onSurface, fontSize: 12),
               underline: const SizedBox(),
               items: [
-                const DropdownMenuItem<int?>(value: null, child: Text('None')),
+                DropdownMenuItem<int?>(
+                  value: null,
+                  child: Text(tr('common-none')),
+                ),
                 ...generators.entries.map(
                   (entry) => DropdownMenuItem<int?>(
                     value: entry.key,
@@ -1916,7 +1925,7 @@ class _PianoRollToolbar extends ConsumerWidget {
                       final name = switch (instanceType) {
                         UiGeneratorInstanceType_Plugin(:final field0) =>
                           field0.label,
-                        _ => "Sampler",
+                        _ => tr('app-automation-sampler'),
                       };
                       return name;
                     }()),
@@ -1954,8 +1963,8 @@ class _PianoRollToolbar extends ConsumerWidget {
                     )
                   : null,
               tooltip: previewPlugin == null
-                  ? 'Choose a plugin generator to open its screen'
-                  : 'Open plugin screen',
+                  ? tr('piano-roll-open-plugin-unavailable')
+                  : tr('piano-roll-open-plugin'),
               iconSize: 20,
             ),
           ],

@@ -47,6 +47,7 @@ DigiDAW follows a feature-driven modular structure. Keep domain logic, UI screen
 | `karbeat-signalsmith` | Signalsmith Stretch bindings and safe wrappers. Compiles the vendored, header-only library behind a small C shim, and is the only crate that calls it. Used for real-time stretching and pitch shifting. |
 | `karbeat-flutter-ffi` | Flutter-facing DTOs and bridge functions. |
 | `karbeat-plugins` | First-party plugin implementations and manifest export. |
+| `karbeat-l10n` | User interface translations: the Fluent `.ftl` files of every language, message formatting, and system-language matching. |
 | `karbeat-host-api` | Low-level contracts for hosting external plugins. |
 | `karbeat-host` | Format-independent async host client, service, and static executor router. |
 | `karbeat-vst3`, `karbeat-clap`, `karbeat-lv2` | Plugin format executors. LV2 is hosted on Linux through `lilv` and `lv2-sys`, and CLAP on Linux and Windows through `clack-host`. VST3 and CLAP modules are probed by the `digidaw-plugin-scanner` helper, because loading them runs plugin code. Unfinished formats, and formats on platforms they do not support, keep concrete "unsupported" stubs. |
@@ -102,6 +103,12 @@ Run only the command that matches the source you changed.
 * Use `package:karbeat/...` imports for app code. Keep relative imports only where a file already uses them for nearby generated barrels.
 * Use Flutter Material widgets in the existing dark, minimal DAW style. Prefer dense, practical controls over marketing-style layouts.
 * **Composition over inheritance.** Avoid deep class hierarchies. Prefer small, reusable widgets, mixins, and helpers over large base classes.
+
+### User-facing text
+
+* Never hard-code user-facing text. Add the English message to `rust/karbeat-l10n/locales/en-US/` and show it with `tr('message-id')` from `package:karbeat/core/l10n/localizer.dart`.
+* Pass literal message ids, keep a whole sentence in one message, and pass counts as numbers so plurals work. [Translating DigiDAW](rust/karbeat-l10n/README.md) has the full rules.
+* Log messages and diagnostic error details stay in English.
 
 ### A passive UI
 

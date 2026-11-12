@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:freezed_annotation/freezed_annotation.dart';
 import 'package:karbeat/app/providers/project_provider.dart';
 import 'package:karbeat/app/providers/notification_provider.dart';
+import 'package:karbeat/core/l10n/localizer.dart';
 import 'package:karbeat/core/utils/logger.dart';
 import 'package:karbeat/core/utils/result_type.dart';
 import 'package:karbeat/features/plugins/models/plugin_browser_entry.dart';
@@ -45,13 +46,16 @@ class PluginNotifier extends AsyncNotifier<PluginState> {
     final favorites = await ref.read(pluginFavoritesServiceProvider).load();
     if (favorites case Error<ISet<String>>(error: final error)) {
       AppLogger.error('Failed to load plugin favorites: $error');
-      ref.notifyError(error, title: 'Could not load plugin favorites');
+      ref.notifyError(
+        error,
+        title: tr('plugins-could-not-load-plugin-favorites'),
+      );
     }
 
     final refreshed = await _loadRegistry();
     if (refreshed case Error<PluginRegistry>(error: final error)) {
       AppLogger.error('Failed to initialize plugin registry: $error');
-      ref.notifyError(error, title: 'Could not load plugins');
+      ref.notifyError(error, title: tr('plugins-could-not-load-plugins'));
     }
     return PluginState(
       registry: refreshed.isOk() ? refreshed.ok() : const PluginRegistry(),
@@ -120,7 +124,10 @@ class PluginNotifier extends AsyncNotifier<PluginState> {
     final refreshed = await _loadRegistry();
     if (refreshed case Error<PluginRegistry>(error: final error)) {
       AppLogger.error('Failed to refresh plugin registry: $error');
-      return ref.notifyErrorResult(error, title: 'Could not refresh plugins');
+      return ref.notifyErrorResult(
+        error,
+        title: tr('plugins-could-not-refresh-plugins'),
+      );
     }
     final current = await future;
     state = AsyncData(current.copyWith(registry: refreshed.ok()));
@@ -199,7 +206,7 @@ class PluginNotifier extends AsyncNotifier<PluginState> {
         AppLogger.error('Failed to save plugin favorites: $error');
         final notified = ref.notifyErrorResult(
           error,
-          title: 'Could not save plugin favorite',
+          title: tr('plugins-could-not-save-plugin-favorite'),
         );
         completer.complete(notified);
       } else {

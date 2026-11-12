@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:karbeat/core/l10n/localizer.dart';
 import 'package:karbeat/core/widgets/context_menu.dart';
 
 /// A widget wrapper class that enables a fine-grained input setter
@@ -122,7 +123,7 @@ class _FineGrainedDialogState<T extends num>
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
-      title: const Text('Exact Value'),
+      title: Text(tr('common-exact-value')),
       content: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -150,9 +151,9 @@ class _FineGrainedDialogState<T extends num>
       actions: [
         TextButton(
           onPressed: () => Navigator.of(context).pop(),
-          child: const Text('Cancel'),
+          child: Text(tr('common-cancel')),
         ),
-        ElevatedButton(onPressed: _submit, child: const Text('OK')),
+        ElevatedButton(onPressed: _submit, child: Text(tr('common-ok'))),
       ],
     );
   }
@@ -224,7 +225,7 @@ class ParameterInteractionWrapper<T extends num> extends StatelessWidget {
       title: parameterName,
       actions: [
         DawContextAction(
-          title: "Type in value...",
+          title: tr('common-type-value'),
           icon: Icons.keyboard,
           onTap: () {
             // Because the ContextMenuWrapper automatically pops the context menu
@@ -240,7 +241,7 @@ class ParameterInteractionWrapper<T extends num> extends StatelessWidget {
           },
         ),
         DawContextAction(
-          title: "Reset to default",
+          title: tr('common-reset-default'),
           icon: Icons.refresh,
           onTap: () {
             onChanged(defaultValue);
@@ -248,13 +249,13 @@ class ParameterInteractionWrapper<T extends num> extends StatelessWidget {
         ),
         if (onAddAutomation != null)
           DawContextAction(
-            title: "Create automation",
+            title: tr('common-automation-create'),
             icon: Icons.show_chart,
             onTap: onAddAutomation!,
           ),
         if (onRemoveAutomation != null)
           DawContextAction(
-            title: "Remove automation",
+            title: tr('common-automation-remove'),
             icon: Icons.cancel,
             onTap: onRemoveAutomation!,
           ),

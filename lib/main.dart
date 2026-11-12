@@ -10,6 +10,10 @@ import 'package:flutter/services.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  LicenseRegistry.addLicense(() async* {
+    final license = await rootBundle.loadString('assets/images/flags/LICENSE');
+    yield LicenseEntryWithLineBreaks(['flag-icons'], license);
+  });
 
   bool isDesktop =
       !kIsWeb && (Platform.isWindows || Platform.isLinux || Platform.isMacOS);

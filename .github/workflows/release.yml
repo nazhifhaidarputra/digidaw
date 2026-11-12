@@ -1,7 +1,7 @@
 name: Release
 
 # Publishes a GitHub release for a version tag, e.g. `git tag v0.6.0 && git push github v0.6.0`.
-# Only Linux x64 is built: it is the only platform that has been tested so far.
+# Linux x64 and Windows x64 are built in parallel; the release is published only when both succeed.
 on:
   push:
     tags: ["v*"]
@@ -25,6 +25,9 @@ jobs:
     # The bundle needs the glibc of the build machine or newer, so build on an older base.
     # CI uses the same one, so a break here shows up before a tag is pushed.
     runs-on: ubuntu-24.04
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      prerelease: ${{ steps.version.outputs.prerelease }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -45,10 +48,21 @@ jobs:
           esac
 
       # build_linux.sh installs the build packages itself but refuses to run without an audio server.
+      # The runner's DNS and the Ubuntu mirrors fail now and then, so apt retries each download
+      # (build_linux.sh's apt-get too, through the config file) and the install is tried three times.
       - name: Install PipeWire
+        timeout-minutes: 15
         run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends pipewire
+          printf 'Acquire::Retries "3";\nAcquire::http::Timeout "30";\nAcquire::https::Timeout "30";\n' \
+            | sudo tee /etc/apt/apt.conf.d/80-ci-retries >/dev/null
+          for attempt in 1 2 3; do
+            if sudo apt-get update && sudo apt-get install -y --no-install-recommends pipewire; then
+              exit 0
+            fi
+            echo "::warning::Installing PipeWire failed (attempt ${attempt} of 3); retrying in 60 s"
+            sleep 60
+          done
+          exit 1
 
       - uses: dtolnay/rust-toolchain@stable
 
@@ -61,26 +75,126 @@ jobs:
       - name: Build Linux release bundle
         run: ./scripts/builder/build_linux.sh
 
-      - name: Name and checksum archive
-        id: package
+      # The packages can be downloaded from the run's summary page before the release is published.
+      - name: Upload packages
+        uses: actions/upload-artifact@v4
+        with:
+          name: digidaw-${{ steps.version.outputs.version }}-linux-x64
+          path: |
+            dist/*.tar.gz*
+            dist/*.deb*
+            dist/*.rpm*
+            dist/*.AppImage*
+          if-no-files-found: error
+
+  windows:
+    name: Windows x64 release
+    runs-on: windows-2025
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.RELEASE_TAG }}
+
+      - name: Check tag matches project version
+        id: version
+        shell: bash
         run: |
-          archive="dist/digidaw-${{ steps.version.outputs.version }}-linux-x64.tar.gz"
-          mv dist/Digidaw-linux-x64.tar.gz "${archive}"
-          (cd dist && sha256sum "$(basename "${archive}")" > "$(basename "${archive}").sha256")
-          echo "archive=${archive}" >> "$GITHUB_OUTPUT"
+          version="$(sed -n 's/^version: *\([^ +]*\).*/\1/p' pubspec.yaml)"
+          if [ "v${version}" != "${RELEASE_TAG}" ]; then
+            echo "::error::Tag ${RELEASE_TAG} does not match pubspec.yaml version ${version}"
+            exit 1
+          fi
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-msvc
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          cache: true
+
+      # The runner image ships MSVC, LLVM and vcpkg. build_windows.ps1 needs clang.exe on PATH and
+      # libclang.dll for CPAL's ASIO bindings, vcpkg to build Rubber Band, and Inno Setup 6 to build
+      # the installer, which is installed here when the image lacks it.
+      - name: Point the build at LLVM, vcpkg and Inno Setup
+        shell: pwsh
+        run: |
+          if (-not (Test-Path (Join-Path ${env:ProgramFiles(x86)} "Inno Setup 6\ISCC.exe"))) {
+            choco install innosetup --yes --no-progress
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          }
+          $llvmBin = Join-Path $env:ProgramFiles "LLVM\bin"
+          if (-not (Test-Path (Join-Path $llvmBin "libclang.dll"))) {
+            Write-Error "LLVM was not found at $llvmBin"
+          }
+          Add-Content -Path $env:GITHUB_PATH -Value $llvmBin
+          Add-Content -Path $env:GITHUB_ENV -Value "LIBCLANG_PATH=$llvmBin"
+          Add-Content -Path $env:GITHUB_ENV -Value "VCPKG_ROOT=$env:VCPKG_INSTALLATION_ROOT"
+
+      # The script is written for Windows PowerShell, which developers run it with locally.
+      # It writes the installer and the zip, each with a .sha256, into dist\.
+      - name: Build Windows installer and bundle
+        shell: powershell
+        run: .\scripts\builder\build_windows.ps1 -RequireInstaller
+
+      - name: Upload packages
+        uses: actions/upload-artifact@v4
+        with:
+          name: digidaw-${{ steps.version.outputs.version }}-windows-x64
+          path: |
+            dist/digidaw-*-windows-x64-setup.exe*
+            dist/digidaw-*-windows-x64.zip*
+          if-no-files-found: error
+
+  release:
+    name: Publish release
+    needs: [linux, windows]
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Download packages
+        uses: actions/download-artifact@v4
+        with:
+          pattern: digidaw-${{ needs.linux.outputs.version }}-*
+          path: dist
+          merge-multiple: true
 
       - name: Write release notes
         run: |
           cat > dist/NOTES.md <<'EOF'
-          Linux x64 only — other platforms have not been tested yet.
+          Builds for Linux x64 and Windows x64. Each file has a `.sha256` checksum next to it.
 
-          ### Installing
-          Extract the archive into a folder and run `./install.sh` from it. It installs the
-          libraries DigiDAW needs (GTK 3, ALSA, FFTW, libsamplerate) with your package manager,
-          then adds DigiDAW to your app menu and a `digidaw` command.
+          ### Installing on Windows
+          Pick one. Both include everything DigiDAW needs, the Visual C++ runtime too.
 
-          To remove it, run `~/.local/share/digidaw/uninstall.sh` (or `./uninstall.sh` from the
-          archive). Add `--purge` to also delete settings and crash recovery data.
+          - **Installer:** run `digidaw-<version>-windows-x64-setup.exe`. It installs DigiDAW into
+            `C:\Program Files\DigiDAW`, adds it to the Start menu, and can be removed from
+            **Settings → Apps**. Installing a newer version over it upgrades it in place.
+          - **Without installing:** extract `digidaw-<version>-windows-x64.zip` into a folder and run
+            `karbeat.exe` from it. Keep the files together: the DLLs next to the exe are part of DigiDAW.
+
+          The builds are not signed yet, so Windows SmartScreen may warn the first time; choose
+          **More info → Run anyway**. WASAPI and ASIO audio devices are supported, and VST3 and CLAP
+          plugins are hosted. Settings are kept in your user profile, so uninstalling keeps them.
+
+          ### Installing on Linux
+          Pick one.
+
+          - **Debian, Ubuntu and derivatives:** `sudo apt install ./digidaw_<version>-1_amd64.deb`
+          - **Fedora:** `sudo dnf install ./digidaw-<version>-1.x86_64.rpm`
+          - **openSUSE:** `sudo zypper install ./digidaw-<version>-1.x86_64.rpm`
+          - **Any distribution, without installing:** `chmod +x DigiDAW-<version>-x86_64.AppImage`, then run it.
+            It needs GTK 3 and ALSA from the system, which every desktop has.
+          - **Any distribution, per user:** extract `digidaw-<version>-linux-x64.tar.gz` into a folder and
+            run `./install.sh` from it. It installs the libraries DigiDAW needs (GTK 3, ALSA, FFTW,
+            libsamplerate, lilv) with your package manager, then adds DigiDAW to your app menu and a
+            `digidaw` command. To remove it, run `~/.local/share/digidaw/uninstall.sh`; add `--purge`
+            to also delete settings and crash recovery data.
+
+          The .deb and .rpm install DigiDAW to `/opt/digidaw` with a `digidaw` command, and pull in the
+          libraries it needs. Remove them with your package manager.
 
           PipeWire (with its JACK compatibility layer) or JACK is recommended for low-latency audio.
 
@@ -94,7 +208,13 @@ jobs:
           name: DigiDAW ${{ env.RELEASE_TAG }}
           body_path: dist/NOTES.md
           generate_release_notes: true
-          prerelease: ${{ steps.version.outputs.prerelease }}
+          prerelease: ${{ needs.linux.outputs.prerelease }}
+          fail_on_unmatched_files: true
           files: |
-            ${{ steps.package.outputs.archive }}
-            ${{ steps.package.outputs.archive }}.sha256
+            dist/*.tar.gz
+            dist/*.deb
+            dist/*.rpm
+            dist/*.AppImage
+            dist/*.zip
+            dist/*.exe
+            dist/*.sha256

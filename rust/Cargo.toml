@@ -15,10 +15,11 @@ members = [
     "karbeat-macros",
     "karbeat-plugin-types", "karbeat-vst3", "karbeat-clap", "karbeat-lv2", "karbeat-signalsmith", "karbeat-audio",
     "karbeat-settings",
+    "karbeat-l10n",
 ]
 
 [workspace.package]
-version = "0.8.2"
+version = "0.9.0"
 edition = "2024"
 license = "GPL 3.0"
 
@@ -41,6 +42,7 @@ karbeat-utils = { path = "karbeat-utils" }
 karbeat-macros = { path = "karbeat-macros" }
 karbeat-plugin-types = { path = "karbeat-plugin-types" }
 karbeat-settings = { path = "karbeat-settings" }
+karbeat-l10n = { path = "karbeat-l10n" }
 anyhow = "1.0.103"
 cpal = { version = "0.17.3"}
 fastrand = "2.4"
@@ -65,6 +67,9 @@ indexmap = { version = "2.14.0", features = ["serde"] }
 itertools = { version = "^0.14" }
 num-complex = "0.4.6"
 parking_lot = "0.12.5"
+fluent = "0.17.0"
+fluent-syntax = "0.12.0"
+unic-langid = "0.9.6"
 memmap2 = "0.9.11"
 bytemuck = "1.25.0"
 tempfile = "3.27.0"

@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:karbeat/app/providers/piano_roll_state.dart';
 import 'package:karbeat/app/providers/transport_state.dart';
+import 'package:karbeat/core/l10n/localizer.dart';
 import 'package:karbeat/core/widgets/context_menu.dart';
 import 'package:karbeat/shared/enums/global.dart';
 import 'package:karbeat/src/rust/api/audio.dart';
@@ -115,15 +116,15 @@ class _PatternRulerState extends ConsumerState<PatternRuler> {
     );
 
     return ContextMenuWrapper(
-      title: 'Pattern loop',
+      title: tr('piano-roll-pattern-loop'),
       actions: [
         DawContextAction(
-          title: 'Clear loop region',
+          title: tr('piano-roll-clear-loop-region'),
           icon: Icons.clear,
           onTap: () => ref.read(pianoRollProvider.notifier).setLoopRegion(null),
         ),
         DawContextAction(
-          title: 'Select Region tool',
+          title: tr('piano-roll-select-region-tool'),
           icon: Icons.space_bar,
           onTap: () => ref
               .read(pianoRollProvider.notifier)

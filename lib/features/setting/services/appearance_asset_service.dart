@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:karbeat/core/l10n/localizer.dart';
 import 'package:karbeat/core/utils/result_type.dart';
 
 class AppearanceAssetService {
@@ -31,7 +32,7 @@ class AppearanceAssetService {
   Future<Result<String?>> pickBackgroundImage() {
     return attemptAsync(() async {
       final result = await FilePicker.pickFiles(
-        dialogTitle: 'Choose workspace background',
+        dialogTitle: tr('settings-appearance-background-dialog'),
         type: FileType.custom,
         allowedExtensions: const ['jpg', 'jpeg', 'png', 'webp'],
       );
@@ -42,7 +43,7 @@ class AppearanceAssetService {
   Future<Result<String?>> pickFontFile() {
     return attemptAsync(() async {
       final result = await FilePicker.pickFiles(
-        dialogTitle: 'Choose application font',
+        dialogTitle: tr('settings-appearance-font-dialog'),
         type: FileType.custom,
         allowedExtensions: const ['ttf', 'otf'],
       );
@@ -53,7 +54,7 @@ class AppearanceAssetService {
   Future<Result<String?>> pickColorThemeFile() {
     return attemptAsync(() async {
       final result = await FilePicker.pickFiles(
-        dialogTitle: 'Choose color theme',
+        dialogTitle: tr('settings-appearance-theme-dialog'),
         type: FileType.custom,
         allowedExtensions: const ['json'],
       );
@@ -71,7 +72,7 @@ class AppearanceAssetService {
       final file = File(source);
       if (await file.length() > maxColorThemeFileBytes) {
         throw FileSystemException(
-          'The color theme file is larger than 1 MB',
+          tr('settings-appearance-theme-too-large'),
           source,
         );
       }

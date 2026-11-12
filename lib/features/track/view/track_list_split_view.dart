@@ -382,7 +382,7 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
         child: Row(
           children: [
             Text(
-              "Snap to Grid",
+              tr('workspace-snap-to-grid'),
               style: TextStyle(color: colors.onSurfaceVariant, fontSize: 12),
             ),
             const SizedBox(width: 8),
@@ -407,17 +407,17 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
             const SizedBox(width: 16),
             _buildToolbarToggle(
               icon: Icons.vertical_split,
-              label: 'Right Panel',
+              label: tr('track-right-panel'),
               isActive: workspaceState.isRightPanelExpanded,
               onPressed: () =>
                   ref.read(workspaceStateProvider.notifier).toggleRightPanel(),
             ),
             const SizedBox(width: 8),
             Tooltip(
-              message: 'Resizing audio clips stretches their audio',
+              message: tr('track-resizing-audio-clips-stretches-their'),
               child: _buildToolbarToggle(
                 icon: Icons.open_in_full,
-                label: 'Stretch',
+                label: tr('track-stretch'),
                 isActive: workspaceState.resizeStretches,
                 onPressed: () => ref
                     .read(workspaceStateProvider.notifier)
@@ -426,7 +426,7 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
             ),
             const SizedBox(width: 8),
             Text(
-              "Move Step",
+              tr('track-move-step'),
               style: TextStyle(color: colors.onSurfaceVariant, fontSize: 12),
             ),
             const SizedBox(width: 8),
@@ -562,7 +562,7 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
           alignment: Alignment.centerLeft,
           padding: const EdgeInsets.only(left: 10),
           child: Text(
-            "Tracks",
+            tr('workspace-view-tracks'),
             style: TextStyle(color: colors.onSurface, fontSize: 12),
           ),
         ),
@@ -763,7 +763,7 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
             MixerChannelContextMenu(
               target: target,
               child: _ChannelTitleRow(
-                title: "Master Track",
+                title: tr('track-master-track'),
                 target: target,
                 rainbow: true,
               ),
@@ -935,10 +935,10 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
                               builder: (context, width, content) =>
                                   SizedBox(width: width, child: content),
                               child: ContextMenuWrapper(
-                                title: "Track Options",
+                                title: tr('track-track-options'),
                                 actions: [
                                   DawContextAction(
-                                    title: "Paste",
+                                    title: tr('track-paste'),
                                     icon: Icons.paste,
                                     // The track slot under the pointer
                                     // records its own track and tick on
@@ -1034,7 +1034,7 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
         return FloatingContextPanel(
           actions: [
             DawContextAction(
-              title: "Copy",
+              title: tr('track-copy'),
               icon: Icons.copy,
               onTap: () async {
                 final trackId = ref
@@ -1050,7 +1050,7 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
               },
             ),
             DawContextAction(
-              title: "Cut",
+              title: tr('track-cut'),
               icon: Icons.cut,
               onTap: () async {
                 final trackId = ref
@@ -1067,7 +1067,7 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
               },
             ),
             DawContextAction(
-              title: "Delete",
+              title: tr('common-delete'),
               icon: Icons.delete,
               isDestructive: true,
               onTap: () async {
@@ -1078,8 +1078,7 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
           ],
           onClose: () =>
               ref.read(trackListStateProvider.notifier).deselectAllClips(),
-          title:
-              "${selectedClipIds.length} Clip${selectedClipIds.length == 1 ? '' : 's'}",
+          title: tr('track-clips-selected', {'count': selectedClipIds.length}),
         );
       },
     );
@@ -1201,7 +1200,10 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
         child: TextButton.icon(
           onPressed: () => _showAddTrackDialog(context),
           icon: Icon(Icons.add, color: colors.primary),
-          label: Text("Add New Track", style: TextStyle(color: colors.primary)),
+          label: Text(
+            tr('track-add-new-track'),
+            style: TextStyle(color: colors.primary),
+          ),
         ),
       ),
     );
@@ -1211,7 +1213,7 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
     showDialog(
       context: context,
       builder: (ctx) => SimpleDialog(
-        title: const Text("Add New Track"),
+        title: Text(tr('track-add-new-track')),
         children: [
           SimpleDialogOption(
             onPressed: () async {
@@ -1234,7 +1236,7 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
                   color: Theme.of(ctx).colorScheme.primary,
                 ),
                 const SizedBox(width: 10),
-                const Text("Audio Track"),
+                Text(tr('track-audio-track')),
               ],
             ),
           ),
@@ -1248,7 +1250,7 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
               children: [
                 Icon(Icons.piano, color: Theme.of(ctx).colorScheme.tertiary),
                 const SizedBox(width: 10),
-                const Text("Add generator..."),
+                Text(tr('track-add-generator')),
               ],
             ),
           ),
@@ -1503,7 +1505,7 @@ class AutomationExpandBar extends StatelessWidget {
             Icon(Icons.show_chart, color: trackColor, size: 12),
             const SizedBox(width: 6),
             Text(
-              '$laneCount automation lane${laneCount == 1 ? '' : 's'}',
+              tr('track-automation-lanes', {'count': laneCount}),
               style: TextStyle(color: colors.onSurfaceVariant, fontSize: 11),
             ),
           ],

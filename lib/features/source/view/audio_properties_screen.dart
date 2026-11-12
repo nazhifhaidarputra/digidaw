@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:karbeat/app/providers/project_provider.dart';
 import 'package:karbeat/app/providers/track_list_state.dart';
+import 'package:karbeat/core/l10n/localizer.dart';
 import 'package:karbeat/src/rust/api/jobs.dart';
 import 'package:karbeat/src/rust/api/audio_analysis.dart';
 import 'package:karbeat/core/utils/result_type.dart';
@@ -40,7 +41,10 @@ class AudioPropertiesScreen extends ConsumerWidget {
         loading: () => const Center(child: CircularProgressIndicator()),
 
         error: (err, _) => Center(
-          child: Text("Error: $err", style: TextStyle(color: colors.error)),
+          child: Text(
+            tr('source-error', {'error': err}),
+            style: TextStyle(color: colors.error),
+          ),
         ),
 
         data: (props) {
@@ -130,7 +134,7 @@ class AudioPropertiesScreen extends ConsumerWidget {
                         playSourcePreview(ctx: ctx, id: sourceId);
                       },
                       icon: const Icon(Icons.play_arrow),
-                      label: const Text("Preview"),
+                      label: Text(tr('source-preview')),
                       backgroundColor: colors.primaryContainer,
                       foregroundColor: colors.onPrimaryContainer,
                     ),
@@ -140,7 +144,7 @@ class AudioPropertiesScreen extends ConsumerWidget {
                       onPressed: () {
                         stopAllPreviews(ctx: ctx);
                       },
-                      label: const Text("Stop"),
+                      label: Text(tr('source-stop')),
                       icon: const Icon(Icons.stop),
                       backgroundColor: colors.errorContainer,
                       foregroundColor: colors.onErrorContainer,
@@ -165,11 +169,20 @@ class AudioPropertiesScreen extends ConsumerWidget {
         children: [
           _row(
             context,
-            "Format",
-            "${props.sampleRate} Hz / ${props.channels} Ch",
+            tr('workspace-export-format'),
+            tr('source-format-value', {
+              'rate': props.sampleRate,
+              'channels': props.channels,
+            }),
           ),
-          _row(context, "Duration", "${props.duration.toStringAsFixed(2)} sec"),
-          _row(context, "Path", props.filePath, isSmall: true),
+          _row(
+            context,
+            tr('source-duration'),
+            tr('source-duration-value', {
+              'seconds': props.duration.toStringAsFixed(2),
+            }),
+          ),
+          _row(context, tr('source-path'), props.filePath, isSmall: true),
         ],
       ),
     );
@@ -304,7 +317,7 @@ class _TrimmedWaveformOverlayState
       width: _gripWidth,
       height: _gripHeight,
       child: Tooltip(
-        message: start ? 'Trim start' : 'Trim end',
+        message: start ? tr('source-trim-start') : tr('source-trim-end'),
         child: MouseRegion(
           cursor: SystemMouseCursors.resizeLeftRight,
           child: GestureDetector(
@@ -416,7 +429,7 @@ class _TrimControls extends ConsumerWidget {
           Icon(Icons.content_cut, size: 16, color: colors.onSurfaceVariant),
           _TrimTimeField(
             key: ValueKey(('trim-start', props.trimStart)),
-            label: 'Trim start (s)',
+            label: tr('source-trim-start-s'),
             seconds: props.trimStart / rate,
             onSubmitted: (text) {
               final frames = toFrames(text);
@@ -426,7 +439,7 @@ class _TrimControls extends ConsumerWidget {
           ),
           _TrimTimeField(
             key: ValueKey(('trim-end', end)),
-            label: 'Trim end (s)',
+            label: tr('source-trim-end-s'),
             seconds: end / rate,
             onSubmitted: (text) {
               final frames = toFrames(text);
@@ -441,14 +454,16 @@ class _TrimControls extends ConsumerWidget {
             },
           ),
           Text(
-            'Plays ${((end - props.trimStart) / rate).toStringAsFixed(3)} s',
+            tr('source-plays-seconds', {
+              'seconds': ((end - props.trimStart) / rate).toStringAsFixed(3),
+            }),
             style: TextStyle(color: colors.onSurfaceVariant, fontSize: 12),
           ),
           if (trimmed)
             TextButton.icon(
               onPressed: () => _commitTrim(ref, sourceId, total, 0, total),
               icon: const Icon(Icons.restart_alt, size: 16),
-              label: const Text('Reset trim'),
+              label: Text(tr('source-reset-trim')),
             ),
         ],
       ),
@@ -577,13 +592,31 @@ class _EnvelopeReadout extends StatelessWidget {
       child: Wrap(
         spacing: 16,
         children: [
-          Text('Attack ${_ms(envelope.fadeIn.length)}', style: style),
-          Text('Decay ${_ms(envelope.decay.length)}', style: style),
-          Text('Sustain ${(envelope.sustain * 100).round()}%', style: style),
-          Text('Release ${_ms(envelope.fadeOut.length)}', style: style),
-          Text('Loop crossfade ${_ms(envelope.crossfade)}', style: style),
+          Text(
+            tr('source-attack', {'time': _ms(envelope.fadeIn.length)}),
+            style: style,
+          ),
+          Text(
+            tr('source-decay', {'time': _ms(envelope.decay.length)}),
+            style: style,
+          ),
+          Text(
+            tr('source-sustain', {'sustain': (envelope.sustain * 100).round()}),
+            style: style,
+          ),
+          Text(
+            tr('source-release', {'time': _ms(envelope.fadeOut.length)}),
+            style: style,
+          ),
+          Text(
+            tr('source-loop-crossfade', {'time': _ms(envelope.crossfade)}),
+            style: style,
+          ),
           if (envelope.points.isNotEmpty)
-            Text('Points ${envelope.points.length}', style: style),
+            Text(
+              tr('source-points', {'count': envelope.points.length}),
+              style: style,
+            ),
         ],
       ),
     );
@@ -600,15 +633,15 @@ class _OfflineEditControls extends ConsumerWidget {
   final AudioWaveformUiForAudioProperties props;
 
   String _modeLabel(UiAudioSampleMode mode) => switch (mode) {
-    UiAudioSampleMode.default_ => 'Default',
-    UiAudioSampleMode.resampled => 'Resampled',
-    UiAudioSampleMode.stretch => 'Stretch',
+    UiAudioSampleMode.default_ => tr('common-default'),
+    UiAudioSampleMode.resampled => tr('source-mode-resampled'),
+    UiAudioSampleMode.stretch => tr('source-mode-stretch'),
   };
 
   String _modeHint(UiAudioSampleMode mode) => switch (mode) {
-    UiAudioSampleMode.default_ => 'Plays at its own speed',
-    UiAudioSampleMode.resampled => 'Follows the tempo, pitch bends with it',
-    UiAudioSampleMode.stretch => 'Follows the tempo, keeps its pitch',
+    UiAudioSampleMode.default_ => tr('source-mode-default-hint'),
+    UiAudioSampleMode.resampled => tr('source-mode-resampled-hint'),
+    UiAudioSampleMode.stretch => tr('source-mode-stretch-hint'),
   };
 
   Future<void> _apply(
@@ -618,7 +651,9 @@ class _OfflineEditControls extends ConsumerWidget {
     final ctx = ref.read(projectProvider.notifier).dawContext;
     final result = await attemptAsync(() => change(ctx));
     if (result case Error<void>(:final error)) {
-      ref.read(notificationProvider.notifier).error(error, title: 'Audio edit');
+      ref
+          .read(notificationProvider.notifier)
+          .error(error, title: tr('source-audio-edit'));
     }
     ref.invalidate(audioPropertiesProvider(sourceId));
     // Clips on the timeline draw with the source's playback rate, and a sample
@@ -688,19 +723,19 @@ class _OfflineEditControls extends ConsumerWidget {
         crossAxisAlignment: WrapCrossAlignment.center,
         children: [
           toggle(
-            'Normalize',
+            tr('source-normalize'),
             Icons.vertical_align_center,
             props.normalized,
             (value) => _setEdits(ref, normalize: value),
           ),
           toggle(
-            'Invert',
+            tr('source-invert'),
             Icons.swap_vert,
             props.invert,
             (value) => _setEdits(ref, invert: value),
           ),
           toggle(
-            'Reverse',
+            tr('source-reverse'),
             Icons.swap_horiz,
             props.reverse,
             (value) => _setEdits(ref, reverse: value),
@@ -727,7 +762,7 @@ class _OfflineEditControls extends ConsumerWidget {
             ),
           ),
           _CommitKnob(
-            label: 'Pitch',
+            label: tr('source-pitch'),
             unit: 'ct',
             value: coarse,
             min: -2400,
@@ -736,7 +771,7 @@ class _OfflineEditControls extends ConsumerWidget {
             onCommit: (value) => _setPitch(ref, cents: value + fine),
           ),
           _CommitKnob(
-            label: 'Fine',
+            label: tr('source-fine'),
             unit: 'ct',
             value: fine,
             min: -50,
@@ -745,21 +780,19 @@ class _OfflineEditControls extends ConsumerWidget {
           ),
           Tooltip(
             message: props.realtime
-                ? 'Pitch and tempo play through a realtime stretcher; '
-                      'turn off to render them offline at full quality'
-                : 'Pitch and tempo are rendered offline; turn on to '
-                      'stretch them while playing instead',
+                ? tr('source-realtime-on-hint')
+                : tr('source-realtime-off-hint'),
             child: toggle(
-              'Realtime',
+              tr('source-realtime'),
               Icons.bolt,
               props.realtime,
               (value) => _setRealtime(ref, value),
             ),
           ),
           Tooltip(
-            message: 'Keep the voice character when shifting pitch',
+            message: tr('source-keep-the-voice-character-when'),
             child: toggle(
-              'Formants',
+              tr('source-formants'),
               Icons.record_voice_over,
               props.preserveFormants,
               (value) => _setPitch(ref, preserveFormants: value),
@@ -854,7 +887,9 @@ class _TempoControlsState extends ConsumerState<_TempoControls> {
     final result = await attemptAsync(() => start(ctx));
     if (!mounted) return;
     if (result case Error<int>(:final error)) {
-      ref.read(notificationProvider.notifier).error(error, title: 'Tempo');
+      ref
+          .read(notificationProvider.notifier)
+          .error(error, title: tr('source-tempo'));
     }
   }
 
@@ -875,20 +910,23 @@ class _TempoControlsState extends ConsumerState<_TempoControls> {
     );
     final grid = props.beatGrid;
     final tempo = switch ((grid, props.originalBpm)) {
-      (final grid?, _) =>
-        '${grid.bpm.toStringAsFixed(1)} BPM · '
-            '${(grid.confidence * 100).round()}% steady',
-      (null, final bpm?) => '${bpm.toStringAsFixed(1)} BPM (as placed)',
-      (null, null) => 'Tempo unknown',
+      (final grid?, _) => tr('source-tempo-detected', {
+        'bpm': grid.bpm.toStringAsFixed(1),
+        'steady': (grid.confidence * 100).round(),
+      }),
+      (null, final bpm?) => tr('source-tempo-placed', {
+        'bpm': bpm.toStringAsFixed(1),
+      }),
+      (null, null) => tr('source-tempo-unknown'),
     };
     final followsLive =
         props.realtime && props.sampleMode == UiAudioSampleMode.stretch;
     final status = rendering || (props.fitted && !props.renderReady)
-        ? 'Rendering…'
+        ? tr('source-rendering')
         : props.fitted
-        ? (props.warp ? 'Fitted beat by beat' : 'Fitted to project tempo')
+        ? (props.warp ? tr('source-fitted-beats') : tr('source-fitted-tempo'))
         : followsLive
-        ? 'Follows the project tempo in real time'
+        ? tr('source-follows-tempo-live')
         : null;
     final canWarp = grid != null && !props.realtime;
     Widget busy() => const SizedBox.square(
@@ -912,7 +950,7 @@ class _TempoControlsState extends ConsumerState<_TempoControls> {
                     (ctx) => startTempoDetection(ctx: ctx, sourceId: sourceId),
                   ),
             icon: detecting ? busy() : const Icon(Icons.graphic_eq, size: 16),
-            label: const Text('Detect tempo'),
+            label: Text(tr('source-detect-tempo')),
           ),
           OutlinedButton.icon(
             onPressed: rendering
@@ -925,16 +963,16 @@ class _TempoControlsState extends ConsumerState<_TempoControls> {
                     ),
                   ),
             icon: rendering ? busy() : const Icon(Icons.timer, size: 16),
-            label: const Text('Fit to tempo'),
+            label: Text(tr('source-fit-to-tempo')),
           ),
           Tooltip(
             message: grid == null
-                ? 'Detect the tempo first'
+                ? tr('source-warp-needs-tempo')
                 : props.realtime
-                ? 'Beat by beat needs offline stretching'
-                : 'Stretch beat by beat so every beat lands on the grid',
+                ? tr('source-warp-needs-offline')
+                : tr('source-warp-hint'),
             child: FilterChip(
-              label: const Text('Beat by beat'),
+              label: Text(tr('source-beat-by-beat')),
               selected: _warp && canWarp,
               onSelected: canWarp
                   ? (selected) => setState(() => _warp = selected)

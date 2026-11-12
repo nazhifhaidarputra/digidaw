@@ -83,14 +83,14 @@ class _RightSidePanelState extends ConsumerState<RightSidePanel> {
               children: [
                 Expanded(
                   child: Text(
-                    'Right Side Panel',
+                    tr('track-right-side-panel'),
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(color: colors.onSurface, fontSize: 12),
                   ),
                 ),
                 if (tab == RightPanelTab.browser)
                   IconButton(
-                    tooltip: 'Add sample directory',
+                    tooltip: tr('track-add-sample-directory'),
                     padding: EdgeInsets.zero,
                     visualDensity: VisualDensity.compact,
                     onPressed: isLoadingDirectory
@@ -105,14 +105,14 @@ class _RightSidePanelState extends ConsumerState<RightSidePanel> {
                   )
                 else
                   IconButton(
-                    tooltip: 'Import audio',
+                    tooltip: tr('track-import-audio'),
                     padding: EdgeInsets.zero,
                     visualDensity: VisualDensity.compact,
                     onPressed: () => unawaited(importAudioSource(context, ref)),
                     icon: const Icon(Icons.add, size: 17),
                   ),
                 IconButton(
-                  tooltip: 'Close right panel',
+                  tooltip: tr('track-close-right-panel'),
                   padding: EdgeInsets.zero,
                   visualDensity: VisualDensity.compact,
                   onPressed: () => ref
@@ -134,7 +134,7 @@ class _RightSidePanelState extends ConsumerState<RightSidePanel> {
                 Expanded(
                   child: _RightPanelTabButton(
                     icon: Icons.library_music,
-                    label: 'Browser',
+                    label: tr('track-browser'),
                     selected: tab == RightPanelTab.browser,
                     onTap: () => _selectTab(RightPanelTab.browser),
                   ),
@@ -142,7 +142,7 @@ class _RightSidePanelState extends ConsumerState<RightSidePanel> {
                 Expanded(
                   child: _RightPanelTabButton(
                     icon: Icons.group_work,
-                    label: 'Sources',
+                    label: tr('track-sources'),
                     selected: tab == RightPanelTab.sources,
                     onTap: () => _selectTab(RightPanelTab.sources),
                   ),

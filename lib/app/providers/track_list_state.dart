@@ -10,6 +10,7 @@ import 'package:karbeat/app/providers/piano_roll_state.dart';
 import 'package:karbeat/app/providers/project_provider.dart';
 import 'package:karbeat/app/providers/transport_state.dart';
 import 'package:karbeat/app/providers/workspace_state.dart';
+import 'package:karbeat/core/l10n/localizer.dart';
 import 'package:karbeat/core/utils/clip_time_utils.dart';
 import 'package:karbeat/core/utils/color.dart';
 import 'package:karbeat/core/utils/logger.dart';
@@ -388,7 +389,7 @@ class TrackListNotifier extends Notifier<TrackListState> {
     } catch (error, stackTrace) {
       return ref.notifyErrorResult(
         error,
-        title: 'Could not change the track input',
+        title: tr('app-tracks-input-change-failed'),
         stackTrace: stackTrace,
       );
     }
@@ -588,7 +589,7 @@ class TrackListNotifier extends Notifier<TrackListState> {
     }
     if (track.trackType != UiTrackType.audio) {
       return ref.notifyErrorResult(
-        Exception('Audio samples can only be dropped on audio tracks'),
+        Exception(tr('app-tracks-samples-audio-only')),
       );
     }
 
@@ -1403,19 +1404,16 @@ class TrackListNotifier extends Notifier<TrackListState> {
     }
     if (sourceTrack.trackType == targetTrack.trackType) return null;
 
-    final clipLabel = plural ? 'clips' : 'clip';
-    final sourceLabel = _trackTypeLabel(sourceTrack.trackType);
-    final targetLabel = _trackTypeLabel(targetTrack.trackType);
     return ref.notifyErrorResult<void>(
-      Exception('Cannot move $sourceLabel $clipLabel to $targetLabel track'),
+      Exception(
+        tr('app-tracks-move-type-mismatch', {
+          'source': sourceTrack.trackType.name,
+          'target': targetTrack.trackType.name,
+          'count': plural ? 2 : 1,
+        }),
+      ),
     );
   }
-
-  String _trackTypeLabel(UiTrackType type) => switch (type) {
-    UiTrackType.audio => 'audio',
-    UiTrackType.midi => 'MIDI',
-    UiTrackType.automation => 'automation',
-  };
 
   void _restoreMovedTracks({
     required int trackId,

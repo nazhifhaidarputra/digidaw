@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:karbeat/core/l10n/localizer.dart';
 import 'package:karbeat/features/setting/services/host_devices_settings_provider.dart';
 
 class HostDevicesSettingsPage extends ConsumerWidget {
@@ -30,28 +31,26 @@ class HostDevicesSettingsPage extends ConsumerWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                'Host & Devices',
+                tr('settings-menu-host-devices'),
                 key: const ValueKey('settings-page-hostAndDevices'),
                 style: Theme.of(context).textTheme.headlineSmall,
               ),
               const SizedBox(height: 8),
-              const Text(
-                'Choose where audio plays and which device audio tracks record from.',
-              ),
+              Text(tr('settings-host-description')),
               const SizedBox(height: 24),
               DropdownButtonFormField<String>(
                 key: ValueKey('output-host-${state.selectedHostName}'),
                 isExpanded: true,
                 initialValue: state.selectedHostName ?? _systemDefault,
-                decoration: const InputDecoration(
-                  labelText: 'Audio host',
+                decoration: InputDecoration(
+                  labelText: tr('settings-host-audio-host'),
                   border: OutlineInputBorder(),
                 ),
                 items: state.availableHosts.isEmpty
-                    ? const [
+                    ? [
                         DropdownMenuItem(
                           value: _systemDefault,
-                          child: Text('System default'),
+                          child: Text(tr('settings-host-system-default')),
                         ),
                       ]
                     : state.availableHosts
@@ -79,15 +78,17 @@ class HostDevicesSettingsPage extends ConsumerWidget {
                 key: ValueKey('output-device-${state.selectedOutputDeviceId}'),
                 isExpanded: true,
                 initialValue: state.selectedOutputDeviceId ?? _systemDefault,
-                decoration: const InputDecoration(
-                  labelText: 'Output device',
+                decoration: InputDecoration(
+                  labelText: tr('settings-host-output-device'),
                   border: OutlineInputBorder(),
                 ),
                 items: state.availableOutputDevices.isEmpty
-                    ? const [
+                    ? [
                         DropdownMenuItem(
                           value: _systemDefault,
-                          child: Text('System default output'),
+                          child: Text(
+                            tr('settings-host-system-default-output'),
+                          ),
                         ),
                       ]
                     : state.availableOutputDevices
@@ -97,7 +98,9 @@ class HostDevicesSettingsPage extends ConsumerWidget {
                               child: Text(
                                 device.isCurrentSystemDefault &&
                                         device.deviceId != null
-                                    ? '${device.displayName} (current default)'
+                                    ? tr('settings-host-current-default', {
+                                        'device': device.displayName,
+                                      })
                                     : device.displayName,
                               ),
                             ),
@@ -121,17 +124,15 @@ class HostDevicesSettingsPage extends ConsumerWidget {
               ],
               const SizedBox(height: 32),
               Text(
-                'Audio input',
+                tr('settings-host-audio-input'),
                 style: Theme.of(context).textTheme.titleMedium,
               ),
               const SizedBox(height: 8),
               SwitchListTile(
                 key: const ValueKey('input-enabled'),
                 contentPadding: EdgeInsets.zero,
-                title: const Text('Enable audio input'),
-                subtitle: const Text(
-                  'Lets audio tracks record and monitor the input device. Arming a track turns it on.',
-                ),
+                title: Text(tr('settings-host-input-enable')),
+                subtitle: Text(tr('settings-host-input-help')),
                 value: state.inputEnabled,
                 onChanged: inputBusy
                     ? null
@@ -142,15 +143,15 @@ class HostDevicesSettingsPage extends ConsumerWidget {
                 key: ValueKey('input-device-${state.selectedInputDeviceId}'),
                 isExpanded: true,
                 initialValue: state.selectedInputDeviceId ?? _systemDefault,
-                decoration: const InputDecoration(
-                  labelText: 'Input device',
+                decoration: InputDecoration(
+                  labelText: tr('settings-host-input-device'),
                   border: OutlineInputBorder(),
                 ),
                 items: state.availableInputDevices.isEmpty
-                    ? const [
+                    ? [
                         DropdownMenuItem(
                           value: _systemDefault,
-                          child: Text('System default input'),
+                          child: Text(tr('settings-host-system-default-input')),
                         ),
                       ]
                     : state.availableInputDevices
@@ -160,7 +161,9 @@ class HostDevicesSettingsPage extends ConsumerWidget {
                               child: Text(
                                 device.isCurrentSystemDefault &&
                                         device.deviceId != null
-                                    ? '${device.displayName} (current default)'
+                                    ? tr('settings-host-current-default', {
+                                        'device': device.displayName,
+                                      })
                                     : device.displayName,
                               ),
                             ),
@@ -187,13 +190,17 @@ class HostDevicesSettingsPage extends ConsumerWidget {
                 TextButton.icon(
                   onPressed: () => unawaited(notifier.reloadInputDevices()),
                   icon: const Icon(Icons.refresh),
-                  label: const Text('Retry input discovery'),
+                  label: Text(tr('settings-host-input-retry')),
                 ),
               ],
               if (state.runtimeSettings?.actualInput case final input?) ...[
                 const SizedBox(height: 8),
                 Text(
-                  '${input.deviceName} · ${input.sampleRate} Hz · ${input.channels} channels',
+                  tr('settings-host-stream-summary', {
+                    'device': input.deviceName,
+                    'rate': input.sampleRate,
+                    'channels': input.channels,
+                  }),
                 ),
               ],
               if (state.discoveryError != null) ...[
@@ -205,7 +212,7 @@ class HostDevicesSettingsPage extends ConsumerWidget {
                 TextButton.icon(
                   onPressed: () => unawaited(notifier.reloadOutputDevices()),
                   icon: const Icon(Icons.refresh),
-                  label: const Text('Retry discovery'),
+                  label: Text(tr('settings-host-retry')),
                 ),
               ],
               if (state.fallbackReason != null) ...[
@@ -214,7 +221,9 @@ class HostDevicesSettingsPage extends ConsumerWidget {
                   child: Padding(
                     padding: const EdgeInsets.all(16),
                     child: Text(
-                      '${state.fallbackReason} System default output is active.',
+                      tr('settings-host-fallback-active', {
+                        'reason': state.fallbackReason ?? '',
+                      }),
                     ),
                   ),
                 ),
@@ -222,13 +231,17 @@ class HostDevicesSettingsPage extends ConsumerWidget {
               if (state.runtimeSettings?.actualStream case final actual?) ...[
                 const SizedBox(height: 24),
                 Text(
-                  'Active device stream',
+                  tr('settings-host-active-stream'),
                   style: Theme.of(context).textTheme.titleMedium,
                 ),
                 const SizedBox(height: 8),
                 Text(actual.deviceName),
                 Text(
-                  '${actual.sampleRate} Hz · ${actual.callbackBufferSize} frames · ${actual.channels} channels',
+                  tr('settings-host-active-stream-summary', {
+                    'rate': actual.sampleRate,
+                    'frames': actual.callbackBufferSize,
+                    'channels': actual.channels,
+                  }),
                 ),
               ],
             ],

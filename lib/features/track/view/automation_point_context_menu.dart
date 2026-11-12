@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:karbeat/core/l10n/localizer.dart';
 import 'package:karbeat/core/widgets/context_menu.dart';
 import 'package:karbeat/features/track/models/automation_lane_clipboard.dart';
 import 'package:karbeat/features/track/services/automation_editor_service.dart';
@@ -10,18 +11,18 @@ import 'package:karbeat/src/rust/api/automation.dart';
 /// Display name of an automation or envelope curve type.
 String automationCurveTypeLabel(AutomationCurveTypeDto curveType) =>
     switch (curveType) {
-      AutomationCurveTypeDto.linear => 'Linear',
-      AutomationCurveTypeDto.exponential => 'Exponential',
-      AutomationCurveTypeDto.logarithmic => 'Logarithmic',
-      AutomationCurveTypeDto.sCurve => 'S-curve',
-      AutomationCurveTypeDto.bezier => 'Bezier',
-      AutomationCurveTypeDto.step => 'Step (hold)',
-      AutomationCurveTypeDto.stairs => 'Stairs',
-      AutomationCurveTypeDto.smoothStairs => 'Smooth stairs',
-      AutomationCurveTypeDto.pulse => 'Pulse',
-      AutomationCurveTypeDto.wave => 'Wave (sine)',
-      AutomationCurveTypeDto.triangle => 'Triangle',
-      AutomationCurveTypeDto.halfSine => 'Half sine',
+      AutomationCurveTypeDto.linear => tr('track-curve-linear'),
+      AutomationCurveTypeDto.exponential => tr('track-curve-exponential'),
+      AutomationCurveTypeDto.logarithmic => tr('track-curve-logarithmic'),
+      AutomationCurveTypeDto.sCurve => tr('track-curve-s-curve'),
+      AutomationCurveTypeDto.bezier => tr('track-curve-bezier'),
+      AutomationCurveTypeDto.step => tr('track-curve-step'),
+      AutomationCurveTypeDto.stairs => tr('track-curve-stairs'),
+      AutomationCurveTypeDto.smoothStairs => tr('track-curve-smooth-stairs'),
+      AutomationCurveTypeDto.pulse => tr('track-curve-pulse'),
+      AutomationCurveTypeDto.wave => tr('track-curve-wave'),
+      AutomationCurveTypeDto.triangle => tr('track-curve-triangle'),
+      AutomationCurveTypeDto.halfSine => tr('track-curve-half-sine'),
     };
 
 /// Icon of an automation or envelope curve type.
@@ -84,19 +85,22 @@ Future<void> showAutomationPointContextMenu({
 
   await showDawContextMenu(
     context: context,
-    title: 'Point: ${lane.label}',
+    title: tr('track-point', {'lane': lane.label}),
     header: Text(
-      'Value ${valueText(point.value)}  at tick ${point.timeTicks}',
+      tr('track-point-at-tick', {
+        'value': valueText(point.value),
+        'tick': point.timeTicks,
+      }),
       style: TextStyle(color: colors.onSurfaceVariant, fontSize: 12),
     ),
     actions: [
       DawContextAction(
-        title: 'Set value',
+        title: tr('track-set-value'),
         icon: Icons.edit,
         onTap: () => setValueRequested = true,
       ),
       DawContextAction(
-        title: 'Copy value',
+        title: tr('track-copy-value'),
         icon: Icons.copy,
         onTap: () => editor.copyPointValue(laneId: laneId, pointId: pointId),
       ),
@@ -104,12 +108,14 @@ Future<void> showAutomationPointContextMenu({
         :final normalizedValue,
       ))
         DawContextAction(
-          title: 'Paste value (${valueText(normalizedValue)})',
+          title: tr('track-paste-value', {
+            'normalizedValue': valueText(normalizedValue),
+          }),
           icon: Icons.content_paste,
           onTap: () => editor.pastePointValue(laneId: laneId, pointId: pointId),
         ),
       DawContextAction.submenu(
-        title: 'Curve type',
+        title: tr('track-curve-type'),
         subtitle: automationCurveTypeLabel(point.curveType),
         icon: automationCurveTypeIcon(point.curveType),
         children: [
@@ -131,8 +137,8 @@ Future<void> showAutomationPointContextMenu({
       if (point.tension != 0 && sampler.traits(point.curveType).supportsTension)
         DawContextAction(
           title: sampler.traits(point.curveType).tensionIsCount
-              ? 'Reset count'
-              : 'Reset tension',
+              ? tr('track-reset-count')
+              : tr('track-reset-tension'),
           icon: Icons.restart_alt,
           onTap: () => editor.setPointTension(
             laneId: laneId,
@@ -141,7 +147,7 @@ Future<void> showAutomationPointContextMenu({
           ),
         ),
       DawContextAction(
-        title: 'Delete point',
+        title: tr('track-delete-point'),
         icon: Icons.delete_outline,
         isDestructive: true,
         onTap: () => editor.deletePoint(laneId: laneId, pointId: pointId),

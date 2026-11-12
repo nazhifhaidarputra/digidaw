@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:karbeat/app/providers/project_provider.dart';
+import 'package:karbeat/core/l10n/localizer.dart';
 import 'package:karbeat/features/mixer/services/routing_labels.dart';
 import 'package:karbeat/src/rust/api/mixer.dart';
 
@@ -29,10 +30,14 @@ class ChannelOutputChip extends ConsumerWidget {
         .length;
 
     final linked = output != null;
-    final label = linked ? labels.channelName(output.destination) : 'Unlinked';
+    final label = linked
+        ? labels.channelName(output.destination)
+        : tr('mixer-unlinked');
     final color = linked ? colors.primary : colors.tertiary;
     return Tooltip(
-      message: linked ? 'Output: $label' : 'Not routed to any output',
+      message: linked
+          ? tr('mixer-output-to', {'name': label})
+          : tr('mixer-not-routed'),
       child: InkWell(
         onTap: onTap,
         borderRadius: BorderRadius.circular(4),
@@ -66,7 +71,7 @@ class ChannelOutputChip extends ConsumerWidget {
               ),
               if (sidechains > 0)
                 Text(
-                  'SC → $sidechains',
+                  tr('mixer-sidechain-count', {'count': sidechains}),
                   style: TextStyle(color: colors.secondary, fontSize: 8),
                 ),
             ],

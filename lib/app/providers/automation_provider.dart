@@ -4,6 +4,7 @@ import 'package:freezed_annotation/freezed_annotation.dart';
 import 'package:karbeat/app/providers/project_provider.dart';
 import 'package:karbeat/app/providers/notification_provider.dart';
 import 'package:karbeat/app/providers/track_list_state.dart';
+import 'package:karbeat/core/l10n/localizer.dart';
 import 'package:karbeat/core/utils/logger.dart';
 import 'package:karbeat/core/utils/result_type.dart';
 import 'package:karbeat/src/rust/api/automation.dart';
@@ -65,15 +66,15 @@ String automationSourceName(
               .where((effect) => effect.id == effectId)
               .firstOrNull
               ?.name ??
-          'Missing effect',
+          tr('app-automation-missing-effect'),
   };
 
   return switch (target) {
     AutomationTargetDto_Generator(:final generatorId) =>
       switch (project.generators[generatorId]?.instanceType) {
         UiGeneratorInstanceType_Plugin(:final field0) => field0.label,
-        UiGeneratorInstanceType_Sampler() => 'Sampler',
-        null => 'Missing instrument',
+        UiGeneratorInstanceType_Sampler() => tr('app-automation-sampler'),
+        null => tr('app-automation-missing-instrument'),
       },
     AutomationTargetDto_Track(
       :final trackId,
@@ -81,20 +82,24 @@ String automationSourceName(
     ) =>
       channelSource(
         project.mixer.channels[trackId],
-        project.tracks[trackId]?.name ?? 'Track',
+        project.tracks[trackId]?.name ?? tr('app-automation-track'),
         field0,
       ),
     AutomationTargetDto_Bus(:final busId, :final mixTarget) => channelSource(
       project.mixer.buses[busId]?.channel,
-      project.mixer.buses[busId]?.name ?? 'Bus',
+      project.mixer.buses[busId]?.name ?? tr('app-automation-bus'),
       mixTarget,
     ),
     AutomationTargetDto_Master(
       field0: MasterAutomationTargetDto_MixerChannel(:final field0),
     ) =>
-      channelSource(project.mixer.masterBus, 'Master', field0),
+      channelSource(
+        project.mixer.masterBus,
+        tr('app-automation-master'),
+        field0,
+      ),
     AutomationTargetDto_Master(field0: MasterAutomationTargetDto_TempoBpm()) =>
-      'Transport',
+      tr('app-automation-transport'),
   };
 }
 
@@ -838,7 +843,7 @@ final pluginAutomationCandidatesProvider = FutureProvider.autoDispose
           .toList();
       String groupName(plugin_api.UiPluginParameter parameter) {
         final group = parameter.group.trim();
-        return group.isEmpty ? 'Other' : group;
+        return group.isEmpty ? tr('app-automation-other-group') : group;
       }
 
       candidates.sort((a, b) {
