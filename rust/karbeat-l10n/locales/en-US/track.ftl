@@ -150,7 +150,6 @@ track-recording-active = Recording. Click to stop and keep the take.
 track-recording = Recording
 track-input-stereo = Ch { $first }+{ $second } (stereo)
 track-input-mono = Ch { $channel } (mono)
-track-move-step = Move Step
 track-clips-selected = { $count ->
     [one] { $count } Clip
    *[other] { $count } Clips

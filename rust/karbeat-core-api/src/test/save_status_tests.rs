@@ -185,12 +185,12 @@ mod tests {
         assert!(!mitigation_api::is_project_saved(&ctx));
         assert!(mitigation_api::begin_auto_save(&ctx).is_none());
 
-        let recovered = mitigation_api::load_recovery_file(&ctx, 48_000).expect("recover");
+        let recovered = mitigation_api::load_recovery_file(&ctx).expect("recover");
         assert_eq!(recovered.tracks.len(), 1);
         assert!(!recovered.session.is_saved());
 
         mitigation_api::mark_clean_shutdown(&ctx).expect("clean shutdown");
-        assert!(mitigation_api::load_recovery_file(&ctx, 48_000).is_err());
+        assert!(mitigation_api::load_recovery_file(&ctx).is_err());
     }
 
     #[test]
@@ -210,7 +210,7 @@ mod tests {
 
         mitigation_api::set_session_suspended(&ctx, true).expect("suspend");
         assert!(!marker.exists());
-        assert!(mitigation_api::load_recovery_file(&ctx, 48_000).is_ok());
+        assert!(mitigation_api::load_recovery_file(&ctx).is_ok());
 
         mitigation_api::set_session_suspended(&ctx, false).expect("resume");
         assert!(marker.exists());

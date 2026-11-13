@@ -186,9 +186,7 @@ class MainScreen extends ConsumerWidget {
                         .read(trackListStateProvider.notifier)
                         .nudgeSelectedClips(
                           steps: intent.steps,
-                          step: ref
-                              .read(workspaceStateProvider)
-                              .horizontalClipShiftSizeDenom,
+                          grid: ref.read(workspaceStateProvider).gridSize,
                         ),
                   );
                   return null;
@@ -251,6 +249,47 @@ class MainScreen extends ConsumerWidget {
                     ref
                         .read(trackListStateProvider.notifier)
                         .deleteSelectedClips(),
+                  );
+                  return null;
+                },
+              ),
+              CutClipsIntent: CallbackAction<CutClipsIntent>(
+                onInvoke: (_) {
+                  unawaited(_cutSelectedClips(ref));
+                  return null;
+                },
+              ),
+              QuantizeClipsIntent: CallbackAction<QuantizeClipsIntent>(
+                onInvoke: (_) {
+                  unawaited(
+                    ref
+                        .read(trackListStateProvider.notifier)
+                        .quantizeSelectedClips(
+                          ref.read(workspaceStateProvider).gridSize,
+                        ),
+                  );
+                  return null;
+                },
+              ),
+              QuantizeClipStartsIntent:
+                  CallbackAction<QuantizeClipStartsIntent>(
+                    onInvoke: (_) {
+                      unawaited(
+                        ref
+                            .read(trackListStateProvider.notifier)
+                            .quantizeSelectedClipStarts(
+                              ref.read(workspaceStateProvider).gridSize,
+                            ),
+                      );
+                      return null;
+                    },
+                  ),
+              LegatoClipsIntent: CallbackAction<LegatoClipsIntent>(
+                onInvoke: (_) {
+                  unawaited(
+                    ref
+                        .read(trackListStateProvider.notifier)
+                        .legatoSelectedClips(),
                   );
                   return null;
                 },
@@ -340,6 +379,18 @@ class MainScreen extends ConsumerWidget {
     await ref
         .read(trackListStateProvider.notifier)
         .copySelectedClips(
+          trackId: trackId,
+          clipIds: selection.selectedClipIds.toList(),
+        );
+  }
+
+  Future<void> _cutSelectedClips(WidgetRef ref) async {
+    final selection = ref.read(trackListStateProvider);
+    final trackId = selection.selectedTrackId;
+    if (trackId == null || selection.selectedClipIds.isEmpty) return;
+    await ref
+        .read(trackListStateProvider.notifier)
+        .cutSelectedClips(
           trackId: trackId,
           clipIds: selection.selectedClipIds.toList(),
         );

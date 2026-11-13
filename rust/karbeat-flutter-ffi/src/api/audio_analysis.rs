@@ -12,11 +12,11 @@ use std::{
 use flutter_rust_bridge::frb;
 use karbeat_core::{core::project::track::audio_waveform::BeatGrid, shared::id::AudioSourceId};
 use karbeat_core_api::{
-    audio_analysis_api,
-    jobs::{self, JobClass, JobContext, JobKind, JobSpec, JobTarget},
+    audio_analysis_api, audio_waveform_api,
+    jobs::{self, JobClass, JobContext, JobId, JobKind, JobSpec, JobTarget},
 };
 
-use crate::api::{context::DawContext, project::UiAudioSampleMode};
+use crate::api::{context::DawContext, jobs::run_job, project::UiAudioSampleMode};
 
 /// Delay before a tempo change starts a high-quality re-render. Until it lands, the engine
 /// stretches the audio in realtime, so this can wait for the user to stop changing the tempo.
@@ -172,21 +172,62 @@ pub(crate) fn schedule_source_renders(ctx: &DawContext, tempo_changed: bool) {
     }
 }
 
-/// Queues a render of one source's current recipe, replacing a pending one.
-fn schedule_render(ctx: &DawContext, source: AudioSourceId, delay: Duration) {
+/// Queues a render of one source's current recipe, replacing a pending one. Returns its job.
+fn schedule_render(ctx: &DawContext, source: AudioSourceId, delay: Duration) -> JobId {
     let ctx = ctx.clone();
-    drop(jobs::global().submit_debounced(
-        source_spec(JobKind::WaveformRender, JobClass::Heavy, source),
-        delay,
-        move |job: &JobContext| -> Result<(), String> {
-            let pending = audio_analysis_api::begin_refresh_render(&ctx.read(), source)
-                .map_err(|error| error.to_string())?;
-            match pending {
-                Some(pending) => render(&ctx, pending, job),
-                None => Ok(()),
-            }
-        },
-    ));
+    jobs::global()
+        .submit_debounced(
+            source_spec(JobKind::WaveformRender, JobClass::Heavy, source),
+            delay,
+            move |job: &JobContext| -> Result<(), String> {
+                let result = render_current_recipe(&ctx, source, job);
+                ctx.tempo_edit().render_ended(source);
+                result
+            },
+        )
+        .id()
+}
+
+fn render_current_recipe(
+    ctx: &DawContext,
+    source: AudioSourceId,
+    job: &JobContext,
+) -> Result<(), String> {
+    let pending = audio_analysis_api::begin_refresh_render(&ctx.read(), source)
+        .map_err(|error| error.to_string())?;
+    match pending {
+        Some(pending) => render(ctx, pending, job),
+        None => Ok(()),
+    }
+}
+
+/// Starts editing the tempo, such as with a drag, or resumes it while the renders of the last
+/// edit run. Until [`end_tempo_edit`], tempo changes render nothing and playback stretches in
+/// real time; the running renders of the last edit are cancelled.
+#[frb(sync)]
+pub fn begin_tempo_edit(ctx: &DawContext) {
+    let cancelled = ctx.tempo_edit().begin();
+    for job in cancelled {
+        jobs::global().cancel(job);
+    }
+}
+
+/// Ends a tempo edit and renders the stretched sources for its final tempo at once.
+pub fn end_tempo_edit(ctx: &DawContext) {
+    let sources = {
+        let project = ctx.read();
+        audio_analysis_api::cancel_stale_renders(&project);
+        audio_analysis_api::sources_needing_render(&project)
+    };
+    let mut edit = ctx.tempo_edit();
+    if !edit.release() {
+        return;
+    }
+    for source in sources {
+        let job = schedule_render(ctx, source, Duration::ZERO);
+        edit.render_started(source, job);
+    }
+    edit.settle();
 }
 
 /// Changes how an audio source follows the project tempo (undoable), then renders it in the
@@ -205,6 +246,46 @@ pub fn set_audio_source_sample_mode(
         schedule_render(ctx, source, Duration::ZERO);
     }
     Ok(())
+}
+
+/// Sets the tempo an audio source was recorded at (undoable), replacing a detected tempo and
+/// its beats, then renders it in the background when needed.
+pub fn set_audio_source_tempo(ctx: &DawContext, source_id: u64, bpm: f32) -> Result<(), String> {
+    let source = AudioSourceId::from_u64(source_id);
+    let needs_render = audio_analysis_api::set_source_tempo(&mut ctx.project_write(), source, bpm)
+        .map_err(|error| error.to_string())?;
+    audio_analysis_api::cancel_stale_renders(&ctx.read());
+    if needs_render {
+        schedule_render(ctx, source, Duration::ZERO);
+    }
+    Ok(())
+}
+
+/// Swaps an audio source's audio for the file at `file_path` (undoable). Its clips keep their
+/// place and it keeps its settings; it renders in the background when its edits need it.
+pub async fn replace_audio_source(
+    ctx: &DawContext,
+    source_id: u64,
+    file_path: String,
+) -> Result<(), String> {
+    let ctx = ctx.clone();
+    let source = AudioSourceId::from_u64(source_id);
+    run_job(
+        source_spec(JobKind::AudioImport, JobClass::Heavy, source),
+        move |_| -> Result<(), String> {
+            let decoded = audio_waveform_api::decode_replacement_audio(&file_path)
+                .map_err(|error| error.to_string())?;
+            let needs_render =
+                audio_waveform_api::replace_audio_source(&mut ctx.project_write(), source, decoded)
+                    .map_err(|error| error.to_string())?;
+            audio_analysis_api::cancel_stale_renders(&ctx.read());
+            if needs_render {
+                schedule_render(&ctx, source, Duration::ZERO);
+            }
+            Ok(())
+        },
+    )
+    .await
 }
 
 /// Sets an audio source's pitch shift in cents (clamped to ±2400, two octaves either way) and

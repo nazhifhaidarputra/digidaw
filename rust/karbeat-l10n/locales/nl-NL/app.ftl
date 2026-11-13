@@ -47,6 +47,7 @@ app-recordings-save-failed = Kan de opnamen niet opslaan
 app-project-recover-failed = Kan het project niet herstellen
 app-project-audio-load-failed = Kan audio niet laden
 app-project-source-delete-failed = Kan de audiobron niet verwijderen
+app-project-source-replace-failed = Kan de audiobron niet vervangen
 app-project-pattern-delete-failed = Kan het patroon niet verwijderen
 app-project-info-update-failed = Kan projectinformatie niet bijwerken
 app-project-undo-failed = Kan niet ongedaan maken

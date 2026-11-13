@@ -149,7 +149,6 @@ track-recording-active = Aufnahme läuft. Klicken zum Stoppen und Behalten des T
 track-recording = Aufnahme
 track-input-stereo = Kan. { $first }+{ $second } (Stereo)
 track-input-mono = Kan. { $channel } (Mono)
-track-move-step = Verschiebeschritt
 track-clips-selected = { $count ->
     [one] { $count } Clip
    *[other] { $count } Clips

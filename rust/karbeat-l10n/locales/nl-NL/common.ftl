@@ -26,15 +26,6 @@ common-no = Nee
 common-loading = Laden…
 common-unknown = Onbekend
 
-## Grid and note lengths
-
-common-grid-bar = 1 maat
-common-grid-beats = { $count ->
-    [one] { $count } tel
-   *[other] { $count } tellen
-}
-common-grid-step = { $fraction } stap
-
 ## Color picker
 
 common-color-choose = Kies een kleur

@@ -164,7 +164,7 @@ pub fn commit_auto_save(ctx: &mut DawContext, revision: u64) {
 }
 
 /// Loads the recovery copy as a staged project marked unsaved and pointing at its original file.
-pub fn load_recovery_file(ctx: &DawContext, sample_rate: u32) -> anyhow::Result<ApplicationState> {
+pub fn load_recovery_file(ctx: &DawContext) -> anyhow::Result<ApplicationState> {
     let store = &ctx
         .mitigation
         .as_ref()
@@ -173,7 +173,7 @@ pub fn load_recovery_file(ctx: &DawContext, sample_rate: u32) -> anyhow::Result<
     let info = store
         .read_info()?
         .ok_or_else(|| anyhow::anyhow!("There is no auto saved project to recover"))?;
-    let mut recovered = load_daw_project(&store.project_path(), sample_rate)?;
+    let mut recovered = load_daw_project(&store.project_path())?;
     recovered.session.set_file_path(info.original_path);
     recovered.session.mark_modified();
     Ok(recovered)

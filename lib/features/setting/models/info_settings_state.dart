@@ -7,7 +7,6 @@ abstract class InfoSettingsState with _$InfoSettingsState {
   const factory InfoSettingsState({
     @Default(false) bool isLoading,
     String? version,
-    String? buildNumber,
     String? errorMessage,
   }) = _InfoSettingsState;
 }

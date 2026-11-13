@@ -190,6 +190,8 @@ class SourceListScreen extends ConsumerWidget {
                             initialTrackId: firstTrackId,
                           );
                     },
+                    onReplace: () =>
+                        replaceAudioSourceWithPicker(context, ref, id),
                     onDelete: () => deleteAudioSourceWithConfirm(
                       context,
                       ref,
@@ -306,6 +308,9 @@ class _SourceTile extends StatelessWidget {
   final VoidCallback? onPlace;
   final VoidCallback? onRename;
 
+  /// Swaps the item's audio for another file.
+  final VoidCallback? onReplace;
+
   /// Deletes the item; the menu entry is hidden when it cannot be deleted.
   final VoidCallback? onDelete;
 
@@ -320,6 +325,7 @@ class _SourceTile extends StatelessWidget {
     required this.onTap,
     this.onPlace,
     this.onRename,
+    this.onReplace,
     this.onDelete,
     this.renameIcon = false,
   });
@@ -335,7 +341,11 @@ class _SourceTile extends StatelessWidget {
         style: TextStyle(color: colors.onSurfaceVariant),
       ),
       // Items without any action get no menu button.
-      trailing: onPlace == null && onRename == null && onDelete == null
+      trailing:
+          onPlace == null &&
+              onRename == null &&
+              onReplace == null &&
+              onDelete == null
           ? null
           : Row(
               mainAxisSize: MainAxisSize.min,
@@ -351,6 +361,7 @@ class _SourceTile extends StatelessWidget {
                   onSelected: (value) {
                     if (value == 'place') onPlace?.call();
                     if (value == 'rename') onRename?.call();
+                    if (value == 'replace') onReplace?.call();
                     if (value == 'delete') onDelete?.call();
                   },
                   itemBuilder: (context) => [
@@ -373,6 +384,17 @@ class _SourceTile extends StatelessWidget {
                             Icon(Icons.edit),
                             SizedBox(width: 8),
                             Text(tr('common-rename')),
+                          ],
+                        ),
+                      ),
+                    if (onReplace != null)
+                      PopupMenuItem(
+                        value: 'replace',
+                        child: Row(
+                          children: [
+                            Icon(Icons.swap_horiz),
+                            SizedBox(width: 8),
+                            Text(tr('source-replace-audio')),
                           ],
                         ),
                       ),

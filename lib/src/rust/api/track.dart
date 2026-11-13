@@ -11,7 +11,7 @@ import 'pattern.dart';
 import 'project.dart';
 part 'track.freezed.dart';
 
-// These functions are ignored because they are not marked as `pub`: `add_midi_track_with_generator_id_blocking`, `delete_track_blocking`, `replace_track_generator_blocking`
+// These functions are ignored because they are not marked as `pub`: `add_midi_track_with_generator_id_blocking`, `delete_track_blocking`, `replace_track_generator_blocking`, `retime_clips`
 // These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `from`, `from`, `from`
 
 Future<UiClip> createClip({
@@ -183,6 +183,46 @@ Future<void> deleteClipBatch({
   required int trackId,
   required List<int> clipIds,
 }) => RustLib.instance.api.crateApiTrackDeleteClipBatch(
+  ctx: ctx,
+  trackId: trackId,
+  clipIds: clipIds,
+);
+
+/// Snaps clip starts and ends to multiples of `step_ticks`, as one undo step. Returns the
+/// clips that changed.
+Future<List<UiClip>> quantizeClips({
+  required DawContext ctx,
+  required int trackId,
+  required List<int> clipIds,
+  required int stepTicks,
+}) => RustLib.instance.api.crateApiTrackQuantizeClips(
+  ctx: ctx,
+  trackId: trackId,
+  clipIds: clipIds,
+  stepTicks: stepTicks,
+);
+
+/// Snaps clip starts to multiples of `step_ticks`, keeping lengths, as one undo step.
+/// Returns the clips that changed.
+Future<List<UiClip>> quantizeClipStarts({
+  required DawContext ctx,
+  required int trackId,
+  required List<int> clipIds,
+  required int stepTicks,
+}) => RustLib.instance.api.crateApiTrackQuantizeClipStarts(
+  ctx: ctx,
+  trackId: trackId,
+  clipIds: clipIds,
+  stepTicks: stepTicks,
+);
+
+/// Makes each clip end where the next of `clip_ids` starts, as one undo step. Returns the
+/// clips that changed.
+Future<List<UiClip>> legatoClips({
+  required DawContext ctx,
+  required int trackId,
+  required List<int> clipIds,
+}) => RustLib.instance.api.crateApiTrackLegatoClips(
   ctx: ctx,
   trackId: trackId,
   clipIds: clipIds,

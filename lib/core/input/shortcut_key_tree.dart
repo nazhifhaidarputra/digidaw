@@ -66,6 +66,10 @@ const shortcutModules = <ShortcutModule>[
       'pasteClips',
       'duplicateClips',
       'deleteClips',
+      'cutClips',
+      'quantizeClips',
+      'quantizeClipStarts',
+      'legatoClips',
     ],
     modules: [
       ShortcutModule(

@@ -414,12 +414,8 @@ fn browser_preview_stops_at_its_frame_limit() {
         writer.write_sample(16_384_i16).expect("fixture sample");
     }
     writer.finalize().expect("finalize fixture");
-    let waveform = load_audio_file(
-        file.path().to_str().expect("fixture path"),
-        None,
-        sample_rate,
-    )
-    .expect("load preview fixture");
+    let waveform = load_audio_file(file.path().to_str().expect("fixture path"), None)
+        .expect("load preview fixture");
 
     engine.process_command(AudioCommand::PlayPreview {
         waveform,

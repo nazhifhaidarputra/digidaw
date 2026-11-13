@@ -311,13 +311,9 @@ settings-info-application = Aplicação
 settings-info-version-unavailable = As informações de versão não estão disponíveis.
 settings-info-name = Nome
 settings-info-version = Versão
-settings-info-build = Compilação
-settings-info-not-specified = Não especificado
 settings-info-report-bug = Comunicar um erro
 settings-info-report-bug-help = Inclua a sua versão do { -app-name }, o sistema operativo, os passos para reproduzir, o resultado esperado, o resultado obtido e os registos relevantes.
 settings-info-copy-url = Copiar URL para comunicar erros
-settings-info-licenses = Licenças de código aberto
-settings-info-view-licenses = Ver licenças
 settings-info-copy-url-failed = Não foi possível copiar o URL
 settings-info-url-copied = URL para comunicar erros copiado
 

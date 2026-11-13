@@ -221,7 +221,7 @@ mod lv2 {
             let directory = tempfile::tempdir().unwrap();
             let path = directory.path().join("lv2.digidaw");
             project_api::save_project(&mut ctx, path.to_str().unwrap()).unwrap();
-            let mut loaded = load_daw_project(&path, 48_000).unwrap();
+            let mut loaded = load_daw_project(&path).unwrap();
             assert_eq!(loaded.generator_pool.len(), 2);
             for (_, generator) in &loaded.generator_pool {
                 let GeneratorInstanceType::Plugin(plugin) = &generator.instance_type else {

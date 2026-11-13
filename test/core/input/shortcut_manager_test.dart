@@ -368,7 +368,7 @@ void main() {
 
     final pianoRollOnly = await notifier.remap(
       TrackListShortcutKeys.nudgeLeft.id,
-      chords[PianoRollShortcutKeys.quantize.id]!,
+      chords[PianoRollShortcutKeys.humanize.id]!,
     );
     expect(pianoRollOnly.isOk(), isTrue);
 

@@ -36,7 +36,7 @@ pub fn play_source_preview(ctx: &mut DawContext, id: AudioSourceId) -> anyhow::R
 /// Loads a file at the requested DSP sample rate and previews at most 15 seconds of frames.
 pub fn play_file_preview(ctx: &mut DawContext, file_path: &str) -> anyhow::Result<()> {
     let sample_rate = ctx.audio_runtime_settings.read().requested_dsp.sample_rate;
-    let waveform = load_audio_file(file_path, None, sample_rate)?;
+    let waveform = load_audio_file(file_path, None)?;
     let max_frames = u64::from(sample_rate) * SAMPLE_BROWSER_PREVIEW_SECONDS;
     ctx.send_audio_command(AudioCommand::PlayPreview {
         waveform,
@@ -62,18 +62,15 @@ const METRONOME_CLICK_MAX_SECONDS: u64 = 10;
 /// click with `None`. Offbeats play the file as recorded and downbeats an octave higher.
 pub fn set_metronome_sound(ctx: &mut DawContext, file_path: Option<&str>) -> anyhow::Result<()> {
     let click = match file_path {
-        Some(path) => {
-            let sample_rate = ctx.audio_runtime_settings.read().requested_dsp.sample_rate;
-            Some(load_metronome_click(path, sample_rate)?)
-        }
+        Some(path) => Some(load_metronome_click(path)?),
         None => None,
     };
     ctx.send_audio_command(AudioCommand::SetMetronomeClick(click))
 }
 
 /// Decodes an audio file into a mono click of bounded length.
-fn load_metronome_click(file_path: &str, sample_rate: u32) -> anyhow::Result<MetronomeClick> {
-    let waveform = load_audio_file(file_path, None, sample_rate)?;
+fn load_metronome_click(file_path: &str) -> anyhow::Result<MetronomeClick> {
+    let waveform = load_audio_file(file_path, None)?;
     let channels = usize::from(waveform.channels);
     let interleaved = waveform
         .get_playable_buffer()

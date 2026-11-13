@@ -47,6 +47,7 @@ app-recordings-save-failed = 无法保存这些录音
 app-project-recover-failed = 无法恢复项目
 app-project-audio-load-failed = 无法加载音频
 app-project-source-delete-failed = 无法删除音频源
+app-project-source-replace-failed = 无法替换音频源
 app-project-pattern-delete-failed = 无法删除样式
 app-project-info-update-failed = 无法更新项目信息
 app-project-undo-failed = 无法撤销

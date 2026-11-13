@@ -134,7 +134,7 @@ pub fn save_daw_project(save_path: &Path, app_state: &ApplicationState) -> anyho
     Ok(())
 }
 
-pub fn load_daw_project(path: &Path, sample_rate: u32) -> anyhow::Result<ApplicationState> {
+pub fn load_daw_project(path: &Path) -> anyhow::Result<ApplicationState> {
     let mut file =
         File::open(path).with_context(|| format!("Failed to open {}", path.display()))?;
 
@@ -207,10 +207,9 @@ pub fn load_daw_project(path: &Path, sample_rate: u32) -> anyhow::Result<Applica
                 )
             })?;
 
-            let waveform = load_audio_file(dest_path_str, Some(&file_name), sample_rate)
-                .with_context(|| {
-                    format!("Failed to decode embedded audio for source id {id} ({file_name})")
-                })?;
+            let waveform = load_audio_file(dest_path_str, Some(&file_name)).with_context(|| {
+                format!("Failed to decode embedded audio for source id {id} ({file_name})")
+            })?;
 
             Ok((id, entry_name, waveform))
         })
@@ -364,13 +363,20 @@ pub fn peek_project_metadata(path: &Path) -> anyhow::Result<ProjectMetadata> {
 }
 
 /// Copies the fields decoding determines into a waveform loaded from the project file.
+///
+/// Projects saved before sources kept their file's sample rate counted the trim points and the
+/// envelope in frames at the rate the audio was decoded at then, the saved `sample_rate`; they
+/// move to frames of the decoded audio.
 fn adopt_decoded_audio(waveform: &mut AudioWaveform, decoded: &AudioWaveform) {
+    waveform.rescale_frames(waveform.sample_rate, decoded.sample_rate);
     waveform.buffer.clone_from(&decoded.buffer);
     waveform.file_path.clone_from(&decoded.file_path);
     waveform.sample_rate = decoded.sample_rate;
     waveform.original_sample_rate = decoded.original_sample_rate;
     waveform.channels = decoded.channels;
     waveform.duration = decoded.duration;
+    // Rounding must not leave the trim end past the audio.
+    waveform.trim_end = waveform.trim_end.min(waveform.original_frames());
 }
 
 /// Parses `audio/{id}_{file_name}` as produced by [`save_karbeat_project`].
@@ -420,6 +426,14 @@ mod test {
         reason = "the fixture's sizes and sample values are small constants"
     )]
     fn write_mono_wav(path: &Path) {
+        write_mono_wav_at(path, SAMPLE_RATE);
+    }
+
+    #[allow(
+        clippy::arithmetic_side_effects,
+        reason = "the fixture's sizes and sample values are small constants"
+    )]
+    fn write_mono_wav_at(path: &Path, sample_rate: u32) {
         let samples: Vec<i16> = (0..4_800).map(|i| (i % 100 - 50) * 100).collect();
         let data_len = u32::try_from(samples.len() * 2).unwrap();
         let mut bytes = Vec::new();
@@ -429,8 +443,8 @@ mod test {
         bytes.extend_from_slice(&16_u32.to_le_bytes());
         bytes.extend_from_slice(&1_u16.to_le_bytes());
         bytes.extend_from_slice(&1_u16.to_le_bytes());
-        bytes.extend_from_slice(&SAMPLE_RATE.to_le_bytes());
-        bytes.extend_from_slice(&(SAMPLE_RATE * 2).to_le_bytes());
+        bytes.extend_from_slice(&sample_rate.to_le_bytes());
+        bytes.extend_from_slice(&(sample_rate * 2).to_le_bytes());
         bytes.extend_from_slice(&2_u16.to_le_bytes());
         bytes.extend_from_slice(&16_u16.to_le_bytes());
         bytes.extend_from_slice(b"data");
@@ -442,18 +456,73 @@ mod test {
     }
 
     #[test]
+    fn audio_keeps_the_sample_rate_of_its_file() {
+        let dir = tempdir().unwrap();
+        let wav = dir.path().join("tone.wav");
+        write_mono_wav_at(&wav, 22_050);
+        let mut state = ApplicationState::default();
+        let id = state.load_audio(wav.to_str().unwrap(), None).unwrap();
+        let project = dir.path().join("rate.karbeat");
+        save_daw_project(&project, &state).unwrap();
+
+        for state in [state, load_daw_project(&project).unwrap()] {
+            let waveform = state.asset_library.source_map.get(id).unwrap();
+            assert_eq!(waveform.sample_rate, 22_050);
+            assert_eq!(waveform.original_sample_rate, 22_050);
+            assert_eq!(waveform.original_frames(), 4_800);
+            assert_eq!(waveform.trim_end, 4_800);
+            assert!((waveform.duration - 4_800.0 / 22_050.0).abs() < 1e-9);
+        }
+    }
+
+    #[test]
+    fn frame_counts_saved_at_another_rate_move_to_the_audio_rate() {
+        let dir = tempdir().unwrap();
+        let wav = dir.path().join("tone.wav");
+        write_mono_wav_at(&wav, 24_000);
+        let decoded = load_audio_file(wav.to_str().unwrap(), None).unwrap();
+        // Saved when the audio was decoded at a 48 kHz project rate.
+        let mut saved = AudioWaveform {
+            sample_rate: 48_000,
+            trim_start: 960,
+            trim_end: 9_601,
+            envelope: GainEnvelope {
+                fade_in: Fade {
+                    length: 480,
+                    ..Fade::default()
+                },
+                crossfade: 96,
+                points: vec![EnvelopePoint {
+                    position: 4_800,
+                    ..EnvelopePoint::default()
+                }],
+                ..GainEnvelope::default()
+            },
+            ..AudioWaveform::default()
+        };
+
+        adopt_decoded_audio(&mut saved, &decoded);
+
+        assert_eq!(saved.sample_rate, 24_000);
+        assert_eq!(saved.trim_start, 480);
+        // Rounding never leaves the trim end past the audio.
+        assert_eq!(saved.trim_end, 4_800);
+        assert_eq!(saved.envelope.fade_in.length, 240);
+        assert_eq!(saved.envelope.crossfade, 48);
+        assert_eq!(saved.envelope.points[0].position, 2_400);
+    }
+
+    #[test]
     fn extracted_audio_is_deleted_with_the_last_project_state() {
         let dir = tempdir().unwrap();
         let wav = dir.path().join("tone.wav");
         write_mono_wav(&wav);
         let mut state = ApplicationState::default();
-        state
-            .load_audio(wav.to_str().unwrap(), None, SAMPLE_RATE)
-            .unwrap();
+        state.load_audio(wav.to_str().unwrap(), None).unwrap();
         let project = dir.path().join("with_audio.karbeat");
         save_daw_project(&project, &state).unwrap();
 
-        let loaded = load_daw_project(&project, SAMPLE_RATE).unwrap();
+        let loaded = load_daw_project(&project).unwrap();
         let session = loaded
             .asset_library
             .session_dir
@@ -520,7 +589,7 @@ mod test {
         let mut file = File::create(&file_path_no_magic).unwrap();
         file.write_all(b"GARBAGE_DATA_NO_MAGIC_HEADER").unwrap();
 
-        let load_result = load_daw_project(&file_path_no_magic, SAMPLE_RATE);
+        let load_result = load_daw_project(&file_path_no_magic);
         assert!(load_result.is_err());
         assert_eq!(
             load_result.unwrap_err().to_string(),
@@ -534,7 +603,7 @@ mod test {
         file2.write_all(KARBEAT_MAGIC_HEADER).unwrap();
         file2.write_all(b"THIS IS NOT A ZIP FILE").unwrap();
 
-        let load_result_zip = load_daw_project(&file_path_bad_zip, SAMPLE_RATE);
+        let load_result_zip = load_daw_project(&file_path_bad_zip);
         assert!(
             load_result_zip.is_err(),
             "Failed to reject a corrupted ZIP payload"
@@ -561,7 +630,7 @@ mod test {
         );
 
         // Load & Verify
-        let load_result = load_daw_project(&file_path, SAMPLE_RATE);
+        let load_result = load_daw_project(&file_path);
         assert!(
             load_result.is_ok(),
             "Failed to load the project we just saved: {:?}",
@@ -631,7 +700,7 @@ mod test {
             );
         }
 
-        let loaded = load_daw_project(&v1, SAMPLE_RATE).unwrap();
+        let loaded = load_daw_project(&v1).unwrap();
         assert_eq!(loaded.transport.bpm, 132.0);
         assert_eq!(loaded.metadata.name, "Old project");
         assert!(loaded.tracks.contains_key(track));
@@ -641,7 +710,7 @@ mod test {
         let v2 = dir.path().join("v2.dgdaw");
         save_daw_project(&v2, &loaded).unwrap();
         assert!(archive_entry(&v2, "format.json").is_some());
-        let reloaded = load_daw_project(&v2, SAMPLE_RATE).unwrap();
+        let reloaded = load_daw_project(&v2).unwrap();
         assert_eq!(
             serde_json::to_value(&loaded).unwrap(),
             serde_json::to_value(&reloaded).unwrap()
@@ -660,7 +729,7 @@ mod test {
         zip.write_all(br#"{"version":99}"#).unwrap();
         zip.finish().unwrap();
 
-        let error = load_daw_project(&project, SAMPLE_RATE).unwrap_err();
+        let error = load_daw_project(&project).unwrap_err();
         assert!(error.to_string().contains("format version 99"), "{error}");
     }
 
@@ -690,7 +759,7 @@ mod test {
 
         save_daw_project(&file_path, &app_state).unwrap();
 
-        let load_result = load_daw_project(&file_path, SAMPLE_RATE);
+        let load_result = load_daw_project(&file_path);
         assert!(
             load_result.is_ok(),
             "Failed to load a known-valid project file"
@@ -727,7 +796,7 @@ mod test {
         let toml = String::from_utf8(archive_entry(&project, "metadata.toml").unwrap()).unwrap();
         assert!(toml.contains("path = \"cover/cover.jpg\""), "{toml}");
 
-        let loaded = load_daw_project(&project, 48_000).unwrap();
+        let loaded = load_daw_project(&project).unwrap();
         let cover = loaded.metadata.cover.expect("resolved cover");
         assert_eq!(cover.linked_path.as_deref(), Some(cover_path.as_path()));
         // The session path leads to the original file on this machine
@@ -746,7 +815,7 @@ mod test {
         let original = read(&cover_path).unwrap();
         remove_file(&cover_path).unwrap();
 
-        let loaded = load_daw_project(&project, 48_000).unwrap();
+        let loaded = load_daw_project(&project).unwrap();
         let cover = loaded.metadata.cover.expect("extracted cover");
         assert_ne!(cover.path, cover_path);
         assert_eq!(read(&cover.path).unwrap(), original);
@@ -760,13 +829,7 @@ mod test {
         let project = dir.path().join("plain.dgdaw");
         save_daw_project(&project, &ApplicationState::default()).unwrap();
         assert!(archive_entry(&project, "cover/cover.jpg").is_none());
-        assert!(
-            load_daw_project(&project, 48_000)
-                .unwrap()
-                .metadata
-                .cover
-                .is_none()
-        );
+        assert!(load_daw_project(&project).unwrap().metadata.cover.is_none());
     }
 
     fn audio_entry_names(project: &Path) -> Vec<String> {
@@ -786,9 +849,7 @@ mod test {
         let wav = dir.path().join("tone.wav");
         write_mono_wav(&wav);
         let mut state = ApplicationState::default();
-        let source = state
-            .load_audio(wav.to_str().unwrap(), None, SAMPLE_RATE)
-            .unwrap();
+        let source = state.load_audio(wav.to_str().unwrap(), None).unwrap();
         let track = state.add_new_audio_track().id;
         let clip = state
             .create_new_clip(Some(source.to_u64()), ClipSourceType::Audio, track, 0)
@@ -852,7 +913,7 @@ mod test {
             "a hard copy shares its original's embedded file"
         );
 
-        let loaded = load_daw_project(&project, SAMPLE_RATE).unwrap();
+        let loaded = load_daw_project(&project).unwrap();
         let sources = &loaded.asset_library.source_map;
         let original = &sources[source];
         assert_eq!(original.envelope, waveform_envelope);

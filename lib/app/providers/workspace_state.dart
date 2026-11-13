@@ -92,8 +92,6 @@ abstract class WorkspaceState with _$WorkspaceState {
 
     @Default(100.0) double horizontalZoomLevel,
 
-    @Default(MusicalBeatSize.none) MusicalBeatSize horizontalClipShiftSizeDenom,
-
     @Default(GridSize.quarter) GridSize gridSize,
 
     @Default(false) bool snapToGrid,
@@ -264,17 +262,6 @@ class WorkspaceNotifier extends Notifier<WorkspaceState> {
     final clamped = level.clamp(WorkspaceState.minZoom, WorkspaceState.maxZoom);
     if (state.horizontalZoomLevel != clamped) {
       state = state.copyWith(horizontalZoomLevel: clamped);
-    }
-  }
-
-  // ------------------------------------------------------------------
-  // Clip shift size
-  // ------------------------------------------------------------------
-
-  /// Set the beat-size used when nudging clips horizontally by a fixed step.
-  void setHorizontalClipShiftSizeDenom(MusicalBeatSize value) {
-    if (state.horizontalClipShiftSizeDenom != value) {
-      state = state.copyWith(horizontalClipShiftSizeDenom: value);
     }
   }
 

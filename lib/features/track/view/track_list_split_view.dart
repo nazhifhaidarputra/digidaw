@@ -284,7 +284,8 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
         (state) => (
           selectedTool: state.selectedTool,
           horizontalZoomLevel: state.horizontalZoomLevel,
-          horizontalClipShiftSizeDenom: state.horizontalClipShiftSizeDenom,
+          snapToGrid: state.snapToGrid,
+          gridSize: state.gridSize,
         ),
       ),
     );
@@ -303,11 +304,10 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
     final zoomLevel = state.horizontalZoomLevel;
     double ticks = absoluteX * zoomLevel;
 
-    // Apply Shift Step Snapping for cut
-    ticks = _snapClipShiftTick(
-      ticks: ticks.toInt(),
-      step: state.horizontalClipShiftSizeDenom,
-    ).toDouble();
+    // The cut lands on the grid, like the slice itself
+    if (state.snapToGrid) {
+      ticks = state.gridSize.snap(ticks.toInt()).toDouble();
+    }
 
     double snappedAbsoluteX = ticks / zoomLevel;
     double left = snappedAbsoluteX - scrollX;
@@ -368,7 +368,6 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
           gridSize: state.gridSize,
           isRightPanelExpanded: state.isRightPanelExpanded,
           resizeStretches: state.resizeStretches,
-          horizontalClipShiftSizeDenom: state.horizontalClipShiftSizeDenom,
         ),
       ),
     );
@@ -423,31 +422,6 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
                     .read(workspaceStateProvider.notifier)
                     .toggleResizeStretches(),
               ),
-            ),
-            const SizedBox(width: 8),
-            Text(
-              tr('track-move-step'),
-              style: TextStyle(color: colors.onSurfaceVariant, fontSize: 12),
-            ),
-            const SizedBox(width: 8),
-            DropdownButton<MusicalBeatSize>(
-              value: workspaceState.horizontalClipShiftSizeDenom,
-              dropdownColor: colors.surfaceContainerHigh,
-              style: TextStyle(color: colors.onSurface, fontSize: 12),
-              underline: const SizedBox(),
-              items: MusicalBeatSize.values.map((size) {
-                return DropdownMenuItem<MusicalBeatSize>(
-                  value: size,
-                  child: Text(size.label),
-                );
-              }).toList(),
-              onChanged: (val) {
-                if (val != null) {
-                  ref
-                      .read(workspaceStateProvider.notifier)
-                      .setHorizontalClipShiftSizeDenom(val);
-                }
-              },
             ),
           ],
         ),

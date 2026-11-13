@@ -179,9 +179,10 @@ pub struct AudioWaveform {
     pub file_path: PathBuf,
     /// name of the audio waveform
     pub name: String,
-    /// Original sample rate of the audio waveform
+    /// Sample rate of the audio file.
     pub original_sample_rate: u32,
-    /// Current sample rate of the audio waveform
+    /// Sample rate of `buffer`, and the unit of the trim points and the envelope. Sources keep
+    /// their file's rate; the engine converts to its own rate while playing.
     pub sample_rate: u32,
     /// Number of channels of the audio waveform
     pub channels: u16,
@@ -382,6 +383,30 @@ impl AudioWaveform {
             return 1.0;
         }
         rendered.len() as f64 / original.len() as f64
+    }
+
+    /// Moves the trim points and the envelope from frames at `from_rate` to frames at `to_rate`.
+    pub fn rescale_frames(&mut self, from_rate: u32, to_rate: u32) {
+        if from_rate == 0 || from_rate == to_rate {
+            return;
+        }
+        let ratio = f64::from(to_rate) / f64::from(from_rate);
+        let scale = |frames: u64| (frames as f64 * ratio).round() as u64;
+        let scale_u32 = |frames: u32| u32::try_from(scale(u64::from(frames))).unwrap_or(u32::MAX);
+        self.trim_start = scale_u32(self.trim_start);
+        self.trim_end = scale_u32(self.trim_end);
+        let envelope = &mut self.envelope;
+        for fade in [
+            &mut envelope.fade_in,
+            &mut envelope.decay,
+            &mut envelope.fade_out,
+        ] {
+            fade.length = scale_u32(fade.length);
+        }
+        envelope.crossfade = scale_u32(envelope.crossfade);
+        for point in &mut envelope.points {
+            point.position = scale(point.position);
+        }
     }
 
     /// Frames of the original audio, the unit of the trim points.

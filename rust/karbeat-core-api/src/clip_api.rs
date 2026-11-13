@@ -252,23 +252,20 @@ pub fn batch_resize_clips(
     Ok(stretched)
 }
 
-/// Tick distance from the dragged edge of `time` to `new_time_val`, the edge's new position.
-fn resize_delta(
-    time: &ClipTimeUnit,
-    edge: ResizeEdge,
-    new_time_val: u64,
-    app: &ApplicationState,
-) -> i64 {
-    let bpm = app.transport.bpm;
-    let sample_rate = app.audio_config.sample_rate;
-    let (start, length) = match *time {
+/// Start and length of `time` on the timeline. Legacy sample-based clips report samples.
+fn timeline_span(time: &ClipTimeUnit, app: &ApplicationState) -> (u64, u64) {
+    match *time {
         ClipTimeUnit::Audio {
             start_tick,
             loop_length,
             ..
         } => (
             start_tick,
-            ClipTimeUnit::samples_to_ticks(loop_length, bpm, sample_rate),
+            ClipTimeUnit::samples_to_ticks(
+                loop_length,
+                app.transport.bpm,
+                app.audio_config.sample_rate,
+            ),
         ),
         ClipTimeUnit::Samples {
             start_time,
@@ -280,7 +277,17 @@ fn resize_delta(
             loop_length,
             ..
         } => (u64::from(start_time), u64::from(loop_length)),
-    };
+    }
+}
+
+/// Tick distance from the dragged edge of `time` to `new_time_val`, the edge's new position.
+fn resize_delta(
+    time: &ClipTimeUnit,
+    edge: ResizeEdge,
+    new_time_val: u64,
+    app: &ApplicationState,
+) -> i64 {
+    let (start, length) = timeline_span(time, app);
     let edge_position = match edge {
         ResizeEdge::Right => start + length,
         ResizeEdge::Left => start,
@@ -365,4 +372,128 @@ pub fn set_clip_modulation(
 
     ctx.broadcast_track_graph();
     Ok(clip)
+}
+
+/// How [`retime_clips`] moves the start and end of each clip.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ClipRetiming {
+    /// Snaps starts and ends to the nearest multiple of the step; clips keep at least one step.
+    Quantize { step_ticks: u64 },
+    /// Snaps starts to the nearest multiple of the step, keeping lengths.
+    QuantizeStart { step_ticks: u64 },
+    /// Makes each clip end where the next later clip among the given clips starts. Clips at
+    /// the last start keep their length.
+    Legato,
+}
+
+impl ClipRetiming {
+    fn label(self) -> &'static str {
+        match self {
+            Self::Quantize { .. } => "Quantize Clips",
+            Self::QuantizeStart { .. } => "Quantize Clip Starts",
+            Self::Legato => "Legato Clips",
+        }
+    }
+}
+
+/// `tick` rounded to the nearest multiple of `step`, which is positive.
+fn snap(tick: u64, step: u64) -> u64 {
+    tick.saturating_add(step / 2)
+        .checked_div(step)
+        .map_or(tick, |steps| steps.saturating_mul(step))
+}
+
+/// The new `(start, end)` tick span of each of `spans` under `timing`, in the same order.
+fn retimed_spans(spans: &[(u64, u64)], timing: ClipRetiming) -> Vec<(u64, u64)> {
+    match timing {
+        ClipRetiming::Quantize { step_ticks } => spans
+            .iter()
+            .map(|&(start, end)| {
+                let start = snap(start, step_ticks);
+                (
+                    start,
+                    snap(end, step_ticks).max(start.saturating_add(step_ticks)),
+                )
+            })
+            .collect(),
+        ClipRetiming::QuantizeStart { step_ticks } => spans
+            .iter()
+            .map(|&(start, end)| {
+                let snapped = snap(start, step_ticks);
+                (snapped, snapped.saturating_add(end.saturating_sub(start)))
+            })
+            .collect(),
+        ClipRetiming::Legato => {
+            let mut starts: Vec<u64> = spans.iter().map(|&(start, _)| start).collect();
+            starts.sort_unstable();
+            starts.dedup();
+            spans
+                .iter()
+                .map(|&(start, end)| {
+                    let next = starts.iter().copied().find(|&next| next > start);
+                    (start, next.unwrap_or(end))
+                })
+                .collect()
+        }
+    }
+}
+
+/// Quantizes or legatos clips of one track as one reversible operation and returns the clips
+/// that changed. Audio clips are trimmed or extended, never stretched. Legacy sample-based
+/// clips are left unchanged.
+pub fn retime_clips(
+    ctx: &mut DawContext,
+    track_id: TrackId,
+    clip_ids: &[ClipId],
+    timing: ClipRetiming,
+) -> anyhow::Result<Vec<Clip>> {
+    if let ClipRetiming::Quantize { step_ticks } | ClipRetiming::QuantizeStart { step_ticks } =
+        timing
+    {
+        anyhow::ensure!(step_ticks > 0, "Quantize step must be positive");
+    }
+    let mut ids = Vec::with_capacity(clip_ids.len());
+    let mut spans = Vec::with_capacity(clip_ids.len());
+    for &clip_id in clip_ids {
+        let clip = ctx
+            .app_state
+            .get_clip(&track_id, &clip_id)
+            .ok_or_else(|| anyhow::anyhow!("Clip {clip_id:?} not found in track {track_id:?}"))?;
+        if matches!(clip.time, ClipTimeUnit::Samples { .. }) {
+            continue;
+        }
+        let (start, length) = timeline_span(&clip.time, &ctx.app_state);
+        ids.push(clip_id);
+        spans.push((start, start.saturating_add(length)));
+    }
+
+    let recorder = ClipEditRecorder::begin(&ctx.app_state, timing.label(), &[track_id], &ids);
+    let mut changed = Vec::new();
+    for ((clip_id, (start, end)), (new_start, new_end)) in ids
+        .into_iter()
+        .zip(spans.iter().copied())
+        .zip(retimed_spans(&spans, timing))
+    {
+        let mut clip = None;
+        if new_start != start {
+            clip = Some(
+                ctx.app_state
+                    .move_clip(track_id, track_id, clip_id, new_start)?,
+            );
+        }
+        if new_end.saturating_sub(new_start) != end.saturating_sub(start) {
+            clip =
+                Some(
+                    ctx.app_state
+                        .resize_clip(track_id, clip_id, ResizeEdge::Right, new_end)?,
+                );
+        }
+        changed.extend(clip);
+    }
+    if !changed.is_empty() {
+        let action = recorder.finish(&mut ctx.app_state);
+        ctx.push_history(action);
+        ctx.broadcast_track_graph();
+    }
+    Ok(changed)
 }

@@ -1027,6 +1027,58 @@ pub fn commit_beat_grid(ctx: &mut DawContext, source_id: AudioSourceId, grid: Be
     true
 }
 
+/// Sets the tempo a source was recorded at, replacing a detected or anchored tempo, as one
+/// undoable step. Returns whether it needs a render.
+///
+/// Detected beats were found for the replaced tempo, so they are dropped, along with a
+/// beat-by-beat stretch that follows them. Detecting the tempo again restores them.
+pub fn set_source_tempo(
+    ctx: &mut DawContext,
+    source_id: AudioSourceId,
+    bpm: f32,
+) -> anyhow::Result<bool> {
+    anyhow::ensure!(
+        BPM_RANGE.contains(&bpm),
+        "Tempo must be between {} and {} BPM",
+        BPM_RANGE.start(),
+        BPM_RANGE.end()
+    );
+    let project_bpm = ctx.app_state.transport.bpm;
+    let entry = ctx
+        .app_state
+        .asset_library
+        .source_map
+        .get_mut(source_id)
+        .context("Cannot find audio source")?;
+    if entry.original_bpm == Some(bpm) && entry.beat_grid.is_none() {
+        return Ok(false);
+    }
+    let duration = [(source_id, entry.duration_scale(project_bpm))];
+    let waveform = Arc::make_mut(entry);
+    let previous = tempo_state(waveform);
+    waveform.original_bpm = Some(bpm);
+    waveform.beat_grid = None;
+    if let Some(edited) = &waveform.edited
+        && edited.edits.warp
+    {
+        let edits = WaveformEdits {
+            warp: false,
+            ..edited.edits.clone()
+        };
+        replace_edits(&mut waveform.edited, edits);
+    }
+    let clips = ctx.app_state.follow_source_durations(&duration);
+    let rescaled = !clips.is_empty();
+    ctx.push_history(
+        SourceTempoChanged::new(source_id, previous, "Set Source Tempo").with_clips(clips),
+    );
+    ctx.broadcast_audio_source(source_id);
+    if rescaled {
+        ctx.broadcast_track_graph();
+    }
+    Ok(begin_refresh_render(ctx, source_id)?.is_some())
+}
+
 /// Sets the Beat This! model files used for tempo detection: the mel front end and the
 /// small beat model.
 pub fn configure_tempo_models(mel: PathBuf, beat: PathBuf) -> Result<(), AnalysisError> {

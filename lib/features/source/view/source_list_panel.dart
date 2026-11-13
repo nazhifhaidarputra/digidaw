@@ -8,6 +8,7 @@ import 'package:karbeat/app/providers/workspace_state.dart';
 import 'package:karbeat/core/l10n/localizer.dart';
 import 'package:karbeat/core/widgets/context_menu.dart';
 import 'package:karbeat/features/plugins/services/plugin_ui_launcher.dart';
+import 'package:karbeat/features/source/services/audio_source_import.dart';
 import 'package:karbeat/features/source/services/audio_waveform_services.dart';
 import 'package:karbeat/features/source/services/source_actions.dart';
 import 'package:karbeat/features/source/view/audio_properties_screen.dart';
@@ -150,6 +151,11 @@ class SourceListPanel extends ConsumerWidget {
                           id: entry.key,
                           type: UiSourceType.audio,
                         ),
+                        onReplace: () => replaceAudioSourceWithPicker(
+                          context,
+                          ref,
+                          entry.key,
+                        ),
                         onDelete: () => deleteAudioSourceWithConfirm(
                           context,
                           ref,
@@ -243,6 +249,7 @@ class _SourcePanelTile extends StatelessWidget {
     required this.onTap,
     this.onPlace,
     this.onRename,
+    this.onReplace,
     this.onDelete,
     this.renameIcon = false,
   });
@@ -254,6 +261,7 @@ class _SourcePanelTile extends StatelessWidget {
   final VoidCallback onTap;
   final VoidCallback? onPlace;
   final VoidCallback? onRename;
+  final VoidCallback? onReplace;
   final VoidCallback? onDelete;
 
   /// Shows [onRename] as a pencil beside the title, not only in the menu.
@@ -312,6 +320,12 @@ class _SourcePanelTile extends StatelessWidget {
           title: tr('common-rename'),
           icon: Icons.edit,
           onTap: onRename!,
+        ),
+      if (onReplace != null)
+        DawContextAction(
+          title: tr('source-replace-audio'),
+          icon: Icons.swap_horiz,
+          onTap: onReplace!,
         ),
       if (onDelete != null)
         DawContextAction(

@@ -149,7 +149,6 @@ track-recording-active = Opnemen. Klik om te stoppen en de take te bewaren.
 track-recording = Opnemen
 track-input-stereo = Kan. { $first }+{ $second } (stereo)
 track-input-mono = Kan. { $channel } (mono)
-track-move-step = Verplaatsstap
 track-clips-selected = { $count ->
     [one] { $count } clip
    *[other] { $count } clips

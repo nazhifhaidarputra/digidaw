@@ -418,10 +418,7 @@ class _InteractiveClipState extends ConsumerState<_InteractiveClip> {
           int cutPoint =
               widget.clip.startTimeInTicks +
               (details.localPosition.dx * widget.zoomLevel).round();
-          cutPoint = _snapClipShiftTick(
-            ticks: cutPoint,
-            step: ref.read(workspaceStateProvider).horizontalClipShiftSizeDenom,
-          );
+          cutPoint = _snapTick(cutPoint, ref.read(workspaceStateProvider));
 
           await ref
               .read(trackListStateProvider.notifier)
@@ -525,32 +522,18 @@ class _InteractiveClipState extends ConsumerState<_InteractiveClip> {
               final workspaceStateProv = ref.read(workspaceStateProvider);
 
               if (_currentAction == _DragAction.resizeLeft) {
-                if (workspaceStateProv.snapToGrid) {
-                  final int rawStart = _leaderBaseStartTime + rawTotalDelta;
-                  snappedTotalDelta =
-                      _snapTick(rawStart, workspaceStateProv) -
-                      _leaderBaseStartTime;
-                } else {
-                  snappedTotalDelta = _snapDeltaToStep(
-                    deltaInTicks: rawTotalDelta,
-                    step: workspaceStateProv.horizontalClipShiftSizeDenom,
-                  );
-                }
+                final int rawStart = _leaderBaseStartTime + rawTotalDelta;
+                snappedTotalDelta =
+                    _snapTick(rawStart, workspaceStateProv) -
+                    _leaderBaseStartTime;
               } else if (_currentAction == _DragAction.resizeRight) {
-                if (workspaceStateProv.snapToGrid) {
-                  final int rawEnd =
-                      _leaderBaseStartTime +
-                      _leaderBaseLoopLength +
-                      rawTotalDelta;
-                  snappedTotalDelta =
-                      _snapTick(rawEnd, workspaceStateProv) -
-                      (_leaderBaseStartTime + _leaderBaseLoopLength);
-                } else {
-                  snappedTotalDelta = _snapDeltaToStep(
-                    deltaInTicks: rawTotalDelta,
-                    step: workspaceStateProv.horizontalClipShiftSizeDenom,
-                  );
-                }
+                final int rawEnd =
+                    _leaderBaseStartTime +
+                    _leaderBaseLoopLength +
+                    rawTotalDelta;
+                snappedTotalDelta =
+                    _snapTick(rawEnd, workspaceStateProv) -
+                    (_leaderBaseStartTime + _leaderBaseLoopLength);
               }
 
               _previousSnappedDelta = snappedTotalDelta;
@@ -734,17 +717,10 @@ class _InteractiveClipState extends ConsumerState<_InteractiveClip> {
           int rawTotalDelta = _accumulatedDeltaTicks.round();
           int snappedTotalDelta = rawTotalDelta;
 
-          final workspaceStateProv = ref.read(workspaceStateProvider);
-          if (workspaceStateProv.snapToGrid) {
-            final int rawStart = _leaderBaseStartTime + rawTotalDelta;
-            snappedTotalDelta =
-                _snapTick(rawStart, workspaceStateProv) - _leaderBaseStartTime;
-          } else {
-            snappedTotalDelta = _snapDeltaToStep(
-              deltaInTicks: rawTotalDelta,
-              step: workspaceStateProv.horizontalClipShiftSizeDenom,
-            );
-          }
+          final int rawStart = _leaderBaseStartTime + rawTotalDelta;
+          snappedTotalDelta =
+              _snapTick(rawStart, ref.read(workspaceStateProvider)) -
+              _leaderBaseStartTime;
 
           _previousSnappedDelta = snappedTotalDelta;
 

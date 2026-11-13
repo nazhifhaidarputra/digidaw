@@ -18,6 +18,7 @@ import 'package:karbeat/src/rust/api/pattern.dart';
 // Rust FFI Imports
 import 'package:karbeat/src/rust/api/project.dart';
 import 'package:karbeat/src/rust/api/audio.dart' as audio_api;
+import 'package:karbeat/src/rust/api/audio_analysis.dart' as analysis_api;
 import 'package:karbeat/src/rust/api/plugin.dart' as plugin_api;
 import 'package:karbeat/src/rust/api/serialization.dart' as serialization_api;
 import 'package:karbeat/src/rust/api/session.dart' as session_api;
@@ -220,6 +221,32 @@ class ProjectNotifier extends AsyncNotifier<ApplicationDataStore> {
         return ref.notifyErrorResult<int>(
           error,
           title: tr('app-project-audio-load-failed'),
+          stackTrace: stackTrace,
+        );
+      }
+    });
+  }
+
+  /// Swaps an audio source's audio for the file at [filePath] as one undo
+  /// step. Its clips keep their place and it keeps its settings; the envelope
+  /// the backend rescaled to the new audio is stored.
+  Future<Result<void>> replaceAudioSource(int sourceId, String filePath) {
+    return _runBackendOperation(() async {
+      try {
+        await analysis_api.replaceAudioSource(
+          ctx: dawContext,
+          sourceId: sourceId,
+          filePath: filePath,
+        );
+        upsertSourceEnvelopes(
+          await audio_api.getAudioSourceEnvelopes(ctx: dawContext),
+        );
+        return Result.ok(null);
+      } catch (error, stackTrace) {
+        AppLogger.error('Failed to replace audio source: $error');
+        return ref.notifyErrorResult<void>(
+          error,
+          title: tr('app-project-source-replace-failed'),
           stackTrace: stackTrace,
         );
       }

@@ -47,6 +47,7 @@ app-recordings-save-failed = Tidak dapat menyimpan rekaman-rekaman
 app-project-recover-failed = Tidak dapat memulihkan proyek
 app-project-audio-load-failed = Tidak dapat memuat audio
 app-project-source-delete-failed = Tidak dapat menghapus sumber audio
+app-project-source-replace-failed = Tidak dapat mengganti sumber audio
 app-project-pattern-delete-failed = Tidak dapat menghapus pola
 app-project-info-update-failed = Tidak dapat memperbarui informasi proyek
 app-project-undo-failed = Tidak dapat mengurungkan

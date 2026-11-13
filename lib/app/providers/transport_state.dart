@@ -8,6 +8,7 @@ import 'package:karbeat/app/providers/track_list_state.dart';
 import 'package:karbeat/core/utils/logger.dart';
 import 'package:karbeat/core/utils/result_type.dart';
 import 'package:karbeat/src/rust/api/audio.dart' as audio_api;
+import 'package:karbeat/src/rust/api/audio_analysis.dart' as analysis_api;
 import 'package:karbeat/src/rust/api/project.dart';
 import 'package:karbeat/src/rust/api/transport.dart' as transport_api;
 
@@ -183,7 +184,35 @@ class TransportNotifier extends AsyncNotifier<TransportStateData> {
     return Result.ok(null);
   }
 
-  Future<Result<void>> setBpm(double value) async {
+  /// The last tempo write. Ending a tempo edit waits for it, so the edit
+  /// renders for its final tempo.
+  Future<Result<void>> _lastBpmWrite = Future.value(Result.ok(null));
+
+  Future<Result<void>> setBpm(double value) => _lastBpmWrite = _writeBpm(value);
+
+  /// Starts editing the tempo with a gesture, such as a drag. Until
+  /// [endTempoEdit], tempo changes stretch audio in real time instead of
+  /// rendering it, and renders of the last edit stop.
+  void beginTempoEdit() {
+    final result = attempt(() => analysis_api.beginTempoEdit(ctx: _ctx));
+    if (result case Error<void>(:final error)) {
+      AppLogger.error('Failed to begin a tempo edit: $error');
+    }
+  }
+
+  /// Ends the tempo edit once its last change is stored, rendering the
+  /// stretched audio for the final tempo.
+  Future<void> endTempoEdit() async {
+    await _lastBpmWrite;
+    final result = await AsyncValue.guard(
+      () => analysis_api.endTempoEdit(ctx: _ctx),
+    );
+    if (result.hasError) {
+      AppLogger.error('Failed to end a tempo edit: ${result.error}');
+    }
+  }
+
+  Future<Result<void>> _writeBpm(double value) async {
     if (!state.hasValue || state.requireValue.state == null) {
       return ref.notifyErrorResult(Exception("State not ready"));
     }

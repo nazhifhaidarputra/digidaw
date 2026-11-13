@@ -28,15 +28,6 @@ common-no = No
 common-loading = Loading…
 common-unknown = Unknown
 
-## Grid and note lengths
-
-common-grid-bar = 1 Bar
-common-grid-beats = { $count ->
-    [one] { $count } Beat
-   *[other] { $count } Beats
-}
-common-grid-step = { $fraction } Step
-
 ## Color picker
 
 common-color-choose = Choose a color

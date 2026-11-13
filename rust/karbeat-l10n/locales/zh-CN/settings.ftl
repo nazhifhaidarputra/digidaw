@@ -293,13 +293,9 @@ settings-info-application = 应用
 settings-info-version-unavailable = 版本信息不可用。
 settings-info-name = 名称
 settings-info-version = 版本
-settings-info-build = 构建号
-settings-info-not-specified = 未指定
 settings-info-report-bug = 报告错误
 settings-info-report-bug-help = 请附上你的 { -app-name } 版本、操作系统、复现步骤、预期结果、实际结果和相关日志。
 settings-info-copy-url = 复制错误报告网址
-settings-info-licenses = 开源许可证
-settings-info-view-licenses = 查看许可证
 settings-info-copy-url-failed = 无法复制网址
 settings-info-url-copied = 已复制错误报告网址
 

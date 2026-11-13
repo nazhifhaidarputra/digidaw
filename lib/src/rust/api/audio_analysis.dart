@@ -9,7 +9,7 @@ import 'package:freezed_annotation/freezed_annotation.dart' hide protected;
 import 'project.dart';
 part 'audio_analysis.freezed.dart';
 
-// These functions are ignored because they are not marked as `pub`: `render`, `schedule_render`, `schedule_source_renders`, `source_spec`, `started`
+// These functions are ignored because they are not marked as `pub`: `render_current_recipe`, `render`, `schedule_render`, `schedule_source_renders`, `source_spec`, `started`
 // These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `fmt`, `from`
 
 /// Sets the Beat This! model files, the mel front end and the small beat model; call once
@@ -48,6 +48,16 @@ Future<int> startFitToTempo({
   warp: warp,
 );
 
+/// Starts editing the tempo, such as with a drag, or resumes it while the renders of the last
+/// edit run. Until [`end_tempo_edit`], tempo changes render nothing and playback stretches in
+/// real time; the running renders of the last edit are cancelled.
+void beginTempoEdit({required DawContext ctx}) =>
+    RustLib.instance.api.crateApiAudioAnalysisBeginTempoEdit(ctx: ctx);
+
+/// Ends a tempo edit and renders the stretched sources for its final tempo at once.
+Future<void> endTempoEdit({required DawContext ctx}) =>
+    RustLib.instance.api.crateApiAudioAnalysisEndTempoEdit(ctx: ctx);
+
 /// Changes how an audio source follows the project tempo (undoable), then renders it in the
 /// background when needed. Stretch keeps the pitch; Resampled bends it like tape.
 Future<void> setAudioSourceSampleMode({
@@ -58,6 +68,30 @@ Future<void> setAudioSourceSampleMode({
   ctx: ctx,
   sourceId: sourceId,
   mode: mode,
+);
+
+/// Sets the tempo an audio source was recorded at (undoable), replacing a detected tempo and
+/// its beats, then renders it in the background when needed.
+Future<void> setAudioSourceTempo({
+  required DawContext ctx,
+  required int sourceId,
+  required double bpm,
+}) => RustLib.instance.api.crateApiAudioAnalysisSetAudioSourceTempo(
+  ctx: ctx,
+  sourceId: sourceId,
+  bpm: bpm,
+);
+
+/// Swaps an audio source's audio for the file at `file_path` (undoable). Its clips keep their
+/// place and it keeps its settings; it renders in the background when its edits need it.
+Future<void> replaceAudioSource({
+  required DawContext ctx,
+  required int sourceId,
+  required String filePath,
+}) => RustLib.instance.api.crateApiAudioAnalysisReplaceAudioSource(
+  ctx: ctx,
+  sourceId: sourceId,
+  filePath: filePath,
 );
 
 /// Sets an audio source's pitch shift in cents (clamped to ±2400, two octaves either way) and

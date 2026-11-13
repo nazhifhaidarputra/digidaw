@@ -26,12 +26,6 @@ common-no = 아니요
 common-loading = 불러오는 중…
 common-unknown = 알 수 없음
 
-## Grid and note lengths
-
-common-grid-bar = 1마디
-common-grid-beats = { $count }박
-common-grid-step = { $fraction } 스텝
-
 ## Color picker
 
 common-color-choose = 색상 선택

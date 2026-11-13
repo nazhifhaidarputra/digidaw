@@ -4,7 +4,9 @@ use crate::core::{
     history::{EngineSync, HistoryAction, HistoryError},
     project::{
         ApplicationState, ClipTiming, GainEnvelope,
-        track::audio_waveform::{AudioSampleMode, BeatGrid, EditedWaveform, SourceTrim},
+        track::audio_waveform::{
+            AudioSampleMode, AudioWaveform, BeatGrid, EditedWaveform, SourceTrim,
+        },
     },
 };
 use crate::shared::id::AudioSourceId;
@@ -130,3 +132,33 @@ impl SourceTempoChanged {
 }
 
 swap_action!(SourceTempoChanged, field label);
+
+/// An audio source's audio replaced by another file; holds the waveform on the other side of
+/// the edit.
+#[derive(Debug)]
+pub struct SourceReplaced {
+    source_id: AudioSourceId,
+    waveform: Arc<AudioWaveform>,
+}
+
+impl SourceReplaced {
+    /// Records an edit from the source's previous waveform.
+    pub fn new(source_id: AudioSourceId, previous: Arc<AudioWaveform>) -> Self {
+        Self {
+            source_id,
+            waveform: previous,
+        }
+    }
+
+    fn swap(&mut self, app: &mut ApplicationState) -> Result<EngineSync, HistoryError> {
+        let entry = app
+            .asset_library
+            .source_map
+            .get_mut(self.source_id)
+            .ok_or(HistoryError::missing("Audio source"))?;
+        swap(entry, &mut self.waveform);
+        Ok(EngineSync::source(self.source_id))
+    }
+}
+
+swap_action!(SourceReplaced, "Replace Audio");

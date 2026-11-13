@@ -70,7 +70,7 @@ void main() {
   Future<void> tapChange(WidgetTester tester, String id) async {
     await tester.ensureVisible(changeButton(id));
     await tester.pumpAndSettle();
-    await tapChange(tester, id);
+    await tester.tap(changeButton(id));
   }
 
   Future<void> enterChord(

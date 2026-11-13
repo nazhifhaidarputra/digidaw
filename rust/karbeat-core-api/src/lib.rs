@@ -53,6 +53,8 @@ pub mod project_api;
 pub mod recording_api;
 /// Sample browser folder scans and file system watches.
 pub mod sample_browser_api;
+/// When a tempo edit renders tempo-stretched sources again.
+pub mod tempo_edit;
 #[allow(
     clippy::expect_used,
     clippy::panic,

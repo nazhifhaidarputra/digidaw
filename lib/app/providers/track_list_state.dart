@@ -788,12 +788,11 @@ class TrackListNotifier extends Notifier<TrackListState> {
   // Batch clip operations
   // ------------------------------------------------------------------
 
-  /// Moves the selected clips [steps] move steps along the timeline, where
-  /// one step is [step] (a single tick when it is none). Stops at the start
-  /// of the timeline.
+  /// Moves the selected clips [steps] cells of [grid] along the timeline (a
+  /// single tick per step without a grid). Stops at the start of the timeline.
   Future<Result<void>> nudgeSelectedClips({
     required int steps,
-    required MusicalBeatSize step,
+    required GridSize grid,
   }) async {
     final trackId = state.selectedTrackId;
     final clipIds = state.selectedClipIds;
@@ -809,10 +808,7 @@ class TrackListNotifier extends Notifier<TrackListState> {
     if (starts.isEmpty) return Result.ok(null);
     final earliestStart = starts.reduce((a, b) => a < b ? a : b);
 
-    final ticksPerStep = step == MusicalBeatSize.none
-        ? 1
-        : (step.value * 960).round();
-    var deltaTicks = steps * ticksPerStep;
+    var deltaTicks = steps * grid.ticks;
     if (deltaTicks < -earliestStart) deltaTicks = -earliestStart;
     if (deltaTicks == 0) return Result.ok(null);
 
@@ -1045,6 +1041,61 @@ class TrackListNotifier extends Notifier<TrackListState> {
     final result = await deleteClipBatch(trackId, clipIds.toList());
     deselectAllClips();
     return result;
+  }
+
+  // ------------------------------------------------------------------
+  // Clip timing
+  // ------------------------------------------------------------------
+
+  /// Snaps the starts and ends of the selected clips to [grid] as one undo
+  /// step. Clips keep at least one grid cell.
+  Future<Result<void>> quantizeSelectedClips(GridSize grid) =>
+      _retimeSelectedClips(
+        (trackId, clipIds) => track_api.quantizeClips(
+          ctx: _ctx,
+          trackId: trackId,
+          clipIds: clipIds,
+          stepTicks: grid.ticks,
+        ),
+      );
+
+  /// Snaps the starts of the selected clips to [grid] as one undo step,
+  /// keeping their lengths.
+  Future<Result<void>> quantizeSelectedClipStarts(GridSize grid) =>
+      _retimeSelectedClips(
+        (trackId, clipIds) => track_api.quantizeClipStarts(
+          ctx: _ctx,
+          trackId: trackId,
+          clipIds: clipIds,
+          stepTicks: grid.ticks,
+        ),
+      );
+
+  /// Makes each selected clip end where the next selected clip starts, as one
+  /// undo step.
+  Future<Result<void>> legatoSelectedClips() => _retimeSelectedClips(
+    (trackId, clipIds) =>
+        track_api.legatoClips(ctx: _ctx, trackId: trackId, clipIds: clipIds),
+  );
+
+  /// Runs [retime] on the selected clips and adopts the clips it changed.
+  Future<Result<void>> _retimeSelectedClips(
+    Future<List<UiClip>> Function(int trackId, List<int> clipIds) retime,
+  ) async {
+    final trackId = state.selectedTrackId;
+    final clipIds = state.selectedClipIds;
+    if (trackId == null || clipIds.isEmpty) return Result.ok(null);
+    final result = await AsyncValue.guard(
+      () => retime(trackId, clipIds.toList()),
+    );
+    if (result.hasError) {
+      AppLogger.error(
+        'TrackListNotifier: error retiming clips: ${result.error}',
+      );
+      return ref.notifyErrorResult(Exception(result.error.toString()));
+    }
+    _replaceClips(trackId, result.requireValue);
+    return Result.ok(null);
   }
 
   // ------------------------------------------------------------------

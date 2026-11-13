@@ -14,7 +14,7 @@ T _$identity<T>(T value) => value;
 /// @nodoc
 mixin _$InfoSettingsState {
 
- bool get isLoading; String? get version; String? get buildNumber; String? get errorMessage;
+ bool get isLoading; String? get version; String? get errorMessage;
 /// Create a copy of InfoSettingsState
 /// with the given fields replaced by the non-null parameter values.
 @JsonKey(includeFromJson: false, includeToJson: false)
@@ -25,16 +25,16 @@ $InfoSettingsStateCopyWith<InfoSettingsState> get copyWith => _$InfoSettingsStat
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is InfoSettingsState&&(identical(other.isLoading, isLoading) || other.isLoading == isLoading)&&(identical(other.version, version) || other.version == version)&&(identical(other.buildNumber, buildNumber) || other.buildNumber == buildNumber)&&(identical(other.errorMessage, errorMessage) || other.errorMessage == errorMessage));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is InfoSettingsState&&(identical(other.isLoading, isLoading) || other.isLoading == isLoading)&&(identical(other.version, version) || other.version == version)&&(identical(other.errorMessage, errorMessage) || other.errorMessage == errorMessage));
 }
 
 
 @override
-int get hashCode => Object.hash(runtimeType,isLoading,version,buildNumber,errorMessage);
+int get hashCode => Object.hash(runtimeType,isLoading,version,errorMessage);
 
 @override
 String toString() {
-  return 'InfoSettingsState(isLoading: $isLoading, version: $version, buildNumber: $buildNumber, errorMessage: $errorMessage)';
+  return 'InfoSettingsState(isLoading: $isLoading, version: $version, errorMessage: $errorMessage)';
 }
 
 
@@ -45,7 +45,7 @@ abstract mixin class $InfoSettingsStateCopyWith<$Res>  {
   factory $InfoSettingsStateCopyWith(InfoSettingsState value, $Res Function(InfoSettingsState) _then) = _$InfoSettingsStateCopyWithImpl;
 @useResult
 $Res call({
- bool isLoading, String? version, String? buildNumber, String? errorMessage
+ bool isLoading, String? version, String? errorMessage
 });
 
 
@@ -62,11 +62,10 @@ class _$InfoSettingsStateCopyWithImpl<$Res>
 
 /// Create a copy of InfoSettingsState
 /// with the given fields replaced by the non-null parameter values.
-@pragma('vm:prefer-inline') @override $Res call({Object? isLoading = null,Object? version = freezed,Object? buildNumber = freezed,Object? errorMessage = freezed,}) {
+@pragma('vm:prefer-inline') @override $Res call({Object? isLoading = null,Object? version = freezed,Object? errorMessage = freezed,}) {
   return _then(_self.copyWith(
 isLoading: null == isLoading ? _self.isLoading : isLoading // ignore: cast_nullable_to_non_nullable
 as bool,version: freezed == version ? _self.version : version // ignore: cast_nullable_to_non_nullable
-as String?,buildNumber: freezed == buildNumber ? _self.buildNumber : buildNumber // ignore: cast_nullable_to_non_nullable
 as String?,errorMessage: freezed == errorMessage ? _self.errorMessage : errorMessage // ignore: cast_nullable_to_non_nullable
 as String?,
   ));
@@ -153,10 +152,10 @@ return $default(_that);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( bool isLoading,  String? version,  String? buildNumber,  String? errorMessage)?  $default,{required TResult orElse(),}) {final _that = this;
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( bool isLoading,  String? version,  String? errorMessage)?  $default,{required TResult orElse(),}) {final _that = this;
 switch (_that) {
 case _InfoSettingsState() when $default != null:
-return $default(_that.isLoading,_that.version,_that.buildNumber,_that.errorMessage);case _:
+return $default(_that.isLoading,_that.version,_that.errorMessage);case _:
   return orElse();
 
 }
@@ -174,10 +173,10 @@ return $default(_that.isLoading,_that.version,_that.buildNumber,_that.errorMessa
 /// }
 /// ```
 
-@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( bool isLoading,  String? version,  String? buildNumber,  String? errorMessage)  $default,) {final _that = this;
+@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( bool isLoading,  String? version,  String? errorMessage)  $default,) {final _that = this;
 switch (_that) {
 case _InfoSettingsState():
-return $default(_that.isLoading,_that.version,_that.buildNumber,_that.errorMessage);case _:
+return $default(_that.isLoading,_that.version,_that.errorMessage);case _:
   throw StateError('Unexpected subclass');
 
 }
@@ -194,10 +193,10 @@ return $default(_that.isLoading,_that.version,_that.buildNumber,_that.errorMessa
 /// }
 /// ```
 
-@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( bool isLoading,  String? version,  String? buildNumber,  String? errorMessage)?  $default,) {final _that = this;
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( bool isLoading,  String? version,  String? errorMessage)?  $default,) {final _that = this;
 switch (_that) {
 case _InfoSettingsState() when $default != null:
-return $default(_that.isLoading,_that.version,_that.buildNumber,_that.errorMessage);case _:
+return $default(_that.isLoading,_that.version,_that.errorMessage);case _:
   return null;
 
 }
@@ -209,12 +208,11 @@ return $default(_that.isLoading,_that.version,_that.buildNumber,_that.errorMessa
 
 
 class _InfoSettingsState implements InfoSettingsState {
-  const _InfoSettingsState({this.isLoading = false, this.version, this.buildNumber, this.errorMessage});
+  const _InfoSettingsState({this.isLoading = false, this.version, this.errorMessage});
   
 
 @override@JsonKey() final  bool isLoading;
 @override final  String? version;
-@override final  String? buildNumber;
 @override final  String? errorMessage;
 
 /// Create a copy of InfoSettingsState
@@ -227,16 +225,16 @@ _$InfoSettingsStateCopyWith<_InfoSettingsState> get copyWith => __$InfoSettingsS
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is _InfoSettingsState&&(identical(other.isLoading, isLoading) || other.isLoading == isLoading)&&(identical(other.version, version) || other.version == version)&&(identical(other.buildNumber, buildNumber) || other.buildNumber == buildNumber)&&(identical(other.errorMessage, errorMessage) || other.errorMessage == errorMessage));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is _InfoSettingsState&&(identical(other.isLoading, isLoading) || other.isLoading == isLoading)&&(identical(other.version, version) || other.version == version)&&(identical(other.errorMessage, errorMessage) || other.errorMessage == errorMessage));
 }
 
 
 @override
-int get hashCode => Object.hash(runtimeType,isLoading,version,buildNumber,errorMessage);
+int get hashCode => Object.hash(runtimeType,isLoading,version,errorMessage);
 
 @override
 String toString() {
-  return 'InfoSettingsState(isLoading: $isLoading, version: $version, buildNumber: $buildNumber, errorMessage: $errorMessage)';
+  return 'InfoSettingsState(isLoading: $isLoading, version: $version, errorMessage: $errorMessage)';
 }
 
 
@@ -247,7 +245,7 @@ abstract mixin class _$InfoSettingsStateCopyWith<$Res> implements $InfoSettingsS
   factory _$InfoSettingsStateCopyWith(_InfoSettingsState value, $Res Function(_InfoSettingsState) _then) = __$InfoSettingsStateCopyWithImpl;
 @override @useResult
 $Res call({
- bool isLoading, String? version, String? buildNumber, String? errorMessage
+ bool isLoading, String? version, String? errorMessage
 });
 
 
@@ -264,11 +262,10 @@ class __$InfoSettingsStateCopyWithImpl<$Res>
 
 /// Create a copy of InfoSettingsState
 /// with the given fields replaced by the non-null parameter values.
-@override @pragma('vm:prefer-inline') $Res call({Object? isLoading = null,Object? version = freezed,Object? buildNumber = freezed,Object? errorMessage = freezed,}) {
+@override @pragma('vm:prefer-inline') $Res call({Object? isLoading = null,Object? version = freezed,Object? errorMessage = freezed,}) {
   return _then(_InfoSettingsState(
 isLoading: null == isLoading ? _self.isLoading : isLoading // ignore: cast_nullable_to_non_nullable
 as bool,version: freezed == version ? _self.version : version // ignore: cast_nullable_to_non_nullable
-as String?,buildNumber: freezed == buildNumber ? _self.buildNumber : buildNumber // ignore: cast_nullable_to_non_nullable
 as String?,errorMessage: freezed == errorMessage ? _self.errorMessage : errorMessage // ignore: cast_nullable_to_non_nullable
 as String?,
   ));

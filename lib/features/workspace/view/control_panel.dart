@@ -746,10 +746,17 @@ class BpmControl extends ConsumerWidget {
           }
         },
         child: GestureDetector(
+          // A drag is one tempo edit: the audio renders for its final tempo.
+          onVerticalDragStart: (_) =>
+              ref.read(transportProvider.notifier).beginTempoEdit(),
           onVerticalDragUpdate: (details) {
             final change = details.primaryDelta! * -0.5;
             _updateBpm(ref, bpm + change);
           },
+          onVerticalDragEnd: (_) =>
+              ref.read(transportProvider.notifier).endTempoEdit(),
+          onVerticalDragCancel: () =>
+              ref.read(transportProvider.notifier).endTempoEdit(),
           child: MouseRegion(
             cursor: SystemMouseCursors.resizeUpDown,
             child: Container(

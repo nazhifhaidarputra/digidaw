@@ -12,7 +12,7 @@ class SelectTrackListToolIntent extends Intent {
   final ToolSelection tool;
 }
 
-/// Moves the selected clips by [steps] move steps in time.
+/// Moves the selected clips by [steps] grid cells in time.
 class NudgeClipsIntent extends Intent {
   const NudgeClipsIntent(this.steps);
 
@@ -37,6 +37,26 @@ class DuplicateClipsIntent extends Intent {
 /// Deletes the selected clips and clears the selection.
 class DeleteClipsIntent extends Intent {
   const DeleteClipsIntent();
+}
+
+/// Moves the selected clips to the clip clipboard.
+class CutClipsIntent extends Intent {
+  const CutClipsIntent();
+}
+
+/// Snaps the starts and ends of the selected clips to the grid.
+class QuantizeClipsIntent extends Intent {
+  const QuantizeClipsIntent();
+}
+
+/// Snaps the starts of the selected clips to the grid, keeping their lengths.
+class QuantizeClipStartsIntent extends Intent {
+  const QuantizeClipStartsIntent();
+}
+
+/// Makes each selected clip end where the next selected clip starts.
+class LegatoClipsIntent extends Intent {
+  const LegatoClipsIntent();
 }
 
 /// Track-list shortcuts. They are active only in the track list view.
@@ -118,5 +138,29 @@ const trackListShortcuts = IListConst<DawShortcut>([
     scope: ShortcutScope.trackList,
     intent: DeleteClipsIntent(),
     defaultKey: SingleActivator(LogicalKeyboardKey.delete),
+  ),
+  DawShortcut(
+    key: TrackListShortcutKeys.cutClips,
+    scope: ShortcutScope.trackList,
+    intent: CutClipsIntent(),
+    defaultKey: SingleActivator(LogicalKeyboardKey.keyX, control: true),
+  ),
+  DawShortcut(
+    key: TrackListShortcutKeys.quantizeClips,
+    scope: ShortcutScope.trackList,
+    intent: QuantizeClipsIntent(),
+    defaultKey: SingleActivator(LogicalKeyboardKey.keyQ, control: true),
+  ),
+  DawShortcut(
+    key: TrackListShortcutKeys.quantizeClipStarts,
+    scope: ShortcutScope.trackList,
+    intent: QuantizeClipStartsIntent(),
+    defaultKey: SingleActivator(LogicalKeyboardKey.keyQ, alt: true),
+  ),
+  DawShortcut(
+    key: TrackListShortcutKeys.legatoClips,
+    scope: ShortcutScope.trackList,
+    intent: LegatoClipsIntent(),
+    defaultKey: SingleActivator(LogicalKeyboardKey.keyL, control: true),
   ),
 ]);

@@ -99,7 +99,7 @@ pub fn execute_bounce(
     // A cancelled or failed render leaves no file behind.
     execute_export(export, &path, config, options, &mut progress)?;
 
-    let waveform = load_audio_file(&path, Some(&name), sample_rate).inspect_err(|_| {
+    let waveform = load_audio_file(&path, Some(&name)).inspect_err(|_| {
         discard(&output_path);
     })?;
     Ok(CompletedBounce {

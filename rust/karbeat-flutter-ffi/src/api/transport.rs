@@ -4,7 +4,7 @@
 
 use flutter_rust_bridge::frb;
 use karbeat_audio::engine::PlaybackMode;
-use karbeat_core_api::transport_api;
+use karbeat_core_api::{audio_analysis_api, transport_api};
 
 use crate::api::{audio_analysis::schedule_source_renders, context::DawContext};
 
@@ -64,10 +64,16 @@ pub fn set_looping(ctx: &DawContext, val: bool) -> Result<(), String> {
 /// writes to both ApplicationState (for serialization) and AudioCommand (for audio thread)
 ///
 /// Returns whether clips of tempo-following audio were rescaled, so the UI should refetch them.
+/// During a tempo edit (`begin_tempo_edit`) stretched sources wait for its end to render.
 pub fn set_bpm(ctx: &DawContext, val: f32) -> Result<bool, String> {
     let rescaled =
         transport_api::set_bpm(&mut ctx.project_write(), val).map_err(|e| e.to_string())?;
-    schedule_source_renders(ctx, true);
+    let editing = ctx.tempo_edit().is_editing();
+    if editing {
+        audio_analysis_api::cancel_stale_renders(&ctx.read());
+    } else {
+        schedule_source_renders(ctx, true);
+    }
     Ok(rescaled)
 }
 

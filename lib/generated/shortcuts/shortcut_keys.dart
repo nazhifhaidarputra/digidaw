@@ -149,6 +149,30 @@ abstract final class TrackListShortcutKeys {
     titleId: 'shortcuts-track-list-delete-clips',
     categoryId: 'shortcuts-category-track-list',
   );
+
+  static const cutClips = ShortcutKey(
+    id: 'trackList.cutClips',
+    titleId: 'shortcuts-track-list-cut-clips',
+    categoryId: 'shortcuts-category-track-list',
+  );
+
+  static const quantizeClips = ShortcutKey(
+    id: 'trackList.quantizeClips',
+    titleId: 'shortcuts-track-list-quantize-clips',
+    categoryId: 'shortcuts-category-track-list',
+  );
+
+  static const quantizeClipStarts = ShortcutKey(
+    id: 'trackList.quantizeClipStarts',
+    titleId: 'shortcuts-track-list-quantize-clip-starts',
+    categoryId: 'shortcuts-category-track-list',
+  );
+
+  static const legatoClips = ShortcutKey(
+    id: 'trackList.legatoClips',
+    titleId: 'shortcuts-track-list-legato-clips',
+    categoryId: 'shortcuts-category-track-list',
+  );
 }
 
 /// Shortcuts of the `trackList.tool` module.
@@ -371,6 +395,10 @@ const allShortcutKeys = <ShortcutKey>[
   TrackListShortcutKeys.pasteClips,
   TrackListShortcutKeys.duplicateClips,
   TrackListShortcutKeys.deleteClips,
+  TrackListShortcutKeys.cutClips,
+  TrackListShortcutKeys.quantizeClips,
+  TrackListShortcutKeys.quantizeClipStarts,
+  TrackListShortcutKeys.legatoClips,
   TrackListToolShortcutKeys.panSelect,
   TrackListToolShortcutKeys.draw,
   TrackListToolShortcutKeys.resize,

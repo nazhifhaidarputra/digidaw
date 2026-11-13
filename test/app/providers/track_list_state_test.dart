@@ -221,27 +221,24 @@ void main() {
             ).captured.single
             as int;
 
-    test('moves by the move step', () async {
+    test('moves by the grid size', () async {
       final container = await _container();
       final notifier = container.read(trackListStateProvider.notifier)
         ..selectClips(trackId: 1, clipIds: [10, 11]);
 
-      await notifier.nudgeSelectedClips(steps: 1, step: MusicalBeatSize.one);
+      await notifier.nudgeSelectedClips(steps: 1, grid: GridSize.quarter);
       expect(movedBy(), 960);
 
-      await notifier.nudgeSelectedClips(
-        steps: -1,
-        step: MusicalBeatSize.quarter,
-      );
+      await notifier.nudgeSelectedClips(steps: -1, grid: GridSize.sixteenth);
       expect(movedBy(), -240);
     });
 
-    test('a move step of none moves one tick', () async {
+    test('no grid moves one tick', () async {
       final container = await _container();
       final notifier = container.read(trackListStateProvider.notifier)
         ..selectClip(trackId: 1, clipId: 11);
 
-      await notifier.nudgeSelectedClips(steps: 1, step: MusicalBeatSize.none);
+      await notifier.nudgeSelectedClips(steps: 1, grid: GridSize.infinity);
 
       expect(movedBy(), 1);
     });
@@ -252,11 +249,11 @@ void main() {
         ..selectClips(trackId: 1, clipIds: [10, 11]);
 
       // The earliest clip starts at tick 480, less than one bar
-      await notifier.nudgeSelectedClips(steps: -1, step: MusicalBeatSize.four);
+      await notifier.nudgeSelectedClips(steps: -1, grid: GridSize.full);
       expect(movedBy(), -480);
 
       // Now at the start, there is nowhere left to go
-      await notifier.nudgeSelectedClips(steps: -1, step: MusicalBeatSize.four);
+      await notifier.nudgeSelectedClips(steps: -1, grid: GridSize.full);
       verifyNever(
         () => api.crateApiTrackMoveClipBatch(
           ctx: any(named: 'ctx'),
@@ -273,7 +270,7 @@ void main() {
 
       await container
           .read(trackListStateProvider.notifier)
-          .nudgeSelectedClips(steps: 1, step: MusicalBeatSize.one);
+          .nudgeSelectedClips(steps: 1, grid: GridSize.quarter);
 
       verifyNever(
         () => api.crateApiTrackMoveClipBatch(

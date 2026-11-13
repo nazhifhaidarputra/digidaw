@@ -49,8 +49,7 @@ class InfoSettingsPage extends ConsumerWidget {
                             ),
                           ),
                           TextButton(
-                            onPressed: () =>
-                                ref.invalidate(appPackageMetadataProvider),
+                            onPressed: () => ref.invalidate(appVersionProvider),
                             child: Text(tr('common-retry')),
                           ),
                         ],
@@ -65,12 +64,6 @@ class InfoSettingsPage extends ConsumerWidget {
                           _InfoRow(
                             label: tr('settings-info-version'),
                             value: infoState.version ?? tr('common-unknown'),
-                          ),
-                          _InfoRow(
-                            label: tr('settings-info-build'),
-                            value: infoState.buildNumber?.isEmpty ?? true
-                                ? tr('settings-info-not-specified')
-                                : infoState.buildNumber!,
                           ),
                         ],
                       ),
@@ -94,21 +87,6 @@ class InfoSettingsPage extends ConsumerWidget {
                       ],
                     ),
                   ],
-                ),
-              ),
-              const SizedBox(height: 16),
-              _InfoCard(
-                title: tr('settings-info-licenses'),
-                child: Align(
-                  alignment: Alignment.centerLeft,
-                  child: OutlinedButton.icon(
-                    onPressed: () => showLicensePage(
-                      context: context,
-                      applicationName: 'DigiDAW',
-                    ),
-                    icon: const Icon(Icons.article_outlined),
-                    label: Text(tr('settings-info-view-licenses')),
-                  ),
                 ),
               ),
             ],

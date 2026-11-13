@@ -89,8 +89,8 @@ pub fn execute_save_channel_template(pending: PendingChannelTemplateSave) -> any
 }
 
 /// Reads a project file into a staged state that remembers `path_name` as its project file.
-pub fn load_project_file(path_name: &str, sample_rate: u32) -> anyhow::Result<ApplicationState> {
-    let mut loaded = load_daw_project(Path::new(path_name), sample_rate)?;
+pub fn load_project_file(path_name: &str) -> anyhow::Result<ApplicationState> {
+    let mut loaded = load_daw_project(Path::new(path_name))?;
     loaded.session.set_file_path(Some(path_name.into()));
     Ok(loaded)
 }
@@ -139,8 +139,7 @@ pub fn load_project<T, F>(ctx: &mut DawContext, path_name: &str, mapper: F) -> a
 where
     F: FnOnce(&ApplicationState) -> T,
 {
-    let sample_rate = ctx.audio_runtime_settings.read().requested_dsp.sample_rate;
-    let mut loaded = load_project_file(path_name, sample_rate)?;
+    let mut loaded = load_project_file(path_name)?;
     loaded.audio_config = ctx.app_state.audio_config.clone();
     loaded.clipboard = ctx.app_state.clipboard.clone();
     if restore::has_external(&loaded) || restore::has_external(&ctx.app_state) {

@@ -10,11 +10,7 @@ void main() {
   ) async {
     await tester.pumpWidget(
       ProviderScope(
-        overrides: [
-          appPackageMetadataProvider.overrideWith(
-            (ref) async => (version: '1.2.3', buildNumber: '45'),
-          ),
-        ],
+        overrides: [appVersionProvider.overrideWith((ref) async => '1.2.3')],
         child: MaterialApp(
           theme: ThemeData.dark(),
           home: const Scaffold(body: InfoSettingsPage()),
@@ -24,17 +20,16 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('1.2.3'), findsOneWidget);
-    expect(find.text('45'), findsOneWidget);
     expect(find.text(InfoSettingsPage.supportUrl), findsOneWidget);
     expect(find.byTooltip('Copy bug report URL'), findsOneWidget);
-    expect(find.text('View licenses'), findsOneWidget);
+    expect(find.text('View licenses'), findsNothing);
   });
 
   testWidgets('offers retry when package metadata fails', (tester) async {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
-          appPackageMetadataProvider.overrideWith(
+          appVersionProvider.overrideWith(
             (ref) => Future.error(Exception('metadata unavailable')),
           ),
         ],

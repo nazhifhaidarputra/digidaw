@@ -18,7 +18,7 @@ use karbeat_core::core::project::{
 };
 use karbeat_core::shared::id::*;
 use karbeat_core_api::{
-    clip_api,
+    clip_api::{self, ClipRetiming},
     external_plugin_api::{
         InstalledPlugin, RemovedProjectItem, begin_add_instrument, begin_delete_track,
         begin_remove_generator, begin_replace_instrument, commit_install, commit_removal,
@@ -404,6 +404,63 @@ pub fn delete_clip_batch(
         .map_err(|e| format!("Failed to delete clips: {}", e))?;
 
     Ok(())
+}
+
+fn retime_clips(
+    ctx: &DawContext,
+    track_id: u64,
+    clip_ids: Vec<u64>,
+    timing: ClipRetiming,
+) -> Result<Vec<UiClip>, String> {
+    project_ctx!(ctx);
+    let track_id = TrackId::from_u64(track_id);
+    let clip_ids: Vec<ClipId> = clip_ids.into_iter().map(ClipId::from_u64).collect();
+    let changed = clip_api::retime_clips(ctx, track_id, &clip_ids, timing)
+        .map_err(|error| error.to_string())?;
+
+    Ok(changed.iter().map(UiClip::from).collect())
+}
+
+/// Snaps clip starts and ends to multiples of `step_ticks`, as one undo step. Returns the
+/// clips that changed.
+pub fn quantize_clips(
+    ctx: &DawContext,
+    track_id: u64,
+    clip_ids: Vec<u64>,
+    step_ticks: u64,
+) -> Result<Vec<UiClip>, String> {
+    retime_clips(
+        ctx,
+        track_id,
+        clip_ids,
+        ClipRetiming::Quantize { step_ticks },
+    )
+}
+
+/// Snaps clip starts to multiples of `step_ticks`, keeping lengths, as one undo step.
+/// Returns the clips that changed.
+pub fn quantize_clip_starts(
+    ctx: &DawContext,
+    track_id: u64,
+    clip_ids: Vec<u64>,
+    step_ticks: u64,
+) -> Result<Vec<UiClip>, String> {
+    retime_clips(
+        ctx,
+        track_id,
+        clip_ids,
+        ClipRetiming::QuantizeStart { step_ticks },
+    )
+}
+
+/// Makes each clip end where the next of `clip_ids` starts, as one undo step. Returns the
+/// clips that changed.
+pub fn legato_clips(
+    ctx: &DawContext,
+    track_id: u64,
+    clip_ids: Vec<u64>,
+) -> Result<Vec<UiClip>, String> {
+    retime_clips(ctx, track_id, clip_ids, ClipRetiming::Legato)
 }
 
 pub fn change_track_name(ctx: &DawContext, track_id: u64, new_name: &str) -> Result<(), String> {

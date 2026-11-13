@@ -11,6 +11,7 @@ import 'package:karbeat/core/utils/result_type.dart';
 import 'package:karbeat/app/providers/notification_provider.dart';
 import 'package:karbeat/app/providers/background_jobs_provider.dart';
 import 'package:karbeat/core/widgets/digidaw_plugin_widgets/parameter_knob.dart';
+import 'package:karbeat/features/source/services/audio_source_import.dart';
 import 'package:karbeat/features/source/services/audio_waveform_services.dart';
 import 'package:karbeat/features/track/services/gain_envelope_evaluator.dart';
 import 'package:karbeat/features/track/view/gain_envelope_editor.dart';
@@ -36,7 +37,17 @@ class AudioPropertiesScreen extends ConsumerWidget {
     final ctx = ref.read(projectProvider.notifier).dawContext;
 
     return Scaffold(
-      appBar: AppBar(title: Text(sourceName)),
+      appBar: AppBar(
+        title: Text(sourceName),
+        actions: [
+          IconButton(
+            tooltip: tr('source-replace-audio'),
+            onPressed: () =>
+                replaceAudioSourceWithPicker(context, ref, sourceId),
+            icon: const Icon(Icons.swap_horiz),
+          ),
+        ],
+      ),
       body: propsAsync.when(
         loading: () => const Center(child: CircularProgressIndicator()),
 
@@ -893,6 +904,30 @@ class _TempoControlsState extends ConsumerState<_TempoControls> {
     }
   }
 
+  /// Asks for the tempo the audio was recorded at and stores it, replacing a
+  /// detected tempo and its beats.
+  Future<void> _setTempo(double? current) async {
+    final bpm = await showDialog<double>(
+      context: context,
+      builder: (_) => _TempoDialog(initial: current),
+    );
+    if (bpm == null || !mounted) return;
+    final ctx = ref.read(projectProvider.notifier).dawContext;
+    final result = await attemptAsync(
+      () => setAudioSourceTempo(ctx: ctx, sourceId: widget.sourceId, bpm: bpm),
+    );
+    if (!mounted) return;
+    if (result case Error<void>(:final error)) {
+      ref
+          .read(notificationProvider.notifier)
+          .error(error, title: tr('source-tempo'));
+    }
+    ref.invalidate(audioPropertiesProvider(widget.sourceId));
+    // A tempo-following source plays for a new length, and its clips with it.
+    ref.invalidate(trackWaveformProvider);
+    await ref.read(trackListStateProvider.notifier).syncTracks();
+  }
+
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
@@ -914,7 +949,7 @@ class _TempoControlsState extends ConsumerState<_TempoControls> {
         'bpm': grid.bpm.toStringAsFixed(1),
         'steady': (grid.confidence * 100).round(),
       }),
-      (null, final bpm?) => tr('source-tempo-placed', {
+      (null, final bpm?) => tr('source-tempo-set', {
         'bpm': bpm.toStringAsFixed(1),
       }),
       (null, null) => tr('source-tempo-unknown'),
@@ -943,6 +978,11 @@ class _TempoControlsState extends ConsumerState<_TempoControls> {
         children: [
           Icon(Icons.speed, size: 16, color: colors.onSurfaceVariant),
           Text(tempo, style: TextStyle(color: colors.onSurfaceVariant)),
+          OutlinedButton.icon(
+            onPressed: () => _setTempo(grid?.bpm ?? props.originalBpm),
+            icon: const Icon(Icons.edit, size: 16),
+            label: Text(tr('source-set-tempo')),
+          ),
           OutlinedButton.icon(
             onPressed: detecting
                 ? null
@@ -986,6 +1026,73 @@ class _TempoControlsState extends ConsumerState<_TempoControls> {
             ),
         ],
       ),
+    );
+  }
+}
+
+/// Asks for a tempo in BPM, within the range a source may be fitted from.
+class _TempoDialog extends StatefulWidget {
+  const _TempoDialog({required this.initial});
+
+  final double? initial;
+
+  @override
+  State<_TempoDialog> createState() => _TempoDialogState();
+}
+
+class _TempoDialogState extends State<_TempoDialog> {
+  static const _min = 20.0;
+  static const _max = 400.0;
+
+  final _formKey = GlobalKey<FormState>();
+  late final _controller = TextEditingController(
+    text: widget.initial?.toStringAsFixed(1) ?? '',
+  );
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  double? get _bpm {
+    final bpm = double.tryParse(_controller.text.trim());
+    return bpm != null && bpm >= _min && bpm <= _max ? bpm : null;
+  }
+
+  void _submit() {
+    if (_formKey.currentState?.validate() ?? false) {
+      Navigator.of(context).pop(_bpm);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: Text(tr('source-set-tempo')),
+      content: Form(
+        key: _formKey,
+        child: TextFormField(
+          controller: _controller,
+          autofocus: true,
+          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+          decoration: InputDecoration(
+            suffixText: 'BPM',
+            helperText: tr('source-set-tempo-hint'),
+            helperMaxLines: 3,
+            border: const OutlineInputBorder(),
+          ),
+          validator: (_) => _bpm == null ? tr('source-tempo-invalid') : null,
+          onFieldSubmitted: (_) => _submit(),
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: Text(tr('common-cancel')),
+        ),
+        FilledButton(onPressed: _submit, child: Text(tr('common-apply'))),
+      ],
     );
   }
 }

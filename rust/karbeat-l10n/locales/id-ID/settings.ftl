@@ -293,13 +293,9 @@ settings-info-application = Aplikasi
 settings-info-version-unavailable = Informasi versi tidak tersedia.
 settings-info-name = Nama
 settings-info-version = Versi
-settings-info-build = Build
-settings-info-not-specified = Tidak ditentukan
 settings-info-report-bug = Laporkan bug
 settings-info-report-bug-help = Sertakan versi { -app-name }, sistem operasi, langkah untuk mereproduksi, hasil yang diharapkan, hasil sebenarnya, dan log yang relevan.
 settings-info-copy-url = Salin URL laporan bug
-settings-info-licenses = Lisensi sumber terbuka
-settings-info-view-licenses = Lihat lisensi
 settings-info-copy-url-failed = Tidak dapat menyalin URL
 settings-info-url-copied = URL laporan bug disalin
 
