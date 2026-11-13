@@ -51,6 +51,8 @@ pub mod plugin_discovery_api;
 pub mod project_api;
 /// Recording device input to audio clips.
 pub mod recording_api;
+/// Sample browser folder scans and file system watches.
+pub mod sample_browser_api;
 #[allow(
     clippy::expect_used,
     clippy::panic,

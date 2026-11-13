@@ -16,6 +16,7 @@ pub mod plugin;
 pub mod plugins;
 pub mod project;
 pub mod recording;
+pub mod sample_browser;
 pub mod serialization;
 pub mod session;
 pub mod settings;

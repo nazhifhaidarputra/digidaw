@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:karbeat/app/providers/notification_provider.dart';
 import 'package:karbeat/core/utils/formatter.dart';
@@ -10,6 +12,12 @@ import 'package:karbeat/shared/models/grid.dart';
 import 'package:karbeat/shared/models/interaction_target.dart';
 import 'package:karbeat/shared/models/menu_group.dart';
 import 'package:karbeat/src/rust/api/project.dart' show DawContext;
+import 'package:karbeat/src/rust/api/sample_browser.dart'
+    show
+        UiSampleFolderEvent,
+        UiSampleFolderEvent_Restored,
+        UiSampleFolderEvent_Scanned,
+        UiSampleFolderEvent_Unavailable;
 
 import 'package:freezed_annotation/freezed_annotation.dart';
 
@@ -121,7 +129,8 @@ abstract class WorkspaceState with _$WorkspaceState {
 /// All actions here mirror the workspace / editor methods of [GlobalAppState]
 /// and are intended as a drop-in replacement during the slow migration.
 class WorkspaceNotifier extends Notifier<WorkspaceState> {
-  bool _didRestoreSampleDirectories = false;
+  StreamSubscription<UiSampleFolderEvent>? _sampleFolderSubscription;
+  Completer<Result<void>>? _sampleFoldersRestored;
   DawContext? _dawContextLifetimeAnchor;
 
   // ---- static data (menu groups are app-level constants) ----
@@ -132,7 +141,13 @@ class WorkspaceNotifier extends Notifier<WorkspaceState> {
   ];
 
   @override
-  WorkspaceState build() => const WorkspaceState();
+  WorkspaceState build() {
+    ref.onDispose(() {
+      unawaited(_sampleFolderSubscription?.cancel());
+      _sampleFolderSubscription = null;
+    });
+    return const WorkspaceState();
+  }
 
   // ------------------------------------------------------------------
   // Navigation
@@ -327,86 +342,101 @@ class WorkspaceNotifier extends Notifier<WorkspaceState> {
     // belongs to the DAW session. Retaining this opaque handle guarantees the
     // Rust context cannot be finalized before an in-flight browser operation.
     _dawContextLifetimeAnchor ??= dawContext;
-    return restoreSampleDirectories();
+    return watchSampleDirectories();
   }
 
-  Future<Result<void>> restoreSampleDirectories() async {
-    if (_didRestoreSampleDirectories) return Result.ok(null);
-    _didRestoreSampleDirectories = true;
+  /// Starts receiving the sample folders from Rust, which scans the saved
+  /// folders and then rescans each one whose files change on disk. Completes
+  /// once every saved folder was scanned; later calls return the same result.
+  Future<Result<void>> watchSampleDirectories() {
+    final restored = _sampleFoldersRestored;
+    if (restored != null) return restored.future;
+    final completer = _sampleFoldersRestored = Completer<Result<void>>();
 
+    _setLoadingDirectory(true);
+    _sampleFolderSubscription = ref
+        .read(sampleBrowserServiceProvider)
+        .watchDirectories()
+        .listen(
+          _applySampleFolderEvent,
+          onError: (Object error, StackTrace stackTrace) {
+            if (!ref.mounted) return;
+            // Rust ends the stream on error; a later call may retry.
+            _sampleFolderSubscription = null;
+            _sampleFoldersRestored = null;
+            _setLoadingDirectory(false);
+            AppLogger.error(
+              'Failed to watch the sample folders',
+              error: error,
+              stackTrace: stackTrace,
+            );
+            final result = ref.notifyErrorResult<void>(
+              error,
+              stackTrace: stackTrace,
+            );
+            if (!completer.isCompleted) completer.complete(result);
+          },
+          onDone: () {
+            if (!completer.isCompleted) completer.complete(Result.ok(null));
+          },
+        );
+    return completer.future;
+  }
+
+  void _applySampleFolderEvent(UiSampleFolderEvent event) {
+    if (!ref.mounted) return;
+    switch (event) {
+      case UiSampleFolderEvent_Scanned(:final tree):
+        _showSampleDirectory(fileTreeFrom(tree));
+      case UiSampleFolderEvent_Unavailable(:final path):
+        final browser = state.browserPanelState;
+        if (!browser.directories.containsKey(path)) return;
+        state = state.copyWith(
+          browserPanelState: browser.copyWith(
+            directories: browser.directories.remove(path),
+          ),
+        );
+      case UiSampleFolderEvent_Restored():
+        _setLoadingDirectory(false);
+        final restored = _sampleFoldersRestored;
+        if (restored != null && !restored.isCompleted) {
+          restored.complete(Result.ok(null));
+        }
+    }
+  }
+
+  /// Shows [tree], expanding it when it is a new source folder.
+  void _showSampleDirectory(FileTree tree) {
+    final browser = state.browserPanelState;
+    final isNew = !browser.directories.containsKey(tree.path);
     state = state.copyWith(
-      browserPanelState: state.browserPanelState.copyWith(
-        isLoadingDirectory: true,
+      browserPanelState: browser.copyWith(
+        directories: browser.directories.add(tree.path, tree),
+        expandedDirectoryPaths: isNew
+            ? browser.expandedDirectoryPaths.add(tree.path)
+            : browser.expandedDirectoryPaths,
       ),
     );
+  }
 
-    final service = ref.read(sampleBrowserServiceProvider);
-    final loadResult = await service.loadPersistedDirectoryPaths();
-    if (!ref.mounted) return Result.ok(null);
-    if (loadResult case Error(error: final error)) {
-      _didRestoreSampleDirectories = false;
-      state = state.copyWith(
-        browserPanelState: state.browserPanelState.copyWith(
-          isLoadingDirectory: false,
-        ),
-      );
-      AppLogger.error(
-        'Failed to restore persisted sample directories',
-        error: error,
-      );
-      return ref.notifyErrorResult(error);
-    }
-
-    final restoredTrees = <String, FileTree>{};
-    for (final path in loadResult.ok().toSet()) {
-      final scanResult = await service.scanDirectory(path);
-      if (!ref.mounted) return Result.ok(null);
-      switch (scanResult) {
-        case Ok(value: final tree):
-          restoredTrees[tree.path] = tree;
-        case Error(error: final error):
-          // Keep the path persisted: removable or network storage may return.
-          AppLogger.warn(
-            'Persisted sample directory is currently unavailable: $path ($error)',
-          );
-      }
-    }
-
-    var directories = state.browserPanelState.directories;
-    var expandedDirectoryPaths = state.browserPanelState.expandedDirectoryPaths;
-    for (final tree in restoredTrees.values) {
-      directories = directories.add(tree.path, tree);
-      expandedDirectoryPaths = expandedDirectoryPaths.add(tree.path);
-    }
-
+  void _setLoadingDirectory(bool isLoading) {
+    if (state.browserPanelState.isLoadingDirectory == isLoading) return;
     state = state.copyWith(
       browserPanelState: state.browserPanelState.copyWith(
-        isLoadingDirectory: false,
-        directories: directories,
-        expandedDirectoryPaths: expandedDirectoryPaths,
+        isLoadingDirectory: isLoading,
       ),
     );
-    return Result.ok(null);
   }
 
   Future<Result<void>> addSampleDirectory() async {
     if (state.browserPanelState.isLoadingDirectory) return Result.ok(null);
-
-    state = state.copyWith(
-      browserPanelState: state.browserPanelState.copyWith(
-        isLoadingDirectory: true,
-      ),
-    );
+    _setLoadingDirectory(true);
 
     final service = ref.read(sampleBrowserServiceProvider);
     final pickResult = await service.pickDirectory();
     if (!ref.mounted) return Result.ok(null);
     if (pickResult case Error(error: final error)) {
-      state = state.copyWith(
-        browserPanelState: state.browserPanelState.copyWith(
-          isLoadingDirectory: false,
-        ),
-      );
+      _setLoadingDirectory(false);
       AppLogger.error(
         'Failed to open the sample directory picker',
         error: error,
@@ -416,49 +446,21 @@ class WorkspaceNotifier extends Notifier<WorkspaceState> {
 
     final path = pickResult.ok();
     if (path == null) {
-      state = state.copyWith(
-        browserPanelState: state.browserPanelState.copyWith(
-          isLoadingDirectory: false,
-        ),
-      );
+      _setLoadingDirectory(false);
       return Result.ok(null);
     }
 
-    final scanResult = await service.scanDirectory(path);
+    final addResult = await service.addDirectory(path);
     if (!ref.mounted) return Result.ok(null);
-    if (scanResult case Error(error: final error)) {
-      state = state.copyWith(
-        browserPanelState: state.browserPanelState.copyWith(
-          isLoadingDirectory: false,
-        ),
-      );
-      AppLogger.error('Failed to scan sample directory', error: error);
-      return ref.notifyErrorResult(error);
+    _setLoadingDirectory(false);
+    switch (addResult) {
+      case Ok(value: final tree):
+        _showSampleDirectory(tree);
+        return Result.ok(null);
+      case Error(error: final error):
+        AppLogger.error('Failed to add sample directory', error: error);
+        return ref.notifyErrorResult(error);
     }
-
-    final tree = scanResult.ok();
-    final updatedDirectories = state.browserPanelState.directories.add(
-      tree.path,
-      tree,
-    );
-    state = state.copyWith(
-      browserPanelState: state.browserPanelState.copyWith(
-        isLoadingDirectory: false,
-        directories: updatedDirectories,
-        expandedDirectoryPaths: state.browserPanelState.expandedDirectoryPaths
-            .add(tree.path),
-      ),
-    );
-
-    final saveResult = await service.savePersistedDirectoryPaths(
-      updatedDirectories.keys,
-    );
-    if (!ref.mounted) return Result.ok(null);
-    if (saveResult case Error(error: final error)) {
-      AppLogger.error('Failed to persist sample directories', error: error);
-      return ref.notifyErrorResult(error);
-    }
-    return Result.ok(null);
   }
 
   void setMidiKeyboardBaseKey(int key) {

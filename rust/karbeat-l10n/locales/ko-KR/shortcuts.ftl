@@ -6,9 +6,9 @@ shortcuts-support-hint = Ctrl, Alt, Command 중 하나와 수정자가 아닌 �
 ## Shortcut categories
 
 shortcuts-category-piano-roll = 피아노 롤
-shortcuts-category-piano-roll-tools = 피아노 롤 도구
+shortcuts-category-piano-roll-tool = 피아노 롤 도구
 shortcuts-category-track-list = 트랙 목록
-shortcuts-category-track-list-tools = 트랙 목록 도구
+shortcuts-category-track-list-tool = 트랙 목록 도구
 shortcuts-category-transport = 트랜스포트
 shortcuts-category-workspace = 작업 공간
 
@@ -44,6 +44,7 @@ shortcuts-track-list-tool-resize = 크기 조절 도구
 shortcuts-track-list-tool-slice = 자르기 도구
 shortcuts-track-list-tool-move = 옮기기 도구
 shortcuts-track-list-tool-range-select = 범위 선택 도구
+shortcuts-track-list-tool-delete = 지우기 도구
 shortcuts-track-list-nudge-left = 클립을 왼쪽으로 한 스텝 이동
 shortcuts-track-list-nudge-right = 클립을 오른쪽으로 한 스텝 이동
 shortcuts-track-list-copy-clips = 클립 복사

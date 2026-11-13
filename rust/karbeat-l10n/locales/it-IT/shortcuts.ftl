@@ -6,9 +6,9 @@ shortcuts-support-hint = Usa Ctrl, Alt o Command con un tasto non modificatore, 
 ## Shortcut categories
 
 shortcuts-category-piano-roll = Piano roll
-shortcuts-category-piano-roll-tools = Strumenti del piano roll
+shortcuts-category-piano-roll-tool = Strumenti del piano roll
 shortcuts-category-track-list = Elenco tracce
-shortcuts-category-track-list-tools = Strumenti dell’elenco tracce
+shortcuts-category-track-list-tool = Strumenti dell’elenco tracce
 shortcuts-category-transport = Trasporto
 shortcuts-category-workspace = Area di lavoro
 
@@ -44,6 +44,7 @@ shortcuts-track-list-tool-resize = Strumento Ridimensiona
 shortcuts-track-list-tool-slice = Strumento Taglio
 shortcuts-track-list-tool-move = Strumento Sposta
 shortcuts-track-list-tool-range-select = Strumento Selezione intervallo
+shortcuts-track-list-tool-delete = Strumento Gomma
 shortcuts-track-list-nudge-left = Sposta le clip a sinistra di un passo
 shortcuts-track-list-nudge-right = Sposta le clip a destra di un passo
 shortcuts-track-list-copy-clips = Copia clip

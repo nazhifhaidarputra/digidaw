@@ -14,6 +14,7 @@ import 'package:karbeat/core/input/shortcut_models.dart';
 import 'package:karbeat/core/input/shortcut_preferences_service.dart';
 import 'package:karbeat/core/utils/result_type.dart';
 import 'package:karbeat/src/rust/api/settings.dart';
+import 'package:karbeat/generated/shortcuts/shortcut_keys.dart';
 
 class _FakeShortcutPreferencesService extends ShortcutPreferencesService {
   IMap<String, ShortcutChord> loaded = const IMapConst({});
@@ -41,7 +42,7 @@ void main() {
 
   test('Escape cancels the selection in every view', () {
     final shortcut = workspaceShortcuts.singleWhere(
-      (shortcut) => shortcut.id == 'workspace.cancelSelection',
+      (shortcut) => shortcut.id == WorkspaceShortcutKeys.cancelSelection.id,
     );
     expect(shortcut.intent, isA<CancelSelectionIntent>());
     expect(shortcut.scope, ShortcutScope.global);
@@ -56,14 +57,14 @@ void main() {
   test('stored chords round-trip supported keys', () {
     final decoded = ShortcutPreferencesService.fromStored(
       ShortcutPreferencesService.toStored(
-        IMap({'workspace.save': customChord}),
+        IMap({WorkspaceShortcutKeys.save.id: customChord}),
       ),
     );
 
     expect(decoded.repaired, isFalse);
-    expect(decoded.overrides['workspace.save'], customChord);
+    expect(decoded.overrides[WorkspaceShortcutKeys.save.id], customChord);
     expect(
-      decoded.overrides['workspace.save']?.toActivator().trigger,
+      decoded.overrides[WorkspaceShortcutKeys.save.id]?.toActivator().trigger,
       LogicalKeyboardKey.keyP,
     );
   });
@@ -126,9 +127,12 @@ void main() {
     addTearDown(container.dispose);
     final notifier = container.read(shortcutManagerProvider.notifier);
     await notifier.initialize();
-    final saveChord = notifier.activeChords()['workspace.save']!;
+    final saveChord = notifier.activeChords()[WorkspaceShortcutKeys.save.id]!;
 
-    final result = await notifier.remap('workspace.undo', saveChord);
+    final result = await notifier.remap(
+      WorkspaceShortcutKeys.undo.id,
+      saveChord,
+    );
 
     expect(result.isErr(), isTrue);
     expect(result.err(), isA<ShortcutConflictException>());
@@ -147,13 +151,16 @@ void main() {
     await notifier.initialize();
 
     expect(
-      (await notifier.remap('workspace.save', customChord)).isOk(),
+      (await notifier.remap(WorkspaceShortcutKeys.save.id, customChord)).isOk(),
       isTrue,
     );
-    expect(service.saved?['workspace.save'], customChord);
-    expect((await notifier.resetOne('workspace.save')).isOk(), isTrue);
+    expect(service.saved?[WorkspaceShortcutKeys.save.id], customChord);
+    expect(
+      (await notifier.resetOne(WorkspaceShortcutKeys.save.id)).isOk(),
+      isTrue,
+    );
     expect(service.saved, isEmpty);
-    await notifier.remap('workspace.save', customChord);
+    await notifier.remap(WorkspaceShortcutKeys.save.id, customChord);
     expect((await notifier.resetAll()).isOk(), isTrue);
     expect(container.read(shortcutManagerProvider).overrides, isEmpty);
   });
@@ -217,7 +224,7 @@ void main() {
 
   test('the metronome toggle moved to Ctrl+M', () {
     final metronome = workspaceShortcuts.singleWhere(
-      (shortcut) => shortcut.id == 'transport.toggleMetronome',
+      (shortcut) => shortcut.id == TransportShortcutKeys.toggleMetronome.id,
     );
 
     expect(metronome.defaultKey.trigger, LogicalKeyboardKey.keyM);
@@ -316,18 +323,26 @@ void main() {
     await notifier.initialize();
 
     expect(
-      container.read(activeShortcutChordProvider('workspace.save')),
+      container.read(activeShortcutChordProvider(WorkspaceShortcutKeys.save)),
       ShortcutChord(logicalKeyId: LogicalKeyboardKey.keyS.keyId, control: true),
     );
     expect(
-      container.read(activeShortcutChordProvider('missing.command')),
+      container.read(
+        activeShortcutChordProvider(
+          const ShortcutKey(
+            id: 'missing.command',
+            titleId: 'missing-title',
+            categoryId: 'missing-category',
+          ),
+        ),
+      ),
       isNull,
     );
 
-    await notifier.remap('workspace.save', customChord);
+    await notifier.remap(WorkspaceShortcutKeys.save.id, customChord);
 
     expect(
-      container.read(activeShortcutChordProvider('workspace.save')),
+      container.read(activeShortcutChordProvider(WorkspaceShortcutKeys.save)),
       customChord,
     );
   });
@@ -345,25 +360,28 @@ void main() {
     final chords = notifier.activeChords();
 
     // The defaults already share Shift+arrows between two views
-    expect(chords['trackList.nudgeRight'], chords['pianoRoll.shiftRight']);
+    expect(
+      chords[TrackListShortcutKeys.nudgeRight.id],
+      chords[PianoRollShortcutKeys.shiftRight.id],
+    );
     expect(container.read(shortcutManagerProvider).overrides, isEmpty);
 
     final pianoRollOnly = await notifier.remap(
-      'trackList.nudgeLeft',
-      chords['pianoRoll.quantize']!,
+      TrackListShortcutKeys.nudgeLeft.id,
+      chords[PianoRollShortcutKeys.quantize.id]!,
     );
     expect(pianoRollOnly.isOk(), isTrue);
 
     final global = await notifier.remap(
-      'trackList.nudgeLeft',
-      chords['workspace.save']!,
+      TrackListShortcutKeys.nudgeLeft.id,
+      chords[WorkspaceShortcutKeys.save.id]!,
     );
     expect(global.err(), isA<ShortcutConflictException>());
   });
 
   test('stored chords this platform cannot trigger are dropped', () {
     final result = ShortcutPreferencesService.fromStored({
-      'workspace.save': UiShortcutChord(
+      WorkspaceShortcutKeys.save.id: UiShortcutChord(
         key: LogicalKeyboardKey.keyS.keyId,
         control: false,
         shift: false,

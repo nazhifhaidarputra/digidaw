@@ -8,6 +8,7 @@ import 'package:karbeat/core/input/shortcut_models.dart';
 import 'package:karbeat/core/input/shortcut_preferences_service.dart';
 import 'package:karbeat/core/utils/result_type.dart';
 import 'package:karbeat/features/setting/view/key_binding_settings_page.dart';
+import 'package:karbeat/generated/shortcuts/shortcut_keys.dart';
 
 class _FakeShortcutPreferencesService extends ShortcutPreferencesService {
   IMap<String, ShortcutChord> saved = const IMapConst({});
@@ -65,6 +66,13 @@ void main() {
     matching: find.widgetWithText(OutlinedButton, 'Change'),
   );
 
+  /// Scrolls the shortcut [id] into view, then taps its Change button.
+  Future<void> tapChange(WidgetTester tester, String id) async {
+    await tester.ensureVisible(changeButton(id));
+    await tester.pumpAndSettle();
+    await tapChange(tester, id);
+  }
+
   Future<void> enterChord(
     WidgetTester tester,
     LogicalKeyboardKey key, {
@@ -98,15 +106,18 @@ void main() {
   ) async {
     await pumpPage(tester);
 
-    await tester.tap(changeButton('workspace.save'));
+    await tapChange(tester, WorkspaceShortcutKeys.save.id);
     await tester.pumpAndSettle();
     await enterChord(tester, LogicalKeyboardKey.keyP);
 
     final remapped = container
         .read(shortcutManagerProvider.notifier)
-        .activeChords()['workspace.save'];
+        .activeChords()[WorkspaceShortcutKeys.save.id];
     expect(remapped?.logicalKeyId, LogicalKeyboardKey.keyP.keyId);
-    expect(preferences.saved.containsKey('workspace.save'), isTrue);
+    expect(
+      preferences.saved.containsKey(WorkspaceShortcutKeys.save.id),
+      isTrue,
+    );
 
     await tester.tap(find.byTooltip('Reset Save Project'));
     await tester.pump();
@@ -114,7 +125,7 @@ void main() {
       container
           .read(shortcutManagerProvider)
           .overrides
-          .containsKey('workspace.save'),
+          .containsKey(WorkspaceShortcutKeys.save.id),
       isFalse,
     );
   });
@@ -122,23 +133,26 @@ void main() {
   testWidgets('captures Backspace as a bare shortcut', (tester) async {
     await pumpPage(tester);
 
-    await tester.tap(changeButton('workspace.undo'));
+    await tapChange(tester, WorkspaceShortcutKeys.undo.id);
     await tester.pumpAndSettle();
     await tester.sendKeyEvent(LogicalKeyboardKey.backspace);
     await tester.pumpAndSettle();
 
     final remapped = container
         .read(shortcutManagerProvider.notifier)
-        .activeChords()['workspace.undo'];
+        .activeChords()[WorkspaceShortcutKeys.undo.id];
     expect(remapped?.logicalKeyId, LogicalKeyboardKey.backspace.keyId);
     expect(remapped?.control, isFalse);
-    expect(preferences.saved.containsKey('workspace.undo'), isTrue);
+    expect(
+      preferences.saved.containsKey(WorkspaceShortcutKeys.undo.id),
+      isTrue,
+    );
   });
 
   testWidgets('escape cancels capture without changing state', (tester) async {
     await pumpPage(tester);
 
-    await tester.tap(changeButton('workspace.undo'));
+    await tapChange(tester, WorkspaceShortcutKeys.undo.id);
     await tester.pumpAndSettle();
     await tester.sendKeyEvent(LogicalKeyboardKey.escape);
     await tester.pumpAndSettle();
@@ -151,7 +165,7 @@ void main() {
   ) async {
     await pumpPage(tester);
 
-    await tester.tap(changeButton('workspace.undo'));
+    await tapChange(tester, WorkspaceShortcutKeys.undo.id);
     await tester.pumpAndSettle();
     await enterChord(tester, LogicalKeyboardKey.keyS);
 
@@ -166,7 +180,7 @@ void main() {
     await container
         .read(shortcutManagerProvider.notifier)
         .remap(
-          'workspace.save',
+          WorkspaceShortcutKeys.save.id,
           ShortcutChord(
             logicalKeyId: LogicalKeyboardKey.keyP.keyId,
             control: true,

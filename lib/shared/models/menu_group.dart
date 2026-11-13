@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:karbeat/app/providers/blocking_task_provider.dart';
 import 'package:karbeat/app/providers/project_provider.dart';
 import 'package:karbeat/app/providers/workspace_state.dart';
+import 'package:karbeat/core/input/shortcut_models.dart';
 import 'package:karbeat/core/l10n/localizer.dart';
 import 'package:karbeat/features/setting/services/general_settings_provider.dart';
 import 'package:karbeat/features/setting/view/setting_screen.dart';
@@ -11,6 +12,7 @@ import 'package:karbeat/features/workspace/services/project_file_actions.dart';
 import 'package:karbeat/features/workspace/services/project_file_dialogs.dart';
 import 'package:karbeat/features/workspace/view/recent_projects_menu.dart';
 import 'package:karbeat/features/workspace/view/unsaved_changes_guard.dart';
+import 'package:karbeat/generated/shortcuts/shortcut_keys.dart';
 import 'package:karbeat/shared/enums/global.dart';
 
 /// Toolbar Menu Group
@@ -39,9 +41,9 @@ class DawToolbarMenuAction {
   /// Message id of the action's name.
   final String titleId;
 
-  /// ID of the shortcut in the shortcut catalog whose active chord is shown as
-  /// a hint. The displayed key follows the user's remapping in settings.
-  final String? shortcutId;
+  /// The shortcut whose active chord is shown as a hint. The displayed key
+  /// follows the user's remapping in settings.
+  final ShortcutKey? shortcut;
 
   /// Flag the menu if the menu is a dangerous operation
   final bool isDestructive;
@@ -58,7 +60,7 @@ class DawToolbarMenuAction {
 
   DawToolbarMenuAction(
     this.titleId, {
-    this.shortcutId,
+    this.shortcut,
     this.isDestructive = false,
     this.callback,
     this.isVisible,
@@ -88,14 +90,14 @@ class DawToolbarMenuGroupFactory {
     actions: [
       DawToolbarMenuAction(
         'app-menu-new-project',
-        shortcutId: 'workspace.newProject',
+        shortcut: WorkspaceShortcutKeys.newProject,
         callback: (context, ref) async {
           await newProject(context, ref);
         },
       ),
       DawToolbarMenuAction(
         'app-menu-open-project',
-        shortcutId: 'workspace.openProject',
+        shortcut: WorkspaceShortcutKeys.openProject,
         callback: (context, ref) async {
           await openProject(context, ref);
         },
@@ -109,7 +111,7 @@ class DawToolbarMenuGroupFactory {
       ),
       DawToolbarMenuAction(
         'app-menu-save-project',
-        shortcutId: 'workspace.save',
+        shortcut: WorkspaceShortcutKeys.save,
         callback: (context, ref) async {
           // Untitled projects fall back to Save As.
           await saveCurrentProject(ref);
@@ -117,26 +119,26 @@ class DawToolbarMenuGroupFactory {
       ),
       DawToolbarMenuAction(
         'app-menu-save-as',
-        shortcutId: 'workspace.saveAs',
+        shortcut: WorkspaceShortcutKeys.saveAs,
         callback: (context, ref) async {
           await saveCurrentProject(ref, saveAs: true);
         },
       ),
       DawToolbarMenuAction(
         'app-menu-import-audio',
-        shortcutId: 'workspace.importAudio',
+        shortcut: WorkspaceShortcutKeys.importAudio,
         callback: (context, ref) => importAudioSource(context, ref),
       ),
       DawToolbarMenuAction(
         'app-menu-export-project',
-        shortcutId: 'workspace.export',
+        shortcut: WorkspaceShortcutKeys.export,
         callback: (context, ref) async {
           ref.read(workspaceStateProvider.notifier).openExportPanel();
         },
       ),
       DawToolbarMenuAction(
         'app-menu-settings',
-        shortcutId: 'workspace.openSettings',
+        shortcut: WorkspaceShortcutKeys.openSettings,
         callback: (context, ref) {
           Navigator.of(context, rootNavigator: true).push(
             MaterialPageRoute<void>(
@@ -158,8 +160,14 @@ class DawToolbarMenuGroupFactory {
     icon: Icons.edit,
     titleId: 'app-menu-edit',
     actions: [
-      DawToolbarMenuAction('app-menu-undo', shortcutId: 'workspace.undo'),
-      DawToolbarMenuAction('app-menu-redo', shortcutId: 'workspace.redo'),
+      DawToolbarMenuAction(
+        'app-menu-undo',
+        shortcut: WorkspaceShortcutKeys.undo,
+      ),
+      DawToolbarMenuAction(
+        'app-menu-redo',
+        shortcut: WorkspaceShortcutKeys.redo,
+      ),
     ],
   );
 

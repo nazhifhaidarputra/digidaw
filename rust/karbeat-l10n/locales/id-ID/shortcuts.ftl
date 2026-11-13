@@ -6,9 +6,9 @@ shortcuts-support-hint = Gunakan Ctrl, Alt, atau Command dengan tombol non-modif
 ## Shortcut categories
 
 shortcuts-category-piano-roll = Piano Roll
-shortcuts-category-piano-roll-tools = Alat Piano Roll
+shortcuts-category-piano-roll-tool = Alat Piano Roll
 shortcuts-category-track-list = Daftar Trek
-shortcuts-category-track-list-tools = Alat Daftar Trek
+shortcuts-category-track-list-tool = Alat Daftar Trek
 shortcuts-category-transport = Transport
 shortcuts-category-workspace = Ruang Kerja
 
@@ -44,6 +44,7 @@ shortcuts-track-list-tool-resize = Alat Ubah Ukuran
 shortcuts-track-list-tool-slice = Alat Iris
 shortcuts-track-list-tool-move = Alat Pindah
 shortcuts-track-list-tool-range-select = Alat Pilih Rentang
+shortcuts-track-list-tool-delete = Alat Hapus
 shortcuts-track-list-nudge-left = Geser Klip Kiri Satu Langkah
 shortcuts-track-list-nudge-right = Geser Klip Kanan Satu Langkah
 shortcuts-track-list-copy-clips = Salin Klip

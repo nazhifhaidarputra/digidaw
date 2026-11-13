@@ -6,9 +6,9 @@ shortcuts-support-hint = Ctrl、Alt、Command のいずれかと修飾キー以�
 ## Shortcut categories
 
 shortcuts-category-piano-roll = ピアノロール
-shortcuts-category-piano-roll-tools = ピアノロールのツール
+shortcuts-category-piano-roll-tool = ピアノロールのツール
 shortcuts-category-track-list = トラックリスト
-shortcuts-category-track-list-tools = トラックリストのツール
+shortcuts-category-track-list-tool = トラックリストのツール
 shortcuts-category-transport = トランスポート
 shortcuts-category-workspace = ワークスペース
 
@@ -44,6 +44,7 @@ shortcuts-track-list-tool-resize = サイズ変更ツール
 shortcuts-track-list-tool-slice = 分割ツール
 shortcuts-track-list-tool-move = 移動ツール
 shortcuts-track-list-tool-range-select = 範囲選択ツール
+shortcuts-track-list-tool-delete = 削除ツール
 shortcuts-track-list-nudge-left = クリップを 1 ステップ左へ移動
 shortcuts-track-list-nudge-right = クリップを 1 ステップ右へ移動
 shortcuts-track-list-copy-clips = クリップをコピー
