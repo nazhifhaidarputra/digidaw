@@ -8,14 +8,15 @@ use karbeat_core::{
     core::{
         history::actions::AutomationRecorder,
         project::{
-            AutomationCurveType, AutomationPoint, BezierHandles, EffectAutomationTarget,
-            MasterAutomationTarget, MixerChannel, MixerChannelParamTarget, ModulationLink,
-            ModulationLinkForOrderedLaneView, ModulationSource, TEMPO_AUTOMATION_MAX_BPM,
-            TEMPO_AUTOMATION_MIN_BPM, TrackAutomationTarget,
+            AutomationCurveType, AutomationPoint, AutomationRegionCopy, AutomationRegionError,
+            BezierHandles, EffectAutomationTarget, MasterAutomationTarget, MixerChannel,
+            MixerChannelParamTarget, ModulationLink, ModulationLinkForOrderedLaneView,
+            ModulationSource, ResizeEdge, TEMPO_AUTOMATION_MAX_BPM, TEMPO_AUTOMATION_MIN_BPM,
+            TrackAutomationTarget,
             automation::{AutomationLane, AutomationTarget},
         },
     },
-    shared::{AutomationId, BusId, ModulationId, ModulationLinkId, TrackId},
+    shared::{AutomationId, AutomationRegionId, BusId, ModulationId, ModulationLinkId, TrackId},
 };
 use std::{collections::HashMap, hash::Hash};
 
@@ -282,6 +283,179 @@ pub fn paste_automation_points(
 
     ctx.broadcast_automation_lane(automation_id, &lane);
     Ok(lane)
+}
+
+// ▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱
+// Automation regions
+// ▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱
+
+/// Runs a region edit on a lane as one undo step and publishes the lane to the audio thread.
+fn edit_regions<T>(
+    ctx: &mut DawContext,
+    automation_id: AutomationId,
+    label: &'static str,
+    edit: impl FnOnce(&mut AutomationLane) -> Result<T, AutomationRegionError>,
+) -> anyhow::Result<(AutomationLane, T)> {
+    let automation_before = AutomationRecorder::begin(&ctx.app_state);
+    let (lane, result) = ctx.app_state.edit_automation_regions(automation_id, edit)?;
+    record(ctx, automation_before, label);
+    ctx.broadcast_automation_lane(automation_id, &lane);
+    Ok((lane, result))
+}
+
+/// Creates a region over a span of a lane. Points already in the span become its members.
+pub fn create_automation_region(
+    ctx: &mut DawContext,
+    automation_id: AutomationId,
+    start_tick: u32,
+    length_ticks: u32,
+    name: &str,
+) -> anyhow::Result<(AutomationLane, AutomationRegionId)> {
+    edit_regions(ctx, automation_id, "Create Automation Region", |lane| {
+        lane.create_region(start_tick, length_ticks, name)
+    })
+}
+
+/// Creates a region holding `points` (times relative to its start), overwriting the free points
+/// under it. Inserting a curve template uses this.
+pub fn insert_automation_region(
+    ctx: &mut DawContext,
+    automation_id: AutomationId,
+    start_tick: u32,
+    length_ticks: u32,
+    name: &str,
+    points: &[AutomationPoint],
+) -> anyhow::Result<(AutomationLane, AutomationRegionId)> {
+    edit_regions(ctx, automation_id, "Insert Automation Region", |lane| {
+        lane.insert_region(start_tick, length_ticks, name, points)
+    })
+}
+
+/// Renames a region.
+pub fn rename_automation_region(
+    ctx: &mut DawContext,
+    automation_id: AutomationId,
+    region_id: AutomationRegionId,
+    name: &str,
+) -> anyhow::Result<AutomationLane> {
+    edit_regions(ctx, automation_id, "Rename Automation Region", |lane| {
+        lane.rename_region(region_id, name)
+    })
+    .map(|(lane, ())| lane)
+}
+
+/// Deletes regions with their points.
+pub fn delete_automation_regions(
+    ctx: &mut DawContext,
+    automation_id: AutomationId,
+    region_ids: &[AutomationRegionId],
+) -> anyhow::Result<AutomationLane> {
+    edit_regions(ctx, automation_id, "Delete Automation Regions", |lane| {
+        lane.delete_regions(region_ids)
+    })
+    .map(|(lane, ())| lane)
+}
+
+/// Removes regions but keeps their points as free points.
+pub fn dissolve_automation_regions(
+    ctx: &mut DawContext,
+    automation_id: AutomationId,
+    region_ids: &[AutomationRegionId],
+) -> anyhow::Result<AutomationLane> {
+    edit_regions(ctx, automation_id, "Dissolve Automation Regions", |lane| {
+        lane.dissolve_regions(region_ids)
+    })
+    .map(|(lane, ())| lane)
+}
+
+/// Moves regions and their points; the move stops at neighbouring regions. Returns the lane and
+/// the move applied.
+pub fn move_automation_regions(
+    ctx: &mut DawContext,
+    automation_id: AutomationId,
+    region_ids: &[AutomationRegionId],
+    delta_ticks: i64,
+) -> anyhow::Result<(AutomationLane, i64)> {
+    edit_regions(ctx, automation_id, "Move Automation Regions", |lane| {
+        lane.move_regions(region_ids, delta_ticks)
+    })
+}
+
+/// Resizes one edge of regions; the resize stops at neighbouring regions. Returns the lane and
+/// the resize applied.
+pub fn resize_automation_regions(
+    ctx: &mut DawContext,
+    automation_id: AutomationId,
+    region_ids: &[AutomationRegionId],
+    edge: ResizeEdge,
+    delta_ticks: i64,
+) -> anyhow::Result<(AutomationLane, i64)> {
+    edit_regions(ctx, automation_id, "Resize Automation Regions", |lane| {
+        lane.resize_regions(region_ids, edge, delta_ticks)
+    })
+}
+
+/// Cuts a region in two at `at_tick` and returns the lane with the second half's identifier.
+pub fn slice_automation_region(
+    ctx: &mut DawContext,
+    automation_id: AutomationId,
+    region_id: AutomationRegionId,
+    at_tick: u32,
+) -> anyhow::Result<(AutomationLane, AutomationRegionId)> {
+    edit_regions(ctx, automation_id, "Slice Automation Region", |lane| {
+        lane.slice_region(region_id, at_tick)
+    })
+}
+
+/// Copies regions `delta_ticks` later, sharing their compositions.
+pub fn duplicate_automation_regions(
+    ctx: &mut DawContext,
+    automation_id: AutomationId,
+    region_ids: &[AutomationRegionId],
+    delta_ticks: u32,
+) -> anyhow::Result<(AutomationLane, Vec<AutomationRegionId>)> {
+    edit_regions(ctx, automation_id, "Duplicate Automation Regions", |lane| {
+        lane.duplicate_regions(region_ids, delta_ticks)
+    })
+}
+
+/// Gives each region a composition of its own.
+pub fn make_automation_regions_unique(
+    ctx: &mut DawContext,
+    automation_id: AutomationId,
+    region_ids: &[AutomationRegionId],
+) -> anyhow::Result<AutomationLane> {
+    edit_regions(
+        ctx,
+        automation_id,
+        "Make Automation Regions Unique",
+        |lane| lane.make_regions_unique(region_ids),
+    )
+    .map(|(lane, ())| lane)
+}
+
+/// Copies regions with their points, with starts relative to the earliest region.
+pub fn copy_automation_regions(
+    ctx: &DawContext,
+    automation_id: AutomationId,
+    region_ids: &[AutomationRegionId],
+) -> anyhow::Result<Vec<AutomationRegionCopy>> {
+    ctx.app_state
+        .copy_automation_regions(automation_id, region_ids)
+}
+
+/// Pastes copied regions at `at_tick`. With `share_content` the copies keep sharing a
+/// composition that still exists in the lane; use it when pasting into the lane they came from.
+pub fn paste_automation_regions(
+    ctx: &mut DawContext,
+    automation_id: AutomationId,
+    at_tick: u32,
+    copies: &[AutomationRegionCopy],
+    share_content: bool,
+) -> anyhow::Result<(AutomationLane, Vec<AutomationRegionId>)> {
+    edit_regions(ctx, automation_id, "Paste Automation Regions", |lane| {
+        lane.paste_regions(at_tick, copies, share_content)
+    })
 }
 
 // ▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱

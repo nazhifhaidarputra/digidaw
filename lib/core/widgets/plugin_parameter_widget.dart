@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:karbeat/app/providers/automation_provider.dart';
 import 'package:karbeat/core/widgets/fine_grained_input.dart';
+import 'package:karbeat/features/track/view/normalized_value_actions.dart';
 import 'package:karbeat/src/rust/api/automation.dart';
 
 import 'digidaw_plugin_widgets/widgets.dart';
@@ -67,6 +68,13 @@ class DawFloatParam extends ConsumerWidget {
         max: max,
         step: step,
         onChanged: onChanged,
+        extraActions: normalizedValueActions(
+          ref: ref,
+          value: value,
+          min: min,
+          max: max,
+          onChanged: onChanged,
+        ),
         onAddAutomation: () async {
           if (target == null) return;
           ref

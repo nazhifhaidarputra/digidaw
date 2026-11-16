@@ -33,6 +33,56 @@ class _AudioTrackSlotState extends ConsumerState<AudioTrackSlot> {
   int? _deletePointer;
   final Set<int> _deleteSwipeClipIds = <int>{};
 
+  /// Scrolls the timeline while a swipe or range drag nears its edge.
+  late final TimelineEdgeAutoScroller _autoScroller = TimelineEdgeAutoScroller(
+    onScrolled: (_) => _replayLastPointer(),
+  );
+
+  /// Last pointer event of the drag in progress, replayed when the timeline
+  /// scrolls under a still pointer.
+  PointerEvent? _lastDragEvent;
+
+  @override
+  void dispose() {
+    _autoScroller.stop();
+    super.dispose();
+  }
+
+  /// Follows a drag with the edge auto-scroller.
+  void _trackDragPointer(PointerEvent event) {
+    _lastDragEvent = event;
+    _autoScroller.update(context, event.position);
+  }
+
+  void _endDragPointer() {
+    _lastDragEvent = null;
+    _autoScroller.stop();
+  }
+
+  /// Runs the active drag again for its last pointer position, which now lies
+  /// over another part of the scrolled timeline.
+  void _replayLastPointer() {
+    final last = _lastDragEvent;
+    final box = context.findRenderObject();
+    if (last == null || box is! RenderBox || !mounted) return;
+    final event = PointerMoveEvent(
+      pointer: last.pointer,
+      position: last.position,
+      buttons: last.buttons,
+      kind: last.kind,
+    ).transformed(Matrix4.tryInvert(box.getTransformTo(null)));
+    final track = ref.read(projectProvider).value?.tracks[widget.trackId];
+    final zoomLevel = ref.read(workspaceStateProvider).horizontalZoomLevel;
+    if (track == null) return;
+    if (_drawPointer == event.pointer) {
+      _updateDrawSwipe(event: event, track: track, zoomLevel: zoomLevel);
+    } else if (_rangePointer == event.pointer) {
+      _updateRangeSelect(event, zoomLevel);
+    } else if (_deletePointer == event.pointer) {
+      _updateDeleteSwipe(event, track, zoomLevel);
+    }
+  }
+
   int _browserDropTick(Offset globalOffset, double zoomLevel) {
     final renderBox = context.findRenderObject() as RenderBox;
     var ticks = (renderBox.globalToLocal(globalOffset).dx * zoomLevel)
@@ -203,7 +253,9 @@ class _AudioTrackSlotState extends ConsumerState<AudioTrackSlot> {
     if (_drawPointer == null) {
       _startDrawSwipe(event: event, track: track, zoomLevel: zoomLevel);
     }
-    if (_drawPointer != event.pointer || _drawSourceClips.isEmpty) return;
+    if (_drawPointer != event.pointer) return;
+    _trackDragPointer(event);
+    if (_drawSourceClips.isEmpty) return;
 
     final tempo = ref.read(transportProvider).value?.state?.bpm ?? 120.0;
     final sampleRate = ref.read(transportProvider).value?.sampleRate ?? 48000;
@@ -248,6 +300,7 @@ class _AudioTrackSlotState extends ConsumerState<AudioTrackSlot> {
       zoomLevel: ref.read(workspaceStateProvider).horizontalZoomLevel,
     );
 
+    _endDragPointer();
     final sourceClips = _drawSourceClips;
     final startsInTicks = _drawCopyStartTicks;
     final anchorTick = _drawAnchorTick;
@@ -340,6 +393,7 @@ class _AudioTrackSlotState extends ConsumerState<AudioTrackSlot> {
 
   void _cancelDrawSwipe(PointerEvent event) {
     if (_drawPointer != event.pointer) return;
+    _endDragPointer();
     setState(() {
       _drawPointer = null;
       _drawSourceClips = const [];
@@ -353,50 +407,32 @@ class _AudioTrackSlotState extends ConsumerState<AudioTrackSlot> {
 
     _rangePointer = event.pointer;
     final tick = math.max(0.0, event.localPosition.dx) * zoomLevel;
-    ref.read(rangeSelectProvider.notifier).start(widget.trackId, tick);
+    ref
+        .read(rangeSelectProvider.notifier)
+        .start(TimelineRow.track(widget.trackId), tick);
   }
 
   void _updateRangeSelect(PointerEvent event, double zoomLevel) {
     if (_rangePointer != event.pointer) return;
+    _trackDragPointer(event);
     final tick = math.max(0.0, event.localPosition.dx) * zoomLevel;
-    ref.read(rangeSelectProvider.notifier).update(tick);
+    ref
+        .read(rangeSelectProvider.notifier)
+        .update(tick, row: timelineRowAt(context, event.position));
   }
 
-  void _finishRangeSelect(PointerEvent event, UiTrack track, double zoomLevel) {
+  void _finishRangeSelect(PointerEvent event, double zoomLevel) {
     if (_rangePointer != event.pointer) return;
     _updateRangeSelect(event, zoomLevel);
     _rangePointer = null;
-
-    final rangeState = ref.read(rangeSelectProvider);
-    if (!rangeState.isSelecting || rangeState.trackId != widget.trackId) {
-      ref.read(rangeSelectProvider.notifier).cancel();
-      return;
-    }
-
-    final minTick = math.min(rangeState.startTick, rangeState.endTick).toInt();
-    final maxTick = math.max(rangeState.startTick, rangeState.endTick).toInt();
-    final tempo = ref.read(transportProvider).value?.state?.bpm ?? 120.0;
-    final sampleRate = ref.read(transportProvider).value?.sampleRate ?? 48000;
-    final selectedIds = track.clips
-        .where((clip) {
-          final range = _clipRangeInTicks(clip, tempo, sampleRate);
-          return range.end > minTick && range.start < maxTick;
-        })
-        .map((clip) => clip.id)
-        .toList(growable: false);
-
-    final notifier = ref.read(trackListStateProvider.notifier);
-    if (selectedIds.isEmpty) {
-      notifier.deselectAllClips();
-    } else {
-      notifier.selectClips(trackId: widget.trackId, clipIds: selectedIds);
-    }
-    ref.read(rangeSelectProvider.notifier).cancel();
+    _endDragPointer();
+    ref.read(rangeSelectProvider.notifier).finish();
   }
 
   void _cancelRangeSelect(PointerEvent event) {
     if (_rangePointer != event.pointer) return;
     _rangePointer = null;
+    _endDragPointer();
     ref.read(rangeSelectProvider.notifier).cancel();
   }
 
@@ -409,6 +445,7 @@ class _AudioTrackSlotState extends ConsumerState<AudioTrackSlot> {
 
   void _updateDeleteSwipe(PointerEvent event, UiTrack track, double zoomLevel) {
     if (_deletePointer != event.pointer) return;
+    _trackDragPointer(event);
     _collectDeleteClip(event, track, zoomLevel);
   }
 
@@ -433,6 +470,7 @@ class _AudioTrackSlotState extends ConsumerState<AudioTrackSlot> {
   ) async {
     if (_deletePointer != event.pointer) return;
     _collectDeleteClip(event, track, zoomLevel);
+    _endDragPointer();
 
     final clipIds = _deleteSwipeClipIds.toList(growable: false);
     setState(() {
@@ -448,6 +486,7 @@ class _AudioTrackSlotState extends ConsumerState<AudioTrackSlot> {
 
   void _cancelDeleteSwipe(PointerEvent event) {
     if (_deletePointer != event.pointer) return;
+    _endDragPointer();
     setState(() {
       _deletePointer = null;
       _deleteSwipeClipIds.clear();
@@ -471,15 +510,10 @@ class _AudioTrackSlotState extends ConsumerState<AudioTrackSlot> {
       projectProvider.select((s) => s.value?.tracks[widget.trackId]),
     );
 
-    final isSelectedTrack = ref.watch(
-      trackListStateProvider.select((s) => s.selectedTrackId == widget.trackId),
-    );
-
-    final trackSelectedClipIdsStr = ref.watch(
-      trackListStateProvider.select((s) {
-        if (s.selectedTrackId != widget.trackId) return '';
-        return s.selectedClipIds.join(',');
-      }),
+    // An immutable list compares by value, so other tracks' selection
+    // changes don't rebuild this row.
+    final selectedClipIds = ref.watch(
+      trackListStateProvider.select((s) => s.clipsSelectedOn(widget.trackId)),
     );
 
     final safeSampleRate = widget.sampleRate <= 0 ? 48000 : widget.sampleRate;
@@ -491,10 +525,6 @@ class _AudioTrackSlotState extends ConsumerState<AudioTrackSlot> {
     final selectedTool = ref.watch(
       workspaceStateProvider.select((s) => s.selectedTool),
     );
-
-    final selectedClipIds = trackSelectedClipIdsStr.isEmpty
-        ? <int>[]
-        : trackSelectedClipIdsStr.split(',').map(int.parse).toList();
 
     final isPlacing = ref.watch(
       clipPlacementProvider.select((s) => s.isPlacing),
@@ -648,8 +678,7 @@ class _AudioTrackSlotState extends ConsumerState<AudioTrackSlot> {
 
               // Existing Clip list
               ...track.clips.map((clip) {
-                final isSelected =
-                    isSelectedTrack && selectedClipIds.contains(clip.id);
+                final isSelected = selectedClipIds.contains(clip.id);
 
                 return _InteractiveClip(
                   key: ValueKey(clip.id),
@@ -663,7 +692,7 @@ class _AudioTrackSlotState extends ConsumerState<AudioTrackSlot> {
                   selectedTool: selectedTool,
                   isSelected: isSelected,
                   isPendingDelete: _deleteSwipeClipIds.contains(clip.id),
-                  selectedClipIds: selectedClipIds,
+                  selectedClipIds: selectedClipIds.unlockView,
                   horizontalScrollController: widget.horizontalScrollController,
                   waveformMap: waveformMap,
                 );
@@ -765,7 +794,7 @@ class _AudioTrackSlotState extends ConsumerState<AudioTrackSlot> {
 
               // Range selection bounding box (per-track, in local coordinate space)
               TrackRangeSelectOverlay(
-                trackId: widget.trackId,
+                row: TimelineRow.track(widget.trackId),
                 trackHeight: widget.height,
                 zoomLevel: zoomLevel,
               ),
@@ -812,7 +841,7 @@ class _AudioTrackSlotState extends ConsumerState<AudioTrackSlot> {
             behavior: HitTestBehavior.deferToChild,
             onPointerDown: (event) => _startRangeSelect(event, zoomLevel),
             onPointerMove: (event) => _updateRangeSelect(event, zoomLevel),
-            onPointerUp: (event) => _finishRangeSelect(event, track, zoomLevel),
+            onPointerUp: (event) => _finishRangeSelect(event, zoomLevel),
             onPointerCancel: _cancelRangeSelect,
             child: trackSlot,
           );
@@ -822,10 +851,13 @@ class _AudioTrackSlotState extends ConsumerState<AudioTrackSlot> {
     }
 
     // Every click on a track records where Ctrl+V should paste.
-    return Listener(
-      behavior: HitTestBehavior.deferToChild,
-      onPointerDown: (event) => _recordTimelineClick(event, zoomLevel),
-      child: toolSlot,
+    return TimelineRowMarker(
+      row: TimelineRow.track(widget.trackId),
+      child: Listener(
+        behavior: HitTestBehavior.deferToChild,
+        onPointerDown: (event) => _recordTimelineClick(event, zoomLevel),
+        child: toolSlot,
+      ),
     );
   }
 }

@@ -9,6 +9,8 @@ new_key_type! {
     pub struct AutomationId;
     /// Lane-local key for an automation point.
     pub struct AutomationPointId;
+    /// Lane-local key for an automation region.
+    pub struct AutomationRegionId;
     /// Generation-aware key for an effect instance.
     pub struct EffectId;
     /// Generation-aware key for an auxiliary mixer bus.
@@ -104,6 +106,7 @@ impl_key_handle!(
     ClipId,
     AutomationId,
     AutomationPointId,
+    AutomationRegionId,
     EffectId,
     BusId,
     PatternId,
@@ -129,6 +132,15 @@ impl NoteId {
 
 impl AutomationPointId {
     /// Lane-local ID allocation for the self-contained automation point Vec.
+    pub fn next(counter: &mut u32) -> Self {
+        let id = Self::from(*counter);
+        *counter = counter.saturating_add(1);
+        id
+    }
+}
+
+impl AutomationRegionId {
+    /// Lane-local ID allocation for the automation region Vec.
     pub fn next(counter: &mut u32) -> Self {
         let id = Self::from(*counter);
         *counter = counter.saturating_add(1);

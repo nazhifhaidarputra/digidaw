@@ -4,6 +4,7 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:karbeat/app/providers/floating_midi_keyboard_state.dart';
+import 'package:karbeat/features/track/models/automation_lane_clipboard.dart';
 import 'package:karbeat/features/track/services/automation_editor_service.dart';
 import 'package:karbeat/app/providers/range_select_state.dart';
 import 'package:karbeat/app/providers/clip_placement_state.dart';
@@ -225,21 +226,13 @@ class MainScreen extends ConsumerWidget {
               ),
               PasteClipsIntent: CallbackAction<PasteClipsIntent>(
                 onInvoke: (_) {
-                  unawaited(
-                    ref
-                        .read(trackListStateProvider.notifier)
-                        .pasteClipsAtLastClick(),
-                  );
+                  unawaited(_paste(ref));
                   return null;
                 },
               ),
               DuplicateClipsIntent: CallbackAction<DuplicateClipsIntent>(
                 onInvoke: (_) {
-                  unawaited(
-                    ref
-                        .read(trackListStateProvider.notifier)
-                        .duplicateSelectedClips(),
-                  );
+                  unawaited(_duplicateSelection(ref));
                   return null;
                 },
               ),
@@ -372,7 +365,48 @@ class MainScreen extends ConsumerWidget {
     await (undo ? project.undoLastAction() : project.redoLastAction());
   }
 
+  /// Regions of the single lane holding the whole selection, if it is one.
+  (int, List<int>)? _selectedLaneRegions(WidgetRef ref) {
+    final selection = ref.read(trackListStateProvider);
+    final laneId = selection.selectedRegionLaneId;
+    if (laneId == null) return null;
+    return (laneId, selection.regionsSelectedOn(laneId).toList());
+  }
+
+  /// Pastes copied regions where a lane was last clicked, else clips at the
+  /// last timeline click.
+  Future<void> _paste(WidgetRef ref) async {
+    final editor = ref.read(automationEditorProvider);
+    final laneId = editor.pasteLaneId;
+    if (editor.clipboard is AutomationLanePointClipboardRegions &&
+        laneId != null) {
+      await ref
+          .read(automationEditorProvider.notifier)
+          .pasteRegions(laneId: laneId, atTick: editor.pasteTickFor(laneId));
+      return;
+    }
+    await ref.read(trackListStateProvider.notifier).pasteClipsAtLastClick();
+  }
+
+  Future<void> _duplicateSelection(WidgetRef ref) async {
+    final regions = _selectedLaneRegions(ref);
+    if (regions != null) {
+      await ref
+          .read(automationEditorProvider.notifier)
+          .duplicateRegions(regions.$1, regions.$2);
+      return;
+    }
+    await ref.read(trackListStateProvider.notifier).duplicateSelectedClips();
+  }
+
   Future<void> _copySelectedClips(WidgetRef ref) async {
+    final regions = _selectedLaneRegions(ref);
+    if (regions != null) {
+      await ref
+          .read(automationEditorProvider.notifier)
+          .copyRegions(regions.$1, regions.$2);
+      return;
+    }
     final selection = ref.read(trackListStateProvider);
     final trackId = selection.selectedTrackId;
     if (trackId == null || selection.selectedClipIds.isEmpty) return;
@@ -385,6 +419,13 @@ class MainScreen extends ConsumerWidget {
   }
 
   Future<void> _cutSelectedClips(WidgetRef ref) async {
+    final regions = _selectedLaneRegions(ref);
+    if (regions != null) {
+      await ref
+          .read(automationEditorProvider.notifier)
+          .cutRegions(regions.$1, regions.$2);
+      return;
+    }
     final selection = ref.read(trackListStateProvider);
     final trackId = selection.selectedTrackId;
     if (trackId == null || selection.selectedClipIds.isEmpty) return;

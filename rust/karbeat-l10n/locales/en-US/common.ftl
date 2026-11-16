@@ -72,3 +72,4 @@ common-reset-default = Reset to default
 common-automation-create = Create automation
 common-automation-remove = Remove automation
 common-select = Select
+common-more-actions = More…

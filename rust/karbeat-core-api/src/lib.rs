@@ -65,6 +65,8 @@ pub mod tempo_edit;
 pub mod test;
 /// Song loop region and cue marker APIs.
 pub mod timeline_api;
+/// Edits of a selection spanning several tracks and automation lanes, as one undo step.
+pub mod timeline_selection_api;
 /// Track lookup, creation, metadata, ordering, and deletion APIs.
 pub mod track_api;
 /// Playback, looping, tempo, playhead, and pattern transport APIs.

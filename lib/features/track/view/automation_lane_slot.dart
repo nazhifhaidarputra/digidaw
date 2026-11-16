@@ -1,21 +1,30 @@
 import 'package:fast_immutable_collections/fast_immutable_collections.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:karbeat/app/providers/automation_provider.dart';
+import 'package:karbeat/app/providers/clip_placement_state.dart';
+import 'package:karbeat/app/providers/range_select_state.dart';
+import 'package:karbeat/app/providers/track_list_state.dart';
 import 'package:karbeat/app/providers/transport_state.dart';
 import 'package:karbeat/app/providers/workspace_state.dart';
 import 'package:karbeat/core/l10n/localizer.dart';
 import 'package:karbeat/features/track/models/automation_lane_editor.dart';
 import 'package:karbeat/features/track/services/automation_curve_evaluator.dart';
 import 'package:karbeat/features/track/services/automation_editor_service.dart';
+import 'package:karbeat/features/track/services/automation_region_edit.dart';
+import 'package:karbeat/features/track/services/timeline_pointer.dart';
 import 'package:karbeat/features/track/services/curve_sampler.dart';
 import 'package:karbeat/features/track/view/automation_lane_header.dart';
 import 'package:karbeat/features/track/view/automation_point_context_menu.dart';
 import 'package:karbeat/features/track/view/automation_range_context_menu.dart';
+import 'package:karbeat/features/track/view/automation_region_context_menu.dart';
 import 'package:karbeat/features/track/view/grid_painter.dart';
+import 'package:karbeat/features/track/view/track_range_select_overlay.dart';
 import 'package:karbeat/shared/enums/global.dart';
 import 'package:karbeat/src/rust/api/automation.dart';
+import 'package:karbeat/src/rust/api/track.dart' show UiResizeEdge;
 import 'automation_curve_painter.dart';
 import 'dart:math' as math;
 
@@ -67,9 +76,46 @@ typedef _BezierDrag = ({
   BezierHandlesDto startHandles,
 });
 
+/// In-progress move or resize of the selected regions, started on this lane.
+/// [startX] is where the pointer went down and [leaderStart] / [leaderEnd]
+/// span the earliest selected item, whose edge snaps to the grid.
+typedef _RegionDrag = ({
+  BatchDragAction action,
+  double startX,
+  int leaderStart,
+  int leaderEnd,
+});
+
 class _AutomationLaneSlotState extends ConsumerState<AutomationLaneSlot> {
   /// Minimum segment width in pixels before a tension handle is offered.
   static const double _minTensionSegmentWidth = 16.0;
+
+  /// Height of the title strip along the top of a region. Dragging it moves
+  /// the region with any tool.
+  static const double _regionHeaderHeight = 14.0;
+
+  /// Distance from a region edge, in pixels, that the Resize tool grabs.
+  static const double _regionEdgeGrab = 8.0;
+
+  _RegionDrag? _regionDrag;
+
+  /// Regions crossed by a Delete tool swipe.
+  final Set<int> _deleteSwipeRegionIds = <int>{};
+  bool _isDeleteSwiping = false;
+
+  /// Region pressed with the Select or Slice tool, and where. It acts on
+  /// release when the pointer barely moved.
+  int? _pressedRegionId;
+  double? _pressX;
+
+  /// Scrolls the timeline while a region drag or range nears its edge.
+  late final TimelineEdgeAutoScroller _autoScroller = TimelineEdgeAutoScroller(
+    onScrolled: (_) => _replayLastPointer(),
+  );
+
+  /// Last pointer event of the drag in progress, replayed when the timeline
+  /// scrolls under a still pointer.
+  PointerEvent? _lastDragEvent;
 
   // Optimistic UI state
   IList<AutomationPointDto>? _localPoints;
@@ -94,9 +140,211 @@ class _AutomationLaneSlotState extends ConsumerState<AutomationLaneSlot> {
       _draggedPointId != null ||
       _tensionDrag != null ||
       _bezierDrag != null ||
+      _regionDrag != null ||
+      _isDeleteSwiping ||
       _isSelectingRange;
 
   CurveSampler get _sampler => ref.read(curveSamplerProvider);
+
+  int get _laneId => widget.lane.id;
+
+  @override
+  void dispose() {
+    _autoScroller.stop();
+    super.dispose();
+  }
+
+  // =========================================================================
+  // REGIONS
+  // =========================================================================
+
+  AutomationRegionDto? _regionAtX(double localX) =>
+      widget.lane.regionAt(_getTicksFromX(localX).floor());
+
+  /// The region whose edge is under [localX], and whether it is the left
+  /// edge.
+  (AutomationRegionDto, UiResizeEdge)? _regionEdgeAt(double localX) {
+    final zoom = ref.read(workspaceStateProvider).horizontalZoomLevel;
+    for (final region in widget.lane.regions) {
+      final left = region.startTicks / zoom;
+      final right = region.endTicks / zoom;
+      if ((localX - left).abs() <= _regionEdgeGrab && localX >= left - 2) {
+        return (region, UiResizeEdge.left);
+      }
+      if ((localX - right).abs() <= _regionEdgeGrab && localX <= right + 2) {
+        return (region, UiResizeEdge.right);
+      }
+    }
+    return null;
+  }
+
+  /// Follows a drag with the edge auto-scroller.
+  void _trackDragPointer(PointerEvent event) {
+    _lastDragEvent = event;
+    _autoScroller.update(context, event.position);
+  }
+
+  void _endDragPointer() {
+    _lastDragEvent = null;
+    _autoScroller.stop();
+  }
+
+  /// Runs the active drag again for its last pointer position, which now lies
+  /// over another part of the scrolled timeline.
+  void _replayLastPointer() {
+    final last = _lastDragEvent;
+    final box = context.findRenderObject();
+    if (last == null || box is! RenderBox || !mounted) return;
+    _onPointerMove(
+      PointerMoveEvent(
+        pointer: last.pointer,
+        position: last.position,
+        buttons: last.buttons,
+        kind: last.kind,
+      ).transformed(Matrix4.tryInvert(box.getTransformTo(null))),
+    );
+  }
+
+  /// Starts moving or resizing the selected regions from [region]. A region
+  /// outside the selection replaces it, or joins it with Ctrl held.
+  void _startRegionDrag(
+    AutomationRegionDto region,
+    BatchDragAction action,
+    double localX,
+  ) {
+    final trackList = ref.read(trackListStateProvider.notifier);
+    if (!ref
+        .read(trackListStateProvider)
+        .regionsSelectedOn(_laneId)
+        .contains(region.id)) {
+      trackList.selectRegion(
+        laneId: _laneId,
+        regionId: region.id,
+        additive: HardwareKeyboard.instance.isControlPressed,
+      );
+    }
+    final spans = trackList.selectionSpans();
+    final leader = spans.isEmpty
+        ? (region.startTicks, region.endTicks)
+        : spans.reduce((a, b) => a.$1 <= b.$1 ? a : b);
+    setState(() {
+      _regionDrag = (
+        action: action,
+        startX: localX,
+        leaderStart: leader.$1,
+        leaderEnd: leader.$2,
+      );
+    });
+    ref
+        .read(clipPlacementProvider.notifier)
+        .startBatchDrag(
+          clipIds: const [],
+          action: action,
+          originalTrackId: -1,
+          isSelectionDrag: true,
+        );
+  }
+
+  void _updateRegionDrag(_RegionDrag drag, double localX) {
+    final raw = _getTicksFromX(localX - drag.startX).round();
+    final trackList = ref.read(trackListStateProvider.notifier);
+    final delta = switch (drag.action) {
+      BatchDragAction.move => trackList.clampSelectionMove(
+        _snapTicks(drag.leaderStart + raw) - drag.leaderStart,
+      ),
+      BatchDragAction.resizeLeft => trackList.clampSelectionResize(
+        UiResizeEdge.left,
+        _snapTicks(drag.leaderStart + raw) - drag.leaderStart,
+      ),
+      BatchDragAction.resizeRight => trackList.clampSelectionResize(
+        UiResizeEdge.right,
+        _snapTicks(drag.leaderEnd + raw) - drag.leaderEnd,
+      ),
+      BatchDragAction.none => 0,
+    };
+    ref
+        .read(clipPlacementProvider.notifier)
+        .updateBatchDrag(targetTrackId: -1, snappedDeltaTicks: delta);
+  }
+
+  void _finishRegionDrag(_RegionDrag drag) {
+    final delta = ref.read(clipPlacementProvider).snappedDeltaTicks;
+    ref.read(clipPlacementProvider.notifier).cancelBatchDrag();
+    setState(() => _regionDrag = null);
+    final trackList = ref.read(trackListStateProvider.notifier);
+    switch (drag.action) {
+      case BatchDragAction.move:
+        trackList.moveSelection(delta);
+      case BatchDragAction.resizeLeft:
+        trackList.resizeSelection(
+          UiResizeEdge.left,
+          delta,
+          stretch: ref.read(workspaceStateProvider).resizeStretches,
+        );
+      case BatchDragAction.resizeRight:
+        trackList.resizeSelection(
+          UiResizeEdge.right,
+          delta,
+          stretch: ref.read(workspaceStateProvider).resizeStretches,
+        );
+      case BatchDragAction.none:
+        break;
+    }
+  }
+
+  /// Cuts [regionId] at the snapped tick under [localX]. A region of a
+  /// multi-lane selection cuts the whole selection.
+  void _sliceRegionAt(int regionId, double localX) {
+    final tick = _tickAt(localX);
+    final selection = ref.read(trackListStateProvider);
+    if (selection.spansLanes &&
+        selection.regionsSelectedOn(_laneId).contains(regionId)) {
+      ref.read(trackListStateProvider.notifier).sliceSelection(tick);
+      return;
+    }
+    ref
+        .read(automationProvider.notifier)
+        .sliceRegion(laneId: _laneId, regionId: regionId, atTick: tick);
+  }
+
+  /// Selects the region clicked with the Select tool; Ctrl toggles it in the
+  /// selection instead.
+  void _clickRegion(int regionId) {
+    final trackList = ref.read(trackListStateProvider.notifier);
+    final selected = ref
+        .read(trackListStateProvider)
+        .regionsSelectedOn(_laneId)
+        .contains(regionId);
+    if (!HardwareKeyboard.instance.isControlPressed) {
+      trackList.selectRegion(laneId: _laneId, regionId: regionId);
+    } else if (selected) {
+      trackList.removeRegionFromSelection(laneId: _laneId, regionId: regionId);
+    } else {
+      trackList.selectRegion(
+        laneId: _laneId,
+        regionId: regionId,
+        additive: true,
+      );
+    }
+  }
+
+  void _collectDeleteRegion(double localX) {
+    final region = _regionAtX(localX);
+    if (region == null || _deleteSwipeRegionIds.contains(region.id)) return;
+    setState(() => _deleteSwipeRegionIds.add(region.id));
+  }
+
+  void _finishDeleteSwipe() {
+    final regionIds = _deleteSwipeRegionIds.toList(growable: false);
+    setState(() {
+      _isDeleteSwiping = false;
+      _deleteSwipeRegionIds.clear();
+    });
+    if (regionIds.isEmpty) return;
+    ref
+        .read(automationProvider.notifier)
+        .deleteRegions(laneId: _laneId, regionIds: regionIds);
+  }
 
   @override
   void didUpdateWidget(covariant AutomationLaneSlot oldWidget) {
@@ -265,23 +513,75 @@ class _AutomationLaneSlotState extends ConsumerState<AutomationLaneSlot> {
     final isRightClick = event.buttons == kSecondaryButton;
     final pointId = _findPointIdAt(event.localPosition);
 
-    if (isRightClick) {
-      // A paste from the lane menu lands where the lane was right-clicked.
+    // A paste from the lane menu or Ctrl+V lands where the lane was last
+    // clicked.
+    ref
+        .read(automationEditorProvider.notifier)
+        .markPasteTarget(
+          laneId: widget.lane.id,
+          tick: _tickAt(event.localPosition.dx),
+        );
+    if (isRightClick) return;
+
+    final tool = ref.read(workspaceStateProvider).selectedTool;
+    final local = event.localPosition;
+    final region = _regionAtX(local.dx);
+
+    // The Select tool paints a time range instead of editing points. The
+    // range may go on over other tracks and lanes.
+    if (tool == ToolSelection.select) {
+      final tick = _tickAt(local.dx);
+      setState(() {
+        _isSelectingRange = true;
+        _selectionPressTick = tick;
+        _pressedRegionId = region?.id;
+      });
       ref
-          .read(automationEditorProvider.notifier)
-          .markPasteTarget(
-            laneId: widget.lane.id,
-            tick: _tickAt(event.localPosition.dx),
-          );
+          .read(rangeSelectProvider.notifier)
+          .start(TimelineRow.lane(_laneId), tick.toDouble());
       return;
     }
 
-    // The Select tool paints a time range instead of editing points.
-    if (ref.read(workspaceStateProvider).selectedTool == ToolSelection.select) {
-      setState(() {
-        _isSelectingRange = true;
-        _selectionPressTick = _tickAt(event.localPosition.dx);
-      });
+    switch (tool) {
+      case ToolSelection.move when region != null:
+        _startRegionDrag(region, BatchDragAction.move, local.dx);
+        return;
+      case ToolSelection.resize:
+        final edge = _regionEdgeAt(local.dx);
+        if (edge != null) {
+          _startRegionDrag(
+            edge.$1,
+            edge.$2 == UiResizeEdge.left
+                ? BatchDragAction.resizeLeft
+                : BatchDragAction.resizeRight,
+            local.dx,
+          );
+          return;
+        }
+      case ToolSelection.slice when region != null && pointId == null:
+        _pressedRegionId = region.id;
+        _pressX = local.dx;
+        return;
+      case ToolSelection.delete when pointId != null:
+        ref
+            .read(automationEditorProvider.notifier)
+            .deletePoint(laneId: _laneId, pointId: pointId);
+        return;
+      case ToolSelection.delete when region != null:
+        setState(() {
+          _isDeleteSwiping = true;
+          _deleteSwipeRegionIds
+            ..clear()
+            ..add(region.id);
+        });
+        return;
+      default:
+        break;
+    }
+
+    // With any other tool, a region's title strip moves the region.
+    if (pointId == null && region != null && local.dy < _regionHeaderHeight) {
+      _startRegionDrag(region, BatchDragAction.move, local.dx);
       return;
     }
 
@@ -470,16 +770,40 @@ class _AutomationLaneSlotState extends ConsumerState<AutomationLaneSlot> {
   }
 
   void _onPointerMove(PointerMoveEvent event) {
+    final regionDrag = _regionDrag;
+    if (regionDrag != null) {
+      _trackDragPointer(event);
+      _updateRegionDrag(regionDrag, event.localPosition.dx);
+      return;
+    }
+
+    if (_isDeleteSwiping) {
+      _trackDragPointer(event);
+      _collectDeleteRegion(event.localPosition.dx);
+      return;
+    }
+
     if (_isSelectingRange) {
+      _trackDragPointer(event);
       final editor = ref.read(automationEditorProvider.notifier);
       final tick = _tickAt(event.localPosition.dx);
+      final row = timelineRowAt(context, event.position);
+      ref.read(rangeSelectProvider.notifier).update(tick.toDouble(), row: row);
       final pressTick = _selectionPressTick;
       if (pressTick != null) {
         if (tick == pressTick) return;
         editor.startSelection(laneId: widget.lane.id, tick: pressTick);
         _selectionPressTick = null;
       }
-      editor.extendSelection(laneId: widget.lane.id, tick: tick);
+      // A range reaching other rows selects items, not this lane's curve.
+      if (row != null && row != TimelineRow.lane(_laneId)) {
+        editor.clearSelection();
+      } else if (ref.read(automationEditorProvider).selectionLaneId ==
+          widget.lane.id) {
+        editor.extendSelection(laneId: widget.lane.id, tick: tick);
+      } else {
+        editor.startSelection(laneId: widget.lane.id, tick: tick);
+      }
       return;
     }
 
@@ -517,23 +841,59 @@ class _AutomationLaneSlotState extends ConsumerState<AutomationLaneSlot> {
   }
 
   void _onPointerUp(PointerUpEvent event) {
+    _endDragPointer();
+
+    final regionDrag = _regionDrag;
+    if (regionDrag != null) {
+      _finishRegionDrag(regionDrag);
+      return;
+    }
+
+    if (_isDeleteSwiping) {
+      _finishDeleteSwipe();
+      return;
+    }
+
+    final slicedRegionId = _pressedRegionId;
+    final pressX = _pressX;
+    if (!_isSelectingRange && slicedRegionId != null && pressX != null) {
+      _pressedRegionId = null;
+      _pressX = null;
+      if ((event.localPosition.dx - pressX).abs() < 4) {
+        _sliceRegionAt(slicedRegionId, event.localPosition.dx);
+      }
+      return;
+    }
+
     if (_isSelectingRange) {
-      // A click without a drag clears the range, unless it landed inside it.
       final pressTick = _selectionPressTick;
-      final range = ref
-          .read(automationEditorProvider)
-          .selectionOf(widget.lane.id);
-      final pressedInside =
-          range != null &&
-          pressTick != null &&
-          pressTick >= range.$1 &&
-          pressTick <= range.$2;
-      if (pressTick != null && !pressedInside) {
-        ref.read(automationEditorProvider.notifier).clearSelection();
+      final clickedRegionId = _pressedRegionId;
+      final rangeSelect = ref.read(rangeSelectProvider.notifier);
+      if (pressTick == null) {
+        // The pointer dragged: select what the range touched.
+        rangeSelect.finish();
+      } else {
+        rangeSelect.cancel();
+        // A click without a drag clears the range, unless it landed inside
+        // it. A click on a region selects the region.
+        final range = ref
+            .read(automationEditorProvider)
+            .selectionOf(widget.lane.id);
+        final pressedInside =
+            range != null && pressTick >= range.$1 && pressTick <= range.$2;
+        if (!pressedInside) {
+          ref.read(automationEditorProvider.notifier).clearSelection();
+        }
+        if (clickedRegionId != null) {
+          _clickRegion(clickedRegionId);
+        } else if (!pressedInside) {
+          ref.read(trackListStateProvider.notifier).deselectAllClips();
+        }
       }
       setState(() {
         _isSelectingRange = false;
         _selectionPressTick = null;
+        _pressedRegionId = null;
       });
       return;
     }
@@ -655,15 +1015,152 @@ class _AutomationLaneSlotState extends ConsumerState<AutomationLaneSlot> {
   }
 
   void _onPointerCancel() {
+    _endDragPointer();
+    if (_regionDrag != null) {
+      ref.read(clipPlacementProvider.notifier).cancelBatchDrag();
+    }
+    if (_isSelectingRange) ref.read(rangeSelectProvider.notifier).cancel();
     setState(() {
       _draggedPointId = null;
       _pointDragOrigin = null;
       _tensionDrag = null;
       _bezierDrag = null;
+      _regionDrag = null;
+      _isDeleteSwiping = false;
+      _deleteSwipeRegionIds.clear();
+      _pressedRegionId = null;
+      _pressX = null;
       _isSelectingRange = false;
       _selectionPressTick = null;
       _localPoints = null;
     });
+  }
+
+  /// One region on the lane: a tinted box with a title strip. Right-click or
+  /// long-press opens the region actions; the lane's pointer handlers do the
+  /// editing.
+  Widget _buildRegion(
+    AutomationLaneDto lane,
+    AutomationRegionDto region,
+    double zoomLevel, {
+    required bool selected,
+    required bool pendingDelete,
+    required ToolSelection tool,
+  }) {
+    final colors = Theme.of(context).colorScheme;
+    final shared = lane.isShared(region);
+    final border = selected ? colors.primary : widget.trackColor;
+    final width = math.max(2.0, region.lengthTicks / zoomLevel);
+    // A long press must not also commit the edit its pointer started.
+    void openMenu() {
+      _onPointerCancel();
+      showAutomationRegionContextMenu(
+        context: context,
+        ref: ref,
+        lane: widget.lane,
+        region: region,
+      );
+    }
+
+    final box = Opacity(
+      opacity: pendingDelete ? 0.3 : 1,
+      child: Container(
+        decoration: BoxDecoration(
+          color: widget.trackColor.withValues(alpha: selected ? 0.22 : 0.12),
+          border: Border.all(
+            color: border.withValues(alpha: selected ? 1 : 0.6),
+            width: selected ? 2 : 1,
+          ),
+          borderRadius: BorderRadius.circular(3),
+        ),
+        child: Align(
+          alignment: Alignment.topLeft,
+          child: Container(
+            height: _regionHeaderHeight,
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(horizontal: 4),
+            color: border.withValues(alpha: selected ? 0.55 : 0.35),
+            child: Row(
+              children: [
+                if (shared)
+                  Padding(
+                    padding: const EdgeInsets.only(right: 3),
+                    child: Icon(Icons.link, size: 10, color: colors.onSurface),
+                  ),
+                Expanded(
+                  child: Text(
+                    region.name,
+                    maxLines: 1,
+                    overflow: TextOverflow.clip,
+                    style: TextStyle(
+                      color: colors.onSurface,
+                      fontSize: 9,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+
+    final cursor = switch (tool) {
+      ToolSelection.move => SystemMouseCursors.move,
+      ToolSelection.slice => SystemMouseCursors.text,
+      ToolSelection.delete => SystemMouseCursors.click,
+      _ => MouseCursor.defer,
+    };
+
+    return Positioned(
+      key: ValueKey(('region', region.id)),
+      left: region.startTicks / zoomLevel,
+      top: 0,
+      width: width,
+      height: widget.height,
+      child: GestureDetector(
+        behavior: HitTestBehavior.translucent,
+        onSecondaryTapUp: (_) => openMenu(),
+        onLongPress: openMenu,
+        child: MouseRegion(
+          cursor: cursor,
+          child: Stack(
+            children: [
+              Positioned.fill(child: box),
+              // The title strip moves the region with any tool.
+              Positioned(
+                left: 0,
+                right: 0,
+                top: 0,
+                height: _regionHeaderHeight,
+                child: const MouseRegion(cursor: SystemMouseCursors.move),
+              ),
+              if (tool == ToolSelection.resize) ...[
+                Positioned(
+                  left: 0,
+                  top: 0,
+                  bottom: 0,
+                  width: _regionEdgeGrab,
+                  child: const MouseRegion(
+                    cursor: SystemMouseCursors.resizeLeftRight,
+                  ),
+                ),
+                Positioned(
+                  right: 0,
+                  top: 0,
+                  bottom: 0,
+                  width: _regionEdgeGrab,
+                  child: const MouseRegion(
+                    cursor: SystemMouseCursors.resizeLeftRight,
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
   /// The selected range; right-click or long-press it for the range actions.
@@ -822,12 +1319,52 @@ class _AutomationLaneSlotState extends ConsumerState<AutomationLaneSlot> {
     final selection = ref.watch(
       automationEditorProvider.select((s) => s.selectionOf(laneId)),
     );
+    // The lane's own range is drawn once the range drag is released.
+    final isPaintingRange = ref.watch(
+      rangeSelectProvider.select((s) => s.isSelecting),
+    );
     final isSelectTool = state.selectedTool == ToolSelection.select;
     final sampler = ref.watch(curveSamplerProvider);
+    final selectedRegionIds = ref.watch(
+      trackListStateProvider.select((s) => s.regionsSelectedOn(laneId)),
+    );
+    // A drag of the timeline selection previews it on every lane.
+    final selectionDrag = ref.watch(
+      clipPlacementProvider.select(
+        (s) => s.isSelectionDrag && s.isDraggingExisting
+            ? (action: s.dragAction, delta: s.snappedDeltaTicks)
+            : null,
+      ),
+    );
 
-    final displayLane = _localPoints != null
+    var displayLane = _localPoints != null
         ? widget.lane.copyWith(points: _localPoints!.toList())
         : widget.lane;
+    final isPreviewingDrag =
+        selectionDrag != null && selectedRegionIds.isNotEmpty;
+    if (isPreviewingDrag) {
+      final ids = selectedRegionIds.toSet();
+      displayLane = switch (selectionDrag.action) {
+        BatchDragAction.move => previewRegionMove(
+          displayLane,
+          ids,
+          selectionDrag.delta,
+        ),
+        BatchDragAction.resizeLeft => previewRegionResize(
+          displayLane,
+          ids,
+          UiResizeEdge.left,
+          selectionDrag.delta,
+        ),
+        BatchDragAction.resizeRight => previewRegionResize(
+          displayLane,
+          ids,
+          UiResizeEdge.right,
+          selectionDrag.delta,
+        ),
+        BatchDragAction.none => displayLane,
+      };
+    }
 
     _pointHitboxes = _buildHitboxes(
       points: displayLane.points,
@@ -845,111 +1382,156 @@ class _AutomationLaneSlotState extends ConsumerState<AutomationLaneSlot> {
       height: widget.height,
     );
 
-    return Container(
-      height: widget.height,
-      decoration: BoxDecoration(
-        color: colors.surface.withValues(alpha: 0.55),
-        border: Border(
-          bottom: BorderSide(color: colors.outlineVariant, width: 1),
-          right: BorderSide(color: colors.outlineVariant, width: 1),
+    return TimelineRowMarker(
+      row: TimelineRow.lane(laneId),
+      child: Container(
+        height: widget.height,
+        decoration: BoxDecoration(
+          color: colors.surface.withValues(alpha: 0.55),
+          border: Border(
+            bottom: BorderSide(color: colors.outlineVariant, width: 1),
+            right: BorderSide(color: colors.outlineVariant, width: 1),
+          ),
         ),
-      ),
-      child: RawGestureDetector(
-        behavior: HitTestBehavior.opaque,
-        // Claims point and tension drags so the timeline's scroll views and
-        // pan gestures never move while a point is being edited.
-        gestures: {
-          _AutomationEditDragRecognizer:
-              GestureRecognizerFactoryWithHandlers<
-                _AutomationEditDragRecognizer
-              >(
-                () => _AutomationEditDragRecognizer(debugOwner: this),
-                (recognizer) => recognizer.isEditing = () => _isInteracting,
-              ),
-        },
-        child: Listener(
+        child: RawGestureDetector(
           behavior: HitTestBehavior.opaque,
-          onPointerDown: _onPointerDown,
-          onPointerMove: _onPointerMove,
-          onPointerUp: _onPointerUp,
-          onPointerCancel: (_) => _onPointerCancel(),
-          child: Stack(
-            children: [
-              // 1. Background Grid
-              Positioned.fill(
-                child: RepaintBoundary(
-                  child: LayoutBuilder(
-                    builder: (context, constraint) {
-                      return CustomPaint(
-                        painter: GridPainter(
-                          zoomLevel: zoomLevel,
-                          gridSize: gridSize,
-                          tempo: tempo,
-                          sampleRate: safeSampleRate,
-                          scrollController: widget.horizontalScrollController,
-                          viewportWidth: constraint.maxWidth,
-                          lineColor: colors.onSurface.withValues(alpha: 0.08),
-                          barLineColor: colors.onSurface.withValues(
-                            alpha: 0.25,
-                          ),
-                        ),
-                      );
-                    },
-                  ),
+          // Claims point and tension drags so the timeline's scroll views and
+          // pan gestures never move while a point is being edited.
+          gestures: {
+            _AutomationEditDragRecognizer:
+                GestureRecognizerFactoryWithHandlers<
+                  _AutomationEditDragRecognizer
+                >(
+                  () => _AutomationEditDragRecognizer(debugOwner: this),
+                  (recognizer) => recognizer.isEditing = () => _isInteracting,
                 ),
-              ),
-
-              // 2. Automation Curve Overlay
-              Positioned.fill(
-                child: RepaintBoundary(
-                  child: CustomPaint(
-                    painter: AutomationCurvePainter(
-                      lane: displayLane,
-                      zoomLevel: zoomLevel,
-                      scrollController: widget.horizontalScrollController,
-                      trackColor: widget.trackColor,
-                      disabledColor: colors.outline,
-                      pointColor: colors.onSurface,
-                      sampler: sampler,
-                      bezierHandles: _bezierHitboxes,
-                      highlightedPointId:
-                          _draggedPointId ?? contextPointId ?? hoveredPointId,
-                      tensionHandles: _tensionHitboxes,
-                      highlightedTensionPointId:
-                          _tensionDrag?.pointId ?? _hoveredTensionPointId,
+          },
+          child: Listener(
+            behavior: HitTestBehavior.opaque,
+            onPointerDown: _onPointerDown,
+            onPointerMove: _onPointerMove,
+            onPointerUp: _onPointerUp,
+            onPointerCancel: (_) => _onPointerCancel(),
+            child: Stack(
+              children: [
+                // 1. Background Grid
+                Positioned.fill(
+                  child: RepaintBoundary(
+                    child: LayoutBuilder(
+                      builder: (context, constraint) {
+                        return CustomPaint(
+                          painter: GridPainter(
+                            zoomLevel: zoomLevel,
+                            gridSize: gridSize,
+                            tempo: tempo,
+                            sampleRate: safeSampleRate,
+                            scrollController: widget.horizontalScrollController,
+                            viewportWidth: constraint.maxWidth,
+                            lineColor: colors.onSurface.withValues(alpha: 0.08),
+                            barLineColor: colors.onSurface.withValues(
+                              alpha: 0.25,
+                            ),
+                          ),
+                        );
+                      },
                     ),
                   ),
                 ),
-              ),
 
-              // 3. Range painted with the Select tool
-              if (selection != null && selection.$2 > selection.$1)
-                _buildSelection(selection, zoomLevel),
-
-              // While the Select tool is active the lane only paints ranges,
-              // so the point and handle hit areas are left out.
-              if (!isSelectTool) ...[
-                // 4. Tension handles, below points so points win overlaps
-                for (final hitbox in _tensionHitboxes)
-                  if (hitbox.pointId >= 0 && hitbox.nextPointId >= 0)
-                    _buildTensionHitArea(hitbox),
-
-                // 5. Bezier handles
-                for (final hitbox in _bezierHitboxes)
-                  Positioned.fromRect(
-                    key: ValueKey(('bezier', hitbox.pointId, hitbox.isFirst)),
-                    rect: hitbox.rect,
-                    child: const MouseRegion(cursor: SystemMouseCursors.move),
+                // 2. Regions, under the curve. While the selection is dragged
+                // its regions show where they started, faded, under their
+                // preview.
+                if (isPreviewingDrag)
+                  for (final region in widget.lane.regions)
+                    if (selectedRegionIds.contains(region.id))
+                      Positioned(
+                        key: ValueKey(('region-origin', region.id)),
+                        left: region.startTicks / zoomLevel,
+                        top: 0,
+                        width: math.max(2.0, region.lengthTicks / zoomLevel),
+                        height: widget.height,
+                        child: IgnorePointer(
+                          child: Container(
+                            decoration: BoxDecoration(
+                              border: Border.all(
+                                color: widget.trackColor.withValues(alpha: 0.3),
+                              ),
+                              borderRadius: BorderRadius.circular(3),
+                            ),
+                          ),
+                        ),
+                      ),
+                for (final region in displayLane.regions)
+                  _buildRegion(
+                    displayLane,
+                    region,
+                    zoomLevel,
+                    selected: selectedRegionIds.contains(region.id),
+                    pendingDelete: _deleteSwipeRegionIds.contains(region.id),
+                    tool: state.selectedTool,
                   ),
 
-                // 6. Point hit areas for hover and secondary click actions
-                for (final hitbox in _pointHitboxes.values)
-                  if (hitbox.pointId >= 0) _buildPointHitArea(hitbox),
-              ],
+                // 3. Automation Curve Overlay
+                Positioned.fill(
+                  child: RepaintBoundary(
+                    child: CustomPaint(
+                      painter: AutomationCurvePainter(
+                        lane: displayLane,
+                        zoomLevel: zoomLevel,
+                        scrollController: widget.horizontalScrollController,
+                        trackColor: widget.trackColor,
+                        disabledColor: colors.outline,
+                        pointColor: colors.onSurface,
+                        sampler: sampler,
+                        bezierHandles: _bezierHitboxes,
+                        highlightedPointId:
+                            _draggedPointId ?? contextPointId ?? hoveredPointId,
+                        tensionHandles: _tensionHitboxes,
+                        highlightedTensionPointId:
+                            _tensionDrag?.pointId ?? _hoveredTensionPointId,
+                      ),
+                    ),
+                  ),
+                ),
 
-              // 7. Tooltip
-              _buildTooltip(hoveredPointId),
-            ],
+                // 4. Range painted with the Select tool
+                if (selection != null &&
+                    selection.$2 > selection.$1 &&
+                    !isPaintingRange)
+                  _buildSelection(selection, zoomLevel),
+
+                // 5. A range being painted across rows
+                TrackRangeSelectOverlay(
+                  row: TimelineRow.lane(laneId),
+                  trackHeight: widget.height,
+                  zoomLevel: zoomLevel,
+                ),
+
+                // While the Select tool is active the lane only paints ranges,
+                // so the point and handle hit areas are left out.
+                if (!isSelectTool) ...[
+                  // 4. Tension handles, below points so points win overlaps
+                  for (final hitbox in _tensionHitboxes)
+                    if (hitbox.pointId >= 0 && hitbox.nextPointId >= 0)
+                      _buildTensionHitArea(hitbox),
+
+                  // 5. Bezier handles
+                  for (final hitbox in _bezierHitboxes)
+                    Positioned.fromRect(
+                      key: ValueKey(('bezier', hitbox.pointId, hitbox.isFirst)),
+                      rect: hitbox.rect,
+                      child: const MouseRegion(cursor: SystemMouseCursors.move),
+                    ),
+
+                  // 6. Point hit areas for hover and secondary click actions
+                  for (final hitbox in _pointHitboxes.values)
+                    if (hitbox.pointId >= 0) _buildPointHitArea(hitbox),
+                ],
+
+                // 7. Tooltip
+                _buildTooltip(hoveredPointId),
+              ],
+            ),
           ),
         ),
       ),

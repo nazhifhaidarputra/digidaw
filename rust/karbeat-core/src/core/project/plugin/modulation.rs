@@ -527,6 +527,8 @@ impl ApplicationState {
     // AUTOMATION POINT MANAGEMENT
     // =========================================================================
     /// Inserts a linear point into a lane and returns the updated lane plus its new numeric ID.
+    ///
+    /// Inside shared automation regions the edit is mirrored into every sibling region.
     pub fn add_automation_point(
         &mut self,
         lane_id: AutomationId,
@@ -539,13 +541,14 @@ impl ApplicationState {
             .automation_pool
             .get_mut(lane_id)
             .ok_or_else(|| anyhow!("Automation lane {:?} not found", lane_id))?
-            .add_point(point)
+            .add_point_mirrored(point)
             .to_u64();
         let lane = &self.automation_pool[lane_id];
         Ok((lane.clone(), point_id))
     }
 
     /// Removes a point when present and returns the current lane snapshot.
+    /// Its mirrors in shared automation regions go with it.
     ///
     /// The current implementation reports an error only when the lane is absent; an unknown point
     /// ID leaves the lane unchanged and still returns success.
@@ -560,7 +563,7 @@ impl ApplicationState {
             .ok_or_else(|| anyhow!("Automation lane {:?} not found", lane_id))?;
 
         let _ = lane
-            .remove_point(point_id)
+            .remove_point_mirrored(point_id)
             .ok_or_else(|| anyhow!("Point ID {} not found in lane {:?}", point_id, lane_id));
 
         Ok(lane.clone())
@@ -581,6 +584,8 @@ impl ApplicationState {
     }
 
     /// Applies supplied point fields, restores chronological ordering, and returns its new index.
+    ///
+    /// Inside shared automation regions the edit is mirrored into every sibling region.
     #[allow(
         clippy::too_many_arguments,
         reason = "each optional field is one independently editable point property"
@@ -600,7 +605,8 @@ impl ApplicationState {
             .get_mut(lane_id)
             .ok_or_else(|| anyhow!("Automation lane {:?} not found", lane_id))?;
 
-        match lane.update_point(point_id, time_ticks, value, tension, curve_type, handles) {
+        match lane.update_point_mirrored(point_id, time_ticks, value, tension, curve_type, handles)
+        {
             Some(new_index) => Ok((lane.clone(), new_index)),
             None => Err(anyhow!(
                 "Point ID {} not found in lane {:?}",
@@ -624,6 +630,8 @@ impl ApplicationState {
     }
 
     /// Removes every point of a lane between two ticks and returns the updated lane.
+    ///
+    /// Inside shared automation regions the edit is mirrored into every sibling region.
     pub fn delete_automation_range(
         &mut self,
         lane_id: AutomationId,
@@ -634,7 +642,7 @@ impl ApplicationState {
             .automation_pool
             .get_mut(lane_id)
             .ok_or_else(|| anyhow!("Automation lane {:?} not found", lane_id))?;
-        lane.delete_range(start_tick, end_tick);
+        lane.delete_range_mirrored(start_tick, end_tick);
         Ok(lane.clone())
     }
 

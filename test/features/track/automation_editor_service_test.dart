@@ -73,6 +73,7 @@ class _ProjectNotifier extends ProjectNotifier {
         ],
         enabled: true,
         defaultValue: 0,
+        regions: [],
       ),
     }),
     modulationSources: const IMapConst<int, ModulationSourceDto>({}),
@@ -94,6 +95,7 @@ AutomationLaneDto _laneWith(List<AutomationPointDto> points) =>
       points: points,
       enabled: true,
       defaultValue: 0,
+      regions: [],
     );
 
 /// What the backend returns for a copied range: times relative to its start.

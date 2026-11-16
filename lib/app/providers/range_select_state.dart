@@ -1,58 +1,187 @@
+import 'dart:math' as math;
+
+import 'package:fast_immutable_collections/fast_immutable_collections.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:freezed_annotation/freezed_annotation.dart';
+import 'package:karbeat/app/providers/automation_provider.dart';
+import 'package:karbeat/app/providers/project_provider.dart';
+import 'package:karbeat/app/providers/track_list_state.dart';
+import 'package:karbeat/app/providers/transport_state.dart';
+import 'package:karbeat/core/utils/clip_time_utils.dart';
+import 'package:karbeat/features/track/services/automation_region_edit.dart';
+import 'package:karbeat/src/rust/api/automation.dart' show AutomationRegionDto;
+import 'package:karbeat/src/rust/api/project.dart' show UiClip;
 
-/// Holds the active range-selection rectangle state in tick-space.
+part 'range_select_state.freezed.dart';
+
+/// One row of the arranger timeline that can hold selectable items: a track's
+/// clips, or an automation lane's regions.
+@freezed
+sealed class TimelineRow with _$TimelineRow {
+  const factory TimelineRow.track(int trackId) = TimelineTrackRow;
+  const factory TimelineRow.lane(int laneId) = TimelineLaneRow;
+}
+
+/// The rows of the timeline in the order they are drawn, top to bottom.
 ///
-/// Storing positions as ticks (rather than screen pixels) means the overlay
-/// widget can render with a simple `left = tick / zoomLevel` without any
-/// scroll-offset arithmetic or brittle Y-position calculations.
-class RangeSelectState {
-  final bool isSelecting;
-
-  /// Track ID where the drag started. -1 when no selection is active.
-  final int trackId;
-
-  /// Drag start position in ticks (absolute timeline space).
-  final double startTick;
-
-  /// Current drag end position in ticks (absolute timeline space).
-  final double endTick;
-
-  const RangeSelectState({
-    this.isSelecting = false,
-    this.trackId = -1,
-    this.startTick = 0,
-    this.endTick = 0,
-  });
-
-  RangeSelectState copyWith({
-    bool? isSelecting,
-    int? trackId,
-    double? startTick,
-    double? endTick,
-  }) => RangeSelectState(
-    isSelecting: isSelecting ?? this.isSelecting,
-    trackId: trackId ?? this.trackId,
-    startTick: startTick ?? this.startTick,
-    endTick: endTick ?? this.endTick,
+/// Rows the user cannot see are left out: lanes inside a closed automation
+/// drawer, and automation lanes shrunk to their title, which hide their
+/// regions. A range selection never reaches them.
+final timelineRowsProvider = Provider<IList<TimelineRow>>((ref) {
+  final automation = ref.watch(automationProvider);
+  final index = ref.watch(automationLaneIndexProvider);
+  final busIds = ref.watch(
+    projectProvider.select(
+      (s) => (s.value?.mixer.buses.keys.toList() ?? <int>[])..sort(),
+    ),
   );
+  final trackIds = ref.watch(
+    projectProvider.select((s) {
+      final tracks = s.value?.tracks.values.toList() ?? [];
+      tracks.sort((a, b) => a.orderIdx.compareTo(b.orderIdx));
+      return tracks.map((track) => track.id).toIList();
+    }),
+  );
+
+  Iterable<TimelineRow> lanes(IList<ChannelAutomationEntry>? entries) sync* {
+    for (final entry
+        in entries ?? const IListConst<ChannelAutomationEntry>([])) {
+      if (automation.collapsedAutomationLaneIds.contains(entry.laneId)) {
+        continue;
+      }
+      yield TimelineRow.lane(entry.laneId);
+    }
+  }
+
+  return [
+    if (automation.isMasterAutomationDrawerOpened) ...lanes(index.master),
+    for (final busId in busIds)
+      if (!automation.collapsedBusAutomations.contains(busId))
+        ...lanes(index.buses[busId]),
+    for (final trackId in trackIds) ...[
+      TimelineRow.track(trackId),
+      if (!automation.collapsedTrackAutomations.contains(trackId))
+        ...lanes(index.tracks[trackId]),
+    ],
+  ].lock;
+});
+
+/// The range being painted with the Select tool, in tick space.
+///
+/// The range covers every row from [anchorRow] to [focusRow] in
+/// [timelineRowsProvider] order, so it can span tracks and automation lanes.
+/// A range started on the ruler covers every row.
+@freezed
+abstract class RangeSelectState with _$RangeSelectState {
+  const RangeSelectState._();
+
+  const factory RangeSelectState({
+    @Default(false) bool isSelecting,
+
+    /// Row where the drag started; null for a range drawn on the ruler.
+    TimelineRow? anchorRow,
+
+    /// Row under the pointer, or the last row it passed over.
+    TimelineRow? focusRow,
+
+    /// Drag start in ticks.
+    @Default(0) double startTick,
+
+    /// Current drag end in ticks.
+    @Default(0) double endTick,
+  }) = _RangeSelectState;
+
+  bool get coversAllRows => isSelecting && anchorRow == null;
+
+  /// Whether the range covers [row], given the rows in drawing order.
+  bool covers(TimelineRow row, IList<TimelineRow> rows) {
+    if (!isSelecting) return false;
+    final anchor = anchorRow;
+    if (anchor == null) return rows.contains(row);
+    final index = rows.indexOf(row);
+    final from = rows.indexOf(anchor);
+    final to = rows.indexOf(focusRow ?? anchor);
+    if (index < 0 || from < 0 || to < 0) return row == anchor;
+    return index >= math.min(from, to) && index <= math.max(from, to);
+  }
+
+  double get minTick => math.min(startTick, endTick);
+  double get maxTick => math.max(startTick, endTick);
 }
 
 class RangeSelectNotifier extends Notifier<RangeSelectState> {
   @override
   RangeSelectState build() => const RangeSelectState();
 
-  void start(int trackId, double startTick) {
+  /// Starts a range on [row] at [tick].
+  void start(TimelineRow row, double tick) {
     state = RangeSelectState(
       isSelecting: true,
-      trackId: trackId,
-      startTick: startTick,
-      endTick: startTick,
+      anchorRow: row,
+      focusRow: row,
+      startTick: tick,
+      endTick: tick,
     );
   }
 
-  void update(double endTick) {
+  /// Starts a range on the ruler, covering every row.
+  void startAllRows(double tick) {
+    state = RangeSelectState(isSelecting: true, startTick: tick, endTick: tick);
+  }
+
+  /// Moves the end of the range to [tick] and, when given, to [row].
+  void update(double tick, {TimelineRow? row}) {
     if (!state.isSelecting) return;
-    state = state.copyWith(endTick: endTick);
+    final focusRow = state.anchorRow == null ? null : row ?? state.focusRow;
+    if (state.endTick == tick && state.focusRow == focusRow) return;
+    state = state.copyWith(endTick: tick, focusRow: focusRow);
+  }
+
+  /// Selects every clip and automation region the range touches, then ends
+  /// the range. A range that touches nothing clears the selection.
+  void finish() {
+    final range = state;
+    state = const RangeSelectState();
+    if (!range.isSelecting) return;
+
+    final project = ref.read(projectProvider).value;
+    if (project == null) return;
+    final rows = ref.read(timelineRowsProvider);
+    final transport = ref.read(transportProvider).value;
+    final bpm = transport?.state?.bpm ?? 120.0;
+    final sampleRate = transport?.sampleRate ?? 48000;
+    final minTick = range.minTick.floor();
+    final maxTick = range.maxTick.ceil();
+    bool touches(int start, int end) => end > minTick && start < maxTick;
+
+    final clips = <int, IList<int>>{};
+    final regions = <int, IList<int>>{};
+    for (final row in rows) {
+      if (!range.covers(row, rows)) continue;
+      switch (row) {
+        case TimelineTrackRow(:final trackId):
+          clips[trackId] = [
+            for (final clip
+                in project.tracks[trackId]?.clips ?? const <UiClip>[])
+              if (touches(
+                clip.startTimeInTicks,
+                clip.startTimeInTicks + clip.loopLengthInTicks(bpm, sampleRate),
+              ))
+                clip.id,
+          ].lock;
+        case TimelineLaneRow(:final laneId):
+          regions[laneId] = [
+            for (final region
+                in project.automationPool[laneId]?.regions ??
+                    const <AutomationRegionDto>[])
+              if (touches(region.startTicks, region.endTicks)) region.id,
+          ].lock;
+      }
+    }
+
+    ref
+        .read(trackListStateProvider.notifier)
+        .selectTimelineItems(clips: clips.lock, regions: regions.lock);
   }
 
   void cancel() {

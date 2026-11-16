@@ -31,6 +31,7 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
   // Right panel scroll controllers (browser and source list tabs).
   late ScrollController _browserPanelController;
   late ScrollController _sourcePanelController;
+  late ScrollController _itemsPanelController;
   ProviderSubscription<bool>? _rightPanelSubscription;
   ProviderSubscription<bool>? _mixerPanelSubscription;
   late final DawContext _dawContext;
@@ -87,6 +88,7 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
     _trackContentController = _horizontalControllers.addAndGet();
     _browserPanelController = ScrollController();
     _sourcePanelController = ScrollController();
+    _itemsPanelController = ScrollController();
     _trackContentController.addListener(_handleScrollExpansion);
     HardwareKeyboard.instance.addHandler(_handleKeyEvents);
     _rightPanelSubscription = ref.listenManual<bool>(
@@ -161,6 +163,7 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
     _trackContentController.dispose();
     _browserPanelController.dispose();
     _sourcePanelController.dispose();
+    _itemsPanelController.dispose();
     unawaited(_stopBrowserPreviews());
     HardwareKeyboard.instance.removeHandler(_handleKeyEvents);
     super.dispose();
@@ -429,6 +432,119 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
     );
   }
 
+  /// Opens the drawer and lane that show [row], then scrolls the timeline so
+  /// [tick] on it is in view.
+  void _revealTimelineItem(TimelineRow row, int tick) {
+    if (row case TimelineLaneRow(:final laneId)) {
+      final automation = ref.read(automationProvider.notifier);
+      final index = ref.read(automationLaneIndexProvider);
+      bool holds(IList<ChannelAutomationEntry>? entries) =>
+          entries?.any((entry) => entry.laneId == laneId) ?? false;
+      if (holds(index.master)) automation.ensureMasterAutomationDrawerOpened();
+      for (final MapEntry(:key, :value) in index.buses.entries) {
+        if (holds(value)) automation.ensureBusAutomationExpanded(key);
+      }
+      for (final MapEntry(:key, :value) in index.tracks.entries) {
+        if (holds(value)) automation.ensureTrackAutomationExpanded(key);
+      }
+      if (ref
+          .read(automationProvider)
+          .collapsedAutomationLaneIds
+          .contains(laneId)) {
+        automation.toggleAutomationLaneCollapsed(laneId: laneId);
+      }
+    }
+    // Scroll once the opened drawers are laid out.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _scrollToTimelineRow(row, tick);
+    });
+  }
+
+  void _scrollToTimelineRow(TimelineRow row, int tick) {
+    const duration = Duration(milliseconds: 250);
+    if (_trackContentController.hasClients) {
+      final zoom = ref.read(workspaceStateProvider).horizontalZoomLevel;
+      final position = _trackContentController.position;
+      final target = (tick / zoom - position.viewportDimension * 0.1).clamp(
+        position.minScrollExtent,
+        position.maxScrollExtent,
+      );
+      _trackContentController.animateTo(
+        target,
+        duration: duration,
+        curve: Curves.easeOut,
+      );
+    }
+    final y = _timelineRowOffset(row);
+    if (y != null && _timelineController.hasClients) {
+      final position = _timelineController.position;
+      _timelineController.animateTo(
+        (y - 24).clamp(position.minScrollExtent, position.maxScrollExtent),
+        duration: duration,
+        curve: Curves.easeOut,
+      );
+    }
+  }
+
+  /// Top of [target] in the timeline's vertical scroll view, following the
+  /// layout of [_buildMasterTimelineAutomationLanes],
+  /// [_buildBusAutomationTimelineSection] and [_buildTimelineTrackWidget].
+  /// Null when the row is not shown.
+  double? _timelineRowOffset(TimelineRow target) {
+    const expandBarHeight = 26.0;
+    const channelLanePadding = 4.0;
+    final automation = ref.read(automationProvider);
+    final index = ref.read(automationLaneIndexProvider);
+    final trackList = ref.read(trackListStateProvider);
+    double laneHeight(int laneId) =>
+        ref.read(automationLaneLayoutProvider(laneId)).height;
+
+    var y = 0.0;
+    double? channelLanes(IList<ChannelAutomationEntry>? lanes, bool open) {
+      y += _ChannelTitleRow.height;
+      if (lanes == null || lanes.isEmpty) return null;
+      y += expandBarHeight;
+      if (!open) return null;
+      for (final entry in lanes) {
+        y += channelLanePadding;
+        if (target == TimelineRow.lane(entry.laneId)) return y;
+        y += laneHeight(entry.laneId);
+      }
+      return null;
+    }
+
+    final master = channelLanes(
+      index.master,
+      automation.isMasterAutomationDrawerOpened,
+    );
+    if (master != null) return master;
+
+    final busIds =
+        ref.read(projectProvider).value?.mixer.buses.keys.toList() ?? <int>[];
+    busIds.sort();
+    for (final busId in busIds) {
+      final bus = channelLanes(
+        index.buses[busId],
+        !automation.collapsedBusAutomations.contains(busId),
+      );
+      if (bus != null) return bus;
+    }
+
+    for (final trackId in _trackOrderController.value) {
+      if (target == TimelineRow.track(trackId)) return y;
+      y += _trackHeightOf(trackList, trackId);
+      final lanes = index.tracks[trackId];
+      if (lanes == null || lanes.isEmpty) continue;
+      y += expandBarHeight;
+      if (automation.collapsedTrackAutomations.contains(trackId)) continue;
+      for (final entry in lanes) {
+        if (target == TimelineRow.lane(entry.laneId)) return y;
+        y += laneHeight(entry.laneId);
+      }
+    }
+    return null;
+  }
+
   /// Effective arranger row height of a track, honoring shrunk tracks.
   double _trackHeightOf(TrackListState state, int trackId) =>
       state.collapsedTrackIds.contains(trackId)
@@ -450,18 +566,32 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
           children: [
             AutomationLaneContextMenu(
               entry: entry,
-              child: AutomationLaneHeader(
-                lane: entry.lane,
-                sourceName: entry.sourceName,
-                itemHeight: layout.height,
-                trackColor: trackColor,
-                collapsed: layout.collapsed,
-                onToggleCollapsed: () => notifier.toggleAutomationLaneCollapsed(
-                  laneId: entry.laneId,
-                ),
-                onToggleEnabled: () => notifier.handleSetAutomationLaneEnabled(
-                  laneId: entry.laneId,
-                  enabled: !entry.lane.enabled,
+              // With the Select tool a header click selects the lane's
+              // regions.
+              child: GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: () {
+                  if (ref.read(workspaceStateProvider).selectedTool !=
+                      ToolSelection.select) {
+                    return;
+                  }
+                  ref
+                      .read(trackListStateProvider.notifier)
+                      .selectAllRegionsOn(entry.laneId);
+                },
+                child: AutomationLaneHeader(
+                  lane: entry.lane,
+                  sourceName: entry.sourceName,
+                  itemHeight: layout.height,
+                  trackColor: trackColor,
+                  collapsed: layout.collapsed,
+                  onToggleCollapsed: () => notifier
+                      .toggleAutomationLaneCollapsed(laneId: entry.laneId),
+                  onToggleEnabled: () =>
+                      notifier.handleSetAutomationLaneEnabled(
+                        laneId: entry.laneId,
+                        enabled: !entry.lane.enabled,
+                      ),
                 ),
               ),
             ),
@@ -612,11 +742,21 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
                             target == UiMixerChannelTarget.track(trackId),
                       ),
                     ),
-                    onSelect: () => ref
-                        .read(trackListStateProvider.notifier)
-                        .selectMixerChannel(
+                    // With the Select tool a header click selects the
+                    // track's clips; otherwise it shows its mixer channel.
+                    onSelect: () {
+                      final trackList = ref.read(
+                        trackListStateProvider.notifier,
+                      );
+                      if (ref.read(workspaceStateProvider).selectedTool ==
+                          ToolSelection.select) {
+                        trackList.selectAllClipsOn(trackId);
+                      } else {
+                        trackList.selectMixerChannel(
                           UiMixerChannelTarget.track(trackId),
-                        ),
+                        );
+                      }
+                    },
                     onDragStarted: () => _startTrackDrag(trackId),
                     onDragEnded: _endTrackDrag,
                   ),
@@ -996,63 +1136,104 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
     );
   }
 
-  /// Actions for the selected clips. It floats over the whole track list, so
-  /// resizing the split areas does not move it.
+  /// Quick actions for the selected clips and regions, and for a range
+  /// painted on an automation lane. It floats over the whole track list, so
+  /// resizing the split areas does not move it. Actions that don't fit move
+  /// behind "More…".
   Widget _buildSelectionPanel() {
     return Consumer(
       builder: (context, ref, _) {
-        final selectedClipIds = ref.watch(
-          trackListStateProvider.select((s) => s.selectedClipIds),
+        final selection = ref.watch(trackListStateProvider);
+        // A range painted with the Select tool on an automation lane.
+        final rangeLaneId = ref.watch(
+          automationEditorProvider.select((s) {
+            final laneId = s.selectionLaneId;
+            final range = laneId == null ? null : s.selectionOf(laneId);
+            return range != null && range.$2 > range.$1 ? laneId : null;
+          }),
         );
-        if (selectedClipIds.isEmpty) return const SizedBox.shrink();
-        return FloatingContextPanel(
-          actions: [
-            DawContextAction(
-              title: tr('track-copy'),
-              icon: Icons.copy,
-              onTap: () async {
-                final trackId = ref
-                    .read(trackListStateProvider)
-                    .selectedTrackId;
-                if (trackId == null) return;
-                await ref
-                    .read(trackListStateProvider.notifier)
-                    .copySelectedClips(
-                      trackId: trackId,
-                      clipIds: selectedClipIds.toList(),
-                    );
-              },
-            ),
-            DawContextAction(
-              title: tr('track-cut'),
-              icon: Icons.cut,
-              onTap: () async {
-                final trackId = ref
-                    .read(trackListStateProvider)
-                    .selectedTrackId;
-                if (trackId == null) return;
-                await ref
-                    .read(trackListStateProvider.notifier)
-                    .cutSelectedClips(
-                      trackId: trackId,
-                      clipIds: selectedClipIds.toList(),
-                    );
-                ref.read(trackListStateProvider.notifier).deselectAllClips();
-              },
-            ),
+        if (!selection.hasSelection && rangeLaneId == null) {
+          return const SizedBox.shrink();
+        }
+        // The actions describe the current clips, regions, clipboard and
+        // template library.
+        final project = ref.watch(projectProvider).value;
+        ref.watch(automationEditorProvider.select((s) => s.clipboard));
+        ref.watch(automationTemplatesProvider);
+        ref.watch(workspaceStateProvider.select((s) => s.clipEnvelopeView));
+        if (project == null) return const SizedBox.shrink();
+
+        final trackList = ref.read(trackListStateProvider.notifier);
+        final editor = ref.read(automationEditorProvider.notifier);
+        final rangeLane = rangeLaneId == null
+            ? null
+            : project.automationPool[rangeLaneId];
+        final rangeActions = rangeLane == null
+            ? const <DawContextAction>[]
+            : automationRangeActions(
+                context: context,
+                ref: ref,
+                lane: rangeLane,
+              );
+
+        final itemActions = <DawContextAction>[];
+        final trackId = selection.selectedTrackId;
+        final regionLaneId = selection.selectedRegionLaneId;
+        if (trackId != null) {
+          final selectedIds = selection.selectedClipIds;
+          final clips = project.tracks[trackId]?.clips ?? const <UiClip>[];
+          final clip =
+              clips.where((c) => c.id == selection.focusClipId).firstOrNull ??
+              clips.where((c) => selectedIds.contains(c.id)).firstOrNull;
+          if (clip != null) {
+            itemActions.addAll(
+              clipActions(
+                context: context,
+                ref: ref,
+                trackId: trackId,
+                clip: clip,
+              ).forQuickMenu,
+            );
+          }
+        } else if (regionLaneId != null) {
+          itemActions.addAll(
+            regionActions(
+              context: context,
+              ref: ref,
+              laneId: regionLaneId,
+              regionIds: selection.regionsSelectedOn(regionLaneId).toList(),
+            ).forQuickMenu,
+          );
+        } else if (selection.hasSelection) {
+          // Clips and regions of several rows only move, resize, slice and
+          // delete together.
+          itemActions.addAll([
             DawContextAction(
               title: tr('common-delete'),
               icon: Icons.delete,
               isDestructive: true,
-              onTap: () async {
-                ref.read(trackListStateProvider.notifier).deleteSelectedClips();
-                ref.read(trackListStateProvider.notifier).deselectAllClips();
-              },
+              onTap: trackList.deleteSelectedClips,
             ),
-          ],
-          onClose: () =>
-              ref.read(trackListStateProvider.notifier).deselectAllClips(),
-          title: tr('track-clips-selected', {'count': selectedClipIds.length}),
+            DawContextAction(
+              title: tr('track-loop-to-selection'),
+              icon: Icons.loop,
+              onTap: () => loopToSelection(ref),
+            ),
+          ]);
+        }
+
+        final count = selection.selectionCount;
+        return FloatingContextPanel(
+          // With nothing selected the range comes first, led by "Create
+          // region"; otherwise the selected items do.
+          actions: [...itemActions, ...rangeActions],
+          onClose: () {
+            trackList.deselectAllClips();
+            editor.clearSelection();
+          },
+          title: count > 0
+              ? tr('track-items-selected', {'count': count})
+              : tr('track-range', {'lane': rangeLane?.label ?? ''}),
         );
       },
     );
@@ -1411,6 +1592,8 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
                         return RightSidePanel(
                           browserScrollController: _browserPanelController,
                           sourceScrollController: _sourcePanelController,
+                          itemsScrollController: _itemsPanelController,
+                          onRevealItem: _revealTimelineItem,
                         );
                       default:
                         return const SizedBox();
@@ -1523,28 +1706,41 @@ class _ChannelTitleRow extends ConsumerWidget {
 
     final row = Container(
       height: height,
-      padding: const EdgeInsets.only(left: 10, right: 8),
       decoration: BoxDecoration(color: rainbow ? null : background),
       foregroundDecoration: isSelected
           ? BoxDecoration(
               border: Border(left: BorderSide(color: colors.primary, width: 3)),
             )
           : null,
-      child: Row(
+      // The meter runs along the bottom edge, like a track header's.
+      child: Column(
         children: [
           Expanded(
-            child: Text(
-              title,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                color: foreground,
-                fontSize: 12,
-                fontWeight: FontWeight.bold,
+            child: Padding(
+              padding: const EdgeInsets.only(left: 10, right: 8),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: foreground,
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                  if (isSelected) Icon(Icons.tune, size: 14, color: foreground),
+                ],
               ),
             ),
           ),
-          if (isSelected) Icon(Icons.tune, size: 14, color: foreground),
+          SizedBox(
+            height: _meterHeight,
+            child: _ChannelLevelMeter(target: target, channelName: title),
+          ),
         ],
       ),
     );
@@ -1558,6 +1754,39 @@ class _ChannelTitleRow extends ConsumerWidget {
             .selectMixerChannel(target),
         child: rainbow ? RainbowSparkle(child: row) : row,
       ),
+    );
+  }
+}
+
+/// Thickness of the output meter along the bottom of a channel title row.
+const double _meterHeight = 4;
+
+/// The output meter of the master or a bus. It is the only part of the title
+/// row that watches the meter magnitude, so a telemetry tick rebuilds this
+/// leaf alone.
+class _ChannelLevelMeter extends ConsumerWidget {
+  const _ChannelLevelMeter({required this.target, required this.channelName});
+
+  final UiMixerChannelTarget target;
+  final String channelName;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final magnitude = ref.watch(
+      mixerStateProvider.select(
+        (state) => switch (target) {
+          UiMixerChannelTarget_Track(:final field0) =>
+            state.trackMagnitudes[field0] ?? 0.0,
+          UiMixerChannelTarget_Bus(:final field0) =>
+            state.busMagnitudes[field0] ?? 0.0,
+          UiMixerChannelTarget_Master() => state.masterMagnitude,
+        },
+      ),
+    );
+    return Semantics(
+      label: tr('track-output-level', {'trackName': channelName}),
+      value: '${magnitudeToDb(magnitude).toStringAsFixed(1)} dB',
+      child: DbLevelMeter(magnitude: magnitude, axis: Axis.horizontal),
     );
   }
 }

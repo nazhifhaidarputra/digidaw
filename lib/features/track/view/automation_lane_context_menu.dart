@@ -64,6 +64,11 @@ class AutomationLaneContextMenu extends ConsumerWidget {
         (s) => s.clipboard is AutomationLanePointClipboardCurve,
       ),
     );
+    final hasRegionClipboard = ref.watch(
+      automationEditorProvider.select(
+        (s) => s.clipboard is AutomationLanePointClipboardRegions,
+      ),
+    );
     // Rebuilds the menu when the template library changes.
     ref.watch(automationTemplatesProvider);
 
@@ -82,6 +87,13 @@ class AutomationLaneContextMenu extends ConsumerWidget {
             title: tr('track-paste-curve'),
             icon: Icons.content_paste,
             onTap: () => editor.pasteCurve(laneId: laneId, atTick: pasteTick()),
+          ),
+        if (hasRegionClipboard)
+          DawContextAction(
+            title: tr('track-paste-regions'),
+            icon: Icons.content_paste,
+            onTap: () =>
+                editor.pasteRegions(laneId: laneId, atTick: pasteTick()),
           ),
         ...automationTemplateActions(
           ref: ref,

@@ -1,13 +1,17 @@
+import 'dart:math' as math;
+
 import 'package:fast_immutable_collections/fast_immutable_collections.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:karbeat/app/providers/automation_provider.dart';
 import 'package:karbeat/app/providers/notification_provider.dart';
 import 'package:karbeat/app/providers/project_provider.dart';
+import 'package:karbeat/app/providers/track_list_state.dart';
 import 'package:karbeat/core/l10n/localizer.dart';
 import 'package:karbeat/core/utils/result_type.dart';
 import 'package:karbeat/features/track/models/automation_lane_clipboard.dart';
 import 'package:karbeat/features/track/models/automation_curve_template.dart';
 import 'package:karbeat/features/track/models/automation_lane_editor.dart';
+import 'package:karbeat/features/track/services/automation_region_edit.dart';
 import 'package:karbeat/features/track/services/automation_template_service.dart';
 import 'package:karbeat/src/rust/api/automation.dart';
 
@@ -276,20 +280,157 @@ class AutomationEditorNotifier extends Notifier<AutomationLaneEditorState> {
     );
   }
 
-  /// Pastes [template] into [laneId] at [atTick], or stretched over the
-  /// lane's selected range with [fitSelection].
+  /// Inserts [template] into [laneId] as a region starting at [atTick], or
+  /// stretched over the lane's selected range with [fitSelection]. The region
+  /// overwrites the free points under it and is refused over another region.
   Future<void> insertTemplate({
     required int laneId,
     required int atTick,
     required AutomationCurveTemplate template,
     bool fitSelection = false,
-  }) => _paste(
-    laneId: laneId,
-    atTick: atTick,
-    points: template.points,
-    lengthTicks: template.lengthTicks,
-    fitSelection: fitSelection,
-  );
+  }) async {
+    final range = fitSelection ? state.selectionOf(laneId) : null;
+    final length = range == null ? template.lengthTicks : range.$2 - range.$1;
+    if (length <= 0) return;
+    final scale = template.lengthTicks <= 0
+        ? 0.0
+        : length / template.lengthTicks;
+    final regionId = await ref
+        .read(automationProvider.notifier)
+        .insertRegion(
+          laneId: laneId,
+          startTick: range?.$1 ?? atTick,
+          lengthTicks: length,
+          name: template.name,
+          points: template.points
+              .map(
+                (point) => point.copyWith(
+                  timeTicks: (point.timeTicks * scale).round(),
+                ),
+              )
+              .toIList(),
+        );
+    if (regionId != null) {
+      ref
+          .read(trackListStateProvider.notifier)
+          .selectRegion(laneId: laneId, regionId: regionId);
+    }
+  }
+
+  // =========================================================================
+  // REGIONS
+  // =========================================================================
+
+  /// Turns the selected range of [laneId] into a region named [name]. The
+  /// points in the range become its members.
+  Future<void> createRegionFromSelection(int laneId, String name) async {
+    final range = state.selectionOf(laneId);
+    if (range == null || range.$2 <= range.$1) return;
+    final regionId = await ref
+        .read(automationProvider.notifier)
+        .createRegion(
+          laneId: laneId,
+          startTick: range.$1,
+          lengthTicks: range.$2 - range.$1,
+          name: name,
+        );
+    if (regionId == null) return;
+    clearSelection();
+    ref
+        .read(trackListStateProvider.notifier)
+        .selectRegion(laneId: laneId, regionId: regionId);
+  }
+
+  /// Copies regions of [laneId] into the editor clipboard.
+  Future<bool> copyRegions(int laneId, List<int> regionIds) async {
+    if (regionIds.isEmpty) return false;
+    final copies = await ref
+        .read(automationProvider.notifier)
+        .copyRegions(laneId: laneId, regionIds: regionIds);
+    if (copies == null || copies.isEmpty) return false;
+    state = state.copyWith(
+      clipboard: AutomationLanePointClipboard.regions(
+        laneId: laneId,
+        copies: copies,
+      ),
+    );
+    return true;
+  }
+
+  /// Copies regions, then deletes them with their points.
+  Future<void> cutRegions(int laneId, List<int> regionIds) async {
+    if (!await copyRegions(laneId, regionIds)) return;
+    await ref
+        .read(automationProvider.notifier)
+        .deleteRegions(laneId: laneId, regionIds: regionIds);
+  }
+
+  /// Pastes the clipboard regions into [laneId] at [atTick] and selects them.
+  /// Regions pasted into the lane they came from keep sharing their
+  /// compositions. No-op when the clipboard holds no regions.
+  Future<void> pasteRegions({required int laneId, required int atTick}) async {
+    final clipboard = state.clipboard;
+    if (clipboard is! AutomationLanePointClipboardRegions) return;
+    final ids = await ref
+        .read(automationProvider.notifier)
+        .pasteRegions(
+          laneId: laneId,
+          atTick: atTick,
+          copies: clipboard.copies,
+          shareContent: clipboard.laneId == laneId,
+        );
+    if (ids == null || ids.isEmpty) return;
+    ref
+        .read(trackListStateProvider.notifier)
+        .selectTimelineItems(
+          clips: const IMapConst({}),
+          regions: IMap({laneId: ids.lock}),
+        );
+  }
+
+  /// Copies regions of [laneId] right after the last of them, sharing their
+  /// compositions, and selects the copies.
+  Future<void> duplicateRegions(int laneId, List<int> regionIds) async {
+    final lane = ref.read(projectProvider).value?.automationPool[laneId];
+    final selected = lane?.regions.where((r) => regionIds.contains(r.id));
+    if (selected == null || selected.isEmpty) return;
+    final start = selected.map((r) => r.startTicks).reduce(math.min);
+    final end = selected.map((r) => r.endTicks).reduce(math.max);
+    final ids = await ref
+        .read(automationProvider.notifier)
+        .duplicateRegions(
+          laneId: laneId,
+          regionIds: regionIds,
+          deltaTicks: end - start,
+        );
+    if (ids == null || ids.isEmpty) return;
+    ref
+        .read(trackListStateProvider.notifier)
+        .selectTimelineItems(
+          clips: const IMapConst({}),
+          regions: IMap({laneId: ids.lock}),
+        );
+  }
+
+  /// Saves a region's curve to the template library as [name].
+  Future<void> saveRegionAsTemplate({
+    required int laneId,
+    required int regionId,
+    required String name,
+  }) async {
+    final copies = await ref
+        .read(automationProvider.notifier)
+        .copyRegions(laneId: laneId, regionIds: [regionId]);
+    final copy = copies?.firstOrNull;
+    if (copy == null) return;
+    await ref
+        .read(automationTemplatesProvider.notifier)
+        .add(
+          name: name,
+          lengthTicks: copy.lengthTicks,
+          points: copy.points.toIList(),
+        );
+  }
 
   Future<void> _paste({
     required int laneId,

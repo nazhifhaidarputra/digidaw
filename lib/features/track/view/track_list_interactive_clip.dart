@@ -60,6 +60,25 @@ class _InteractiveClipState extends ConsumerState<_InteractiveClip> {
   /// Runs while a second click would count as a double-click.
   Timer? _doubleClickWindow;
 
+  /// Whether the drag in progress edits a selection spanning several tracks
+  /// or lanes. Such a drag keeps every item on its own row.
+  bool _isSelectionDrag = false;
+
+  /// Scrolls the timeline while a move or resize nears its edge; the scrolled
+  /// distance counts as pointer travel.
+  late final TimelineEdgeAutoScroller _autoScroller = TimelineEdgeAutoScroller(
+    onScrolled: (dx) {
+      switch (_currentAction) {
+        case _DragAction.move:
+          _moveBy(dx);
+        case _DragAction.resizeLeft || _DragAction.resizeRight:
+          _resizeBy(dx);
+        case _DragAction.none:
+          break;
+      }
+    },
+  );
+
   @override
   void initState() {
     super.initState();
@@ -69,7 +88,106 @@ class _InteractiveClipState extends ConsumerState<_InteractiveClip> {
   @override
   void dispose() {
     _doubleClickWindow?.cancel();
+    _autoScroller.stop();
     super.dispose();
+  }
+
+  /// Start and end of the earliest selected item, the anchor that snaps to
+  /// the grid while the selection moves or resizes.
+  (int, int)? _selectionLeader() {
+    final spans = ref.read(trackListStateProvider.notifier).selectionSpans();
+    if (spans.isEmpty) return null;
+    return spans.reduce((a, b) => a.$1 <= b.$1 ? a : b);
+  }
+
+  /// Adds [dx] pixels to a move drag and publishes the snapped move.
+  void _moveBy(double dx) {
+    if (_currentAction != _DragAction.move) return;
+    _accumulatedDeltaTicks += dx * widget.zoomLevel;
+    final rawStart = _leaderBaseStartTime + _accumulatedDeltaTicks.round();
+    var snappedTotalDelta =
+        _snapTick(rawStart, ref.read(workspaceStateProvider)) -
+        _leaderBaseStartTime;
+
+    if (_isSelectionDrag) {
+      snappedTotalDelta = ref
+          .read(trackListStateProvider.notifier)
+          .clampSelectionMove(snappedTotalDelta);
+    } else if (snappedTotalDelta < -_leaderBaseStartTime) {
+      // _leaderBaseStartTime is the leftmost clip in the selection, so
+      // leaderBaseStart + delta >= 0  =>  delta >= -leaderBaseStartTime.
+      snappedTotalDelta = -_leaderBaseStartTime;
+    }
+    _previousSnappedDelta = snappedTotalDelta;
+
+    final placementState = ref.read(clipPlacementProvider);
+    ref
+        .read(clipPlacementProvider.notifier)
+        .updateBatchDrag(
+          targetTrackId: _isSelectionDrag
+              ? widget.trackId
+              : placementState.trackId,
+          snappedDeltaTicks: snappedTotalDelta,
+        );
+  }
+
+  /// Adds [dx] pixels to a resize drag and publishes the snapped resize.
+  void _resizeBy(double dx) {
+    if (_currentAction != _DragAction.resizeLeft &&
+        _currentAction != _DragAction.resizeRight) {
+      return;
+    }
+    final isRight = _currentAction == _DragAction.resizeRight;
+    _accumulatedDeltaTicks += dx * widget.zoomLevel;
+    int rawTotalDelta = _accumulatedDeltaTicks.round();
+
+    const minTicks = 10;
+    if (!_isSelectionDrag) {
+      final currentSelectedIds = ref
+          .read(trackListStateProvider)
+          .clipsSelectedOn(widget.trackId);
+      final track = ref.read(projectProvider).value?.tracks[widget.trackId];
+      if (track == null) return;
+      final tempo = ref.read(transportProvider).value?.state?.bpm ?? 120.0;
+      final sampleRate = ref.read(transportProvider).value?.sampleRate ?? 48000;
+      final lengths = track.clips
+          .where((c) => currentSelectedIds.contains(c.id))
+          .map((clip) => clip.loopLengthInTicks(tempo, sampleRate));
+      if (lengths.isEmpty) return;
+      final shortestClipLengthTicks = lengths.reduce(math.min);
+      final maxShrink = shortestClipLengthTicks - minTicks;
+      if (isRight && rawTotalDelta < -maxShrink) rawTotalDelta = -maxShrink;
+      if (!isRight && rawTotalDelta > maxShrink) rawTotalDelta = maxShrink;
+    }
+
+    final workspaceStateProv = ref.read(workspaceStateProvider);
+    int snappedTotalDelta;
+    if (isRight) {
+      final leaderEnd = _leaderBaseStartTime + _leaderBaseLoopLength;
+      snappedTotalDelta =
+          _snapTick(leaderEnd + rawTotalDelta, workspaceStateProv) - leaderEnd;
+    } else {
+      snappedTotalDelta =
+          _snapTick(_leaderBaseStartTime + rawTotalDelta, workspaceStateProv) -
+          _leaderBaseStartTime;
+    }
+    if (_isSelectionDrag) {
+      snappedTotalDelta = ref
+          .read(trackListStateProvider.notifier)
+          .clampSelectionResize(
+            isRight ? UiResizeEdge.right : UiResizeEdge.left,
+            snappedTotalDelta,
+            minTicks: minTicks,
+          );
+    }
+
+    _previousSnappedDelta = snappedTotalDelta;
+    ref
+        .read(clipPlacementProvider.notifier)
+        .updateBatchDrag(
+          targetTrackId: widget.trackId,
+          snappedDeltaTicks: snappedTotalDelta,
+        );
   }
 
   @override
@@ -90,70 +208,30 @@ class _InteractiveClipState extends ConsumerState<_InteractiveClip> {
     _visualOffset = widget.clip.offsetStartInTicks(bpm, sr);
   }
 
-  void _openInPianoRoll(int patternId) {
-    final generatorId = ref
-        .read(projectProvider)
-        .value
-        ?.tracks[widget.trackId]
-        ?.generatorId;
-
-    ref
-        .read(trackListStateProvider.notifier)
-        .selectClip(trackId: widget.trackId, clipId: widget.clip.id);
-    ref
-        .read(pianoRollProvider.notifier)
-        .openPattern(patternId, previewGeneratorId: generatorId);
-    ref.read(workspaceStateProvider.notifier).openPattern(patternId);
-  }
-
-  void _openAudioProperties(int sourceId) {
-    ref
-        .read(trackListStateProvider.notifier)
-        .selectClip(trackId: widget.trackId, clipId: widget.clip.id);
-    final sourceName =
-        ref.read(audioSourcesProvider).value?[sourceId]?.name ??
-        widget.clip.name;
-    Navigator.of(context).push(
-      MaterialPageRoute<void>(
-        builder: (_) =>
-            AudioPropertiesScreen(sourceId: sourceId, sourceName: sourceName),
-      ),
+  /// The clip's actions; built when the menu opens, so they act on the
+  /// selection as it is then.
+  void _showContextMenu(BuildContext context) {
+    showDawContextMenu(
+      context: context,
+      title: widget.clip.name,
+      actions: clipActions(
+        context: context,
+        ref: ref,
+        trackId: widget.trackId,
+        clip: widget.clip,
+      ).forContextMenu,
     );
   }
 
-  /// Opens what this clip plays: the piano roll for a pattern, the audio
-  /// properties for an audio source.
-  void _openClipParent() {
-    switch (widget.clip.source) {
-      case UiClipSource_Midi(:final patternId):
-        _openInPianoRoll(patternId);
-      case UiClipSource_Audio(:final sourceId):
-        _openAudioProperties(sourceId);
-      case UiClipSource_None():
-        break;
-    }
-  }
-
-  void _openClipInformation() {
-    ref
-        .read(trackListStateProvider.notifier)
-        .selectClip(trackId: widget.trackId, clipId: widget.clip.id);
-    showClipPropertiesDialog(
-      context,
-      trackId: widget.trackId,
-      clipId: widget.clip.id,
-      onGoToParent: () {
-        if (mounted) _openClipParent();
-      },
-    );
-  }
+  void _openClipInformation() =>
+      openClipInformation(context, ref, widget.trackId, widget.clip);
 
   /// A double-click opens a pattern in the piano roll and shows the clip
   /// information of an audio clip.
   void _openOnDoubleClick() {
     switch (widget.clip.source) {
-      case UiClipSource_Midi(:final patternId):
-        _openInPianoRoll(patternId);
+      case UiClipSource_Midi():
+        openClipInPianoRoll(ref, widget.trackId, widget.clip);
       case UiClipSource_Audio():
         _openClipInformation();
       case UiClipSource_None():
@@ -176,71 +254,6 @@ class _InteractiveClipState extends ConsumerState<_InteractiveClip> {
     }
     _doubleClickWindow = Timer(kDoubleTapTimeout, () {});
     return false;
-  }
-
-  /// Gives the selection (or just this clip) its own copies of the content it
-  /// shares with other clips.
-  Future<void> _makeUnique() async {
-    final clipIds = widget.isSelected && widget.selectedClipIds.isNotEmpty
-        ? widget.selectedClipIds
-        : [widget.clip.id];
-    await ref
-        .read(trackListStateProvider.notifier)
-        .makeClipsUnique(trackId: widget.trackId, clipIds: clipIds);
-  }
-
-  /// Sets the loop region to span the selection, or just this clip.
-  Future<void> _loopClips() async {
-    final clipIds = widget.isSelected && widget.selectedClipIds.isNotEmpty
-        ? widget.selectedClipIds
-        : [widget.clip.id];
-    final span = _clipsSpan(ref, clipIds.toSet());
-    if (span == null) return;
-    await ref
-        .read(timelineProvider.notifier)
-        .setLoopRegion(span.start, span.end);
-  }
-
-  Future<void> _renameClip() async {
-    var pendingName = widget.clip.name;
-    final newName = await showDialog<String>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: Text(tr('track-rename-clip')),
-        content: TextFormField(
-          initialValue: pendingName,
-          autofocus: true,
-          decoration: InputDecoration(
-            labelText: tr('track-new-clip-name'),
-            border: OutlineInputBorder(),
-          ),
-          onChanged: (value) => pendingName = value,
-          onFieldSubmitted: (value) => Navigator.pop(dialogContext, value),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext),
-            child: Text(tr('common-cancel')),
-          ),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(dialogContext, pendingName),
-            child: Text(tr('common-rename')),
-          ),
-        ],
-      ),
-    );
-    if (!mounted) return;
-
-    final trimmedName = newName?.trim();
-    if (trimmedName == null ||
-        trimmedName.isEmpty ||
-        trimmedName == widget.clip.name) {
-      return;
-    }
-
-    await ref
-        .read(trackListStateProvider.notifier)
-        .renameClip(widget.trackId, widget.clip.id, trimmedName);
   }
 
   @override
@@ -420,9 +433,14 @@ class _InteractiveClipState extends ConsumerState<_InteractiveClip> {
               (details.localPosition.dx * widget.zoomLevel).round();
           cutPoint = _snapTick(cutPoint, ref.read(workspaceStateProvider));
 
-          await ref
-              .read(trackListStateProvider.notifier)
-              .sliceClip(widget.trackId, widget.clip.id, cutPoint);
+          final trackList = ref.read(trackListStateProvider.notifier);
+          // A clip of a multi-track selection cuts the whole selection.
+          if (widget.isSelected &&
+              ref.read(trackListStateProvider).spansLanes) {
+            await trackList.sliceSelection(cutPoint);
+          } else {
+            await trackList.sliceClip(widget.trackId, widget.clip.id, cutPoint);
+          }
         }
       },
       onPanStart: (widget.selectedTool == ToolSelection.resize)
@@ -447,28 +465,12 @@ class _InteractiveClipState extends ConsumerState<_InteractiveClip> {
                 );
               }
 
-              final currentSelectedIds = ref
-                  .read(trackListStateProvider)
-                  .selectedClipIds;
-              final track = ref
-                  .read(projectProvider)
-                  .value
-                  ?.tracks[widget.trackId];
-              if (track != null && currentSelectedIds.isNotEmpty) {
-                final tempo = ref.read(transportProvider).value?.state?.bpm;
-                final sr = ref.read(transportProvider).value?.sampleRate;
-                if (tempo == null || sr == null) {
-                  throw Exception("Tempo or Sample Rate is null");
-                }
-
-                final leaderClip = track.clips
-                    .where((c) => currentSelectedIds.contains(c.id))
-                    .reduce(
-                      (a, b) => a.startTimeInTicks < b.startTimeInTicks ? a : b,
-                    );
-
-                _leaderBaseStartTime = leaderClip.startTimeInTicks;
-                _leaderBaseLoopLength = leaderClip.loopLengthInTicks(tempo, sr);
+              final selection = ref.read(trackListStateProvider);
+              _isSelectionDrag = selection.spansLanes;
+              final leader = _selectionLeader();
+              if (leader != null) {
+                _leaderBaseStartTime = leader.$1;
+                _leaderBaseLoopLength = leader.$2 - leader.$1;
               }
 
               final batchAction = _currentAction == _DragAction.resizeLeft
@@ -478,108 +480,55 @@ class _InteractiveClipState extends ConsumerState<_InteractiveClip> {
               ref
                   .read(clipPlacementProvider.notifier)
                   .startBatchDrag(
-                    clipIds: currentSelectedIds.toList(),
+                    clipIds: selection.clipsSelectedOn(widget.trackId).toList(),
                     action: batchAction,
                     originalTrackId: widget.trackId,
+                    isSelectionDrag: _isSelectionDrag,
                   );
             }
           : null,
       onPanUpdate: (widget.selectedTool == ToolSelection.resize)
           ? (details) {
               if (_currentAction == _DragAction.none) return;
-
-              final currentSelectedIds = ref
-                  .read(trackListStateProvider)
-                  .selectedClipIds;
-              final track = ref
-                  .read(projectProvider)
-                  .value
-                  ?.tracks[widget.trackId];
-              if (track == null) return;
-
-              _accumulatedDeltaTicks += details.delta.dx * widget.zoomLevel;
-              int rawTotalDelta = _accumulatedDeltaTicks.round();
-
-              final minTicks = 10;
-              final shortestClipLengthTicks = track.clips
-                  .where((c) => currentSelectedIds.contains(c.id))
-                  .map((clip) => clip.loopLengthInTicks(tempo, sampleRate))
-                  .reduce(math.min);
-
-              if (_currentAction == _DragAction.resizeRight) {
-                final maxShrink = -(shortestClipLengthTicks - minTicks);
-                if (rawTotalDelta < maxShrink) {
-                  rawTotalDelta = maxShrink;
-                }
-              } else if (_currentAction == _DragAction.resizeLeft) {
-                final maxShrink = shortestClipLengthTicks - minTicks;
-                if (rawTotalDelta > maxShrink) {
-                  rawTotalDelta = maxShrink;
-                }
-              }
-
-              int snappedTotalDelta = rawTotalDelta;
-              final workspaceStateProv = ref.read(workspaceStateProvider);
-
-              if (_currentAction == _DragAction.resizeLeft) {
-                final int rawStart = _leaderBaseStartTime + rawTotalDelta;
-                snappedTotalDelta =
-                    _snapTick(rawStart, workspaceStateProv) -
-                    _leaderBaseStartTime;
-              } else if (_currentAction == _DragAction.resizeRight) {
-                final int rawEnd =
-                    _leaderBaseStartTime +
-                    _leaderBaseLoopLength +
-                    rawTotalDelta;
-                snappedTotalDelta =
-                    _snapTick(rawEnd, workspaceStateProv) -
-                    (_leaderBaseStartTime + _leaderBaseLoopLength);
-              }
-
-              _previousSnappedDelta = snappedTotalDelta;
-
-              ref
-                  .read(clipPlacementProvider.notifier)
-                  .updateBatchDrag(
-                    targetTrackId: widget.trackId,
-                    snappedDeltaTicks: snappedTotalDelta,
-                  );
+              _resizeBy(details.delta.dx);
+              _autoScroller.update(context, details.globalPosition);
             }
           : null,
       onPanEnd: (widget.selectedTool == ToolSelection.resize)
           ? (_) {
               if (_currentAction == _DragAction.none) return;
+              _autoScroller.stop();
 
-              final state = ref.read(trackListStateProvider);
-              final currentSelectedIds = state.selectedClipIds;
+              final currentSelectedIds = ref
+                  .read(trackListStateProvider)
+                  .clipsSelectedOn(widget.trackId);
               // The track list's stretch mode stretches audio clips instead
               // of trimming them.
               final stretch = ref.read(workspaceStateProvider).resizeStretches;
+              final edge = _currentAction == _DragAction.resizeRight
+                  ? UiResizeEdge.right
+                  : UiResizeEdge.left;
+              final trackList = ref.read(trackListStateProvider.notifier);
 
-              if (_currentAction == _DragAction.resizeRight) {
-                ref
-                    .read(trackListStateProvider.notifier)
-                    .resizeClipBatch(
-                      widget.trackId,
-                      currentSelectedIds.toList(),
-                      UiResizeEdge.right,
-                      _previousSnappedDelta,
-                      stretch: stretch,
-                    );
-              } else if (_currentAction == _DragAction.resizeLeft) {
-                ref
-                    .read(trackListStateProvider.notifier)
-                    .resizeClipBatch(
-                      widget.trackId,
-                      currentSelectedIds.toList(),
-                      UiResizeEdge.left,
-                      _previousSnappedDelta,
-                      stretch: stretch,
-                    );
+              if (_isSelectionDrag) {
+                trackList.resizeSelection(
+                  edge,
+                  _previousSnappedDelta,
+                  stretch: stretch,
+                );
+              } else {
+                trackList.resizeClipBatch(
+                  widget.trackId,
+                  currentSelectedIds.toList(),
+                  edge,
+                  _previousSnappedDelta,
+                  stretch: stretch,
+                );
               }
 
               setState(() {
                 _currentAction = _DragAction.none;
+                _isSelectionDrag = false;
               });
 
               ref.read(clipPlacementProvider.notifier).cancelBatchDrag();
@@ -588,79 +537,15 @@ class _InteractiveClipState extends ConsumerState<_InteractiveClip> {
       child: clipRenderer,
     );
 
-    final envelopeView = ref.watch(
-      workspaceStateProvider.select((s) => s.clipEnvelopeView),
-    );
-    final colors = Theme.of(context).colorScheme;
-    DawContextAction envelopeViewAction(
-      ClipEnvelopeView view,
-      String title,
-      IconData icon,
-    ) {
-      final shown = envelopeView == view;
-      return DawContextAction(
-        title: title,
-        icon: shown ? Icons.check : icon,
-        color: shown ? colors.primary : null,
-        onTap: () => ref
-            .read(workspaceStateProvider.notifier)
-            .toggleClipEnvelopeView(view),
-      );
-    }
-
-    final interactiveChild = ContextMenuWrapper(
-      title: widget.clip.name,
-      actions: [
-        DawContextAction(
-          title: tr('common-rename'),
-          icon: Icons.edit,
-          onTap: _renameClip,
-        ),
-        if (widget.clip.source is! UiClipSource_None)
-          DawContextAction(
-            title: tr('track-go-to-clip-information'),
-            icon: Icons.info_outline,
-            onTap: _openClipInformation,
-          ),
-        if (widget.clip.source case UiClipSource_Midi(:final patternId))
-          DawContextAction(
-            title: tr('track-go-to-piano-roll'),
-            icon: Icons.piano,
-            onTap: () => _openInPianoRoll(patternId),
-          ),
-        if (widget.clip.source case UiClipSource_Audio(:final sourceId))
-          DawContextAction(
-            title: tr('track-go-to-audio-properties'),
-            icon: Icons.audio_file,
-            onTap: () => _openAudioProperties(sourceId),
-          ),
-        DawContextAction(
-          title: widget.isSelected && widget.selectedClipIds.length > 1
-              ? tr('track-loop-to-selection')
-              : tr('track-loop-to-clip'),
-          icon: Icons.loop,
-          onTap: _loopClips,
-        ),
-        if (widget.clip.source is! UiClipSource_None)
-          DawContextAction(
-            title: tr('track-make-unique'),
-            icon: Icons.call_split,
-            onTap: _makeUnique,
-          ),
-        if (widget.clip.source is UiClipSource_Audio) ...[
-          envelopeViewAction(
-            ClipEnvelopeView.waveform,
-            tr('track-show-waveform-envelope'),
-            Icons.graphic_eq,
-          ),
-          envelopeViewAction(
-            ClipEnvelopeView.clip,
-            tr('track-show-clip-envelope'),
-            Icons.show_chart,
-          ),
-        ],
-      ],
-      child: gestureDetector,
+    // Rebuilds the menu when the envelope view it shows a check for changes.
+    ref.watch(workspaceStateProvider.select((s) => s.clipEnvelopeView));
+    final interactiveChild = Builder(
+      builder: (context) => GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onLongPress: () => _showContextMenu(context),
+        onSecondaryTap: () => _showContextMenu(context),
+        child: gestureDetector,
+      ),
     );
 
     if (widget.selectedTool == ToolSelection.move) {
@@ -683,87 +568,57 @@ class _InteractiveClipState extends ConsumerState<_InteractiveClip> {
             );
           }
 
-          final currentSelectedIds = ref
-              .read(trackListStateProvider)
-              .selectedClipIds;
-          final track = ref.read(projectProvider).value?.tracks[widget.trackId];
-
-          if (track != null && currentSelectedIds.isNotEmpty) {
-            final leaderClip = track.clips
-                .where((c) => currentSelectedIds.contains(c.id))
-                .reduce(
-                  (a, b) => a.startTimeInTicks < b.startTimeInTicks ? a : b,
-                );
-
-            _leaderBaseStartTime = leaderClip.startTimeInTicks;
-            _leaderBaseLoopLength = leaderClip.loopLengthInTicks(
-              tempo,
-              sampleRate,
-            );
+          final selection = ref.read(trackListStateProvider);
+          _isSelectionDrag = selection.spansLanes;
+          final leader = _selectionLeader();
+          if (leader != null) {
+            _leaderBaseStartTime = leader.$1;
+            _leaderBaseLoopLength = leader.$2 - leader.$1;
           }
 
           ref
               .read(clipPlacementProvider.notifier)
               .startBatchDrag(
-                clipIds: currentSelectedIds.toList(),
+                clipIds: selection.clipsSelectedOn(widget.trackId).toList(),
                 action: BatchDragAction.move,
                 originalTrackId: widget.trackId,
+                isSelectionDrag: _isSelectionDrag,
               );
         },
         onDragUpdate: (details) {
           if (_currentAction != _DragAction.move) return;
-
-          _accumulatedDeltaTicks += details.delta.dx * widget.zoomLevel;
-          int rawTotalDelta = _accumulatedDeltaTicks.round();
-          int snappedTotalDelta = rawTotalDelta;
-
-          final int rawStart = _leaderBaseStartTime + rawTotalDelta;
-          snappedTotalDelta =
-              _snapTick(rawStart, ref.read(workspaceStateProvider)) -
-              _leaderBaseStartTime;
-
-          _previousSnappedDelta = snappedTotalDelta;
-
-          // Clamp: prevent any clip from moving left of the timeline origin (x < 0).
-          // _leaderBaseStartTime is the leftmost clip in the selection, so
-          // leaderBaseStart + delta >= 0  =>  delta >= -leaderBaseStartTime.
-          if (snappedTotalDelta < -_leaderBaseStartTime) {
-            snappedTotalDelta = -_leaderBaseStartTime;
-          }
-          _previousSnappedDelta = snappedTotalDelta;
-
-          final placementState = ref.read(clipPlacementProvider);
-          ref
-              .read(clipPlacementProvider.notifier)
-              .updateBatchDrag(
-                targetTrackId: placementState.trackId,
-                snappedDeltaTicks: snappedTotalDelta,
-              );
+          _moveBy(details.delta.dx);
+          _autoScroller.update(context, details.globalPosition);
         },
         onDragEnd: (details) {
           if (_currentAction != _DragAction.move) return;
+          _autoScroller.stop();
 
-          final state = ref.read(trackListStateProvider);
-          final currentSelectedIds = state.selectedClipIds;
+          final trackList = ref.read(trackListStateProvider.notifier);
+          if (_isSelectionDrag) {
+            trackList.moveSelection(_previousSnappedDelta);
+          } else {
+            final currentSelectedIds = ref
+                .read(trackListStateProvider)
+                .clipsSelectedOn(widget.trackId);
+            final placementState = ref.read(clipPlacementProvider);
+            int? newTrackId =
+                placementState.trackId != widget.trackId &&
+                    placementState.trackId != -1
+                ? placementState.trackId
+                : null;
 
-          final placementState = ref.read(clipPlacementProvider);
-          int? newTrackId =
-              placementState.trackId != widget.trackId &&
-                  placementState.trackId != -1
-              ? placementState.trackId
-              : null;
-
-          ref
-              .read(trackListStateProvider.notifier)
-              .moveClipBatch(
-                widget.trackId,
-                currentSelectedIds.toList(),
-                _previousSnappedDelta,
-                newTrackId: newTrackId,
-              );
+            trackList.moveClipBatch(
+              widget.trackId,
+              currentSelectedIds.toList(),
+              _previousSnappedDelta,
+              newTrackId: newTrackId,
+            );
+          }
 
           setState(() {
             _currentAction = _DragAction.none;
+            _isSelectionDrag = false;
           });
 
           ref.read(clipPlacementProvider.notifier).cancelBatchDrag();

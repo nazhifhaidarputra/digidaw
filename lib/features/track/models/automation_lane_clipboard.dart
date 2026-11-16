@@ -19,4 +19,11 @@ abstract class AutomationLanePointClipboard
     required IList<AutomationPointDto> points,
     required int lengthTicks,
   }) = AutomationLanePointClipboardCurve;
+
+  /// Copied regions of the lane [laneId]. Pasting them back into that lane
+  /// keeps them sharing their compositions.
+  const factory AutomationLanePointClipboard.regions({
+    required int laneId,
+    required IList<AutomationRegionCopyDto> copies,
+  }) = AutomationLanePointClipboardRegions;
 }

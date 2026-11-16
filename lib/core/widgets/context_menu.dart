@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:karbeat/core/l10n/localizer.dart';
 
 /// Context action for an context menu available component
 ///
@@ -191,6 +192,10 @@ class ContextMenuWrapper extends StatelessWidget {
 
 /// A floating panel that displays context-specific actions at the bottom of the screen.
 /// Uses the shared [DawContextAction] model.
+///
+/// Actions are shown in order. When they don't all fit the available width,
+/// the ones that don't fit move behind a [moreLabel] button that opens them
+/// in a context menu, so put the most used actions first.
 class FloatingContextPanel extends StatelessWidget {
   final List<DawContextAction> actions;
   final VoidCallback onClose;
@@ -203,62 +208,148 @@ class FloatingContextPanel extends StatelessWidget {
     required this.title,
   });
 
+  /// Outer horizontal margin kept free on each side of the panel.
+  static const double _margin = 16;
+
+  /// Width of one action button: its padding and the wider of the icon and
+  /// the label.
+  static double _actionWidth(DawContextAction action, TextScaler scaler) {
+    final label = TextPainter(
+      text: TextSpan(text: action.title, style: const TextStyle(fontSize: 10)),
+      textDirection: TextDirection.ltr,
+      textScaler: scaler,
+      maxLines: 1,
+    )..layout();
+    return 24 + (label.width > 20 ? label.width : 20);
+  }
+
+  /// Width of the title, the close icon and the divider after them, plus the
+  /// panel's own padding.
+  double _chromeWidth(TextScaler scaler) {
+    final label = TextPainter(
+      text: TextSpan(
+        text: title,
+        style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+      ),
+      textDirection: TextDirection.ltr,
+      textScaler: scaler,
+      maxLines: 1,
+    )..layout();
+    // Padding 16 + 16, close icon 16 + 4, title, 12 gap, divider 1, gap 8.
+    return 32 + 20 + label.width + 12 + 1 + 8;
+  }
+
+  /// How many [actions] fit in [width], leaving room for the More button
+  /// when some don't.
+  int _fittingCount(double width, TextScaler scaler, String moreLabel) {
+    final available = width - 2 * _margin - _chromeWidth(scaler);
+    final widths = [for (final action in actions) _actionWidth(action, scaler)];
+    if (widths.fold(0.0, (sum, w) => sum + w) <= available) {
+      return actions.length;
+    }
+    final more = _actionWidth(
+      DawContextAction(title: moreLabel, onTap: () {}),
+      scaler,
+    );
+    var used = more;
+    var count = 0;
+    for (final w in widths) {
+      if (used + w > available) break;
+      used += w;
+      count++;
+    }
+    return count;
+  }
+
   @override
   Widget build(BuildContext context) {
     if (actions.isEmpty) return const SizedBox.shrink();
     final colors = Theme.of(context).colorScheme;
+    final scaler = MediaQuery.textScalerOf(context);
+    final moreLabel = tr('common-more-actions');
 
     return Positioned(
       bottom: 20,
       left: 0,
       right: 0,
-      child: Center(
-        child: Material(
-          elevation: 8,
-          borderRadius: BorderRadius.circular(12),
-          color: colors.surfaceContainerHigh,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                // Title / Close button
-                InkWell(
-                  onTap: onClose,
-                  borderRadius: BorderRadius.circular(20),
-                  child: Padding(
-                    padding: const EdgeInsets.only(right: 12),
-                    child: Row(
-                      children: [
-                        Icon(
-                          Icons.close,
-                          color: colors.onSurfaceVariant,
-                          size: 16,
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final fitting = _fittingCount(
+            constraints.maxWidth,
+            scaler,
+            moreLabel,
+          );
+          final shown = actions.take(fitting);
+          final hidden = actions.skip(fitting).toList();
+
+          return Center(
+            child: Material(
+              elevation: 8,
+              borderRadius: BorderRadius.circular(12),
+              color: colors.surfaceContainerHigh,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 8,
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    // Title / Close button
+                    InkWell(
+                      onTap: onClose,
+                      borderRadius: BorderRadius.circular(20),
+                      child: Padding(
+                        padding: const EdgeInsets.only(right: 12),
+                        child: Row(
+                          children: [
+                            Icon(
+                              Icons.close,
+                              color: colors.onSurfaceVariant,
+                              size: 16,
+                            ),
+                            const SizedBox(width: 4),
+                            Text(
+                              title,
+                              style: TextStyle(
+                                color: colors.onSurfaceVariant,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 12,
+                              ),
+                            ),
+                          ],
                         ),
-                        const SizedBox(width: 4),
-                        Text(
-                          title,
-                          style: TextStyle(
-                            color: colors.onSurfaceVariant,
-                            fontWeight: FontWeight.bold,
-                            fontSize: 12,
+                      ),
+                    ),
+                    Container(
+                      width: 1,
+                      height: 24,
+                      color: colors.outlineVariant,
+                    ),
+                    const SizedBox(width: 8),
+
+                    // Action Buttons
+                    ...shown.map(
+                      (action) => _FloatingActionButtonItem(action: action),
+                    ),
+                    if (hidden.isNotEmpty)
+                      _FloatingActionButtonItem(
+                        action: DawContextAction(
+                          title: moreLabel,
+                          icon: Icons.more_horiz,
+                          onTap: () => showDawContextMenu(
+                            context: context,
+                            title: title,
+                            actions: hidden,
                           ),
                         ),
-                      ],
-                    ),
-                  ),
+                      ),
+                  ],
                 ),
-                Container(width: 1, height: 24, color: colors.outlineVariant),
-                const SizedBox(width: 8),
-
-                // Action Buttons
-                ...actions.map(
-                  (action) => _FloatingActionButtonItem(action: action),
-                ),
-              ],
+              ),
             ),
-          ),
-        ),
+          );
+        },
       ),
     );
   }
@@ -277,10 +368,20 @@ class _FloatingActionButtonItem extends StatelessWidget {
         action.color ??
         (action.isDestructive ? colors.error : colors.onSurface);
 
+    // A submenu on the bar opens its choices in a context menu.
+    final children = action.children;
+    final onTap = children == null
+        ? action.onTap
+        : () => showDawContextMenu(
+            context: context,
+            title: action.title,
+            actions: children,
+          );
+
     return Tooltip(
       message: action.title,
       child: InkWell(
-        onTap: action.onTap,
+        onTap: onTap,
         borderRadius: BorderRadius.circular(8),
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),

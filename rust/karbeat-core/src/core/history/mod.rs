@@ -231,6 +231,29 @@ impl HistoryManager {
         self.redo_stack.clear();
     }
 
+    /// Position of the undo stack, to pass to [`Self::group_since`] after an edit made of
+    /// several recorded steps.
+    pub fn mark(&self) -> usize {
+        self.undo_stack.len()
+    }
+
+    /// Folds the steps recorded since `mark` into one step named `label`, so one undo reverts
+    /// them all. Does nothing when fewer than two steps were recorded.
+    pub fn group_since(&mut self, mark: usize, label: &'static str) {
+        if self.undo_stack.len() <= mark.saturating_add(1) {
+            return;
+        }
+        let entries = self.undo_stack.split_off(mark);
+        let recorded_at = entries
+            .last()
+            .map_or_else(Instant::now, |entry| entry.recorded_at);
+        let actions = entries.into_iter().map(|entry| entry.action).collect();
+        self.undo_stack.push(HistoryEntry {
+            action: Box::new(actions::Batch::new(label, actions)),
+            recorded_at,
+        });
+    }
+
     /// Description of the step [`Self::undo`] would revert.
     pub fn undo_label(&self) -> Option<&'static str> {
         self.undo_stack.last().map(HistoryEntry::label)
@@ -369,6 +392,29 @@ mod tests {
             EngineSync::tempo()
         );
         assert_eq!(app.transport.bpm, 120.0);
+    }
+
+    #[test]
+    fn grouped_steps_undo_and_redo_as_one() {
+        let mut app = ApplicationState::default();
+        app.transport.bpm = 120.0;
+        let mut history = HistoryManager::new();
+        let first = set_bpm(&mut app, 100.0, false);
+        history.push(first);
+
+        let mark = history.mark();
+        for bpm in [130.0, 140.0] {
+            let action = set_bpm(&mut app, bpm, false);
+            history.push(action);
+        }
+        history.group_since(mark, "Edit Selection");
+
+        assert_eq!(history.undo_stack.len(), 2);
+        assert_eq!(history.undo_label(), Some("Edit Selection"));
+        assert!(history.undo(&mut app).is_ok());
+        assert_eq!(app.transport.bpm, 100.0);
+        assert!(history.redo(&mut app).is_ok());
+        assert_eq!(app.transport.bpm, 140.0);
     }
 
     #[test]

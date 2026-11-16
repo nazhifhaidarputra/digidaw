@@ -29,6 +29,11 @@ abstract class ClipPlacementState with _$ClipPlacementState {
     @Default(BatchDragAction.none) BatchDragAction dragAction,
     @Default(0) int snappedDeltaTicks,
     @Default(-1) int originalTrackId,
+
+    /// Whether the drag edits the whole timeline selection (clips of several
+    /// tracks, or automation regions). Every item stays on its own track or
+    /// lane, and each row previews its own part of the selection.
+    @Default(false) bool isSelectionDrag,
   }) = _ClipPlacementState;
 }
 
@@ -70,6 +75,8 @@ class ClipPlacementNotifier extends Notifier<ClipPlacementState> {
   }
 
   void updatePlacementTarget(int trackId, double startTick) {
+    // A selection drag never changes track.
+    if (state.isSelectionDrag) return;
     state = state.copyWith(trackId: trackId, startTick: startTick);
   }
 
@@ -106,6 +113,7 @@ class ClipPlacementNotifier extends Notifier<ClipPlacementState> {
     required List<int> clipIds,
     required BatchDragAction action,
     required int originalTrackId,
+    bool isSelectionDrag = false,
   }) {
     state = state.copyWith(
       draggedClipIds: clipIds,
@@ -113,6 +121,7 @@ class ClipPlacementNotifier extends Notifier<ClipPlacementState> {
       originalTrackId: originalTrackId,
       trackId: originalTrackId,
       snappedDeltaTicks: 0,
+      isSelectionDrag: isSelectionDrag,
     );
   }
 
@@ -133,6 +142,7 @@ class ClipPlacementNotifier extends Notifier<ClipPlacementState> {
       originalTrackId: -1,
       trackId: -1,
       snappedDeltaTicks: 0,
+      isSelectionDrag: false,
     );
   }
 }

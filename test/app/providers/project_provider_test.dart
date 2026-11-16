@@ -152,6 +152,7 @@ AutomationLaneDto _lane(int id) => AutomationLaneDto(
   points: const [],
   enabled: true,
   defaultValue: 0.5,
+  regions: [],
 );
 
 ModulationLinkDto _link(int id, int sourceId) => ModulationLinkDto(

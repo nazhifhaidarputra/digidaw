@@ -12,8 +12,9 @@ mod tests {
         karbeatzer_v2_registry_id, my_retro_registry_id, param_eq_registry_id,
     };
     use crate::{
-        automation_api, clip_api, mixer_api, note_api, pattern_api, project_api, track_api,
-        transport_api,
+        automation_api, clip_api, mixer_api, note_api, pattern_api, project_api,
+        timeline_selection_api::{self, TimelineSelection},
+        track_api, transport_api,
     };
     use karbeat_audio::commands::{AudioCommand, EffectTarget, MixerChannelTarget};
     use karbeat_audio::context::DawContext;
@@ -21,7 +22,7 @@ mod tests {
     use karbeat_core::shared::id::{BusId, ClipId, EffectId, GeneratorId, GraphNodeId, TrackId};
     use karbeat_core::{
         core::project::{
-            AutomationLane, ModulationLinkForOrderedLaneView, ModulationSource,
+            AutomationLane, ModulationLinkForOrderedLaneView, ModulationSource, ResizeEdge,
             automation::{
                 AutomationTarget, EffectAutomationTarget, MasterAutomationTarget,
                 MixerChannelParamTarget, TrackAutomationTarget,
@@ -254,6 +255,89 @@ mod tests {
             },
             automation_state,
         );
+    }
+
+    #[test]
+    fn selection_edits_across_tracks_and_lanes_are_single_undo_steps() {
+        let (mut ctx, audio, midi, _) = make_seeded_ctx();
+        let lane = automation_api::add_automation_lane_for_track(
+            &mut ctx,
+            audio,
+            volume_target(audio),
+            "Volume",
+            None,
+        )
+        .expect("add lane")
+        .id;
+        automation_api::add_new_automation_point(&mut ctx, lane, 120, NormalizedF64::new(0.3))
+            .expect("add point");
+        let (_, region) = automation_api::create_automation_region(&mut ctx, lane, 0, 960, "A")
+            .expect("create region");
+        let clip = ctx.app_state.tracks[midi].clips[0];
+        let selection = TimelineSelection {
+            clips: vec![(midi, vec![clip])],
+            regions: vec![(lane, vec![region])],
+        };
+        let observe = |ctx: &DawContext| {
+            (
+                ctx.app_state.clips_pool[clip].time.start_time_raw(),
+                automation_state(ctx),
+            )
+        };
+
+        assert_round_trip(
+            &mut ctx,
+            "Move Selection",
+            |ctx| {
+                let moved = timeline_selection_api::move_selection(ctx, &selection, 480)
+                    .expect("move selection");
+                assert_eq!(moved, 480);
+            },
+            observe,
+        );
+        assert_eq!(ctx.app_state.clips_pool[clip].time.start_time_raw(), 480);
+        let lane_after = &ctx.app_state.automation_pool[lane];
+        assert_eq!(lane_after.regions[0].start_ticks, 480);
+        // The lane's starting point at 0 and the point at 120 moved with the region.
+        let ticks: Vec<u32> = lane_after.points.iter().map(|p| p.time_ticks).collect();
+        assert_eq!(ticks, [480, 600]);
+
+        assert_round_trip(
+            &mut ctx,
+            "Resize Selection",
+            |ctx| {
+                timeline_selection_api::resize_selection(
+                    ctx,
+                    &selection,
+                    ResizeEdge::Right,
+                    -480,
+                    false,
+                )
+                .expect("resize selection");
+            },
+            observe,
+        );
+        assert_round_trip(
+            &mut ctx,
+            "Delete Selection",
+            |ctx| {
+                timeline_selection_api::delete_selection(ctx, &selection)
+                    .expect("delete selection");
+            },
+            observe_lanes_and_track(midi),
+        );
+    }
+
+    /// The clip list of `track` and the automation state, which a delete changes.
+    fn observe_lanes_and_track(
+        track: TrackId,
+    ) -> impl Fn(&DawContext) -> (Vec<ClipId>, AutomationSnapshot) {
+        move |ctx| {
+            (
+                ctx.app_state.tracks[track].clips.clone(),
+                automation_state(ctx),
+            )
+        }
     }
 
     #[test]

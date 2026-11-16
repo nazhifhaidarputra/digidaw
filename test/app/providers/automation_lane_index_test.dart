@@ -42,6 +42,7 @@ AutomationLaneDto _lane(int id) => AutomationLaneDto(
   points: const [],
   enabled: true,
   defaultValue: 0,
+  regions: [],
 );
 
 ModulationLinkDto _link(int id, AutomationTargetDto target, int orderIdx) =>
