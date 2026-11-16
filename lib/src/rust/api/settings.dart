@@ -10,7 +10,7 @@ import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 import 'package:freezed_annotation/freezed_annotation.dart' hide protected;
 part 'settings.freezed.dart';
 
-// These functions are ignored because they are not marked as `pub`: `audio_preferences`, `auto_save_settings`, `automation_templates`, `curve_type_dto`, `curve_type`, `display_path`, `general_settings`, `history_limit_is_valid`, `non_empty_path`, `not_open`, `optional_path_string`, `path_string`, `read`, `record_recent_project`, `remember_sample_folder`, `sample_folders`, `store_language`, `store_plugin_scan`, `stored_language`, `stored_plugin_scan`, `update_audio`, `write`
+// These functions are ignored because they are not marked as `pub`: `audio_preferences`, `auto_save_settings`, `automation_templates`, `curve_type_dto`, `curve_type`, `display_path`, `general_settings`, `history_limit_is_valid`, `metronome_folder`, `non_empty_path`, `not_open`, `optional_path_string`, `path_string`, `read`, `record_recent_project`, `remember_sample_folder`, `sample_folders`, `store_language`, `store_plugin_scan`, `stored_language`, `stored_plugin_scan`, `update_audio`, `write`
 // These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`
 
 /// Loads the settings from `<support_dir>/settings`. Call once at startup, before any other
@@ -76,7 +76,8 @@ Future<UiAudioPreferences> saveAudioDsp({
   blockSize: blockSize,
 );
 
-/// Sets the metronome sound file; `None` uses the built-in click.
+/// Records the file the custom metronome clicks were rendered from; `None` uses the built-in
+/// click.
 Future<UiAudioPreferences> saveMetronomeSound({String? path}) =>
     RustLib.instance.api.crateApiSettingsSaveMetronomeSound(path: path);
 

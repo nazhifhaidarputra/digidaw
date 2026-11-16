@@ -38,6 +38,9 @@ static SETTINGS: RwLock<Option<SettingsStore>> = RwLock::new(None);
 /// Name of the folder holding the settings files inside the app support directory.
 const SETTINGS_FOLDER: &str = "settings";
 
+/// Name of the folder holding the rendered metronome clicks inside the settings folder.
+const METRONOME_FOLDER: &str = "metronome";
+
 fn read<R>(read: impl FnOnce(&SettingsStore) -> R) -> anyhow::Result<R> {
     let store = SETTINGS.read();
     let store = store.as_ref().ok_or_else(not_open)?;
@@ -308,7 +311,13 @@ pub fn save_audio_dsp(sample_rate: u32, block_size: u32) -> anyhow::Result<UiAud
     })
 }
 
-/// Sets the metronome sound file; `None` uses the built-in click.
+/// Folder holding the custom metronome clicks, inside the settings folder.
+pub(crate) fn metronome_folder() -> anyhow::Result<PathBuf> {
+    read(|store| store.dir().join(METRONOME_FOLDER))
+}
+
+/// Records the file the custom metronome clicks were rendered from; `None` uses the built-in
+/// click.
 pub fn save_metronome_sound(path: Option<String>) -> anyhow::Result<UiAudioPreferences> {
     update_audio(|audio| audio.metronome_sound = path.map(PathBuf::from))
 }

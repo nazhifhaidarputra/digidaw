@@ -13,6 +13,7 @@ use crate::api::{
         AudioWaveformUiForAudioProperties, UiApplicationState, UiAudioHardwareConfig,
         UiGainEnvelope,
     },
+    settings::metronome_folder,
 };
 use crate::frb_generated::StreamSink;
 use flutter_rust_bridge::frb;
@@ -546,9 +547,29 @@ pub fn set_metronome_active(ctx: &DawContext, active: bool) {
     audio_api::set_metronome_active(&mut ctx.runtime_write(), active);
 }
 
-/// Uses the audio file at `file_path` as the metronome sound, or the built-in click when it
-/// is `None`. Offbeats play the file as recorded and downbeats an octave higher.
-pub fn set_metronome_sound(ctx: &DawContext, file_path: Option<String>) -> Result<(), String> {
-    audio_api::set_metronome_sound(&mut ctx.runtime_write(), file_path.as_deref())
+/// Makes the audio file at `file_path` the metronome sound.
+///
+/// The file is rendered into an offbeat click as recorded and a downbeat click an octave
+/// higher with the same length. Both are saved beside the settings, then read back from disk
+/// for the engine.
+pub fn import_metronome_sound(ctx: &DawContext, file_path: String) -> Result<(), String> {
+    let folder = metronome_folder().map_err(|error| error.to_string())?;
+    audio_api::render_metronome_sound(&file_path, &folder).map_err(|error| error.to_string())?;
+    let click = audio_api::read_metronome_sound(&folder).map_err(|error| error.to_string())?;
+    audio_api::set_metronome_click(&mut ctx.runtime_write(), Some(click))
+        .map_err(|error| error.to_string())
+}
+
+/// Plays the clicks saved by [`import_metronome_sound`], read from disk.
+pub fn load_metronome_sound(ctx: &DawContext) -> Result<(), String> {
+    let folder = metronome_folder().map_err(|error| error.to_string())?;
+    let click = audio_api::read_metronome_sound(&folder).map_err(|error| error.to_string())?;
+    audio_api::set_metronome_click(&mut ctx.runtime_write(), Some(click))
+        .map_err(|error| error.to_string())
+}
+
+/// Restores the built-in metronome click.
+pub fn use_default_metronome_sound(ctx: &DawContext) -> Result<(), String> {
+    audio_api::set_metronome_click(&mut ctx.runtime_write(), None)
         .map_err(|error| error.to_string())
 }

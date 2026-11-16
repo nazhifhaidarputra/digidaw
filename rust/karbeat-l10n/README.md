@@ -181,7 +181,7 @@ To rename an id, change it in every language folder and in `lib/` together.
 1. Add a variant to `Language` in `src/language.rs` and give it a code, native name, English name and flag in each `match`. Add it to `Language::ALL` in the position the selector should show it.
 2. Add `language_sources!("xx-YY")` for it in `sources()` in `src/catalog.rs`.
 3. Create `locales/xx-YY/` with all ten `.ftl` files. Copy `common.ftl` from another language first: it holds the `-app-name` term.
-4. Add the flag as `assets/images/flags/<flag>.svg`. We use the 4×3 SVGs from [flag-icons](https://github.com/lipis/flag-icons) (MIT, already credited in **Info → View licenses**).
+4. Add the flag as `assets/images/flags/<flag>.svg`. We use the 4×3 SVGs from [flag-icons](https://github.com/lipis/flag-icons)
 5. Check that Flutter's own Material translations support the language (`GlobalMaterialLocalizations.delegate.isSupported`). Almost all common languages are supported. Nothing else in Dart needs to change: the supported locales come from Rust.
 6. If system locales should resolve to it in a special way (as Traditional Chinese must not pick Simplified Chinese), extend `src/negotiate.rs` and its tests.
 7. Run the checks below. The bridge does not need to be regenerated: the language list crosses it as data.

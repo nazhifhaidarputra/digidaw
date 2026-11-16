@@ -849,7 +849,8 @@ impl AudioEngine {
             }
             AudioCommand::SetMetronomeClick(click) => {
                 if let Some(previous) = self.metronome_state.set_custom_click(click) {
-                    self.retire_graph_state(RetiredGraphState::AudioBuffer(previous.samples));
+                    self.retire_graph_state(RetiredGraphState::AudioBuffer(previous.downbeat));
+                    self.retire_graph_state(RetiredGraphState::AudioBuffer(previous.offbeat));
                 }
             }
             AudioCommand::TogglePlayingWithPlaybackMode(playback_mode) => {
