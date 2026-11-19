@@ -26,15 +26,6 @@ common-no = Non
 common-loading = Chargement…
 common-unknown = Inconnu
 
-## Grid and note lengths
-
-common-grid-bar = 1 mesure
-common-grid-beats = { $count ->
-    [one] { $count } temps
-   *[other] { $count } temps
-}
-common-grid-step = { $fraction } pas
-
 ## Color picker
 
 common-color-choose = Choisir une couleur

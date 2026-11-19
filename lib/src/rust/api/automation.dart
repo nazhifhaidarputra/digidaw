@@ -8,10 +8,11 @@ import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 import 'package:freezed_annotation/freezed_annotation.dart' hide protected;
 import 'plugin.dart';
 import 'project.dart';
+import 'track.dart';
 part 'automation.freezed.dart';
 
-// These functions are ignored because they are not marked as `pub`: `narrow`
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `try_from`
+// These functions are ignored because they are not marked as `pub`: `narrow`, `to_region_ids`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `try_from`
 
 /// Fetch the list of (modulation_id, automation_id, automation_lane) where
 /// the target is the given track id
@@ -207,6 +208,168 @@ Future<AutomationLaneDto> pasteAutomationPoints({
   targetLength: targetLength,
 );
 
+/// Creates a region over a span of a lane; points already in the span become its members.
+/// Returns the lane and the new region's id.
+Future<(AutomationLaneDto, int)> createAutomationRegion({
+  required DawContext ctx,
+  required int automationId,
+  required int startTick,
+  required int lengthTicks,
+  required String name,
+}) => RustLib.instance.api.crateApiAutomationCreateAutomationRegion(
+  ctx: ctx,
+  automationId: automationId,
+  startTick: startTick,
+  lengthTicks: lengthTicks,
+  name: name,
+);
+
+/// Creates a region holding `points` (times relative to its start), overwriting the free points
+/// under it. Inserting a curve template uses this.
+Future<(AutomationLaneDto, int)> insertAutomationRegion({
+  required DawContext ctx,
+  required int automationId,
+  required int startTick,
+  required int lengthTicks,
+  required String name,
+  required List<AutomationPointDto> points,
+}) => RustLib.instance.api.crateApiAutomationInsertAutomationRegion(
+  ctx: ctx,
+  automationId: automationId,
+  startTick: startTick,
+  lengthTicks: lengthTicks,
+  name: name,
+  points: points,
+);
+
+Future<AutomationLaneDto> renameAutomationRegion({
+  required DawContext ctx,
+  required int automationId,
+  required int regionId,
+  required String name,
+}) => RustLib.instance.api.crateApiAutomationRenameAutomationRegion(
+  ctx: ctx,
+  automationId: automationId,
+  regionId: regionId,
+  name: name,
+);
+
+/// Deletes regions together with their points.
+Future<AutomationLaneDto> deleteAutomationRegions({
+  required DawContext ctx,
+  required int automationId,
+  required List<int> regionIds,
+}) => RustLib.instance.api.crateApiAutomationDeleteAutomationRegions(
+  ctx: ctx,
+  automationId: automationId,
+  regionIds: regionIds,
+);
+
+/// Removes regions but keeps their points as free points.
+Future<AutomationLaneDto> dissolveAutomationRegions({
+  required DawContext ctx,
+  required int automationId,
+  required List<int> regionIds,
+}) => RustLib.instance.api.crateApiAutomationDissolveAutomationRegions(
+  ctx: ctx,
+  automationId: automationId,
+  regionIds: regionIds,
+);
+
+/// Moves regions and their points within their lane; the move stops at neighbouring regions.
+Future<AutomationLaneDto> moveAutomationRegions({
+  required DawContext ctx,
+  required int automationId,
+  required List<int> regionIds,
+  required int deltaTicks,
+}) => RustLib.instance.api.crateApiAutomationMoveAutomationRegions(
+  ctx: ctx,
+  automationId: automationId,
+  regionIds: regionIds,
+  deltaTicks: deltaTicks,
+);
+
+/// Moves one edge of regions; the resize stops at neighbouring regions.
+Future<AutomationLaneDto> resizeAutomationRegions({
+  required DawContext ctx,
+  required int automationId,
+  required List<int> regionIds,
+  required UiResizeEdge edge,
+  required int deltaTicks,
+}) => RustLib.instance.api.crateApiAutomationResizeAutomationRegions(
+  ctx: ctx,
+  automationId: automationId,
+  regionIds: regionIds,
+  edge: edge,
+  deltaTicks: deltaTicks,
+);
+
+/// Cuts a region in two at `at_tick`.
+Future<AutomationLaneDto> sliceAutomationRegion({
+  required DawContext ctx,
+  required int automationId,
+  required int regionId,
+  required int atTick,
+}) => RustLib.instance.api.crateApiAutomationSliceAutomationRegion(
+  ctx: ctx,
+  automationId: automationId,
+  regionId: regionId,
+  atTick: atTick,
+);
+
+/// Copies regions `delta_ticks` later, sharing their compositions. Returns the lane and the
+/// copies' ids.
+Future<(AutomationLaneDto, List<int>)> duplicateAutomationRegions({
+  required DawContext ctx,
+  required int automationId,
+  required List<int> regionIds,
+  required int deltaTicks,
+}) => RustLib.instance.api.crateApiAutomationDuplicateAutomationRegions(
+  ctx: ctx,
+  automationId: automationId,
+  regionIds: regionIds,
+  deltaTicks: deltaTicks,
+);
+
+/// Gives each region a composition of its own.
+Future<AutomationLaneDto> makeAutomationRegionsUnique({
+  required DawContext ctx,
+  required int automationId,
+  required List<int> regionIds,
+}) => RustLib.instance.api.crateApiAutomationMakeAutomationRegionsUnique(
+  ctx: ctx,
+  automationId: automationId,
+  regionIds: regionIds,
+);
+
+/// Copies regions with their points for a later paste.
+Future<List<AutomationRegionCopyDto>> copyAutomationRegions({
+  required DawContext ctx,
+  required int automationId,
+  required List<int> regionIds,
+}) => RustLib.instance.api.crateApiAutomationCopyAutomationRegions(
+  ctx: ctx,
+  automationId: automationId,
+  regionIds: regionIds,
+);
+
+/// Pastes copied regions at `at_tick`. Pass `share_content` when pasting into the lane they
+/// were copied from, so the copies keep sharing their compositions. Returns the lane and the
+/// pasted regions' ids.
+Future<(AutomationLaneDto, List<int>)> pasteAutomationRegions({
+  required DawContext ctx,
+  required int automationId,
+  required int atTick,
+  required List<AutomationRegionCopyDto> copies,
+  required bool shareContent,
+}) => RustLib.instance.api.crateApiAutomationPasteAutomationRegions(
+  ctx: ctx,
+  automationId: automationId,
+  atTick: atTick,
+  copies: copies,
+  shareContent: shareContent,
+);
+
 /// Formats a lane's normalized value in the unit of the parameter it automates.
 String automationValueText({
   required DawContext ctx,
@@ -366,6 +529,7 @@ sealed class AutomationLaneDto with _$AutomationLaneDto {
     required List<AutomationPointDto> points,
     required bool enabled,
     required double defaultValue,
+    required List<AutomationRegionDto> regions,
   }) = _AutomationLaneDto;
 }
 
@@ -379,6 +543,34 @@ sealed class AutomationPointDto with _$AutomationPointDto {
     required double tension,
     BezierHandlesDto? handles,
   }) = _AutomationPointDto;
+}
+
+/// A region detached from its lane for copy and paste. `start_ticks` is relative to the
+/// earliest copied region and point times are relative to the region start.
+@freezed
+sealed class AutomationRegionCopyDto with _$AutomationRegionCopyDto {
+  const factory AutomationRegionCopyDto({
+    required String name,
+    required int startTicks,
+    required int lengthTicks,
+    required int contentId,
+    required int contentOffset,
+    required List<AutomationPointDto> points,
+  }) = _AutomationRegionCopyDto;
+}
+
+/// A clip-like span of an automation lane. It groups the points in `[start_ticks,
+/// start_ticks + length_ticks)`; the points themselves stay in the lane.
+@freezed
+sealed class AutomationRegionDto with _$AutomationRegionDto {
+  const factory AutomationRegionDto({
+    required int id,
+    required String name,
+    required int startTicks,
+    required int lengthTicks,
+    required int contentId,
+    required int contentOffset,
+  }) = _AutomationRegionDto;
 }
 
 @freezed

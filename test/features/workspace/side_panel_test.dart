@@ -10,6 +10,7 @@ import 'package:karbeat/core/utils/result_type.dart';
 import 'package:karbeat/features/workspace/view/side_panel.dart';
 import 'package:karbeat/shared/enums/global.dart';
 import 'package:karbeat/shared/models/menu_group.dart';
+import 'package:karbeat/generated/shortcuts/shortcut_keys.dart';
 
 class _FakeShortcutPreferencesService extends ShortcutPreferencesService {
   @override
@@ -40,7 +41,7 @@ void main() {
       actions: [
         DawToolbarMenuAction(
           'app-menu-save-project',
-          shortcutId: 'workspace.save',
+          shortcut: WorkspaceShortcutKeys.save,
         ),
       ],
     );
@@ -61,7 +62,7 @@ void main() {
     await container
         .read(shortcutManagerProvider.notifier)
         .remap(
-          'workspace.save',
+          WorkspaceShortcutKeys.save.id,
           ShortcutChord(
             logicalKeyId: LogicalKeyboardKey.keyP.keyId,
             control: true,

@@ -146,7 +146,6 @@ track-recording-active = Merekam. Klik untuk berhenti dan menyimpan rekaman.
 track-recording = Merekam
 track-input-stereo = Kanal { $first }+{ $second } (stereo)
 track-input-mono = Kanal { $channel } (mono)
-track-move-step = Langkah Geser
 track-clips-selected = { $count } Klip
 track-automation-lanes = { $count } lajur otomasi
 track-loop-to-selection = Jadikan Pilihan sebagai Wilayah Loop

@@ -5,9 +5,63 @@ mod tests {
     use crate::audio_api;
     use crate::test::helpers::make_ctx;
     use crate::track_api;
+    use hound::{SampleFormat, WavSpec, WavWriter};
     use karbeat_audio::commands::AudioCommand;
     use karbeat_core::shared::id::{AudioSourceId, GeneratorId, TrackId};
     use rtrb::RingBuffer;
+    use std::f32::consts::TAU;
+    use tempfile::tempdir;
+
+    /// Sign changes in the middle half of `samples`, away from the stretcher's edges.
+    fn zero_crossings(samples: &[f32]) -> usize {
+        let quarter = samples.len().div_euclid(4);
+        let middle = samples
+            .get(quarter..samples.len().saturating_sub(quarter))
+            .unwrap_or_default();
+        middle
+            .windows(2)
+            .filter(|pair| matches!(pair, [a, b] if (*a < 0.0) != (*b < 0.0)))
+            .count()
+    }
+
+    #[test]
+    fn rendered_metronome_sound_is_read_back_with_an_octave_up_downbeat_of_equal_length() {
+        let source_dir = tempdir().expect("source folder");
+        let source = source_dir.path().join("click.wav");
+        let spec = WavSpec {
+            channels: 2,
+            sample_rate: 44_100,
+            bits_per_sample: 16,
+            sample_format: SampleFormat::Int,
+        };
+        let frames = 11_025;
+        let mut writer = WavWriter::create(&source, spec).expect("source writer");
+        for frame in 0..frames {
+            let value = (frame as f32 * 441.0 * TAU / 44_100.0).sin() * 0.5;
+            let sample = (value * f32::from(i16::MAX)) as i16;
+            writer.write_sample(sample).expect("left sample");
+            writer.write_sample(sample).expect("right sample");
+        }
+        writer.finalize().expect("finalize source");
+        let folder = tempdir().expect("metronome folder");
+
+        audio_api::render_metronome_sound(source.to_str().expect("source path"), folder.path())
+            .expect("render clicks");
+        let click = audio_api::read_metronome_sound(folder.path()).expect("read clicks");
+
+        assert_eq!(click.sample_rate, 44_100);
+        assert_eq!(click.offbeat.len(), frames);
+        assert_eq!(click.downbeat.len(), frames);
+        let ratio = zero_crossings(&click.downbeat) as f32 / zero_crossings(&click.offbeat) as f32;
+        assert!((1.8..2.2).contains(&ratio), "downbeat pitch ratio {ratio}");
+    }
+
+    #[test]
+    fn reading_a_metronome_folder_without_clicks_fails() {
+        let folder = tempdir().expect("metronome folder");
+
+        assert!(audio_api::read_metronome_sound(folder.path()).is_err());
+    }
 
     #[test]
     fn get_audio_source_missing_returns_none() {

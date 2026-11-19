@@ -113,7 +113,7 @@ fn workflow(descriptor: PluginDescriptor) {
         let directory = tempfile::tempdir().unwrap();
         let path = directory.path().join("vital.digidaw");
         project_api::save_project(&mut ctx, path.to_str().unwrap()).unwrap();
-        let mut loaded = load_daw_project(&path, 48_000).unwrap();
+        let mut loaded = load_daw_project(&path).unwrap();
         assert_eq!(loaded.generator_pool.len(), 2);
         for (_, generator) in &loaded.generator_pool {
             let GeneratorInstanceType::Plugin(plugin) = &generator.instance_type else {
@@ -190,7 +190,7 @@ fn workflow(descriptor: PluginDescriptor) {
         assert_eq!(ctx.external_plugin_failures.len(), 2);
         assert!(external_plugin_api::capabilities(&mut ctx, target).is_err());
         project_api::save_project(&mut ctx, path.to_str().unwrap()).unwrap();
-        let missing_saved = load_daw_project(&path, 48_000).unwrap();
+        let missing_saved = load_daw_project(&path).unwrap();
         let stored_states: Vec<_> = missing_saved
             .generator_pool
             .values()

@@ -2,14 +2,18 @@ use std::{collections::HashSet, fs::canonicalize, iter::empty, path::PathBuf, sy
 
 use anyhow::Context;
 
-use crate::audio_api::stop_all_previews;
+use crate::{audio_analysis_api::begin_refresh_render, audio_api::stop_all_previews};
 use karbeat_audio::context::DawContext;
 use karbeat_core::core::{
     file_manager::audio_loader::{AudioLoader, load_audio_file},
     history::actions::{
-        AudioSourceRemoved, ClipEditRecorder, SourceEnvelopeChanged, SourceTrimChanged,
+        AudioSourceRemoved, ClipEditRecorder, SourceEnvelopeChanged, SourceReplaced,
+        SourceTrimChanged,
     },
-    project::{AudioSourceId, AudioWaveform, ClipId, DawSource, GainEnvelope, TrackId, TrackType},
+    project::{
+        AudioSourceId, AudioWaveform, ClipId, DawSource, GainEnvelope, TrackId, TrackType,
+        track::audio_waveform::{AudioSampleMode, EditedWaveform, WaveformEdits},
+    },
 };
 
 /// Get audio waveform clips data from Application and map them into U value
@@ -142,7 +146,6 @@ pub struct PendingAudioImport {
     normalized_path: PathBuf,
     /// Sources present when the import began, with their stored paths.
     existing: Vec<(AudioSourceId, PathBuf)>,
-    sample_rate: u32,
 }
 
 /// Decoded audio import; add it with [`commit_audio_import`].
@@ -171,7 +174,6 @@ pub fn begin_audio_import(ctx: &DawContext, file_path: &str) -> anyhow::Result<P
             .iter()
             .map(|(id, waveform)| (id, waveform.file_path.clone()))
             .collect(),
-        sample_rate: ctx.audio_runtime_settings.read().requested_dsp.sample_rate,
     })
 }
 
@@ -187,7 +189,7 @@ pub fn execute_audio_import(pending: PendingAudioImport) -> anyhow::Result<Compl
         return Ok(CompletedAudioImport::Existing(source_id));
     }
 
-    let waveform = load_audio_file(&pending.file_path, None, pending.sample_rate).map_err(|e| {
+    let waveform = load_audio_file(&pending.file_path, None).map_err(|e| {
         tracing::error!("[error] failed to load the audio: {}", e);
         anyhow::anyhow!("Failed to load the audio source")
     })?;
@@ -237,6 +239,76 @@ pub fn commit_audio_import(ctx: &mut DawContext, completed: CompletedAudioImport
     ctx.mark_project_modified();
     ctx.broadcast_full_graph();
     source_id
+}
+
+/// Decodes an audio file to replace a source with [`replace_audio_source`]. Holds no project
+/// lock.
+pub fn decode_replacement_audio(file_path: &str) -> anyhow::Result<AudioWaveform> {
+    load_audio_file(file_path, None).map_err(|error| {
+        tracing::error!("Failed to load the replacement audio: {error}");
+        anyhow::anyhow!("Failed to load the audio source")
+    })
+}
+
+/// Swaps a source's audio for `decoded`, as one undoable step. Returns whether it needs a
+/// render.
+///
+/// The clips that play the source keep their place, and the source keeps its playback
+/// settings and edits; envelope times stay the same. Trim points and detected beats describe
+/// the old audio, so the new audio plays whole, and a tempo-following source anchors to the
+/// project tempo as when entering its mode.
+pub fn replace_audio_source(
+    ctx: &mut DawContext,
+    source_id: AudioSourceId,
+    decoded: AudioWaveform,
+) -> anyhow::Result<bool> {
+    let project_bpm = ctx.app_state.transport.bpm;
+    let entry = ctx
+        .app_state
+        .asset_library
+        .source_map
+        .get_mut(source_id)
+        .context("Cannot find audio source")?;
+    let previous = Arc::clone(entry);
+    let mut envelope_source = AudioWaveform {
+        envelope: previous.envelope.clone(),
+        ..AudioWaveform::default()
+    };
+    envelope_source.rescale_frames(previous.sample_rate, decoded.sample_rate);
+    let edits = previous
+        .edited
+        .as_ref()
+        .map(|edited| WaveformEdits {
+            time_ratio: 1.0,
+            warp: false,
+            ..edited.edits.clone()
+        })
+        .filter(|edits| *edits != WaveformEdits::default());
+    *entry = Arc::new(AudioWaveform {
+        id: Some(source_id),
+        root_note: previous.root_note,
+        fine_tune: previous.fine_tune,
+        is_looping: previous.is_looping,
+        muted: previous.muted,
+        sample_mode: previous.sample_mode,
+        original_bpm: match previous.sample_mode {
+            AudioSampleMode::Default => None,
+            AudioSampleMode::Stretch | AudioSampleMode::Resampled => {
+                Some(project_bpm).filter(|bpm| *bpm > 0.0)
+            }
+        },
+        envelope: envelope_source.envelope,
+        edited: edits.map(|edits| EditedWaveform {
+            edits,
+            ..EditedWaveform::default()
+        }),
+        beat_grid: None,
+        ..decoded
+    });
+    ctx.push_history(SourceReplaced::new(source_id, previous));
+    ctx.broadcast_audio_source(source_id);
+    tracing::info!("Replaced the audio of source {}", source_id.to_u64());
+    Ok(begin_refresh_render(ctx, source_id)?.is_some())
 }
 
 /// Deletes an audio source and every clip that plays it as one undoable step.

@@ -3,17 +3,17 @@ use std::mem::replace;
 
 /// A user-supplied click that replaces both built-in metronome sounds.
 ///
-/// Offbeats play it as recorded and downbeats play it an octave higher.
+/// Both buffers are rendered ahead of time, so playback only converts their sample rate to the
+/// engine's.
 #[derive(Debug, Clone, PartialEq)]
 pub struct MetronomeClick {
-    /// Mono samples.
-    pub samples: Vec<f32>,
-    /// Sample rate `samples` were decoded at.
+    /// Mono samples played on the first beat of each bar.
+    pub downbeat: Vec<f32>,
+    /// Mono samples played on every other beat.
+    pub offbeat: Vec<f32>,
+    /// Sample rate both buffers were rendered at.
     pub sample_rate: u32,
 }
-
-/// Playback rate of a custom click on downbeats: one octave up.
-const DOWNBEAT_RATE: f64 = 2.0;
 
 pub struct MetronomeState {
     is_active: bool,
@@ -83,20 +83,23 @@ impl MetronomeState {
             }
 
             if let Some(click) = &self.custom_click {
+                let samples = if self.is_downbeat {
+                    &click.downbeat
+                } else {
+                    &click.offbeat
+                };
                 let index = self.custom_position as usize;
-                let Some(&current) = click.samples.get(index) else {
+                let Some(&current) = samples.get(index) else {
                     self.is_playing = false;
                     continue;
                 };
-                let next = click.samples.get(index + 1).copied().unwrap_or(0.0);
+                let next = samples.get(index + 1).copied().unwrap_or(0.0);
                 let fraction = (self.custom_position - index as f64) as f32;
                 let sample = current + (next - current) * fraction;
                 for output_sample in output_frame {
                     *output_sample += sample;
                 }
-                let pitch = if self.is_downbeat { DOWNBEAT_RATE } else { 1.0 };
-                self.custom_position +=
-                    f64::from(click.sample_rate) / f64::from(sample_rate) * pitch;
+                self.custom_position += f64::from(click.sample_rate) / f64::from(sample_rate);
                 continue;
             }
 
@@ -152,7 +155,8 @@ mod tests {
 
     fn ramp(sample_rate: u32) -> MetronomeClick {
         MetronomeClick {
-            samples: vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0],
+            downbeat: vec![-1.0, -2.0, -3.0, -4.0, -5.0, -6.0],
+            offbeat: vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0],
             sample_rate,
         }
     }
@@ -168,18 +172,18 @@ mod tests {
     }
 
     #[test]
-    fn custom_click_plays_an_octave_up_on_the_downbeat() {
+    fn custom_click_plays_its_downbeat_buffer_on_the_downbeat() {
         let mut metronome = metronome(Some(ramp(48_000)));
         let mut output = [0.0; 4];
 
-        // Sample 0 starts bar one: every other sample is read, so it ends in half the time
+        // Sample 0 starts bar one
         metronome.render(&mut output, 1, 0, 120.0, 48_000);
 
-        assert_eq!(output, [1.0, 3.0, 5.0, 0.0]);
+        assert_eq!(output, [-1.0, -2.0, -3.0, -4.0]);
     }
 
     #[test]
-    fn custom_click_plays_as_recorded_on_an_offbeat() {
+    fn custom_click_plays_its_offbeat_buffer_on_an_offbeat() {
         let mut metronome = metronome(Some(ramp(48_000)));
         let mut output = [0.0; 4];
 

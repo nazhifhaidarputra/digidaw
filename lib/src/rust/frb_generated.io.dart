@@ -20,6 +20,7 @@ import 'api/plugins/opaque.dart';
 import 'api/plugins/types.dart';
 import 'api/project.dart';
 import 'api/recording.dart';
+import 'api/sample_browser.dart';
 import 'api/serialization.dart';
 import 'api/session.dart';
 import 'api/settings.dart';
@@ -248,6 +249,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   dco_decode_StreamSink_ui_recording_progress_Sse(dynamic raw);
 
   @protected
+  RustStreamSink<UiSampleFolderEvent>
+  dco_decode_StreamSink_ui_sample_folder_event_Sse(dynamic raw);
+
+  @protected
   RustStreamSink<UiTransportFeedback>
   dco_decode_StreamSink_ui_transport_feedback_Sse(dynamic raw);
 
@@ -273,6 +278,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   AutomationPointDto dco_decode_automation_point_dto(dynamic raw);
+
+  @protected
+  AutomationRegionCopyDto dco_decode_automation_region_copy_dto(dynamic raw);
+
+  @protected
+  AutomationRegionDto dco_decode_automation_region_dto(dynamic raw);
 
   @protected
   AutomationTargetDto dco_decode_automation_target_dto(dynamic raw);
@@ -465,6 +476,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   UiRoutingNode dco_decode_box_autoadd_ui_routing_node(dynamic raw);
 
   @protected
+  UiSampleTree dco_decode_box_autoadd_ui_sample_tree(dynamic raw);
+
+  @protected
   UiTrack dco_decode_box_autoadd_ui_track(dynamic raw);
 
   @protected
@@ -516,6 +530,14 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   List<AutomationPointDto> dco_decode_list_automation_point_dto(dynamic raw);
+
+  @protected
+  List<AutomationRegionCopyDto> dco_decode_list_automation_region_copy_dto(
+    dynamic raw,
+  );
+
+  @protected
+  List<AutomationRegionDto> dco_decode_list_automation_region_dto(dynamic raw);
 
   @protected
   List<ParameterSpecDTO> dco_decode_list_parameter_spec_dto(dynamic raw);
@@ -721,6 +743,18 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<UiRoutingConnection> dco_decode_list_ui_routing_connection(dynamic raw);
 
   @protected
+  List<UiSampleFile> dco_decode_list_ui_sample_file(dynamic raw);
+
+  @protected
+  List<UiSampleTree> dco_decode_list_ui_sample_tree(dynamic raw);
+
+  @protected
+  List<UiSelectedClips> dco_decode_list_ui_selected_clips(dynamic raw);
+
+  @protected
+  List<UiSelectedRegions> dco_decode_list_ui_selected_regions(dynamic raw);
+
+  @protected
   List<UiSidechainSource> dco_decode_list_ui_sidechain_source(dynamic raw);
 
   @protected
@@ -882,6 +916,14 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   PluginTelemetrySnapshotDto dco_decode_plugin_telemetry_snapshot_dto(
     dynamic raw,
   );
+
+  @protected
+  (AutomationLaneDto, int)
+  dco_decode_record_automation_lane_dto_casted_primitive_u_64(dynamic raw);
+
+  @protected
+  (AutomationLaneDto, List<int>)
+  dco_decode_record_automation_lane_dto_list_casted_primitive_u_64(dynamic raw);
 
   @protected
   (AutomationLaneDto, ModulationLinkDto)
@@ -1279,6 +1321,21 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   UiRoutingTap dco_decode_ui_routing_tap(dynamic raw);
 
   @protected
+  UiSampleFile dco_decode_ui_sample_file(dynamic raw);
+
+  @protected
+  UiSampleFolderEvent dco_decode_ui_sample_folder_event(dynamic raw);
+
+  @protected
+  UiSampleTree dco_decode_ui_sample_tree(dynamic raw);
+
+  @protected
+  UiSelectedClips dco_decode_ui_selected_clips(dynamic raw);
+
+  @protected
+  UiSelectedRegions dco_decode_ui_selected_regions(dynamic raw);
+
+  @protected
   UiShortcutChord dco_decode_ui_shortcut_chord(dynamic raw);
 
   @protected
@@ -1534,6 +1591,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   sse_decode_StreamSink_ui_recording_progress_Sse(SseDeserializer deserializer);
 
   @protected
+  RustStreamSink<UiSampleFolderEvent>
+  sse_decode_StreamSink_ui_sample_folder_event_Sse(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   RustStreamSink<UiTransportFeedback>
   sse_decode_StreamSink_ui_transport_feedback_Sse(SseDeserializer deserializer);
 
@@ -1567,6 +1630,16 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   AutomationPointDto sse_decode_automation_point_dto(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  AutomationRegionCopyDto sse_decode_automation_region_copy_dto(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  AutomationRegionDto sse_decode_automation_region_dto(
     SseDeserializer deserializer,
   );
 
@@ -1817,6 +1890,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  UiSampleTree sse_decode_box_autoadd_ui_sample_tree(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   UiTrack sse_decode_box_autoadd_ui_track(SseDeserializer deserializer);
 
   @protected
@@ -1878,6 +1956,16 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   List<AutomationPointDto> sse_decode_list_automation_point_dto(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  List<AutomationRegionCopyDto> sse_decode_list_automation_region_copy_dto(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  List<AutomationRegionDto> sse_decode_list_automation_region_dto(
     SseDeserializer deserializer,
   );
 
@@ -2127,6 +2215,26 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  List<UiSampleFile> sse_decode_list_ui_sample_file(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  List<UiSampleTree> sse_decode_list_ui_sample_tree(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  List<UiSelectedClips> sse_decode_list_ui_selected_clips(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  List<UiSelectedRegions> sse_decode_list_ui_selected_regions(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   List<UiSidechainSource> sse_decode_list_ui_sidechain_source(
     SseDeserializer deserializer,
   );
@@ -2322,6 +2430,18 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   PluginTelemetrySnapshotDto sse_decode_plugin_telemetry_snapshot_dto(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  (AutomationLaneDto, int)
+  sse_decode_record_automation_lane_dto_casted_primitive_u_64(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  (AutomationLaneDto, List<int>)
+  sse_decode_record_automation_lane_dto_list_casted_primitive_u_64(
     SseDeserializer deserializer,
   );
 
@@ -2823,6 +2943,25 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   UiRoutingTap sse_decode_ui_routing_tap(SseDeserializer deserializer);
 
   @protected
+  UiSampleFile sse_decode_ui_sample_file(SseDeserializer deserializer);
+
+  @protected
+  UiSampleFolderEvent sse_decode_ui_sample_folder_event(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  UiSampleTree sse_decode_ui_sample_tree(SseDeserializer deserializer);
+
+  @protected
+  UiSelectedClips sse_decode_ui_selected_clips(SseDeserializer deserializer);
+
+  @protected
+  UiSelectedRegions sse_decode_ui_selected_regions(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   UiShortcutChord sse_decode_ui_shortcut_chord(SseDeserializer deserializer);
 
   @protected
@@ -3117,6 +3256,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_StreamSink_ui_sample_folder_event_Sse(
+    RustStreamSink<UiSampleFolderEvent> self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_StreamSink_ui_transport_feedback_Sse(
     RustStreamSink<UiTransportFeedback> self,
     SseSerializer serializer,
@@ -3158,6 +3303,18 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_automation_point_dto(
     AutomationPointDto self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_automation_region_copy_dto(
+    AutomationRegionCopyDto self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_automation_region_dto(
+    AutomationRegionDto self,
     SseSerializer serializer,
   );
 
@@ -3453,6 +3610,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_box_autoadd_ui_sample_tree(
+    UiSampleTree self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_box_autoadd_ui_track(UiTrack self, SseSerializer serializer);
 
   @protected
@@ -3527,6 +3690,18 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_list_automation_point_dto(
     List<AutomationPointDto> self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_list_automation_region_copy_dto(
+    List<AutomationRegionCopyDto> self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_list_automation_region_dto(
+    List<AutomationRegionDto> self,
     SseSerializer serializer,
   );
 
@@ -3839,6 +4014,30 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_list_ui_sample_file(
+    List<UiSampleFile> self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_list_ui_sample_tree(
+    List<UiSampleTree> self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_list_ui_selected_clips(
+    List<UiSelectedClips> self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_list_ui_selected_regions(
+    List<UiSelectedRegions> self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_list_ui_sidechain_source(
     List<UiSidechainSource> self,
     SseSerializer serializer,
@@ -4070,6 +4269,18 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_plugin_telemetry_snapshot_dto(
     PluginTelemetrySnapshotDto self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_record_automation_lane_dto_casted_primitive_u_64(
+    (AutomationLaneDto, int) self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_record_automation_lane_dto_list_casted_primitive_u_64(
+    (AutomationLaneDto, List<int>) self,
     SseSerializer serializer,
   );
 
@@ -4680,6 +4891,30 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_ui_routing_tap(UiRoutingTap self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_ui_sample_file(UiSampleFile self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_ui_sample_folder_event(
+    UiSampleFolderEvent self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_ui_sample_tree(UiSampleTree self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_ui_selected_clips(
+    UiSelectedClips self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_ui_selected_regions(
+    UiSelectedRegions self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_ui_shortcut_chord(

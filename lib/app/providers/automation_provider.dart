@@ -616,6 +616,200 @@ class AutomationNotifier extends Notifier<AutomationDataState> {
     ),
   );
 
+  // =========================================================================
+  // AUTOMATION REGIONS
+  // =========================================================================
+
+  /// Creates a region over [startTick] to [startTick] + [lengthTicks]; points
+  /// already there become its members. Returns the new region's ID, or null
+  /// when the region was refused (the user is notified).
+  Future<int?> createRegion({
+    required int laneId,
+    required int startTick,
+    required int lengthTicks,
+    required String name,
+  }) => _applyLaneEditWith(
+    laneId,
+    () => createAutomationRegion(
+      ctx: _ctx,
+      automationId: laneId,
+      startTick: startTick,
+      lengthTicks: lengthTicks,
+      name: name,
+    ),
+  );
+
+  /// Creates a region holding [points] (times relative to its start). It
+  /// overwrites the free points under it. Returns the new region's ID.
+  Future<int?> insertRegion({
+    required int laneId,
+    required int startTick,
+    required int lengthTicks,
+    required String name,
+    required IList<AutomationPointDto> points,
+  }) => _applyLaneEditWith(
+    laneId,
+    () => insertAutomationRegion(
+      ctx: _ctx,
+      automationId: laneId,
+      startTick: startTick,
+      lengthTicks: lengthTicks,
+      name: name,
+      points: points.unlockView,
+    ),
+  );
+
+  Future<void> renameRegion({
+    required int laneId,
+    required int regionId,
+    required String name,
+  }) => _applyLaneEdit(
+    laneId,
+    () => renameAutomationRegion(
+      ctx: _ctx,
+      automationId: laneId,
+      regionId: regionId,
+      name: name,
+    ),
+  );
+
+  /// Deletes regions together with their points.
+  Future<void> deleteRegions({
+    required int laneId,
+    required List<int> regionIds,
+  }) => _applyLaneEdit(
+    laneId,
+    () => deleteAutomationRegions(
+      ctx: _ctx,
+      automationId: laneId,
+      regionIds: regionIds,
+    ),
+  );
+
+  /// Removes regions but keeps their points as free points.
+  Future<void> dissolveRegions({
+    required int laneId,
+    required List<int> regionIds,
+  }) => _applyLaneEdit(
+    laneId,
+    () => dissolveAutomationRegions(
+      ctx: _ctx,
+      automationId: laneId,
+      regionIds: regionIds,
+    ),
+  );
+
+  /// Copies regions [deltaTicks] later, sharing their compositions. Returns
+  /// the copies' IDs, or null when they would overlap a region.
+  Future<List<int>?> duplicateRegions({
+    required int laneId,
+    required List<int> regionIds,
+    required int deltaTicks,
+  }) => _applyLaneEditWith(
+    laneId,
+    () => duplicateAutomationRegions(
+      ctx: _ctx,
+      automationId: laneId,
+      regionIds: regionIds,
+      deltaTicks: deltaTicks,
+    ),
+  );
+
+  /// Cuts a region in two at [atTick].
+  Future<void> sliceRegion({
+    required int laneId,
+    required int regionId,
+    required int atTick,
+  }) => _applyLaneEdit(
+    laneId,
+    () => sliceAutomationRegion(
+      ctx: _ctx,
+      automationId: laneId,
+      regionId: regionId,
+      atTick: atTick,
+    ),
+  );
+
+  /// Gives each region a composition of its own.
+  Future<void> makeRegionsUnique({
+    required int laneId,
+    required List<int> regionIds,
+  }) => _applyLaneEdit(
+    laneId,
+    () => makeAutomationRegionsUnique(
+      ctx: _ctx,
+      automationId: laneId,
+      regionIds: regionIds,
+    ),
+  );
+
+  /// Copies regions with their points; null when the copy failed.
+  Future<IList<AutomationRegionCopyDto>?> copyRegions({
+    required int laneId,
+    required List<int> regionIds,
+  }) async {
+    final copied = await ref.guardApi(
+      () => copyAutomationRegions(
+        ctx: _ctx,
+        automationId: laneId,
+        regionIds: regionIds,
+      ),
+    );
+    return copied.value?.toIList();
+  }
+
+  /// Pastes copied regions at [atTick]. [shareContent] keeps the copies
+  /// sharing their compositions; use it for the lane they came from. Returns
+  /// the pasted regions' IDs, or null when they would overlap a region.
+  Future<List<int>?> pasteRegions({
+    required int laneId,
+    required int atTick,
+    required IList<AutomationRegionCopyDto> copies,
+    required bool shareContent,
+  }) => _applyLaneEditWith(
+    laneId,
+    () => pasteAutomationRegions(
+      ctx: _ctx,
+      automationId: laneId,
+      atTick: atTick,
+      copies: copies.unlockView,
+      shareContent: shareContent,
+    ),
+  );
+
+  /// Reloads every lane from Rust, after an edit that changed lanes without
+  /// returning them.
+  Future<void> syncLanes() async {
+    final lanes = await ref.guardApi(() => getAutomationsLanesAll(ctx: _ctx));
+    final pool = lanes.value;
+    if (pool == null || ref.read(projectProvider).value == null) return;
+    ref.read(projectProvider.notifier).updateAutomations(pool: pool.lock);
+    for (final lane in pool.values) {
+      _pruneRegionSelection(lane);
+    }
+  }
+
+  void _pruneRegionSelection(AutomationLaneDto lane) {
+    ref.read(trackListStateProvider.notifier).pruneRegionSelection(lane.id, {
+      for (final region in lane.regions) region.id,
+    });
+  }
+
+  /// [_applyLaneEdit] for Rust edits that return the lane with a result.
+  /// Returns the result, or null when the edit failed.
+  Future<T?> _applyLaneEditWith<T>(
+    int laneId,
+    Future<(AutomationLaneDto, T)> Function() edit,
+  ) async {
+    T? value;
+    await _applyLaneEdit(laneId, () async {
+      final (lane, result) = await edit();
+      value = result;
+      return lane;
+    });
+    return value;
+  }
+
   /// Runs a Rust lane edit and publishes the lane it returns, keeping the
   /// backend mutation and the project state update paired.
   Future<void> _applyLaneEdit(
@@ -638,6 +832,7 @@ class AutomationNotifier extends Notifier<AutomationDataState> {
     ref
         .read(projectProvider.notifier)
         .updateAutomations(pool: projectData.automationPool.add(laneId, lane));
+    _pruneRegionSelection(lane);
   }
 }
 

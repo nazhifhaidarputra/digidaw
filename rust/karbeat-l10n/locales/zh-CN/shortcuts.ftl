@@ -6,9 +6,9 @@ shortcuts-support-hint = 请将 Ctrl、Alt 或 Command 与非修饰键组合使�
 ## Shortcut categories
 
 shortcuts-category-piano-roll = 钢琴卷帘
-shortcuts-category-piano-roll-tools = 钢琴卷帘工具
+shortcuts-category-piano-roll-tool = 钢琴卷帘工具
 shortcuts-category-track-list = 轨道列表
-shortcuts-category-track-list-tools = 轨道列表工具
+shortcuts-category-track-list-tool = 轨道列表工具
 shortcuts-category-transport = 走带
 shortcuts-category-workspace = 工作区
 
@@ -44,12 +44,17 @@ shortcuts-track-list-tool-resize = 调整大小工具
 shortcuts-track-list-tool-slice = 切割工具
 shortcuts-track-list-tool-move = 移动工具
 shortcuts-track-list-tool-range-select = 范围选择工具
+shortcuts-track-list-tool-delete = 删除工具
 shortcuts-track-list-nudge-left = 将片段左移一步
 shortcuts-track-list-nudge-right = 将片段右移一步
 shortcuts-track-list-copy-clips = 复制片段
 shortcuts-track-list-paste-clips = 粘贴片段
 shortcuts-track-list-duplicate-clips = 再制片段
 shortcuts-track-list-delete-clips = 删除片段
+shortcuts-track-list-cut-clips = 剪切片段
+shortcuts-track-list-quantize-clips = 量化片段
+shortcuts-track-list-quantize-clip-starts = 量化片段起始位置
+shortcuts-track-list-legato-clips = 片段连奏
 shortcuts-transport-toggle-playback = 播放/暂停
 shortcuts-transport-stop-playback = 停止
 shortcuts-transport-toggle-loop = 切换循环

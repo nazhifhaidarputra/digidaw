@@ -7,6 +7,7 @@ import 'package:karbeat/core/input/intents/workspace/open_midi_keyboard_intent.d
 import 'package:karbeat/core/input/intents/workspace/save_intent.dart';
 import 'package:karbeat/core/input/intents/workspace/action_history_intent.dart';
 import 'package:karbeat/core/input/shortcut_models.dart';
+import 'package:karbeat/generated/shortcuts/shortcut_keys.dart';
 
 /// Opens the application settings screen.
 class OpenSettingsIntent extends Intent {
@@ -33,37 +34,27 @@ class NewProjectIntent extends Intent {
 
 const workspaceShortcuts = IListConst<DawShortcut>([
   DawShortcut(
-    id: 'transport.togglePlayback',
-    titleId: 'shortcuts-transport-toggle-playback',
-    categoryId: 'shortcuts-category-transport',
+    key: TransportShortcutKeys.togglePlayback,
     intent: TogglePlayIntent(),
     defaultKey: SingleActivator(LogicalKeyboardKey.space),
   ),
   DawShortcut(
-    id: 'transport.stopPlayback',
-    titleId: 'shortcuts-transport-stop-playback',
-    categoryId: 'shortcuts-category-transport',
+    key: TransportShortcutKeys.stopPlayback,
     intent: StopIntent(),
     defaultKey: SingleActivator(LogicalKeyboardKey.end),
   ),
   DawShortcut(
-    id: 'transport.toggleLoop',
-    titleId: 'shortcuts-transport-toggle-loop',
-    categoryId: 'shortcuts-category-transport',
+    key: TransportShortcutKeys.toggleLoop,
     intent: ToggleLoopIntent(),
     defaultKey: SingleActivator(LogicalKeyboardKey.keyL),
   ),
   DawShortcut(
-    id: 'transport.toggleMetronome',
-    titleId: 'shortcuts-transport-toggle-metronome',
-    categoryId: 'shortcuts-category-transport',
+    key: TransportShortcutKeys.toggleMetronome,
     intent: ToggleMetronomeIntent(),
     defaultKey: SingleActivator(LogicalKeyboardKey.keyM, control: true),
   ),
   DawShortcut(
-    id: 'transport.recordSelectedTrack',
-    titleId: 'shortcuts-transport-record-selected-track',
-    categoryId: 'shortcuts-category-transport',
+    key: TransportShortcutKeys.recordSelectedTrack,
     intent: RecordSelectedTrackIntent(),
     defaultKey: SingleActivator(
       LogicalKeyboardKey.keyR,
@@ -72,9 +63,7 @@ const workspaceShortcuts = IListConst<DawShortcut>([
     ),
   ),
   DawShortcut(
-    id: 'transport.stopRecording',
-    titleId: 'shortcuts-transport-stop-recording',
-    categoryId: 'shortcuts-category-transport',
+    key: TransportShortcutKeys.stopRecording,
     intent: StopRecordingIntent(),
     defaultKey: SingleActivator(
       LogicalKeyboardKey.keyE,
@@ -83,23 +72,17 @@ const workspaceShortcuts = IListConst<DawShortcut>([
     ),
   ),
   DawShortcut(
-    id: 'workspace.save',
-    titleId: 'shortcuts-workspace-save',
-    categoryId: 'shortcuts-category-workspace',
+    key: WorkspaceShortcutKeys.save,
     intent: SaveIntent(),
     defaultKey: SingleActivator(LogicalKeyboardKey.keyS, control: true),
   ),
   DawShortcut(
-    id: 'workspace.undo',
-    titleId: 'shortcuts-workspace-undo',
-    categoryId: 'shortcuts-category-workspace',
+    key: WorkspaceShortcutKeys.undo,
     intent: UndoIntent(),
     defaultKey: SingleActivator(LogicalKeyboardKey.keyZ, control: true),
   ),
   DawShortcut(
-    id: 'workspace.redo',
-    titleId: 'shortcuts-workspace-redo',
-    categoryId: 'shortcuts-category-workspace',
+    key: WorkspaceShortcutKeys.redo,
     intent: RedoIntent(),
     defaultKey: SingleActivator(
       LogicalKeyboardKey.keyZ,
@@ -108,9 +91,7 @@ const workspaceShortcuts = IListConst<DawShortcut>([
     ),
   ),
   DawShortcut(
-    id: 'workspace.saveAs',
-    titleId: 'shortcuts-workspace-save-as',
-    categoryId: 'shortcuts-category-workspace',
+    key: WorkspaceShortcutKeys.saveAs,
     intent: SaveAsIntent(),
     defaultKey: SingleActivator(
       LogicalKeyboardKey.keyS,
@@ -119,9 +100,7 @@ const workspaceShortcuts = IListConst<DawShortcut>([
     ),
   ),
   DawShortcut(
-    id: 'workspace.export',
-    titleId: 'shortcuts-workspace-export',
-    categoryId: 'shortcuts-category-workspace',
+    key: WorkspaceShortcutKeys.export,
     intent: ExportIntent(),
     defaultKey: SingleActivator(
       LogicalKeyboardKey.keyE,
@@ -130,44 +109,32 @@ const workspaceShortcuts = IListConst<DawShortcut>([
     ),
   ),
   DawShortcut(
-    id: 'workspace.toggleMidiKeyboard',
-    titleId: 'shortcuts-workspace-toggle-midi-keyboard',
-    categoryId: 'shortcuts-category-workspace',
+    key: WorkspaceShortcutKeys.toggleMidiKeyboard,
     intent: ToggleVirtualMidiKeyboardIntent(),
     defaultKey: SingleActivator(LogicalKeyboardKey.keyK, alt: true),
   ),
   DawShortcut(
-    id: 'workspace.openSettings',
-    titleId: 'shortcuts-workspace-open-settings',
-    categoryId: 'shortcuts-category-workspace',
+    key: WorkspaceShortcutKeys.openSettings,
     intent: OpenSettingsIntent(),
     defaultKey: SingleActivator(LogicalKeyboardKey.f2),
   ),
   DawShortcut(
-    id: 'workspace.importAudio',
-    titleId: 'shortcuts-workspace-import-audio',
-    categoryId: 'shortcuts-category-workspace',
+    key: WorkspaceShortcutKeys.importAudio,
     intent: ImportAudioIntent(),
     defaultKey: SingleActivator(LogicalKeyboardKey.keyI, control: true),
   ),
   DawShortcut(
-    id: 'workspace.openProject',
-    titleId: 'shortcuts-workspace-open-project',
-    categoryId: 'shortcuts-category-workspace',
+    key: WorkspaceShortcutKeys.openProject,
     intent: OpenProjectIntent(),
     defaultKey: SingleActivator(LogicalKeyboardKey.keyO, control: true),
   ),
   DawShortcut(
-    id: 'workspace.newProject',
-    titleId: 'shortcuts-workspace-new-project',
-    categoryId: 'shortcuts-category-workspace',
+    key: WorkspaceShortcutKeys.newProject,
     intent: NewProjectIntent(),
     defaultKey: SingleActivator(LogicalKeyboardKey.keyN, control: true),
   ),
   DawShortcut(
-    id: 'workspace.cancelSelection',
-    titleId: 'shortcuts-workspace-cancel-selection',
-    categoryId: 'shortcuts-category-workspace',
+    key: WorkspaceShortcutKeys.cancelSelection,
     intent: CancelSelectionIntent(),
     defaultKey: SingleActivator(LogicalKeyboardKey.escape),
   ),

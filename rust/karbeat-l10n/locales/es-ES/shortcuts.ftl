@@ -6,9 +6,9 @@ shortcuts-support-hint = Usa Ctrl, Alt o Comando con una tecla que no sea modifi
 ## Shortcut categories
 
 shortcuts-category-piano-roll = Piano roll
-shortcuts-category-piano-roll-tools = Herramientas del piano roll
+shortcuts-category-piano-roll-tool = Herramientas del piano roll
 shortcuts-category-track-list = Lista de pistas
-shortcuts-category-track-list-tools = Herramientas de la lista de pistas
+shortcuts-category-track-list-tool = Herramientas de la lista de pistas
 shortcuts-category-transport = Transporte
 shortcuts-category-workspace = Espacio de trabajo
 
@@ -44,12 +44,17 @@ shortcuts-track-list-tool-resize = Herramienta Redimensionar
 shortcuts-track-list-tool-slice = Herramienta Cortar
 shortcuts-track-list-tool-move = Herramienta Mover
 shortcuts-track-list-tool-range-select = Herramienta Seleccionar rango
+shortcuts-track-list-tool-delete = Herramienta Borrar
 shortcuts-track-list-nudge-left = Mover clips un paso a la izquierda
 shortcuts-track-list-nudge-right = Mover clips un paso a la derecha
 shortcuts-track-list-copy-clips = Copiar clips
 shortcuts-track-list-paste-clips = Pegar clips
 shortcuts-track-list-duplicate-clips = Duplicar clips
 shortcuts-track-list-delete-clips = Eliminar clips
+shortcuts-track-list-cut-clips = Cortar clips
+shortcuts-track-list-quantize-clips = Cuantizar clips
+shortcuts-track-list-quantize-clip-starts = Cuantizar inicios de clips
+shortcuts-track-list-legato-clips = Clips en legato
 shortcuts-transport-toggle-playback = Reproducir/Pausa
 shortcuts-transport-stop-playback = Detener
 shortcuts-transport-toggle-loop = Activar/desactivar bucle

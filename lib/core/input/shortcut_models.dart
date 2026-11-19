@@ -20,23 +20,42 @@ enum ShortcutScope {
       this == global || other == global || this == other;
 }
 
+/// Identifies a shortcut command: the id its binding is stored under and the
+/// message ids of its name and category.
+///
+/// Do not write these by hand. Add the command to `shortcutModules` in
+/// `lib/core/input/shortcut_key_tree.dart` and use the constant generated in
+/// `lib/generated/shortcuts/shortcut_keys.dart`.
+@freezed
+abstract class ShortcutKey with _$ShortcutKey {
+  const factory ShortcutKey({
+    /// Stored id of the user's binding, e.g. `trackList.tool.delete`.
+    required String id,
+
+    /// Message id of the command's name, shown in menus and key bindings.
+    required String titleId,
+
+    /// Message id of the group the command is listed under.
+    required String categoryId,
+  }) = _ShortcutKey;
+}
+
 class DawShortcut {
   const DawShortcut({
-    required this.id,
-    required this.titleId,
-    required this.categoryId,
+    required this.key,
     required this.intent,
     required this.defaultKey,
     this.scope = ShortcutScope.global,
   });
 
-  final String id;
+  /// The generated key naming this command.
+  final ShortcutKey key;
 
-  /// Message id of the command's name, shown in menus and key bindings.
-  final String titleId;
+  String get id => key.id;
 
-  /// Message id of the group the command is listed under.
-  final String categoryId;
+  String get titleId => key.titleId;
+
+  String get categoryId => key.categoryId;
 
   String get title => tr(titleId);
 

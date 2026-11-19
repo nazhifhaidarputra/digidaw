@@ -354,7 +354,7 @@ mod tests {
                     let path = directory.path().join("saved.karbeat");
                     project_api_save_project(&mut ctx, path.to_str().unwrap()).unwrap();
                     responder.join().unwrap();
-                    let loaded = load_daw_project(&path, 48_000).unwrap();
+                    let loaded = load_daw_project(&path).unwrap();
                     let generator = loaded.generator_pool.values().next().unwrap();
                     let GeneratorInstanceType::Plugin(plugin) = &generator.instance_type else {
                         panic!("expected plugin");
@@ -643,7 +643,7 @@ mod tests {
             panic!("no live instance to capture")
         })
         .unwrap();
-        let loaded = load_daw_project(&path, 48_000).unwrap();
+        let loaded = load_daw_project(&path).unwrap();
         let GeneratorInstanceType::Plugin(plugin) =
             &loaded.generator_pool.values().next().unwrap().instance_type
         else {

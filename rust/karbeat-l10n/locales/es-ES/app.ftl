@@ -47,6 +47,7 @@ app-recordings-save-failed = No se han podido guardar las grabaciones
 app-project-recover-failed = No se ha podido recuperar el proyecto
 app-project-audio-load-failed = No se ha podido cargar el audio
 app-project-source-delete-failed = No se ha podido eliminar la fuente de audio
+app-project-source-replace-failed = No se ha podido reemplazar la fuente de audio
 app-project-pattern-delete-failed = No se ha podido eliminar el patrón
 app-project-info-update-failed = No se ha podido actualizar la información del proyecto
 app-project-undo-failed = No se ha podido deshacer

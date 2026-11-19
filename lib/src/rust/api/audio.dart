@@ -140,13 +140,26 @@ void setMetronomeActive({required DawContext ctx, required bool active}) =>
       active: active,
     );
 
-/// Uses the audio file at `file_path` as the metronome sound, or the built-in click when it
-/// is `None`. Offbeats play the file as recorded and downbeats an octave higher.
-Future<void> setMetronomeSound({required DawContext ctx, String? filePath}) =>
-    RustLib.instance.api.crateApiAudioSetMetronomeSound(
-      ctx: ctx,
-      filePath: filePath,
-    );
+/// Makes the audio file at `file_path` the metronome sound.
+///
+/// The file is rendered into an offbeat click as recorded and a downbeat click an octave
+/// higher with the same length. Both are saved beside the settings, then read back from disk
+/// for the engine.
+Future<void> importMetronomeSound({
+  required DawContext ctx,
+  required String filePath,
+}) => RustLib.instance.api.crateApiAudioImportMetronomeSound(
+  ctx: ctx,
+  filePath: filePath,
+);
+
+/// Plays the clicks saved by [`import_metronome_sound`], read from disk.
+Future<void> loadMetronomeSound({required DawContext ctx}) =>
+    RustLib.instance.api.crateApiAudioLoadMetronomeSound(ctx: ctx);
+
+/// Restores the built-in metronome click.
+Future<void> useDefaultMetronomeSound({required DawContext ctx}) =>
+    RustLib.instance.api.crateApiAudioUseDefaultMetronomeSound(ctx: ctx);
 
 @freezed
 sealed class UiAudioFeedback with _$UiAudioFeedback {

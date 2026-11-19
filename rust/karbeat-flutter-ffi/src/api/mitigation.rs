@@ -234,11 +234,7 @@ pub async fn load_recovered_project(ctx: &DawContext) -> anyhow::Result<UiApplic
 
 fn load_recovered_project_blocking(ctx: &DawContext) -> anyhow::Result<UiApplicationState> {
     let operation = ctx.begin_project_operation();
-    let recovered = {
-        let core = operation.read_core();
-        let sample_rate = core.audio_runtime_settings.read().requested_dsp.sample_rate;
-        mitigation_api::load_recovery_file(&core, sample_rate)?
-    };
+    let recovered = mitigation_api::load_recovery_file(&operation.read_core())?;
     let ui_state = restore_loaded_project(&operation, recovered)?;
     drop(operation);
     schedule_source_renders(ctx, false);

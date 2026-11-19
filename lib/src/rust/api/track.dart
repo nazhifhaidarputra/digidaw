@@ -11,8 +11,8 @@ import 'pattern.dart';
 import 'project.dart';
 part 'track.freezed.dart';
 
-// These functions are ignored because they are not marked as `pub`: `add_midi_track_with_generator_id_blocking`, `delete_track_blocking`, `replace_track_generator_blocking`
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `from`, `from`, `from`
+// These functions are ignored because they are not marked as `pub`: `add_midi_track_with_generator_id_blocking`, `delete_track_blocking`, `replace_track_generator_blocking`, `retime_clips`, `timeline_selection`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `fmt`, `fmt`, `from`, `from`, `from`
 
 Future<UiClip> createClip({
   required DawContext ctx,
@@ -177,12 +177,109 @@ Future<List<UiClip>> duplicateClipGroups({
   groupStartTimes: groupStartTimes,
 );
 
+/// Moves selected clips and automation regions on their own tracks and lanes as one undo step.
+/// Regions stop at the regions they would run into. Returns the move applied.
+Future<int> moveSelection({
+  required DawContext ctx,
+  required List<UiSelectedClips> clips,
+  required List<UiSelectedRegions> regions,
+  required int deltaTicks,
+}) => RustLib.instance.api.crateApiTrackMoveSelection(
+  ctx: ctx,
+  clips: clips,
+  regions: regions,
+  deltaTicks: deltaTicks,
+);
+
+/// Resizes one edge of selected clips and automation regions as one undo step. With `stretch`,
+/// audio clips stretch their audio. Returns the resize applied.
+Future<int> resizeSelection({
+  required DawContext ctx,
+  required List<UiSelectedClips> clips,
+  required List<UiSelectedRegions> regions,
+  required UiResizeEdge edge,
+  required int deltaTicks,
+  required bool stretch,
+}) => RustLib.instance.api.crateApiTrackResizeSelection(
+  ctx: ctx,
+  clips: clips,
+  regions: regions,
+  edge: edge,
+  deltaTicks: deltaTicks,
+  stretch: stretch,
+);
+
+/// Deletes selected clips and automation regions as one undo step.
+Future<void> deleteSelection({
+  required DawContext ctx,
+  required List<UiSelectedClips> clips,
+  required List<UiSelectedRegions> regions,
+}) => RustLib.instance.api.crateApiTrackDeleteSelection(
+  ctx: ctx,
+  clips: clips,
+  regions: regions,
+);
+
+/// Cuts the listed clips and automation regions at `at_tick` as one undo step. List only what
+/// the tick cuts through.
+Future<void> sliceSelection({
+  required DawContext ctx,
+  required List<UiSelectedClips> clips,
+  required List<UiSelectedRegions> regions,
+  required int atTick,
+}) => RustLib.instance.api.crateApiTrackSliceSelection(
+  ctx: ctx,
+  clips: clips,
+  regions: regions,
+  atTick: atTick,
+);
+
 /// Delete clips in batch
 Future<void> deleteClipBatch({
   required DawContext ctx,
   required int trackId,
   required List<int> clipIds,
 }) => RustLib.instance.api.crateApiTrackDeleteClipBatch(
+  ctx: ctx,
+  trackId: trackId,
+  clipIds: clipIds,
+);
+
+/// Snaps clip starts and ends to multiples of `step_ticks`, as one undo step. Returns the
+/// clips that changed.
+Future<List<UiClip>> quantizeClips({
+  required DawContext ctx,
+  required int trackId,
+  required List<int> clipIds,
+  required int stepTicks,
+}) => RustLib.instance.api.crateApiTrackQuantizeClips(
+  ctx: ctx,
+  trackId: trackId,
+  clipIds: clipIds,
+  stepTicks: stepTicks,
+);
+
+/// Snaps clip starts to multiples of `step_ticks`, keeping lengths, as one undo step.
+/// Returns the clips that changed.
+Future<List<UiClip>> quantizeClipStarts({
+  required DawContext ctx,
+  required int trackId,
+  required List<int> clipIds,
+  required int stepTicks,
+}) => RustLib.instance.api.crateApiTrackQuantizeClipStarts(
+  ctx: ctx,
+  trackId: trackId,
+  clipIds: clipIds,
+  stepTicks: stepTicks,
+);
+
+/// Makes each clip end where the next of `clip_ids` starts, as one undo step. Returns the
+/// clips that changed.
+Future<List<UiClip>> legatoClips({
+  required DawContext ctx,
+  required int trackId,
+  required List<int> clipIds,
+}) => RustLib.instance.api.crateApiTrackLegatoClips(
   ctx: ctx,
   trackId: trackId,
   clipIds: clipIds,
@@ -293,5 +390,43 @@ sealed class UiMadeUnique with _$UiMadeUnique {
 }
 
 enum UiResizeEdge { left, right }
+
+/// Clips of one track in a timeline selection.
+class UiSelectedClips {
+  final int trackId;
+  final List<int> clipIds;
+
+  const UiSelectedClips({required this.trackId, required this.clipIds});
+
+  @override
+  int get hashCode => trackId.hashCode ^ clipIds.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is UiSelectedClips &&
+          runtimeType == other.runtimeType &&
+          trackId == other.trackId &&
+          clipIds == other.clipIds;
+}
+
+/// Automation regions of one lane in a timeline selection.
+class UiSelectedRegions {
+  final int laneId;
+  final List<int> regionIds;
+
+  const UiSelectedRegions({required this.laneId, required this.regionIds});
+
+  @override
+  int get hashCode => laneId.hashCode ^ regionIds.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is UiSelectedRegions &&
+          runtimeType == other.runtimeType &&
+          laneId == other.laneId &&
+          regionIds == other.regionIds;
+}
 
 enum UiSourceType { audio, midi }

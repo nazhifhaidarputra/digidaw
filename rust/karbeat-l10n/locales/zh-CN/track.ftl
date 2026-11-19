@@ -146,7 +146,6 @@ track-recording-active = 正在录音。单击停止并保留这一条录音。
 track-recording = 正在录音
 track-input-stereo = 声道 { $first }+{ $second }（立体声）
 track-input-mono = 声道 { $channel }（单声道）
-track-move-step = 移动步长
 track-clips-selected = { $count } 个片段
 track-automation-lanes = { $count } 条自动化通道
 track-loop-to-selection = 将所选内容设为循环区域

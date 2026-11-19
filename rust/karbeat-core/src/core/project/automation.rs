@@ -14,6 +14,8 @@ use crate::shared::{
 };
 use std::f64::consts::PI;
 
+use super::automation_region::AutomationRegion;
+
 // ============================================================================
 // AUTOMATION TARGET
 // ============================================================================
@@ -454,6 +456,13 @@ pub struct AutomationLane {
     pub enabled: bool,
     /// Value held while the lane has no points (normalized 0.0–1.0)
     pub default_value: NormalizedF64,
+    /// Regions sorted by start tick, never overlapping. A region only marks which points it
+    /// groups for editing; the points themselves stay in [`Self::points`].
+    pub regions: Vec<AutomationRegion>,
+    /// Monotonic lane-local counter used when assigning region identifiers.
+    pub next_region_id: u32,
+    /// Monotonic lane-local counter used when assigning region compositions.
+    pub next_content_id: u32,
 }
 
 impl AutomationLane {
@@ -466,6 +475,9 @@ impl AutomationLane {
             next_point_id: 0,
             enabled: true,
             default_value,
+            regions: Vec::new(),
+            next_region_id: 0,
+            next_content_id: 0,
         }
     }
 
@@ -613,7 +625,8 @@ impl AutomationLane {
     ///
     /// `length_ticks` is the length of the copied range. `target_length` stretches or squeezes
     /// the pasted curve to another length; `None` keeps the original length. Existing points
-    /// under the pasted span are replaced. Returns the identifiers of the new points.
+    /// under the pasted span are replaced. Inside shared regions the replacement is mirrored
+    /// like any other point edit. Returns the identifiers of the new points.
     pub fn paste_points(
         &mut self,
         at_tick: u32,
@@ -625,7 +638,7 @@ impl AutomationLane {
             return Vec::new();
         }
         let span = target_length.unwrap_or(length_ticks);
-        self.delete_range(at_tick, at_tick.saturating_add(span));
+        self.delete_range_mirrored(at_tick, at_tick.saturating_add(span));
 
         let scale = if length_ticks == 0 {
             0.0
@@ -637,7 +650,7 @@ impl AutomationLane {
             .map(|point| {
                 let offset =
                     floor_to_u32((f64::from(point.time_ticks.min(length_ticks)) * scale).round());
-                self.add_point(AutomationPoint {
+                self.add_point_mirrored(AutomationPoint {
                     time_ticks: at_tick.saturating_add(offset),
                     ..point.clone()
                 })
@@ -823,7 +836,7 @@ const NEUTRAL_COUNT: u32 = 4;
     clippy::as_conversions,
     reason = "float-to-int `as` saturates, which is the wanted behaviour here"
 )]
-fn floor_to_u32(value: f64) -> u32 {
+pub(crate) fn floor_to_u32(value: f64) -> u32 {
     value as u32
 }
 

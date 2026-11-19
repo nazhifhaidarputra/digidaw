@@ -49,13 +49,7 @@ pub async fn load_project(ctx: &DawContext, path_name: &str) -> Result<UiApplica
 
 fn load_project_blocking(ctx: &DawContext, path_name: &str) -> Result<UiApplicationState, String> {
     let operation = ctx.begin_project_operation();
-    let sample_rate = operation
-        .read_core()
-        .audio_runtime_settings
-        .read()
-        .requested_dsp
-        .sample_rate;
-    let loaded = project_api::load_project_file(path_name, sample_rate)
+    let loaded = project_api::load_project_file(path_name)
         .map_err(|error| error.to_string())?;
     let ui_state = restore_loaded_project(&operation, loaded).map_err(|error| error.to_string())?;
     drop(operation);

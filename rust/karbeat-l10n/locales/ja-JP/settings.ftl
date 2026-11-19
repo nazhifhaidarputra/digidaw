@@ -293,13 +293,9 @@ settings-info-application = アプリケーション
 settings-info-version-unavailable = バージョン情報を取得できません。
 settings-info-name = 名前
 settings-info-version = バージョン
-settings-info-build = ビルド
-settings-info-not-specified = 指定なし
 settings-info-report-bug = 不具合を報告
 settings-info-report-bug-help = { -app-name } のバージョン、OS、再現手順、期待した結果、実際の結果、関連するログを含めてください。
 settings-info-copy-url = 不具合報告の URL をコピー
-settings-info-licenses = オープンソースライセンス
-settings-info-view-licenses = ライセンスを表示
 settings-info-copy-url-failed = URL をコピーできませんでした
 settings-info-url-copied = 不具合報告の URL をコピーしました
 

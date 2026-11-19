@@ -146,7 +146,6 @@ track-recording-active = 녹음 중. 클릭하면 멈추고 테이크를 보관�
 track-recording = 녹음 중
 track-input-stereo = 채널 { $first }+{ $second } (스테레오)
 track-input-mono = 채널 { $channel } (모노)
-track-move-step = 이동 단위
 track-clips-selected = 클립 { $count }개
 track-automation-lanes = 오토메이션 레인 { $count }개
 track-loop-to-selection = 선택 영역을 루프 구간으로 설정

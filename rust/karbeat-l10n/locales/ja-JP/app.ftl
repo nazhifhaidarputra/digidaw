@@ -44,6 +44,7 @@ app-recordings-save-failed = 録音を保存できませんでした
 app-project-recover-failed = プロジェクトを復元できませんでした
 app-project-audio-load-failed = オーディオを読み込めませんでした
 app-project-source-delete-failed = オーディオソースを削除できませんでした
+app-project-source-replace-failed = オーディオソースを置き換えられませんでした
 app-project-pattern-delete-failed = パターンを削除できませんでした
 app-project-info-update-failed = プロジェクト情報を更新できませんでした
 app-project-undo-failed = 元に戻せませんでした

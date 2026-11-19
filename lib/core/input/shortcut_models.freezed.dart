@@ -12,7 +12,288 @@ part of 'shortcut_models.dart';
 // dart format off
 T _$identity<T>(T value) => value;
 /// @nodoc
-mixin _$ShortcutChord {
+mixin _$ShortcutKey implements DiagnosticableTreeMixin {
+
+/// Stored id of the user's binding, e.g. `trackList.tool.delete`.
+ String get id;/// Message id of the command's name, shown in menus and key bindings.
+ String get titleId;/// Message id of the group the command is listed under.
+ String get categoryId;
+/// Create a copy of ShortcutKey
+/// with the given fields replaced by the non-null parameter values.
+@JsonKey(includeFromJson: false, includeToJson: false)
+@pragma('vm:prefer-inline')
+$ShortcutKeyCopyWith<ShortcutKey> get copyWith => _$ShortcutKeyCopyWithImpl<ShortcutKey>(this as ShortcutKey, _$identity);
+
+
+@override
+void debugFillProperties(DiagnosticPropertiesBuilder properties) {
+  properties
+    ..add(DiagnosticsProperty('type', 'ShortcutKey'))
+    ..add(DiagnosticsProperty('id', id))..add(DiagnosticsProperty('titleId', titleId))..add(DiagnosticsProperty('categoryId', categoryId));
+}
+
+@override
+bool operator ==(Object other) {
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is ShortcutKey&&(identical(other.id, id) || other.id == id)&&(identical(other.titleId, titleId) || other.titleId == titleId)&&(identical(other.categoryId, categoryId) || other.categoryId == categoryId));
+}
+
+
+@override
+int get hashCode => Object.hash(runtimeType,id,titleId,categoryId);
+
+@override
+String toString({ DiagnosticLevel minLevel = DiagnosticLevel.info }) {
+  return 'ShortcutKey(id: $id, titleId: $titleId, categoryId: $categoryId)';
+}
+
+
+}
+
+/// @nodoc
+abstract mixin class $ShortcutKeyCopyWith<$Res>  {
+  factory $ShortcutKeyCopyWith(ShortcutKey value, $Res Function(ShortcutKey) _then) = _$ShortcutKeyCopyWithImpl;
+@useResult
+$Res call({
+ String id, String titleId, String categoryId
+});
+
+
+
+
+}
+/// @nodoc
+class _$ShortcutKeyCopyWithImpl<$Res>
+    implements $ShortcutKeyCopyWith<$Res> {
+  _$ShortcutKeyCopyWithImpl(this._self, this._then);
+
+  final ShortcutKey _self;
+  final $Res Function(ShortcutKey) _then;
+
+/// Create a copy of ShortcutKey
+/// with the given fields replaced by the non-null parameter values.
+@pragma('vm:prefer-inline') @override $Res call({Object? id = null,Object? titleId = null,Object? categoryId = null,}) {
+  return _then(_self.copyWith(
+id: null == id ? _self.id : id // ignore: cast_nullable_to_non_nullable
+as String,titleId: null == titleId ? _self.titleId : titleId // ignore: cast_nullable_to_non_nullable
+as String,categoryId: null == categoryId ? _self.categoryId : categoryId // ignore: cast_nullable_to_non_nullable
+as String,
+  ));
+}
+
+}
+
+
+/// Adds pattern-matching-related methods to [ShortcutKey].
+extension ShortcutKeyPatterns on ShortcutKey {
+/// A variant of `map` that fallback to returning `orElse`.
+///
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case final Subclass value:
+///     return ...;
+///   case _:
+///     return orElse();
+/// }
+/// ```
+
+@optionalTypeArgs TResult maybeMap<TResult extends Object?>(TResult Function( _ShortcutKey value)?  $default,{required TResult orElse(),}){
+final _that = this;
+switch (_that) {
+case _ShortcutKey() when $default != null:
+return $default(_that);case _:
+  return orElse();
+
+}
+}
+/// A `switch`-like method, using callbacks.
+///
+/// Callbacks receives the raw object, upcasted.
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case final Subclass value:
+///     return ...;
+///   case final Subclass2 value:
+///     return ...;
+/// }
+/// ```
+
+@optionalTypeArgs TResult map<TResult extends Object?>(TResult Function( _ShortcutKey value)  $default,){
+final _that = this;
+switch (_that) {
+case _ShortcutKey():
+return $default(_that);case _:
+  throw StateError('Unexpected subclass');
+
+}
+}
+/// A variant of `map` that fallback to returning `null`.
+///
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case final Subclass value:
+///     return ...;
+///   case _:
+///     return null;
+/// }
+/// ```
+
+@optionalTypeArgs TResult? mapOrNull<TResult extends Object?>(TResult? Function( _ShortcutKey value)?  $default,){
+final _that = this;
+switch (_that) {
+case _ShortcutKey() when $default != null:
+return $default(_that);case _:
+  return null;
+
+}
+}
+/// A variant of `when` that fallback to an `orElse` callback.
+///
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case Subclass(:final field):
+///     return ...;
+///   case _:
+///     return orElse();
+/// }
+/// ```
+
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( String id,  String titleId,  String categoryId)?  $default,{required TResult orElse(),}) {final _that = this;
+switch (_that) {
+case _ShortcutKey() when $default != null:
+return $default(_that.id,_that.titleId,_that.categoryId);case _:
+  return orElse();
+
+}
+}
+/// A `switch`-like method, using callbacks.
+///
+/// As opposed to `map`, this offers destructuring.
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case Subclass(:final field):
+///     return ...;
+///   case Subclass2(:final field2):
+///     return ...;
+/// }
+/// ```
+
+@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( String id,  String titleId,  String categoryId)  $default,) {final _that = this;
+switch (_that) {
+case _ShortcutKey():
+return $default(_that.id,_that.titleId,_that.categoryId);case _:
+  throw StateError('Unexpected subclass');
+
+}
+}
+/// A variant of `when` that fallback to returning `null`
+///
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case Subclass(:final field):
+///     return ...;
+///   case _:
+///     return null;
+/// }
+/// ```
+
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( String id,  String titleId,  String categoryId)?  $default,) {final _that = this;
+switch (_that) {
+case _ShortcutKey() when $default != null:
+return $default(_that.id,_that.titleId,_that.categoryId);case _:
+  return null;
+
+}
+}
+
+}
+
+/// @nodoc
+
+
+class _ShortcutKey with DiagnosticableTreeMixin implements ShortcutKey {
+  const _ShortcutKey({required this.id, required this.titleId, required this.categoryId});
+  
+
+/// Stored id of the user's binding, e.g. `trackList.tool.delete`.
+@override final  String id;
+/// Message id of the command's name, shown in menus and key bindings.
+@override final  String titleId;
+/// Message id of the group the command is listed under.
+@override final  String categoryId;
+
+/// Create a copy of ShortcutKey
+/// with the given fields replaced by the non-null parameter values.
+@override @JsonKey(includeFromJson: false, includeToJson: false)
+@pragma('vm:prefer-inline')
+_$ShortcutKeyCopyWith<_ShortcutKey> get copyWith => __$ShortcutKeyCopyWithImpl<_ShortcutKey>(this, _$identity);
+
+
+@override
+void debugFillProperties(DiagnosticPropertiesBuilder properties) {
+  properties
+    ..add(DiagnosticsProperty('type', 'ShortcutKey'))
+    ..add(DiagnosticsProperty('id', id))..add(DiagnosticsProperty('titleId', titleId))..add(DiagnosticsProperty('categoryId', categoryId));
+}
+
+@override
+bool operator ==(Object other) {
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is _ShortcutKey&&(identical(other.id, id) || other.id == id)&&(identical(other.titleId, titleId) || other.titleId == titleId)&&(identical(other.categoryId, categoryId) || other.categoryId == categoryId));
+}
+
+
+@override
+int get hashCode => Object.hash(runtimeType,id,titleId,categoryId);
+
+@override
+String toString({ DiagnosticLevel minLevel = DiagnosticLevel.info }) {
+  return 'ShortcutKey(id: $id, titleId: $titleId, categoryId: $categoryId)';
+}
+
+
+}
+
+/// @nodoc
+abstract mixin class _$ShortcutKeyCopyWith<$Res> implements $ShortcutKeyCopyWith<$Res> {
+  factory _$ShortcutKeyCopyWith(_ShortcutKey value, $Res Function(_ShortcutKey) _then) = __$ShortcutKeyCopyWithImpl;
+@override @useResult
+$Res call({
+ String id, String titleId, String categoryId
+});
+
+
+
+
+}
+/// @nodoc
+class __$ShortcutKeyCopyWithImpl<$Res>
+    implements _$ShortcutKeyCopyWith<$Res> {
+  __$ShortcutKeyCopyWithImpl(this._self, this._then);
+
+  final _ShortcutKey _self;
+  final $Res Function(_ShortcutKey) _then;
+
+/// Create a copy of ShortcutKey
+/// with the given fields replaced by the non-null parameter values.
+@override @pragma('vm:prefer-inline') $Res call({Object? id = null,Object? titleId = null,Object? categoryId = null,}) {
+  return _then(_ShortcutKey(
+id: null == id ? _self.id : id // ignore: cast_nullable_to_non_nullable
+as String,titleId: null == titleId ? _self.titleId : titleId // ignore: cast_nullable_to_non_nullable
+as String,categoryId: null == categoryId ? _self.categoryId : categoryId // ignore: cast_nullable_to_non_nullable
+as String,
+  ));
+}
+
+
+}
+
+/// @nodoc
+mixin _$ShortcutChord implements DiagnosticableTreeMixin {
 
  int get logicalKeyId; bool get control; bool get shift; bool get alt; bool get meta;
 /// Create a copy of ShortcutChord
@@ -22,6 +303,12 @@ mixin _$ShortcutChord {
 $ShortcutChordCopyWith<ShortcutChord> get copyWith => _$ShortcutChordCopyWithImpl<ShortcutChord>(this as ShortcutChord, _$identity);
 
 
+@override
+void debugFillProperties(DiagnosticPropertiesBuilder properties) {
+  properties
+    ..add(DiagnosticsProperty('type', 'ShortcutChord'))
+    ..add(DiagnosticsProperty('logicalKeyId', logicalKeyId))..add(DiagnosticsProperty('control', control))..add(DiagnosticsProperty('shift', shift))..add(DiagnosticsProperty('alt', alt))..add(DiagnosticsProperty('meta', meta));
+}
 
 @override
 bool operator ==(Object other) {
@@ -33,7 +320,7 @@ bool operator ==(Object other) {
 int get hashCode => Object.hash(runtimeType,logicalKeyId,control,shift,alt,meta);
 
 @override
-String toString() {
+String toString({ DiagnosticLevel minLevel = DiagnosticLevel.info }) {
   return 'ShortcutChord(logicalKeyId: $logicalKeyId, control: $control, shift: $shift, alt: $alt, meta: $meta)';
 }
 
@@ -209,7 +496,7 @@ return $default(_that.logicalKeyId,_that.control,_that.shift,_that.alt,_that.met
 /// @nodoc
 
 
-class _ShortcutChord extends ShortcutChord {
+class _ShortcutChord extends ShortcutChord with DiagnosticableTreeMixin {
   const _ShortcutChord({required this.logicalKeyId, this.control = false, this.shift = false, this.alt = false, this.meta = false}): super._();
   
 
@@ -226,6 +513,12 @@ class _ShortcutChord extends ShortcutChord {
 _$ShortcutChordCopyWith<_ShortcutChord> get copyWith => __$ShortcutChordCopyWithImpl<_ShortcutChord>(this, _$identity);
 
 
+@override
+void debugFillProperties(DiagnosticPropertiesBuilder properties) {
+  properties
+    ..add(DiagnosticsProperty('type', 'ShortcutChord'))
+    ..add(DiagnosticsProperty('logicalKeyId', logicalKeyId))..add(DiagnosticsProperty('control', control))..add(DiagnosticsProperty('shift', shift))..add(DiagnosticsProperty('alt', alt))..add(DiagnosticsProperty('meta', meta));
+}
 
 @override
 bool operator ==(Object other) {
@@ -237,7 +530,7 @@ bool operator ==(Object other) {
 int get hashCode => Object.hash(runtimeType,logicalKeyId,control,shift,alt,meta);
 
 @override
-String toString() {
+String toString({ DiagnosticLevel minLevel = DiagnosticLevel.info }) {
   return 'ShortcutChord(logicalKeyId: $logicalKeyId, control: $control, shift: $shift, alt: $alt, meta: $meta)';
 }
 
@@ -281,7 +574,7 @@ as bool,
 }
 
 /// @nodoc
-mixin _$ShortcutManagerState {
+mixin _$ShortcutManagerState implements DiagnosticableTreeMixin {
 
  IMap<String, ShortcutChord> get overrides; bool get isInitialized;
 /// Create a copy of ShortcutManagerState
@@ -291,6 +584,12 @@ mixin _$ShortcutManagerState {
 $ShortcutManagerStateCopyWith<ShortcutManagerState> get copyWith => _$ShortcutManagerStateCopyWithImpl<ShortcutManagerState>(this as ShortcutManagerState, _$identity);
 
 
+@override
+void debugFillProperties(DiagnosticPropertiesBuilder properties) {
+  properties
+    ..add(DiagnosticsProperty('type', 'ShortcutManagerState'))
+    ..add(DiagnosticsProperty('overrides', overrides))..add(DiagnosticsProperty('isInitialized', isInitialized));
+}
 
 @override
 bool operator ==(Object other) {
@@ -302,7 +601,7 @@ bool operator ==(Object other) {
 int get hashCode => Object.hash(runtimeType,overrides,isInitialized);
 
 @override
-String toString() {
+String toString({ DiagnosticLevel minLevel = DiagnosticLevel.info }) {
   return 'ShortcutManagerState(overrides: $overrides, isInitialized: $isInitialized)';
 }
 
@@ -475,7 +774,7 @@ return $default(_that.overrides,_that.isInitialized);case _:
 /// @nodoc
 
 
-class _ShortcutManagerState implements ShortcutManagerState {
+class _ShortcutManagerState with DiagnosticableTreeMixin implements ShortcutManagerState {
   const _ShortcutManagerState({this.overrides = const IMapConst<String, ShortcutChord>({}), this.isInitialized = false});
   
 
@@ -489,6 +788,12 @@ class _ShortcutManagerState implements ShortcutManagerState {
 _$ShortcutManagerStateCopyWith<_ShortcutManagerState> get copyWith => __$ShortcutManagerStateCopyWithImpl<_ShortcutManagerState>(this, _$identity);
 
 
+@override
+void debugFillProperties(DiagnosticPropertiesBuilder properties) {
+  properties
+    ..add(DiagnosticsProperty('type', 'ShortcutManagerState'))
+    ..add(DiagnosticsProperty('overrides', overrides))..add(DiagnosticsProperty('isInitialized', isInitialized));
+}
 
 @override
 bool operator ==(Object other) {
@@ -500,7 +805,7 @@ bool operator ==(Object other) {
 int get hashCode => Object.hash(runtimeType,overrides,isInitialized);
 
 @override
-String toString() {
+String toString({ DiagnosticLevel minLevel = DiagnosticLevel.info }) {
   return 'ShortcutManagerState(overrides: $overrides, isInitialized: $isInitialized)';
 }
 

@@ -66,7 +66,9 @@ pub use names::{
     TracksReordered,
 };
 pub use notes::{NoteMove, NotesChanged, NotesMoved, NotesResized};
-pub use sources::{SourceEnvelopeChanged, SourceTempo, SourceTempoChanged, SourceTrimChanged};
+pub use sources::{
+    SourceEnvelopeChanged, SourceReplaced, SourceTempo, SourceTempoChanged, SourceTrimChanged,
+};
 use std::mem::replace;
 pub use structure::{
     EffectBypassed, EffectMoved, EffectToggled, RoutingChanged, RoutingRecorder, StructureChanged,

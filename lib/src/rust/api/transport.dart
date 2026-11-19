@@ -27,6 +27,7 @@ Future<void> setLooping({required DawContext ctx, required bool val}) =>
 /// writes to both ApplicationState (for serialization) and AudioCommand (for audio thread)
 ///
 /// Returns whether clips of tempo-following audio were rescaled, so the UI should refetch them.
+/// During a tempo edit (`begin_tempo_edit`) stretched sources wait for its end to render.
 Future<bool> setBpm({required DawContext ctx, required double val}) =>
     RustLib.instance.api.crateApiTransportSetBpm(ctx: ctx, val: val);
 

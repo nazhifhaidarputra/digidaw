@@ -105,10 +105,10 @@ class _ActionEntry extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final colors = Theme.of(context).colorScheme;
-    final shortcutId = action.shortcutId;
-    final chord = shortcutId == null
+    final shortcut = action.shortcut;
+    final chord = shortcut == null
         ? null
-        : ref.watch(activeShortcutChordProvider(shortcutId));
+        : ref.watch(activeShortcutChordProvider(shortcut));
     return Material(
       color: Colors.transparent,
       child: InkWell(

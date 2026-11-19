@@ -1,4 +1,5 @@
 pub mod automation;
+pub mod automation_region;
 pub mod clip;
 pub mod clip_modulation;
 pub mod clipboard;
@@ -14,6 +15,7 @@ pub mod track;
 pub mod transport;
 
 pub use automation::*;
+pub use automation_region::*;
 pub use clip::*;
 pub use clip_modulation::*;
 pub use clipboard::*;

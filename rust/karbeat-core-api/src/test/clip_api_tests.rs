@@ -562,4 +562,131 @@ mod tests {
         assert_eq!(ctx.app_state.clips_pool.len(), pool_count_before);
         assert_eq!(ctx.history.undo_stack.len(), history_count_before);
     }
+
+    fn tick_span(ctx: &DawContext, track_id: TrackId, clip_id: ClipId) -> (u32, u32) {
+        match ctx
+            .app_state
+            .get_clip(&track_id, &clip_id)
+            .map(|clip| clip.time)
+        {
+            Some(ClipTimeUnit::Ticks {
+                start_time,
+                loop_length,
+                ..
+            }) => (start_time, start_time + loop_length),
+            other => panic!("expected a tick clip, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn quantize_clips_snaps_both_edges_in_one_undo_step() {
+        let (mut ctx, _audio_id, midi_id, _pat_id) = make_seeded_ctx();
+        let first = add_midi_clip(&mut ctx, midi_id, 5_000).id;
+        let second = add_midi_clip(&mut ctx, midi_id, 9_700).id;
+        clip_api::resize_clip(&mut ctx, midi_id, second, ResizeEdge::Right, 9_900, false)
+            .expect("resize");
+        let history = ctx.history.undo_stack.len();
+
+        let changed = clip_api::retime_clips(
+            &mut ctx,
+            midi_id,
+            &[first, second],
+            clip_api::ClipRetiming::Quantize { step_ticks: 960 },
+        )
+        .expect("quantize");
+
+        assert_eq!(changed.len(), 2);
+        assert_eq!(tick_span(&ctx, midi_id, first), (4_800, 8_640));
+        // A clip shorter than a step keeps one step.
+        assert_eq!(tick_span(&ctx, midi_id, second), (9_600, 10_560));
+        assert_eq!(ctx.history.undo_stack.len(), history + 1);
+
+        undo(&mut ctx).expect("undo");
+        assert_eq!(tick_span(&ctx, midi_id, first), (5_000, 8_840));
+        assert_eq!(tick_span(&ctx, midi_id, second), (9_700, 9_900));
+    }
+
+    #[test]
+    fn quantize_clip_starts_keeps_lengths() {
+        let (mut ctx, _audio_id, midi_id, _pat_id) = make_seeded_ctx();
+        let clip = add_midi_clip(&mut ctx, midi_id, 5_000).id;
+
+        clip_api::retime_clips(
+            &mut ctx,
+            midi_id,
+            &[clip],
+            clip_api::ClipRetiming::QuantizeStart { step_ticks: 960 },
+        )
+        .expect("quantize starts");
+
+        assert_eq!(tick_span(&ctx, midi_id, clip), (4_800, 8_640));
+    }
+
+    #[test]
+    fn legato_clips_end_at_the_next_selected_clip() {
+        let (mut ctx, _audio_id, midi_id, _pat_id) = make_seeded_ctx();
+        let first = add_midi_clip(&mut ctx, midi_id, 10_000).id;
+        let second = add_midi_clip(&mut ctx, midi_id, 20_000).id;
+        let third = add_midi_clip(&mut ctx, midi_id, 22_000).id;
+
+        clip_api::retime_clips(
+            &mut ctx,
+            midi_id,
+            &[first, second, third],
+            clip_api::ClipRetiming::Legato,
+        )
+        .expect("legato");
+
+        assert_eq!(tick_span(&ctx, midi_id, first), (10_000, 20_000));
+        assert_eq!(tick_span(&ctx, midi_id, second), (20_000, 22_000));
+        assert_eq!(tick_span(&ctx, midi_id, third), (22_000, 25_840));
+    }
+
+    #[test]
+    fn retime_clips_without_changes_adds_no_history() {
+        let (mut ctx, _audio_id, midi_id, _pat_id) = make_seeded_ctx();
+        let clip = add_midi_clip(&mut ctx, midi_id, 3_840).id;
+        let history = ctx.history.undo_stack.len();
+
+        let changed = clip_api::retime_clips(
+            &mut ctx,
+            midi_id,
+            &[clip],
+            clip_api::ClipRetiming::Quantize { step_ticks: 960 },
+        )
+        .expect("quantize");
+
+        assert!(changed.is_empty());
+        assert_eq!(ctx.history.undo_stack.len(), history);
+    }
+
+    #[test]
+    fn quantize_clips_trims_audio_clips_on_the_tick_grid() {
+        let (mut ctx, audio_id, _midi_id, _pat_id) = make_seeded_ctx();
+        let clip = add_audio_clip(&mut ctx, audio_id, 1_000).id;
+
+        clip_api::retime_clips(
+            &mut ctx,
+            audio_id,
+            &[clip],
+            clip_api::ClipRetiming::QuantizeStart { step_ticks: 960 },
+        )
+        .expect("quantize audio start");
+
+        match ctx
+            .app_state
+            .get_clip(&audio_id, &clip)
+            .map(|clip| clip.time)
+        {
+            Some(ClipTimeUnit::Audio {
+                start_tick,
+                loop_length,
+                ..
+            }) => {
+                assert_eq!(start_tick, 960);
+                assert_eq!(loop_length, 48_000);
+            }
+            other => panic!("expected an audio clip, got {other:?}"),
+        }
+    }
 }

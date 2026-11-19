@@ -37,43 +37,10 @@ enum GridSize {
     GridSize.infinity => 4 / 960,
     _ => 4 / value,
   };
-}
 
-enum MusicalBeatSize {
-  four(4),
-  three(3),
-  two(2),
-  one(1),
-  half(0.5),
-  third(1 / 3),
-  quarter(1 / 4),
-  sixth(1 / 6),
-  eighth(1 / 8),
-  twelfth(1 / 12),
-  sixteenth(1 / 16),
-  thirtysecond(1 / 32),
-  sixtyfourth(1 / 64),
-  none(0); // this means one tick size
+  /// Ticks spanned by one grid cell; a single tick when there is no grid.
+  int get ticks => this == GridSize.infinity ? 1 : (960 * 4 / value).round();
 
-  final double value;
-  const MusicalBeatSize(this.value);
-
-  String get label => switch (this) {
-    MusicalBeatSize.four => tr('common-grid-bar'),
-    MusicalBeatSize.three => tr('common-grid-beats', {'count': 3}),
-    MusicalBeatSize.two => tr('common-grid-beats', {'count': 2}),
-    MusicalBeatSize.one => tr('common-grid-beats', {'count': 1}),
-    MusicalBeatSize.half => tr('common-grid-step', {'fraction': '1/2'}),
-    MusicalBeatSize.third => tr('common-grid-step', {'fraction': '1/3'}),
-    MusicalBeatSize.quarter => tr('common-grid-step', {'fraction': '1/4'}),
-    MusicalBeatSize.sixth => tr('common-grid-step', {'fraction': '1/6'}),
-    MusicalBeatSize.eighth => tr('common-grid-step', {'fraction': '1/8'}),
-    MusicalBeatSize.twelfth => tr('common-grid-step', {'fraction': '1/12'}),
-    MusicalBeatSize.sixteenth => tr('common-grid-step', {'fraction': '1/16'}),
-    MusicalBeatSize.thirtysecond => tr('common-grid-step', {
-      'fraction': '1/32',
-    }),
-    MusicalBeatSize.sixtyfourth => tr('common-grid-step', {'fraction': '1/64'}),
-    MusicalBeatSize.none => tr('common-none'),
-  };
+  /// [tick] moved to the nearest grid line.
+  int snap(int tick) => (tick / ticks).round() * ticks;
 }

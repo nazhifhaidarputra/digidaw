@@ -26,12 +26,6 @@ common-no = いいえ
 common-loading = 読み込み中…
 common-unknown = 不明
 
-## Grid and note lengths
-
-common-grid-bar = 1 小節
-common-grid-beats = { $count } 拍
-common-grid-step = { $fraction } ステップ
-
 ## Color picker
 
 common-color-choose = 色を選択

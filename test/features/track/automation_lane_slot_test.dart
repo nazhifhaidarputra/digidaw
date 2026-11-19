@@ -42,6 +42,7 @@ const _lane = AutomationLaneDto(
   ],
   enabled: true,
   defaultValue: 0,
+  regions: [],
 );
 
 void main() {

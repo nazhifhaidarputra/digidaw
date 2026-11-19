@@ -146,7 +146,6 @@ track-recording-active = 録音中。クリックで停止してテイクを残�
 track-recording = 録音中
 track-input-stereo = Ch { $first }+{ $second }（ステレオ）
 track-input-mono = Ch { $channel }（モノラル）
-track-move-step = 移動ステップ
 track-clips-selected = { $count } 個のクリップ
 track-automation-lanes = オートメーションレーン { $count } 本
 track-loop-to-selection = 選択範囲をループ範囲に設定

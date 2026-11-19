@@ -7,7 +7,7 @@
 #[cfg(not(windows))]
 use std::env::var_os;
 use std::{
-    collections::{BTreeSet, HashMap},
+    collections::HashMap,
     fs::canonicalize,
     path::{Path, PathBuf},
     time::Duration,
@@ -20,8 +20,8 @@ use karbeat_core_api::audio_settings_api::validate_dsp_config;
 use karbeat_settings::{
     AppearanceSettings, AudioPreferences, AutomationTemplate, AutomationTemplates, BackgroundFit,
     ColorPalette, ColorThemeChoice, CurveType, GeneralSettings, LogLevel, LogSettings,
-    PluginFavorites, PluginScanSettings, RecentProjects, Recovered, SampleFolders, SettingsError,
-    SettingsStore, ShortcutChord, TemplatePoint, ThemeMode,
+    PluginFavorites, PluginScanSettings, RecentProjects, Recovered, SettingsError, SettingsStore,
+    ShortcutChord, TemplatePoint, ThemeMode,
 };
 use parking_lot::RwLock;
 
@@ -37,6 +37,9 @@ static SETTINGS: RwLock<Option<SettingsStore>> = RwLock::new(None);
 
 /// Name of the folder holding the settings files inside the app support directory.
 const SETTINGS_FOLDER: &str = "settings";
+
+/// Name of the folder holding the rendered metronome clicks inside the settings folder.
+const METRONOME_FOLDER: &str = "metronome";
 
 fn read<R>(read: impl FnOnce(&SettingsStore) -> R) -> anyhow::Result<R> {
     let store = SETTINGS.read();
@@ -308,7 +311,13 @@ pub fn save_audio_dsp(sample_rate: u32, block_size: u32) -> anyhow::Result<UiAud
     })
 }
 
-/// Sets the metronome sound file; `None` uses the built-in click.
+/// Folder holding the custom metronome clicks, inside the settings folder.
+pub(crate) fn metronome_folder() -> anyhow::Result<PathBuf> {
+    read(|store| store.dir().join(METRONOME_FOLDER))
+}
+
+/// Records the file the custom metronome clicks were rendered from; `None` uses the built-in
+/// click.
 pub fn save_metronome_sound(path: Option<String>) -> anyhow::Result<UiAudioPreferences> {
     update_audio(|audio| audio.metronome_sound = path.map(PathBuf::from))
 }
@@ -806,25 +815,17 @@ pub fn save_plugin_favorites(ids: Vec<String>) -> anyhow::Result<()> {
 }
 
 /// Sample browser folders, sorted and each listed once.
-pub fn load_sample_folders() -> anyhow::Result<Vec<String>> {
-    read(|store| {
-        store
-            .sample_folders()
-            .folders
-            .iter()
-            .map(|folder| path_string(folder))
-            .collect()
-    })
+pub(crate) fn sample_folders() -> anyhow::Result<Vec<PathBuf>> {
+    read(|store| store.sample_folders().folders.iter().cloned().collect())
 }
 
-pub fn save_sample_folders(folders: Vec<String>) -> anyhow::Result<()> {
+/// Adds `folder` to the saved sample browser folders.
+pub(crate) fn remember_sample_folder(folder: PathBuf) -> anyhow::Result<()> {
     write(|store| {
-        store.set_sample_folders(SampleFolders {
-            folders: folders
-                .into_iter()
-                .map(PathBuf::from)
-                .collect::<BTreeSet<_>>(),
-        })?;
+        let mut folders = store.sample_folders().clone();
+        if folders.folders.insert(folder) {
+            store.set_sample_folders(folders)?;
+        }
         Ok(())
     })
 }

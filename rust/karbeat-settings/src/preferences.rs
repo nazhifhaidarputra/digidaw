@@ -126,7 +126,8 @@ pub struct AudioPreferences {
     pub sample_rate: u32,
     /// Frames rendered per engine block.
     pub block_size: u32,
-    /// Audio file played by the metronome; `None` uses the built-in click.
+    /// Audio file the custom metronome clicks were rendered from; `None` uses the built-in
+    /// click. The clicks themselves are stored as separate files, so this file may be gone.
     pub metronome_sound: Option<PathBuf>,
 }
 

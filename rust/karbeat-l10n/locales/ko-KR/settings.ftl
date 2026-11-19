@@ -293,13 +293,9 @@ settings-info-application = 애플리케이션
 settings-info-version-unavailable = 버전 정보를 사용할 수 없습니다.
 settings-info-name = 이름
 settings-info-version = 버전
-settings-info-build = 빌드
-settings-info-not-specified = 지정되지 않음
 settings-info-report-bug = 버그 신고
 settings-info-report-bug-help = { -app-name } 버전, 운영 체제, 재현 단계, 기대한 결과, 실제 결과, 관련 로그를 포함해 주세요.
 settings-info-copy-url = 버그 신고 URL 복사
-settings-info-licenses = 오픈 소스 라이선스
-settings-info-view-licenses = 라이선스 보기
 settings-info-copy-url-failed = URL을 복사할 수 없습니다
 settings-info-url-copied = 버그 신고 URL을 복사했습니다
 

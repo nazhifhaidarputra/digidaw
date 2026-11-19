@@ -3,12 +3,13 @@ use std::collections::HashMap;
 use flutter_rust_bridge::frb;
 use karbeat_core::{
     core::project::{
-        AutomationCurveType, AutomationLane, AutomationPoint, AutomationTarget, BezierHandles,
-        EffectAutomationTarget, MasterAutomationTarget, MixerChannelParamTarget, ModulationLink,
-        ModulationLinkForOrderedLaneView, ModulationSource, RemovedModulations,
+        AutomationCurveType, AutomationLane, AutomationPoint, AutomationRegion,
+        AutomationRegionCopy, AutomationTarget, BezierHandles, EffectAutomationTarget,
+        MasterAutomationTarget, MixerChannelParamTarget, ModulationLink,
+        ModulationLinkForOrderedLaneView, ModulationSource, RemovedModulations, ResizeEdge,
         TrackAutomationTarget, interpolate_points_at, interpolate_segment, tension_count,
     },
-    shared::{BusId, EffectId, TrackId},
+    shared::{AutomationRegionId, BusId, EffectId, TrackId},
 };
 use karbeat_core_api::automation_api;
 use karbeat_utils::types::{BipolarF64, NormalizedF64};
@@ -16,6 +17,7 @@ use karbeat_utils::types::{BipolarF64, NormalizedF64};
 use crate::api::{
     context::{DawContext, project_ctx, read_ctx},
     plugin::UiPluginTarget,
+    track::UiResizeEdge,
 };
 
 #[derive(Clone, Debug)]
@@ -28,6 +30,75 @@ pub struct AutomationLaneDto {
     pub enabled: bool,
     /// Normalized value held while the lane has no points.
     pub default_value: f64,
+    /// Regions sorted by start, never overlapping.
+    pub regions: Vec<AutomationRegionDto>,
+}
+
+/// A clip-like span of an automation lane. It groups the points in `[start_ticks,
+/// start_ticks + length_ticks)`; the points themselves stay in the lane.
+#[derive(Clone, Debug)]
+#[frb(dart_metadata=("freezed"))]
+pub struct AutomationRegionDto {
+    pub id: u64,
+    pub name: String,
+    pub start_ticks: u32,
+    pub length_ticks: u32,
+    /// Regions of the lane with the same content id share one composition.
+    pub content_id: u32,
+    /// Composition time shown at the region's start.
+    pub content_offset: i64,
+}
+
+impl From<&AutomationRegion> for AutomationRegionDto {
+    fn from(region: &AutomationRegion) -> Self {
+        Self {
+            id: region.id.to_u64(),
+            name: region.name.clone(),
+            start_ticks: region.start_ticks,
+            length_ticks: region.length_ticks,
+            content_id: region.content_id,
+            content_offset: region.content_offset,
+        }
+    }
+}
+
+/// A region detached from its lane for copy and paste. `start_ticks` is relative to the
+/// earliest copied region and point times are relative to the region start.
+#[derive(Clone, Debug)]
+#[frb(dart_metadata=("freezed"))]
+pub struct AutomationRegionCopyDto {
+    pub name: String,
+    pub start_ticks: u32,
+    pub length_ticks: u32,
+    pub content_id: u32,
+    pub content_offset: i64,
+    pub points: Vec<AutomationPointDto>,
+}
+
+impl From<AutomationRegionCopy> for AutomationRegionCopyDto {
+    fn from(copy: AutomationRegionCopy) -> Self {
+        Self {
+            name: copy.name,
+            start_ticks: copy.start_ticks,
+            length_ticks: copy.length_ticks,
+            content_id: copy.content_id,
+            content_offset: copy.content_offset,
+            points: copy.points.into_iter().map(Into::into).collect(),
+        }
+    }
+}
+
+impl From<AutomationRegionCopyDto> for AutomationRegionCopy {
+    fn from(copy: AutomationRegionCopyDto) -> Self {
+        Self {
+            name: copy.name,
+            start_ticks: copy.start_ticks,
+            length_ticks: copy.length_ticks,
+            content_id: copy.content_id,
+            content_offset: copy.content_offset,
+            points: copy.points.into_iter().map(Into::into).collect(),
+        }
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -334,6 +405,29 @@ impl TryFrom<AutomationLaneDto> for AutomationLane {
             .max()
             .map_or(0, |id| id.saturating_add(1));
 
+        let regions: Vec<AutomationRegion> = l
+            .regions
+            .into_iter()
+            .map(|region| AutomationRegion {
+                id: region.id.into(),
+                name: region.name,
+                start_ticks: region.start_ticks,
+                length_ticks: region.length_ticks,
+                content_id: region.content_id,
+                content_offset: region.content_offset,
+            })
+            .collect();
+        let next_region_id = regions
+            .iter()
+            .map(|region| region.id.to_u32())
+            .max()
+            .map_or(0, |id| id.saturating_add(1));
+        let next_content_id = regions
+            .iter()
+            .map(|region| region.content_id)
+            .max()
+            .map_or(0, |id| id.saturating_add(1));
+
         Ok(Self {
             id: l.id.into(),
             label: l.label,
@@ -341,6 +435,9 @@ impl TryFrom<AutomationLaneDto> for AutomationLane {
             next_point_id,
             enabled: l.enabled,
             default_value,
+            regions,
+            next_region_id,
+            next_content_id,
         })
     }
 }
@@ -353,6 +450,7 @@ impl From<&AutomationLane> for AutomationLaneDto {
             points: l.points.iter().map(|p| p.to_owned().into()).collect(),
             enabled: l.enabled,
             default_value: l.default_value.get(),
+            regions: l.regions.iter().map(Into::into).collect(),
         }
     }
 }
@@ -775,6 +873,240 @@ pub fn paste_automation_points(
         target_length,
     )
     .map(|lane| (&lane).into())
+    .map_err(|e| e.to_string())
+}
+
+// ▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱
+// Automation regions
+// ▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱
+
+fn to_region_ids(ids: Vec<u64>) -> Vec<AutomationRegionId> {
+    ids.into_iter().map(AutomationRegionId::from_u64).collect()
+}
+
+/// Creates a region over a span of a lane; points already in the span become its members.
+/// Returns the lane and the new region's id.
+pub fn create_automation_region(
+    ctx: &DawContext,
+    automation_id: u64,
+    start_tick: u32,
+    length_ticks: u32,
+    name: String,
+) -> Result<(AutomationLaneDto, u64), String> {
+    project_ctx!(ctx);
+    automation_api::create_automation_region(
+        ctx,
+        automation_id.into(),
+        start_tick,
+        length_ticks,
+        &name,
+    )
+    .map(|(lane, id)| ((&lane).into(), id.to_u64()))
+    .map_err(|e| e.to_string())
+}
+
+/// Creates a region holding `points` (times relative to its start), overwriting the free points
+/// under it. Inserting a curve template uses this.
+pub fn insert_automation_region(
+    ctx: &DawContext,
+    automation_id: u64,
+    start_tick: u32,
+    length_ticks: u32,
+    name: String,
+    points: Vec<AutomationPointDto>,
+) -> Result<(AutomationLaneDto, u64), String> {
+    project_ctx!(ctx);
+    let points: Vec<AutomationPoint> = points.into_iter().map(Into::into).collect();
+    automation_api::insert_automation_region(
+        ctx,
+        automation_id.into(),
+        start_tick,
+        length_ticks,
+        &name,
+        &points,
+    )
+    .map(|(lane, id)| ((&lane).into(), id.to_u64()))
+    .map_err(|e| e.to_string())
+}
+
+pub fn rename_automation_region(
+    ctx: &DawContext,
+    automation_id: u64,
+    region_id: u64,
+    name: String,
+) -> Result<AutomationLaneDto, String> {
+    project_ctx!(ctx);
+    automation_api::rename_automation_region(
+        ctx,
+        automation_id.into(),
+        AutomationRegionId::from_u64(region_id),
+        &name,
+    )
+    .map(|lane| (&lane).into())
+    .map_err(|e| e.to_string())
+}
+
+/// Deletes regions together with their points.
+pub fn delete_automation_regions(
+    ctx: &DawContext,
+    automation_id: u64,
+    region_ids: Vec<u64>,
+) -> Result<AutomationLaneDto, String> {
+    project_ctx!(ctx);
+    automation_api::delete_automation_regions(ctx, automation_id.into(), &to_region_ids(region_ids))
+        .map(|lane| (&lane).into())
+        .map_err(|e| e.to_string())
+}
+
+/// Removes regions but keeps their points as free points.
+pub fn dissolve_automation_regions(
+    ctx: &DawContext,
+    automation_id: u64,
+    region_ids: Vec<u64>,
+) -> Result<AutomationLaneDto, String> {
+    project_ctx!(ctx);
+    automation_api::dissolve_automation_regions(
+        ctx,
+        automation_id.into(),
+        &to_region_ids(region_ids),
+    )
+    .map(|lane| (&lane).into())
+    .map_err(|e| e.to_string())
+}
+
+/// Moves regions and their points within their lane; the move stops at neighbouring regions.
+pub fn move_automation_regions(
+    ctx: &DawContext,
+    automation_id: u64,
+    region_ids: Vec<u64>,
+    delta_ticks: i64,
+) -> Result<AutomationLaneDto, String> {
+    project_ctx!(ctx);
+    automation_api::move_automation_regions(
+        ctx,
+        automation_id.into(),
+        &to_region_ids(region_ids),
+        delta_ticks,
+    )
+    .map(|(lane, _)| (&lane).into())
+    .map_err(|e| e.to_string())
+}
+
+/// Moves one edge of regions; the resize stops at neighbouring regions.
+pub fn resize_automation_regions(
+    ctx: &DawContext,
+    automation_id: u64,
+    region_ids: Vec<u64>,
+    edge: UiResizeEdge,
+    delta_ticks: i64,
+) -> Result<AutomationLaneDto, String> {
+    project_ctx!(ctx);
+    automation_api::resize_automation_regions(
+        ctx,
+        automation_id.into(),
+        &to_region_ids(region_ids),
+        ResizeEdge::from(&edge),
+        delta_ticks,
+    )
+    .map(|(lane, _)| (&lane).into())
+    .map_err(|e| e.to_string())
+}
+
+/// Cuts a region in two at `at_tick`.
+pub fn slice_automation_region(
+    ctx: &DawContext,
+    automation_id: u64,
+    region_id: u64,
+    at_tick: u32,
+) -> Result<AutomationLaneDto, String> {
+    project_ctx!(ctx);
+    automation_api::slice_automation_region(
+        ctx,
+        automation_id.into(),
+        AutomationRegionId::from_u64(region_id),
+        at_tick,
+    )
+    .map(|(lane, _)| (&lane).into())
+    .map_err(|e| e.to_string())
+}
+
+/// Copies regions `delta_ticks` later, sharing their compositions. Returns the lane and the
+/// copies' ids.
+pub fn duplicate_automation_regions(
+    ctx: &DawContext,
+    automation_id: u64,
+    region_ids: Vec<u64>,
+    delta_ticks: u32,
+) -> Result<(AutomationLaneDto, Vec<u64>), String> {
+    project_ctx!(ctx);
+    automation_api::duplicate_automation_regions(
+        ctx,
+        automation_id.into(),
+        &to_region_ids(region_ids),
+        delta_ticks,
+    )
+    .map(|(lane, ids)| {
+        (
+            (&lane).into(),
+            ids.into_iter().map(|id| id.to_u64()).collect(),
+        )
+    })
+    .map_err(|e| e.to_string())
+}
+
+/// Gives each region a composition of its own.
+pub fn make_automation_regions_unique(
+    ctx: &DawContext,
+    automation_id: u64,
+    region_ids: Vec<u64>,
+) -> Result<AutomationLaneDto, String> {
+    project_ctx!(ctx);
+    automation_api::make_automation_regions_unique(
+        ctx,
+        automation_id.into(),
+        &to_region_ids(region_ids),
+    )
+    .map(|lane| (&lane).into())
+    .map_err(|e| e.to_string())
+}
+
+/// Copies regions with their points for a later paste.
+pub fn copy_automation_regions(
+    ctx: &DawContext,
+    automation_id: u64,
+    region_ids: Vec<u64>,
+) -> Result<Vec<AutomationRegionCopyDto>, String> {
+    read_ctx!(ctx);
+    automation_api::copy_automation_regions(ctx, automation_id.into(), &to_region_ids(region_ids))
+        .map(|copies| copies.into_iter().map(Into::into).collect())
+        .map_err(|e| e.to_string())
+}
+
+/// Pastes copied regions at `at_tick`. Pass `share_content` when pasting into the lane they
+/// were copied from, so the copies keep sharing their compositions. Returns the lane and the
+/// pasted regions' ids.
+pub fn paste_automation_regions(
+    ctx: &DawContext,
+    automation_id: u64,
+    at_tick: u32,
+    copies: Vec<AutomationRegionCopyDto>,
+    share_content: bool,
+) -> Result<(AutomationLaneDto, Vec<u64>), String> {
+    project_ctx!(ctx);
+    let copies: Vec<AutomationRegionCopy> = copies.into_iter().map(Into::into).collect();
+    automation_api::paste_automation_regions(
+        ctx,
+        automation_id.into(),
+        at_tick,
+        &copies,
+        share_content,
+    )
+    .map(|(lane, ids)| {
+        (
+            (&lane).into(),
+            ids.into_iter().map(|id| id.to_u64()).collect(),
+        )
+    })
     .map_err(|e| e.to_string())
 }
 

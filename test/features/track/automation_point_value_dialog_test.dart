@@ -11,6 +11,7 @@ const _lane = AutomationLaneDto(
   points: [],
   enabled: true,
   defaultValue: 0,
+  regions: [],
 );
 
 // 0.5 of the fake parameter's -100 to 6 range is -47.

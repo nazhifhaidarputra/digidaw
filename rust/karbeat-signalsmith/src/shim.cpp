@@ -13,6 +13,12 @@ using Stretch = signalsmith::stretch::SignalsmithStretch<float>;
 // Fixed seed so renders are reproducible.
 constexpr long kSeed = 0x6b617262;
 
+// Analysis block, in seconds: the length of the library's default preset.
+constexpr double kBlockSeconds = 0.12;
+// Hop between blocks, in seconds: half the default preset's, so blocks overlap 8 times
+// instead of 4. The denser overlap smooths phase and transients for about twice the work.
+constexpr double kIntervalSeconds = 0.015;
+
 }  // namespace
 
 struct KarbeatStretch {
@@ -26,7 +32,8 @@ extern "C" {
 KarbeatStretch *karbeat_stretch_new(int channels, float sample_rate) noexcept {
     try {
         auto *instance = new KarbeatStretch();
-        instance->stretch.presetDefault(channels, sample_rate, true);
+        instance->stretch.configure(channels, static_cast<int>(sample_rate * kBlockSeconds),
+                                    static_cast<int>(sample_rate * kIntervalSeconds), true);
         return instance;
     } catch (...) {
         return nullptr;

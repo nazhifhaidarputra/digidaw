@@ -718,38 +718,121 @@ class _TransportReadout extends ConsumerWidget {
   }
 }
 
-class BpmControl extends ConsumerWidget {
+/// Phase of a tempo drag on [BpmControl]. A drag only previews the tempo; the
+/// engine receives one change, when the drag is released.
+sealed class _TempoDrag {
+  const _TempoDrag();
+}
+
+/// No drag in progress; the control shows the transport tempo.
+final class _TempoDragIdle extends _TempoDrag {
+  const _TempoDragIdle();
+}
+
+/// The pointer is dragging. [preview] is shown but not sent yet.
+final class _TempoDragActive extends _TempoDrag {
+  const _TempoDragActive({required this.start, required this.preview});
+
+  final double start;
+  final double preview;
+}
+
+/// The released tempo is being stored. New edits wait until it lands, so
+/// requests never overlap.
+final class _TempoDragCommitting extends _TempoDrag {
+  const _TempoDragCommitting(this.bpm);
+
+  final double bpm;
+}
+
+class BpmControl extends ConsumerStatefulWidget {
   const BpmControl({super.key});
 
+  static const double minBpm = 10.0;
+  static const double maxBpm = 999.0;
+
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<BpmControl> createState() => _BpmControlState();
+}
+
+class _BpmControlState extends ConsumerState<BpmControl> {
+  _TempoDrag _drag = const _TempoDragIdle();
+
+  double _clamp(double bpm) => bpm.clamp(BpmControl.minBpm, BpmControl.maxBpm);
+
+  /// Sends a tempo outside a drag, such as from the wheel or the exact value
+  /// dialog. Ignored while a drag owns the tempo.
+  void _setBpm(double bpm) {
+    if (_drag is! _TempoDragIdle) return;
+    ref.read(transportProvider.notifier).setBpm(_clamp(bpm));
+  }
+
+  void _startDrag(double currentBpm) {
+    if (_drag is! _TempoDragIdle) return;
+    setState(
+      () => _drag = _TempoDragActive(start: currentBpm, preview: currentBpm),
+    );
+  }
+
+  void _updateDrag(double delta) {
+    final drag = _drag;
+    if (drag is! _TempoDragActive) return;
+    final preview = _clamp(drag.preview + delta * -0.5);
+    if (preview == drag.preview) return;
+    setState(
+      () => _drag = _TempoDragActive(start: drag.start, preview: preview),
+    );
+  }
+
+  Future<void> _endDrag() async {
+    final drag = _drag;
+    if (drag is! _TempoDragActive) return;
+    if (drag.preview == drag.start) {
+      setState(() => _drag = const _TempoDragIdle());
+      return;
+    }
+    setState(() => _drag = _TempoDragCommitting(drag.preview));
+    await ref.read(transportProvider.notifier).setBpm(drag.preview);
+    if (mounted) setState(() => _drag = const _TempoDragIdle());
+  }
+
+  void _cancelDrag() {
+    if (_drag is! _TempoDragActive) return;
+    setState(() => _drag = const _TempoDragIdle());
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
-    final bpm = ref.watch(
+    final transportBpm = ref.watch(
       transportProvider.select((s) => s.value?.state?.bpm ?? 120.0),
     );
+    final bpm = switch (_drag) {
+      _TempoDragIdle() => transportBpm,
+      _TempoDragActive(:final preview) => preview,
+      _TempoDragCommitting(bpm: final committing) => committing,
+    };
     final isSmallScreen = MediaQuery.sizeOf(context).width < 600;
 
     return FineGrainedInputWrapper<double>(
       value: bpm,
-      min: 10.0,
-      max: 999.0,
+      min: BpmControl.minBpm,
+      max: BpmControl.maxBpm,
       step: 1.0,
-      onChanged: (newBpm) {
-        _updateBpm(ref, newBpm);
-      },
+      onChanged: _setBpm,
       child: Listener(
         onPointerSignal: (event) {
           if (event is PointerScrollEvent) {
             final dy = event.scrollDelta.dy;
             final change = dy < 0 ? 0.1 : -0.1;
-            _updateBpm(ref, bpm + change);
+            _setBpm(bpm + change);
           }
         },
         child: GestureDetector(
-          onVerticalDragUpdate: (details) {
-            final change = details.primaryDelta! * -0.5;
-            _updateBpm(ref, bpm + change);
-          },
+          onVerticalDragStart: (_) => _startDrag(bpm),
+          onVerticalDragUpdate: (details) => _updateDrag(details.primaryDelta!),
+          onVerticalDragEnd: (_) => _endDrag(),
+          onVerticalDragCancel: _cancelDrag,
           child: MouseRegion(
             cursor: SystemMouseCursors.resizeUpDown,
             child: Container(
@@ -780,10 +863,5 @@ class BpmControl extends ConsumerWidget {
         ),
       ),
     );
-  }
-
-  void _updateBpm(WidgetRef ref, double newBpm) {
-    final clamped = newBpm.clamp(10.0, 999.0);
-    ref.read(transportProvider.notifier).setBpm(clamped);
   }
 }

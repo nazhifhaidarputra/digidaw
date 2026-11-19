@@ -311,13 +311,9 @@ settings-info-application = Applicatie
 settings-info-version-unavailable = Versie-informatie is niet beschikbaar.
 settings-info-name = Naam
 settings-info-version = Versie
-settings-info-build = Build
-settings-info-not-specified = Niet opgegeven
 settings-info-report-bug = Fout melden
 settings-info-report-bug-help = Vermeld je { -app-name }-versie, besturingssysteem, stappen om het te reproduceren, verwacht resultaat, werkelijk resultaat en relevante logboeken.
 settings-info-copy-url = URL voor foutmeldingen kopiëren
-settings-info-licenses = Opensourcelicenties
-settings-info-view-licenses = Licenties bekijken
 settings-info-copy-url-failed = Kan URL niet kopiëren
 settings-info-url-copied = URL voor foutmeldingen gekopieerd
 

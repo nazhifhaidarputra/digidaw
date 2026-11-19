@@ -47,6 +47,7 @@ app-recordings-save-failed = Impossible d’enregistrer les prises
 app-project-recover-failed = Impossible de récupérer le projet
 app-project-audio-load-failed = Impossible de charger l’audio
 app-project-source-delete-failed = Impossible de supprimer la source audio
+app-project-source-replace-failed = Impossible de remplacer la source audio
 app-project-pattern-delete-failed = Impossible de supprimer le pattern
 app-project-info-update-failed = Impossible de mettre à jour les informations du projet
 app-project-undo-failed = Impossible d’annuler

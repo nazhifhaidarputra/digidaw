@@ -6,9 +6,9 @@ shortcuts-support-hint = Ctrl, Alt, Command 중 하나와 수정자가 아닌 �
 ## Shortcut categories
 
 shortcuts-category-piano-roll = 피아노 롤
-shortcuts-category-piano-roll-tools = 피아노 롤 도구
+shortcuts-category-piano-roll-tool = 피아노 롤 도구
 shortcuts-category-track-list = 트랙 목록
-shortcuts-category-track-list-tools = 트랙 목록 도구
+shortcuts-category-track-list-tool = 트랙 목록 도구
 shortcuts-category-transport = 트랜스포트
 shortcuts-category-workspace = 작업 공간
 
@@ -44,12 +44,17 @@ shortcuts-track-list-tool-resize = 크기 조절 도구
 shortcuts-track-list-tool-slice = 자르기 도구
 shortcuts-track-list-tool-move = 옮기기 도구
 shortcuts-track-list-tool-range-select = 범위 선택 도구
+shortcuts-track-list-tool-delete = 지우기 도구
 shortcuts-track-list-nudge-left = 클립을 왼쪽으로 한 스텝 이동
 shortcuts-track-list-nudge-right = 클립을 오른쪽으로 한 스텝 이동
 shortcuts-track-list-copy-clips = 클립 복사
 shortcuts-track-list-paste-clips = 클립 붙여넣기
 shortcuts-track-list-duplicate-clips = 클립 복제
 shortcuts-track-list-delete-clips = 클립 삭제
+shortcuts-track-list-cut-clips = 클립 잘라내기
+shortcuts-track-list-quantize-clips = 클립 퀀타이즈
+shortcuts-track-list-quantize-clip-starts = 클립 시작 위치 퀀타이즈
+shortcuts-track-list-legato-clips = 클립 레가토
 shortcuts-transport-toggle-playback = 재생/일시 정지
 shortcuts-transport-stop-playback = 정지
 shortcuts-transport-toggle-loop = 루프 켜기/끄기

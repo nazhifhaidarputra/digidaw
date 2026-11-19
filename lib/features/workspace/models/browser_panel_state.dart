@@ -4,7 +4,7 @@ import 'package:freezed_annotation/freezed_annotation.dart';
 part 'browser_panel_state.freezed.dart';
 
 /// The tab shown in the track list's unified right-side panel.
-enum RightPanelTab { browser, sources }
+enum RightPanelTab { browser, sources, clips }
 
 @freezed
 abstract class BrowserSample with _$BrowserSample {

@@ -11,10 +11,11 @@ class _MockDawContext extends Mock implements DawContext {}
 class _FakeMetronomeSoundService extends MetronomeSoundService {
   String? savedPath;
   String? pickedPath;
-  Set<String> existingFiles = {};
+  bool hasSavedClicks = false;
   Exception? applyError;
 
-  /// Every sound handed to the engine, in order; null is the built-in click.
+  /// Every sound handed to the engine, in order: an imported path, 'restored'
+  /// for the clicks saved on disk, or null for the built-in click.
   final List<String?> applied = [];
 
   @override
@@ -29,17 +30,29 @@ class _FakeMetronomeSoundService extends MetronomeSoundService {
   @override
   Future<Result<String?>> pickSound() async => Result.ok(pickedPath);
 
-  @override
-  Future<Result<bool>> fileExists(String path) async =>
-      Result.ok(existingFiles.contains(path));
-
-  @override
-  Future<Result<void>> apply(DawContext context, String? path) async {
+  Result<void> _apply(String? sound) {
     final error = applyError;
     if (error != null) return Result.error(error);
-    applied.add(path);
+    applied.add(sound);
     return Result.ok(null);
   }
+
+  @override
+  Future<Result<void>> importSound(DawContext context, String path) async {
+    final result = _apply(path);
+    if (result.isOk()) hasSavedClicks = true;
+    return result;
+  }
+
+  @override
+  Future<Result<void>> restoreSound(DawContext context) async {
+    if (!hasSavedClicks) return Result.error(Exception('No saved clicks'));
+    return _apply('restored');
+  }
+
+  @override
+  Future<Result<void>> useDefaultSound(DawContext context) async =>
+      _apply(null);
 }
 
 ProviderContainer _container(_FakeMetronomeSoundService service) {
@@ -51,10 +64,10 @@ ProviderContainer _container(_FakeMetronomeSoundService service) {
 }
 
 void main() {
-  test('restores and applies the saved sound', () async {
+  test('restores the saved clicks from disk', () async {
     final service = _FakeMetronomeSoundService()
       ..savedPath = '/sounds/click.wav'
-      ..existingFiles = {'/sounds/click.wav'};
+      ..hasSavedClicks = true;
     final container = _container(service);
 
     final result = await container
@@ -62,7 +75,7 @@ void main() {
         .initialize(_MockDawContext());
 
     expect(result.isOk(), isTrue);
-    expect(service.applied, ['/sounds/click.wav']);
+    expect(service.applied, ['restored']);
     expect(container.read(metronomeSoundProvider), '/sounds/click.wav');
   });
 
@@ -78,7 +91,7 @@ void main() {
     expect(container.read(metronomeSoundProvider), isNull);
   });
 
-  test('a missing saved sound falls back to the default click', () async {
+  test('missing saved clicks fall back to the default click', () async {
     final service = _FakeMetronomeSoundService()
       ..savedPath = '/sounds/gone.wav';
     final container = _container(service);
@@ -97,7 +110,7 @@ void main() {
   });
 
   test(
-    'choosing a sound applies and saves it, and default clears it',
+    'choosing a sound imports and saves it, and default clears it',
     () async {
       final service = _FakeMetronomeSoundService();
       final container = _container(service);

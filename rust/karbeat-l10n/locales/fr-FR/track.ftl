@@ -149,7 +149,6 @@ track-recording-active = Enregistrement. Cliquez pour arrêter et garder la pris
 track-recording = Enregistrement
 track-input-stereo = Can. { $first }+{ $second } (stéréo)
 track-input-mono = Can. { $channel } (mono)
-track-move-step = Pas de déplacement
 track-clips-selected = { $count ->
     [one] { $count } clip
    *[other] { $count } clips

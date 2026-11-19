@@ -5,6 +5,7 @@ use std::{
 
 use crate::sync::{Mutex, MutexGuard, RwLock, RwLockReadGuard, RwLockWriteGuard};
 use karbeat_audio::context::DawContext as CoreDawContext;
+use karbeat_core_api::tempo_edit::TempoEdit;
 
 pub(crate) use crate::api::project::DawContext;
 
@@ -20,6 +21,10 @@ pub(crate) struct DawSessionInner {
     ///
     /// A plain OS lock, taken only after the core lock and never held across a wait.
     save_status_listener: parking_lot::Mutex<Option<SaveStatusListener>>,
+    /// Phase of the tempo edit, which decides when stretched sources render again.
+    ///
+    /// A plain OS lock, never held while taking the core lock.
+    tempo_edit: parking_lot::Mutex<TempoEdit>,
 }
 
 /// Receives whether the project has no unsaved changes. Returns `false` once it stops
@@ -119,6 +124,7 @@ impl DawContext {
                 project_operation: Mutex::new(()),
                 auto_save_wake: parking_lot::Mutex::new(None),
                 save_status_listener: parking_lot::Mutex::new(None),
+                tempo_edit: parking_lot::Mutex::new(TempoEdit::default()),
             }),
         }
     }
@@ -160,6 +166,11 @@ impl DawContext {
 
     pub(crate) fn try_runtime_operation(&self) -> Option<MutexGuard<'_, ()>> {
         self.inner.project_operation.try_lock()
+    }
+
+    /// The tempo edit. Never take the core lock while holding it.
+    pub(crate) fn tempo_edit(&self) -> parking_lot::MutexGuard<'_, TempoEdit> {
+        self.inner.tempo_edit.lock()
     }
 }
 

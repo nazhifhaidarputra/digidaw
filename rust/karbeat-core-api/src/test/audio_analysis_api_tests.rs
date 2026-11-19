@@ -19,8 +19,8 @@ mod tests {
     use crate::{
         audio_analysis_api::{
             begin_fit_to_tempo, begin_refresh_render, cancel_stale_renders, commit_beat_grid,
-            commit_render, execute_render, set_sample_mode, set_waveform_edits, set_waveform_pitch,
-            set_waveform_realtime, sources_needing_render,
+            commit_render, execute_render, set_sample_mode, set_source_tempo, set_waveform_edits,
+            set_waveform_pitch, set_waveform_realtime, sources_needing_render,
         },
         redo,
         transport_api::set_bpm,
@@ -141,6 +141,40 @@ mod tests {
         undo(&mut ctx).unwrap();
         assert_eq!(source(&ctx, id).original_bpm, None);
         assert!(source(&ctx, id).beat_grid.is_none());
+    }
+
+    #[test]
+    fn a_typed_tempo_replaces_the_detected_beats_and_is_undoable() {
+        let (mut ctx, id) = setup();
+        fit(&mut ctx, id, true);
+
+        // The fit follows the source tempo, so it renders again.
+        assert!(set_source_tempo(&mut ctx, id, 60.0).unwrap());
+        let waveform = source(&ctx, id);
+        assert_eq!(waveform.original_bpm, Some(60.0));
+        assert!(waveform.beat_grid.is_none());
+        assert!(!waveform.edited.as_ref().unwrap().edits.warp);
+        assert!(begin_fit_to_tempo(&ctx, id, true).is_err());
+
+        undo(&mut ctx).unwrap();
+        let waveform = source(&ctx, id);
+        assert_eq!(waveform.original_bpm, Some(120.0));
+        assert!(waveform.beat_grid.is_some());
+        assert!(waveform.edited.as_ref().unwrap().edits.warp);
+    }
+
+    #[test]
+    fn a_typed_tempo_must_be_in_range_and_changes_something() {
+        let mut ctx = make_ctx();
+        let id = add_dc_audio_source(&mut ctx);
+        assert!(set_source_tempo(&mut ctx, id, 10.0).is_err());
+        assert!(set_source_tempo(&mut ctx, id, 500.0).is_err());
+
+        assert!(!set_source_tempo(&mut ctx, id, 90.0).unwrap());
+        let history = ctx.history.undo_stack.len();
+        assert!(!set_source_tempo(&mut ctx, id, 90.0).unwrap());
+        assert_eq!(ctx.history.undo_stack.len(), history);
+        assert_eq!(source(&ctx, id).original_bpm, Some(90.0));
     }
 
     #[test]

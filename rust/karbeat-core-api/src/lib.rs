@@ -51,6 +51,10 @@ pub mod plugin_discovery_api;
 pub mod project_api;
 /// Recording device input to audio clips.
 pub mod recording_api;
+/// Sample browser folder scans and file system watches.
+pub mod sample_browser_api;
+/// When a tempo edit renders tempo-stretched sources again.
+pub mod tempo_edit;
 #[allow(
     clippy::expect_used,
     clippy::panic,
@@ -61,6 +65,8 @@ pub mod recording_api;
 pub mod test;
 /// Song loop region and cue marker APIs.
 pub mod timeline_api;
+/// Edits of a selection spanning several tracks and automation lanes, as one undo step.
+pub mod timeline_selection_api;
 /// Track lookup, creation, metadata, ordering, and deletion APIs.
 pub mod track_api;
 /// Playback, looping, tempo, playhead, and pattern transport APIs.

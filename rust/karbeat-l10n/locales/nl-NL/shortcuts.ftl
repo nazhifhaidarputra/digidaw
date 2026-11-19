@@ -6,9 +6,9 @@ shortcuts-support-hint = Gebruik Ctrl, Alt of Command met een toets die geen mod
 ## Shortcut categories
 
 shortcuts-category-piano-roll = Pianorol
-shortcuts-category-piano-roll-tools = Pianorolgereedschap
+shortcuts-category-piano-roll-tool = Pianorolgereedschap
 shortcuts-category-track-list = Tracklijst
-shortcuts-category-track-list-tools = Tracklijstgereedschap
+shortcuts-category-track-list-tool = Tracklijstgereedschap
 shortcuts-category-transport = Transport
 shortcuts-category-workspace = Werkruimte
 
@@ -44,12 +44,17 @@ shortcuts-track-list-tool-resize = Formaatgereedschap
 shortcuts-track-list-tool-slice = Snijgereedschap
 shortcuts-track-list-tool-move = Verplaatsgereedschap
 shortcuts-track-list-tool-range-select = Bereikselectie
+shortcuts-track-list-tool-delete = Gumgereedschap
 shortcuts-track-list-nudge-left = Clips één stap naar links
 shortcuts-track-list-nudge-right = Clips één stap naar rechts
 shortcuts-track-list-copy-clips = Clips kopiëren
 shortcuts-track-list-paste-clips = Clips plakken
 shortcuts-track-list-duplicate-clips = Clips dupliceren
 shortcuts-track-list-delete-clips = Clips verwijderen
+shortcuts-track-list-cut-clips = Clips knippen
+shortcuts-track-list-quantize-clips = Clips kwantiseren
+shortcuts-track-list-quantize-clip-starts = Begintijden van clips kwantiseren
+shortcuts-track-list-legato-clips = Clips legato
 shortcuts-transport-toggle-playback = Afspelen/pauzeren
 shortcuts-transport-stop-playback = Stoppen
 shortcuts-transport-toggle-loop = Lus aan/uit

@@ -149,7 +149,6 @@ track-recording-active = A gravar. Clique para parar e manter o take.
 track-recording = A gravar
 track-input-stereo = Can. { $first }+{ $second } (estéreo)
 track-input-mono = Can. { $channel } (mono)
-track-move-step = Passo de movimento
 track-clips-selected = { $count ->
     [one] { $count } clip
    *[other] { $count } clips

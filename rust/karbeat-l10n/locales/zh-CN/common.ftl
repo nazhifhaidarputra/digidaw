@@ -26,12 +26,6 @@ common-no = 否
 common-loading = 正在加载…
 common-unknown = 未知
 
-## Grid and note lengths
-
-common-grid-bar = 1 小节
-common-grid-beats = { $count } 拍
-common-grid-step = { $fraction } 步
-
 ## Color picker
 
 common-color-choose = 选择颜色

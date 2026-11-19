@@ -338,37 +338,5 @@ int computeTargetBin(double zoomLevel) {
 }
 
 /// Snaps a tick value to the nearest grid line based on the global state
-int _snapTick(int ticks, WorkspaceState workspaceState) {
-  if (!workspaceState.snapToGrid) return ticks;
-  if (workspaceState.gridSize.value <= 0) return ticks;
-  final double ticksPerGridLine = (960.0 * 4.0) / workspaceState.gridSize.value;
-  if (ticksPerGridLine <= 0) return ticks;
-  return ((ticks / ticksPerGridLine).round() * ticksPerGridLine).toInt();
-}
-
-/// Snaps an absolute tick value to the nearest global step boundary.
-/// Used for the cut tool, where the cut point should land on a step grid line.
-int _snapClipShiftTick({required int ticks, required MusicalBeatSize step}) {
-  if (step == MusicalBeatSize.none) return ticks;
-
-  final double ticksPerStep = step.value * 960.0;
-  if (ticksPerStep <= 0) return ticks;
-
-  return ((ticks / ticksPerStep).round() * ticksPerStep).toInt();
-}
-
-/// Snaps a movement **delta** to the nearest multiple of the move-step size.
-/// Unlike [_snapClipShiftTick], this does NOT clamp to global grid boundaries.
-/// The clip jumps in step-size increments from its initial starting position:
-///   new_position = initial_start + round(delta / step) * step
-int _snapDeltaToStep({
-  required int deltaInTicks,
-  required MusicalBeatSize step,
-}) {
-  if (step == MusicalBeatSize.none) return deltaInTicks;
-
-  final double ticksPerStep = step.value * 960.0;
-  if (ticksPerStep <= 0) return deltaInTicks;
-
-  return ((deltaInTicks / ticksPerStep).round() * ticksPerStep).toInt();
-}
+int _snapTick(int ticks, WorkspaceState workspaceState) =>
+    workspaceState.snapToGrid ? workspaceState.gridSize.snap(ticks) : ticks;

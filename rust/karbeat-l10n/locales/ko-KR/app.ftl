@@ -47,6 +47,7 @@ app-recordings-save-failed = 녹음들을 저장할 수 없습니다
 app-project-recover-failed = 프로젝트를 복구할 수 없습니다
 app-project-audio-load-failed = 오디오를 불러올 수 없습니다
 app-project-source-delete-failed = 오디오 소스를 삭제할 수 없습니다
+app-project-source-replace-failed = 오디오 소스를 바꿀 수 없습니다
 app-project-pattern-delete-failed = 패턴을 삭제할 수 없습니다
 app-project-info-update-failed = 프로젝트 정보를 업데이트할 수 없습니다
 app-project-undo-failed = 실행 취소할 수 없습니다

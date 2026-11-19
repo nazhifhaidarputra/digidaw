@@ -1,24 +1,21 @@
-import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:karbeat/app/providers/range_select_state.dart';
 
-/// Renders the blue range-selection rectangle for a single track row.
+/// Renders the range-selection rectangle on one timeline row.
 ///
-/// Lives inside [AudioTrackSlot]'s Stack — the same pattern used by
-/// [TrackGhostClip]. Because it sits in the track's own coordinate space:
-///  • X is already in absolute timeline pixels (no scroll offset to subtract).
-///  • Y is always 0, height is always [trackHeight] — no brittle calculations.
-///  • Automation lanes are naturally handled because each slot has its own
-///    independent coordinate system.
+/// Lives inside the row's Stack — the same pattern used by [TrackGhostClip].
+/// Because it sits in the row's own coordinate space, X is already in
+/// absolute timeline pixels and the height is the row's. A range spanning
+/// several rows draws one rectangle per covered row.
 class TrackRangeSelectOverlay extends ConsumerWidget {
-  final int trackId;
+  final TimelineRow row;
   final double trackHeight;
   final double zoomLevel;
 
   const TrackRangeSelectOverlay({
     super.key,
-    required this.trackId,
+    required this.row,
     required this.trackHeight,
     required this.zoomLevel,
   });
@@ -26,16 +23,16 @@ class TrackRangeSelectOverlay extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final colors = Theme.of(context).colorScheme;
-    final rangeState = ref.watch(rangeSelectProvider);
+    // Rows outside the range select null and skip rebuilding while it moves.
+    final rows = ref.watch(timelineRowsProvider);
+    final rangeState = ref.watch(
+      rangeSelectProvider.select((s) => s.covers(row, rows) ? s : null),
+    );
 
-    List<Widget> children = [];
-
-    if (rangeState.isSelecting && rangeState.trackId == trackId) {
-      final minTick = math.min(rangeState.startTick, rangeState.endTick);
-      final maxTick = math.max(rangeState.startTick, rangeState.endTick);
-
-      final left = minTick / zoomLevel;
-      final width = (maxTick - minTick) / zoomLevel;
+    final children = <Widget>[];
+    if (rangeState != null) {
+      final left = rangeState.minTick / zoomLevel;
+      final width = (rangeState.maxTick - rangeState.minTick) / zoomLevel;
 
       children.add(
         Positioned(

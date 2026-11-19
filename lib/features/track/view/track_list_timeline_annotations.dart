@@ -7,31 +7,6 @@ const double _loopEdgeHitWidth = 8;
 /// Four beats, the length a loop gets when only one of its ends is picked.
 const int _defaultLoopTicks = 960 * 4;
 
-/// Timeline span covering [clipIds], or null when none of them exist.
-_ClipTickRange? _clipsSpan(WidgetRef ref, Set<int> clipIds) {
-  final tracks = ref.read(projectProvider).value?.tracks;
-  if (clipIds.isEmpty || tracks == null) return null;
-  final position = ref.read(transportPositionStreamProvider).value;
-  final tempo = position?.tempo ?? 120.0;
-  final sampleRate = position?.sampleRate ?? 48000;
-
-  _ClipTickRange? span;
-  for (final track in tracks.values) {
-    for (final clip in track.clips) {
-      if (!clipIds.contains(clip.id)) continue;
-      final start = clip.startTimeInTicks;
-      final end = start + clip.loopLengthInTicks(tempo, sampleRate);
-      span = span == null
-          ? _ClipTickRange(start, end)
-          : _ClipTickRange(
-              math.min(span.start, start),
-              math.max(span.end, end),
-            );
-    }
-  }
-  return span != null && span.end > span.start ? span : null;
-}
-
 /// The timeline ruler with the song loop region and cue markers on it.
 ///
 /// Tapping or dragging seeks. Shift-dragging draws a loop region, and its edges
@@ -82,7 +57,42 @@ class _TimelineRulerBarState extends ConsumerState<_TimelineRulerBar> {
   // Ruler gestures: seek, or draw a loop region with shift held
   // --------------------------------------------------------------------------
 
+  /// Pointer position, in ruler coordinates, of a range drawn with the
+  /// Select tool; null while no such range is being drawn.
+  double? _rangeX;
+
+  /// Scrolls the timeline while a range drawn on the ruler nears its edge.
+  late final TimelineEdgeAutoScroller _autoScroller = TimelineEdgeAutoScroller(
+    onScrolled: (dx) {
+      final x = _rangeX;
+      if (x == null) return;
+      _rangeX = x + dx;
+      _updateRulerRange();
+    },
+  );
+
+  @override
+  void dispose() {
+    _autoScroller.stop();
+    super.dispose();
+  }
+
+  void _updateRulerRange() {
+    final x = _rangeX;
+    if (x == null) return;
+    ref.read(rangeSelectProvider.notifier).update(math.max(0.0, x) * _zoom);
+  }
+
   void _onPanStart(DragStartDetails details) {
+    // With the Select tool the ruler selects a time range on every row.
+    if (ref.read(workspaceStateProvider).selectedTool == ToolSelection.select &&
+        !HardwareKeyboard.instance.isShiftPressed) {
+      _rangeX = details.localPosition.dx;
+      ref
+          .read(rangeSelectProvider.notifier)
+          .startAllRows(math.max(0.0, details.localPosition.dx) * _zoom);
+      return;
+    }
     if (HardwareKeyboard.instance.isShiftPressed) {
       final tick = _tickAt(details.localPosition.dx);
       setState(() {
@@ -95,6 +105,12 @@ class _TimelineRulerBarState extends ConsumerState<_TimelineRulerBar> {
   }
 
   void _onPanUpdate(DragUpdateDetails details) {
+    if (_rangeX != null) {
+      _rangeX = details.localPosition.dx;
+      _updateRulerRange();
+      _autoScroller.update(context, details.globalPosition);
+      return;
+    }
     final anchor = _drawAnchorTick;
     final tick = _tickAt(details.localPosition.dx);
     if (anchor == null) {
@@ -107,6 +123,12 @@ class _TimelineRulerBarState extends ConsumerState<_TimelineRulerBar> {
   }
 
   void _onPanEnd(DragEndDetails _) {
+    if (_rangeX != null) {
+      _rangeX = null;
+      _autoScroller.stop();
+      ref.read(rangeSelectProvider.notifier).finish();
+      return;
+    }
     final draft = _draftRegion;
     final drawing = _drawAnchorTick != null;
     setState(() {
@@ -221,10 +243,13 @@ class _TimelineRulerBarState extends ConsumerState<_TimelineRulerBar> {
   Future<void> _showRulerMenu(double x) {
     final tick = _tickAt(x);
     final region = ref.read(loopRegionProvider);
-    final selectionSpan = _clipsSpan(
-      ref,
-      ref.read(trackListStateProvider).selectedClipIds.toSet(),
-    );
+    final spans = ref.read(trackListStateProvider.notifier).selectionSpans();
+    final selectionSpan = spans.isEmpty
+        ? null
+        : _ClipTickRange(
+            spans.map((span) => span.$1).reduce(math.min),
+            spans.map((span) => span.$2).reduce(math.max),
+          );
 
     return showDawContextMenu(
       context: context,
@@ -328,6 +353,12 @@ class _TimelineRulerBarState extends ConsumerState<_TimelineRulerBar> {
               widget.onSeekTicks(_tickAt(details.localPosition.dx));
             },
             onPanStart: _onPanStart,
+            onPanCancel: () {
+              if (_rangeX == null) return;
+              _rangeX = null;
+              _autoScroller.stop();
+              ref.read(rangeSelectProvider.notifier).cancel();
+            },
             // Throttled by the TransportNotifier's seekTo queue implementation
             onPanUpdate: _onPanUpdate,
             onPanEnd: _onPanEnd,

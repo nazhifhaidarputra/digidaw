@@ -7,10 +7,16 @@ class RightSidePanel extends ConsumerStatefulWidget {
     super.key,
     required this.browserScrollController,
     required this.sourceScrollController,
+    required this.itemsScrollController,
+    required this.onRevealItem,
   });
 
   final ScrollController browserScrollController;
   final ScrollController sourceScrollController;
+  final ScrollController itemsScrollController;
+
+  /// Scrolls the timeline to a clip or region picked in the clips tab.
+  final void Function(TimelineRow row, int tick) onRevealItem;
 
   @override
   ConsumerState<RightSidePanel> createState() => _RightSidePanelState();
@@ -103,7 +109,7 @@ class _RightSidePanelState extends ConsumerState<RightSidePanel> {
                       size: 17,
                     ),
                   )
-                else
+                else if (tab == RightPanelTab.sources)
                   IconButton(
                     tooltip: tr('track-import-audio'),
                     padding: EdgeInsets.zero,
@@ -147,6 +153,14 @@ class _RightSidePanelState extends ConsumerState<RightSidePanel> {
                     onTap: () => _selectTab(RightPanelTab.sources),
                   ),
                 ),
+                Expanded(
+                  child: _RightPanelTabButton(
+                    icon: Icons.view_list,
+                    label: tr('track-clips-regions'),
+                    selected: tab == RightPanelTab.clips,
+                    onTap: () => _selectTab(RightPanelTab.clips),
+                  ),
+                ),
               ],
             ),
           ),
@@ -158,6 +172,10 @@ class _RightSidePanelState extends ConsumerState<RightSidePanel> {
               ),
               RightPanelTab.sources => SourceListPanel(
                 scrollController: widget.sourceScrollController,
+              ),
+              RightPanelTab.clips => TimelineItemsPanel(
+                scrollController: widget.itemsScrollController,
+                onReveal: widget.onRevealItem,
               ),
             },
           ),
@@ -202,12 +220,16 @@ class _RightPanelTabButton extends StatelessWidget {
             children: [
               Icon(icon, size: 15, color: foreground),
               const SizedBox(width: 5),
-              Text(
-                label,
-                style: TextStyle(
-                  color: foreground,
-                  fontSize: 12,
-                  fontWeight: selected ? FontWeight.w600 : FontWeight.normal,
+              Flexible(
+                child: Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: foreground,
+                    fontSize: 12,
+                    fontWeight: selected ? FontWeight.w600 : FontWeight.normal,
+                  ),
                 ),
               ),
             ],

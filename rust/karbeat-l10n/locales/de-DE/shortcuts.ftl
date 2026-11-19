@@ -6,9 +6,9 @@ shortcuts-support-hint = Verwende Strg, Alt oder Befehl zusammen mit einer Taste
 ## Shortcut categories
 
 shortcuts-category-piano-roll = Piano Roll
-shortcuts-category-piano-roll-tools = Piano-Roll-Werkzeuge
+shortcuts-category-piano-roll-tool = Piano-Roll-Werkzeuge
 shortcuts-category-track-list = Spurliste
-shortcuts-category-track-list-tools = Spurlisten-Werkzeuge
+shortcuts-category-track-list-tool = Spurlisten-Werkzeuge
 shortcuts-category-transport = Transport
 shortcuts-category-workspace = Arbeitsbereich
 
@@ -44,12 +44,17 @@ shortcuts-track-list-tool-resize = Größenwerkzeug
 shortcuts-track-list-tool-slice = Schneidewerkzeug
 shortcuts-track-list-tool-move = Verschiebewerkzeug
 shortcuts-track-list-tool-range-select = Bereichsauswahl
+shortcuts-track-list-tool-delete = Radiergummi
 shortcuts-track-list-nudge-left = Clips einen Schritt nach links
 shortcuts-track-list-nudge-right = Clips einen Schritt nach rechts
 shortcuts-track-list-copy-clips = Clips kopieren
 shortcuts-track-list-paste-clips = Clips einfügen
 shortcuts-track-list-duplicate-clips = Clips duplizieren
 shortcuts-track-list-delete-clips = Clips löschen
+shortcuts-track-list-cut-clips = Clips ausschneiden
+shortcuts-track-list-quantize-clips = Clips quantisieren
+shortcuts-track-list-quantize-clip-starts = Clipanfänge quantisieren
+shortcuts-track-list-legato-clips = Clips legato
 shortcuts-transport-toggle-playback = Wiedergabe/Pause
 shortcuts-transport-stop-playback = Stopp
 shortcuts-transport-toggle-loop = Loop ein/aus

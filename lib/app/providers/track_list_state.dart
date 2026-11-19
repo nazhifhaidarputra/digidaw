@@ -1,7 +1,10 @@
+import 'dart:math' as math;
+
 import 'package:fast_immutable_collections/fast_immutable_collections.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:freezed_annotation/freezed_annotation.dart';
+import 'package:karbeat/app/providers/automation_provider.dart';
 import 'package:karbeat/app/providers/background_jobs_provider.dart';
 import 'package:karbeat/app/providers/telemetry_polling_suppression.dart';
 import 'package:karbeat/app/providers/mixer_state.dart';
@@ -17,12 +20,15 @@ import 'package:karbeat/core/utils/logger.dart';
 import 'package:karbeat/core/utils/result_type.dart';
 import 'package:karbeat/features/mixer/services/mixer_channel_targets.dart';
 import 'package:karbeat/features/source/services/audio_waveform_services.dart';
+import 'package:karbeat/features/track/services/automation_region_edit.dart';
 import 'package:karbeat/features/track/models/mixer_channel_sidepanel.dart';
 import 'package:karbeat/shared/models/grid.dart';
 import 'package:karbeat/src/rust/api/mixer.dart' show UiMixerChannelTarget;
 import 'package:karbeat/src/rust/api/audio.dart' as audio_api;
 import 'package:karbeat/src/rust/api/automation.dart'
     show
+        AutomationLaneDto,
+        AutomationRegionDto,
         getAllLinkedModulationParams,
         getAllModulationSources,
         getAutomationsLanesAll;
@@ -50,12 +56,18 @@ part 'track_list_state.freezed.dart';
 /// wherever possible.
 @freezed
 abstract class TrackListState with _$TrackListState {
-  const factory TrackListState({
-    /// The track that currently "owns" the clip selection.
-    int? selectedTrackId,
+  const TrackListState._();
 
-    /// IDs of clips that are currently selected (always from [selectedTrackId]).
-    @Default(IListConst<int>([])) IList<int> selectedClipIds,
+  const factory TrackListState({
+    /// Selected clips grouped by track ID. A track is listed only while it has
+    /// selected clips.
+    @Default(IMapConst<int, IList<int>>({}))
+    IMap<int, IList<int>> selectedClips,
+
+    /// Selected automation regions grouped by automation lane ID. A lane is
+    /// listed only while it has selected regions.
+    @Default(IMapConst<int, IList<int>>({}))
+    IMap<int, IList<int>> selectedRegions,
 
     /// The clip that should receive keyboard focus (last clicked).
     int? focusClipId,
@@ -74,6 +86,57 @@ abstract class TrackListState with _$TrackListState {
     /// Mixer channel panel beside the track headers.
     @Default(MixerChannelPanelState()) MixerChannelPanelState mixerChannelPanel,
   }) = _TrackListState;
+
+  /// The track holding the whole selection, when the selection is clips of a
+  /// single track. Single-track clip actions (copy, paste, duplicate,
+  /// quantize, draw) act on it.
+  int? get selectedTrackId =>
+      selectedClips.length == 1 && selectedRegions.isEmpty
+      ? selectedClips.keys.first
+      : null;
+
+  /// The clips of [selectedTrackId]; empty for any other selection.
+  IList<int> get selectedClipIds {
+    final trackId = selectedTrackId;
+    if (trackId == null) return const IListConst<int>([]);
+    return selectedClips[trackId] ?? const IListConst<int>([]);
+  }
+
+  /// Selected clips of [trackId].
+  IList<int> clipsSelectedOn(int trackId) =>
+      selectedClips[trackId] ?? const IListConst<int>([]);
+
+  /// Selected regions of the automation lane [laneId].
+  IList<int> regionsSelectedOn(int laneId) =>
+      selectedRegions[laneId] ?? const IListConst<int>([]);
+
+  /// Number of selected clips and regions.
+  int get selectionCount =>
+      selectedClips.values.fold(0, (sum, ids) => sum + ids.length) +
+      selectedRegions.values.fold(0, (sum, ids) => sum + ids.length);
+
+  bool get hasSelection =>
+      selectedClips.isNotEmpty || selectedRegions.isNotEmpty;
+
+  /// Whether the selection spans several tracks or lanes. Such a selection
+  /// only moves, resizes, slices and deletes, and nothing leaves its track or
+  /// lane.
+  bool get spansLanes => selectedClips.length + selectedRegions.length > 1;
+
+  /// The lane holding the whole selection, when the selection is regions of a
+  /// single automation lane.
+  int? get selectedRegionLaneId =>
+      selectedRegions.length == 1 && selectedClips.isEmpty
+      ? selectedRegions.keys.first
+      : null;
+}
+
+/// Clip IDs as a selection of one track; an empty list selects nothing.
+IMap<int, IList<int>> _onTrack(int trackId, Iterable<int> clipIds) {
+  final ids = clipIds.toIList();
+  return ids.isEmpty
+      ? const IMapConst<int, IList<int>>({})
+      : IMap<int, IList<int>>({trackId: ids});
 }
 
 /// The channel shown in the track list's mixer panel; null while the panel is
@@ -228,63 +291,139 @@ class TrackListNotifier extends Notifier<TrackListState> {
   /// Select a single clip (clears any existing multi-selection).
   void selectClip({required int trackId, required int clipId}) {
     state = state.copyWith(
-      selectedTrackId: trackId,
-      selectedClipIds: IList([clipId]),
+      selectedClips: _onTrack(trackId, [clipId]),
+      selectedRegions: const IMapConst({}),
       focusClipId: clipId,
     );
   }
 
-  /// Add a clip to the selection (Ctrl+Click behaviour).
+  /// Add a clip to the selection (Ctrl+Click behaviour). Clips of other
+  /// tracks stay selected.
   void addClipToSelection({required int trackId, required int clipId}) {
-    IList<int> current = state.selectedClipIds;
-
-    // Switching to a different track resets the selection.
-    if (state.selectedTrackId != null && state.selectedTrackId != trackId) {
-      current = IList();
-    }
-
-    // O(1) addition if it doesn't exist
-    final updated = current.contains(clipId) ? current : current.add(clipId);
-
+    final current = state.clipsSelectedOn(trackId);
     state = state.copyWith(
-      selectedTrackId: trackId,
-      selectedClipIds: updated,
+      selectedClips: state.selectedClips.add(
+        trackId,
+        current.contains(clipId) ? current : current.add(clipId),
+      ),
       focusClipId: clipId,
     );
   }
 
   /// Remove a clip from the selection.
   void removeClipFromSelection({required int clipId}) {
-    final updated = state.selectedClipIds.remove(clipId);
+    final selected = state.selectedClips.map(
+      (trackId, ids) => MapEntry(trackId, ids.remove(clipId)),
+    );
+    final remaining = selected.where((_, ids) => ids.isNotEmpty);
 
     int? newFocus = state.focusClipId;
     if (newFocus == clipId) {
-      newFocus = updated.isNotEmpty ? updated.last : null;
+      newFocus = remaining.values.lastOrNull?.lastOrNull;
     }
 
-    state = state.copyWith(
-      selectedClipIds: updated,
-      focusClipId: newFocus,
-      selectedTrackId: updated.isEmpty ? null : state.selectedTrackId,
-    );
+    state = state.copyWith(selectedClips: remaining, focusClipId: newFocus);
   }
 
   /// Select a specific set of clips on a given track.
   void selectClips({required int trackId, required List<int> clipIds}) {
     final updated = clipIds.lock;
     state = state.copyWith(
-      selectedTrackId: trackId,
-      selectedClipIds: updated,
+      selectedClips: _onTrack(trackId, updated),
+      selectedRegions: const IMapConst({}),
       focusClipId: updated.isNotEmpty ? updated.last : null,
+    );
+  }
+
+  /// Replaces the selection with clips and automation regions of any number
+  /// of tracks and lanes.
+  void selectTimelineItems({
+    required IMap<int, IList<int>> clips,
+    required IMap<int, IList<int>> regions,
+  }) {
+    final selectedClips = clips.where((_, ids) => ids.isNotEmpty);
+    state = state.copyWith(
+      selectedClips: selectedClips,
+      selectedRegions: regions.where((_, ids) => ids.isNotEmpty),
+      focusClipId: selectedClips.values.lastOrNull?.lastOrNull,
+    );
+  }
+
+  /// Selects a single automation region, or with [additive] adds it to the
+  /// selection.
+  void selectRegion({
+    required int laneId,
+    required int regionId,
+    bool additive = false,
+  }) {
+    if (!additive) {
+      state = state.copyWith(
+        selectedClips: const IMapConst({}),
+        selectedRegions: IMap({
+          laneId: IList([regionId]),
+        }),
+        focusClipId: null,
+      );
+      return;
+    }
+    final current = state.regionsSelectedOn(laneId);
+    state = state.copyWith(
+      selectedRegions: state.selectedRegions.add(
+        laneId,
+        current.contains(regionId) ? current : current.add(regionId),
+      ),
+    );
+  }
+
+  /// Removes one automation region from the selection.
+  void removeRegionFromSelection({required int laneId, required int regionId}) {
+    final remaining = state.regionsSelectedOn(laneId).remove(regionId);
+    state = state.copyWith(
+      selectedRegions: remaining.isEmpty
+          ? state.selectedRegions.remove(laneId)
+          : state.selectedRegions.add(laneId, remaining),
+    );
+  }
+
+  /// Selects every clip of [trackId], replacing the selection.
+  void selectAllClipsOn(int trackId) {
+    final clips = ref.read(projectProvider).value?.tracks[trackId]?.clips;
+    if (clips == null) return;
+    selectClips(trackId: trackId, clipIds: [for (final clip in clips) clip.id]);
+  }
+
+  /// Selects every region of the automation lane [laneId], replacing the
+  /// selection.
+  void selectAllRegionsOn(int laneId) {
+    final lane = ref.read(projectProvider).value?.automationPool[laneId];
+    if (lane == null) return;
+    selectTimelineItems(
+      clips: const IMapConst({}),
+      regions: IMap({
+        laneId: [for (final region in lane.regions) region.id].lock,
+      }),
     );
   }
 
   /// Clear all clip selection.
   void deselectAllClips() {
     state = state.copyWith(
-      selectedTrackId: null,
-      selectedClipIds: IList(),
+      selectedClips: const IMapConst({}),
+      selectedRegions: const IMapConst({}),
       focusClipId: null,
+    );
+  }
+
+  /// Drops regions that no longer exist in [lane] from the selection.
+  void pruneRegionSelection(int laneId, Set<int> existingRegionIds) {
+    final selected = state.regionsSelectedOn(laneId);
+    if (selected.isEmpty) return;
+    final remaining = selected.where(existingRegionIds.contains).toIList();
+    if (remaining.length == selected.length) return;
+    state = state.copyWith(
+      selectedRegions: remaining.isEmpty
+          ? state.selectedRegions.remove(laneId)
+          : state.selectedRegions.add(laneId, remaining),
     );
   }
 
@@ -616,11 +755,7 @@ class TrackListNotifier extends Notifier<TrackListState> {
         );
       }
 
-      state = state.copyWith(
-        selectedTrackId: trackId,
-        selectedClipIds: IList([newClip.id]),
-        focusClipId: newClip.id,
-      );
+      selectClip(trackId: trackId, clipId: newClip.id);
       ref.invalidate(audioSourcesProvider);
     });
 
@@ -788,13 +923,15 @@ class TrackListNotifier extends Notifier<TrackListState> {
   // Batch clip operations
   // ------------------------------------------------------------------
 
-  /// Moves the selected clips [steps] move steps along the timeline, where
-  /// one step is [step] (a single tick when it is none). Stops at the start
-  /// of the timeline.
+  /// Moves the selected clips [steps] cells of [grid] along the timeline (a
+  /// single tick per step without a grid). Stops at the start of the timeline.
   Future<Result<void>> nudgeSelectedClips({
     required int steps,
-    required MusicalBeatSize step,
+    required GridSize grid,
   }) async {
+    if (state.spansLanes || state.selectedRegions.isNotEmpty) {
+      return moveSelection(steps * grid.ticks);
+    }
     final trackId = state.selectedTrackId;
     final clipIds = state.selectedClipIds;
     final track = trackId == null
@@ -809,10 +946,7 @@ class TrackListNotifier extends Notifier<TrackListState> {
     if (starts.isEmpty) return Result.ok(null);
     final earliestStart = starts.reduce((a, b) => a < b ? a : b);
 
-    final ticksPerStep = step == MusicalBeatSize.none
-        ? 1
-        : (step.value * 960).round();
-    var deltaTicks = steps * ticksPerStep;
+    var deltaTicks = steps * grid.ticks;
     if (deltaTicks < -earliestStart) deltaTicks = -earliestStart;
     if (deltaTicks == 0) return Result.ok(null);
 
@@ -1039,12 +1173,319 @@ class TrackListNotifier extends Notifier<TrackListState> {
 
   /// Delete all currently selected clips and clear the selection.
   Future<Result<void>> deleteSelectedClips() async {
+    if (state.spansLanes || state.selectedRegions.isNotEmpty) {
+      return deleteSelection();
+    }
     final trackId = state.selectedTrackId;
     final clipIds = state.selectedClipIds;
     if (trackId == null || clipIds.isEmpty) return Result.ok(null);
     final result = await deleteClipBatch(trackId, clipIds.toList());
     deselectAllClips();
     return result;
+  }
+
+  // ------------------------------------------------------------------
+  // Timeline selection: clips and automation regions of any lanes
+  // ------------------------------------------------------------------
+
+  List<UiSelectedClips> get _selectedClipGroups => [
+    for (final MapEntry(:key, :value) in state.selectedClips.entries)
+      UiSelectedClips(trackId: key, clipIds: value.toList()),
+  ];
+
+  List<UiSelectedRegions> get _selectedRegionGroups => [
+    for (final MapEntry(:key, :value) in state.selectedRegions.entries)
+      UiSelectedRegions(laneId: key, regionIds: value.toList()),
+  ];
+
+  /// Tick spans of every selected clip and region, as (start, end) pairs.
+  List<(int, int)> selectionSpans() {
+    final project = ref.read(projectProvider).value;
+    if (project == null) return const [];
+    final bpm = ref.read(transportProvider).value?.state?.bpm ?? 120.0;
+    final sampleRate = ref.read(transportProvider).value?.sampleRate ?? 48000;
+    return [
+      for (final MapEntry(:key, :value) in state.selectedClips.entries)
+        for (final clip in project.tracks[key]?.clips ?? const <UiClip>[])
+          if (value.contains(clip.id))
+            (
+              clip.startTimeInTicks,
+              clip.startTimeInTicks + clip.loopLengthInTicks(bpm, sampleRate),
+            ),
+      for (final MapEntry(:key, :value) in state.selectedRegions.entries)
+        for (final region
+            in project.automationPool[key]?.regions ??
+                const <AutomationRegionDto>[])
+          if (value.contains(region.id)) (region.startTicks, region.endTicks),
+    ];
+  }
+
+  /// Closest move to [deltaTicks] that keeps the selection at or after tick
+  /// zero and its regions clear of the regions they would run into.
+  int clampSelectionMove(int deltaTicks) {
+    var delta = deltaTicks;
+    final spans = selectionSpans();
+    if (spans.isEmpty) return 0;
+    final start = spans.map((span) => span.$1).reduce(math.min);
+    if (delta < -start) delta = -start;
+    final pool = ref.read(projectProvider).value?.automationPool;
+    for (final MapEntry(:key, :value) in state.selectedRegions.entries) {
+      final lane = pool?[key];
+      if (lane == null) continue;
+      delta = clampTowardZero(
+        delta,
+        clampRegionMove(lane, value.toSet(), delta),
+      );
+    }
+    return delta;
+  }
+
+  /// Closest resize of [edge] to [deltaTicks] that keeps every selected item
+  /// at least [minTicks] long and its regions clear of their neighbours.
+  int clampSelectionResize(
+    UiResizeEdge edge,
+    int deltaTicks, {
+    int minTicks = 10,
+  }) {
+    final spans = selectionSpans();
+    if (spans.isEmpty) return 0;
+    final shortest = spans.map((span) => span.$2 - span.$1).reduce(math.min);
+    final maxShrink = math.max(0, shortest - minTicks);
+    var delta = switch (edge) {
+      UiResizeEdge.right => math.max(deltaTicks, -maxShrink),
+      UiResizeEdge.left => math.min(deltaTicks, maxShrink),
+    };
+    if (edge == UiResizeEdge.left) {
+      final start = spans.map((span) => span.$1).reduce(math.min);
+      delta = math.max(delta, -start);
+    }
+    final pool = ref.read(projectProvider).value?.automationPool;
+    for (final MapEntry(:key, :value) in state.selectedRegions.entries) {
+      final lane = pool?[key];
+      if (lane == null) continue;
+      delta = clampTowardZero(
+        delta,
+        clampRegionResize(lane, value.toSet(), edge, delta),
+      );
+    }
+    return delta;
+  }
+
+  /// Shows [previewLane] on every lane with selected regions until the engine
+  /// confirms the edit.
+  void _previewSelectedRegions(
+    AutomationLaneDto Function(AutomationLaneDto lane, Set<int> ids)
+    previewLane,
+  ) {
+    final project = ref.read(projectProvider).value;
+    if (project == null || state.selectedRegions.isEmpty) return;
+    var pool = project.automationPool;
+    for (final MapEntry(:key, :value) in state.selectedRegions.entries) {
+      final lane = pool[key];
+      if (lane != null) pool = pool.add(key, previewLane(lane, value.toSet()));
+    }
+    ref.read(projectProvider.notifier).updateAutomations(pool: pool);
+  }
+
+  /// Reloads tracks and lanes after a selection edit and reports its error.
+  Future<Result<void>> _finishSelectionEdit(
+    AsyncValue<void> result,
+    String action,
+  ) async {
+    await (
+      syncTracks(),
+      ref.read(automationProvider.notifier).syncLanes(),
+    ).wait;
+    if (result.hasError) {
+      AppLogger.error(
+        'TrackListNotifier: error $action the selection: ${result.error}',
+      );
+      return ref.notifyErrorResult(Exception(result.error.toString()));
+    }
+    return Result.ok(null);
+  }
+
+  /// Moves every selected clip and region by [deltaTicks] on its own track or
+  /// lane, as one undo step.
+  Future<Result<void>> moveSelection(int deltaTicks) async {
+    final delta = clampSelectionMove(deltaTicks);
+    if (delta == 0) return Result.ok(null);
+    final clips = _selectedClipGroups;
+    final regions = _selectedRegionGroups;
+
+    for (final group in clips) {
+      _applyOptimisticMoveBatch(group.trackId, group.clipIds, delta, null);
+    }
+    _previewSelectedRegions((lane, ids) => previewRegionMove(lane, ids, delta));
+
+    final result = await AsyncValue.guard(
+      () => track_api.moveSelection(
+        ctx: _ctx,
+        clips: clips,
+        regions: regions,
+        deltaTicks: delta,
+      ),
+    );
+    return _finishSelectionEdit(result, 'moving');
+  }
+
+  /// Moves [edge] of every selected clip and region by [deltaTicks], as one
+  /// undo step. With [stretch], audio clips stretch their audio.
+  Future<Result<void>> resizeSelection(
+    UiResizeEdge edge,
+    int deltaTicks, {
+    bool stretch = false,
+  }) async {
+    final delta = clampSelectionResize(edge, deltaTicks);
+    if (delta == 0) return Result.ok(null);
+    final clips = _selectedClipGroups;
+    final regions = _selectedRegionGroups;
+
+    if (!stretch) {
+      for (final group in clips) {
+        _applyOptimisticResizeBatch(group.trackId, group.clipIds, edge, delta);
+      }
+    }
+    _previewSelectedRegions(
+      (lane, ids) => previewRegionResize(lane, ids, edge, delta),
+    );
+
+    final result = await AsyncValue.guard(
+      () => track_api.resizeSelection(
+        ctx: _ctx,
+        clips: clips,
+        regions: regions,
+        edge: edge,
+        deltaTicks: delta,
+        stretch: stretch,
+      ),
+    );
+    return _finishSelectionEdit(result, 'resizing');
+  }
+
+  /// Deletes every selected clip and region as one undo step and clears the
+  /// selection.
+  Future<Result<void>> deleteSelection() async {
+    if (!state.hasSelection) return Result.ok(null);
+    final clips = _selectedClipGroups;
+    final regions = _selectedRegionGroups;
+    for (final group in clips) {
+      _optimisticDeleteClips(group.trackId, group.clipIds.toSet());
+    }
+    deselectAllClips();
+
+    final result = await AsyncValue.guard(
+      () =>
+          track_api.deleteSelection(ctx: _ctx, clips: clips, regions: regions),
+    );
+    return _finishSelectionEdit(result, 'deleting');
+  }
+
+  /// Cuts every selected clip and region that [atTick] passes through, as one
+  /// undo step.
+  Future<Result<void>> sliceSelection(int atTick) async {
+    final project = ref.read(projectProvider).value;
+    if (project == null) return Result.ok(null);
+    final bpm = ref.read(transportProvider).value?.state?.bpm ?? 120.0;
+    final sampleRate = ref.read(transportProvider).value?.sampleRate ?? 48000;
+    bool cuts(int start, int end) => atTick > start && atTick < end;
+
+    final clips = [
+      for (final MapEntry(:key, :value) in state.selectedClips.entries)
+        UiSelectedClips(
+          trackId: key,
+          clipIds: [
+            for (final clip in project.tracks[key]?.clips ?? const <UiClip>[])
+              if (value.contains(clip.id) &&
+                  cuts(
+                    clip.startTimeInTicks,
+                    clip.startTimeInTicks +
+                        clip.loopLengthInTicks(bpm, sampleRate),
+                  ))
+                clip.id,
+          ],
+        ),
+    ].where((group) => group.clipIds.isNotEmpty).toList();
+    final regions = [
+      for (final MapEntry(:key, :value) in state.selectedRegions.entries)
+        UiSelectedRegions(
+          laneId: key,
+          regionIds: [
+            for (final region
+                in project.automationPool[key]?.regions ??
+                    const <AutomationRegionDto>[])
+              if (value.contains(region.id) &&
+                  cuts(region.startTicks, region.endTicks))
+                region.id,
+          ],
+        ),
+    ].where((group) => group.regionIds.isNotEmpty).toList();
+    if (clips.isEmpty && regions.isEmpty) return Result.ok(null);
+
+    final result = await AsyncValue.guard(
+      () => track_api.sliceSelection(
+        ctx: _ctx,
+        clips: clips,
+        regions: regions,
+        atTick: atTick,
+      ),
+    );
+    return _finishSelectionEdit(result, 'slicing');
+  }
+
+  // ------------------------------------------------------------------
+  // Clip timing
+  // ------------------------------------------------------------------
+
+  /// Snaps the starts and ends of the selected clips to [grid] as one undo
+  /// step. Clips keep at least one grid cell.
+  Future<Result<void>> quantizeSelectedClips(GridSize grid) =>
+      _retimeSelectedClips(
+        (trackId, clipIds) => track_api.quantizeClips(
+          ctx: _ctx,
+          trackId: trackId,
+          clipIds: clipIds,
+          stepTicks: grid.ticks,
+        ),
+      );
+
+  /// Snaps the starts of the selected clips to [grid] as one undo step,
+  /// keeping their lengths.
+  Future<Result<void>> quantizeSelectedClipStarts(GridSize grid) =>
+      _retimeSelectedClips(
+        (trackId, clipIds) => track_api.quantizeClipStarts(
+          ctx: _ctx,
+          trackId: trackId,
+          clipIds: clipIds,
+          stepTicks: grid.ticks,
+        ),
+      );
+
+  /// Makes each selected clip end where the next selected clip starts, as one
+  /// undo step.
+  Future<Result<void>> legatoSelectedClips() => _retimeSelectedClips(
+    (trackId, clipIds) =>
+        track_api.legatoClips(ctx: _ctx, trackId: trackId, clipIds: clipIds),
+  );
+
+  /// Runs [retime] on the selected clips and adopts the clips it changed.
+  Future<Result<void>> _retimeSelectedClips(
+    Future<List<UiClip>> Function(int trackId, List<int> clipIds) retime,
+  ) async {
+    final trackId = state.selectedTrackId;
+    final clipIds = state.selectedClipIds;
+    if (trackId == null || clipIds.isEmpty) return Result.ok(null);
+    final result = await AsyncValue.guard(
+      () => retime(trackId, clipIds.toList()),
+    );
+    if (result.hasError) {
+      AppLogger.error(
+        'TrackListNotifier: error retiming clips: ${result.error}',
+      );
+      return ref.notifyErrorResult(Exception(result.error.toString()));
+    }
+    _replaceClips(trackId, result.requireValue);
+    return Result.ok(null);
   }
 
   // ------------------------------------------------------------------
@@ -1078,13 +1519,7 @@ class TrackListNotifier extends Notifier<TrackListState> {
       await session_api.cutClips(ctx: _ctx, trackId: trackId, clipIds: clipIds);
       _optimisticDeleteClips(trackId, clipIds.toSet());
       // Clear selection
-      if (state.selectedTrackId == trackId) {
-        state = state.copyWith(
-          selectedClipIds: IList(),
-          selectedTrackId: null,
-          focusClipId: null,
-        );
-      }
+      if (state.selectedTrackId == trackId) deselectAllClips();
       return Result.ok(null);
     } catch (e) {
       AppLogger.error('TrackListNotifier: error cutting clips: $e');
@@ -1118,10 +1553,9 @@ class TrackListNotifier extends Notifier<TrackListState> {
             .read(projectProvider.notifier)
             .upsertTrack(targetTrackId, track.copyWith(clips: updatedClips));
 
-        state = state.copyWith(
-          selectedTrackId: targetTrackId,
-          selectedClipIds: clips.map((c) => c.id).toIList(),
-          focusClipId: clips.last.id,
+        selectClips(
+          trackId: targetTrackId,
+          clipIds: clips.map((c) => c.id).toList(),
         );
       }
 
@@ -1197,10 +1631,9 @@ class TrackListNotifier extends Notifier<TrackListState> {
 
     final duplicated = result.ok();
     if (duplicated.isNotEmpty) {
-      state = state.copyWith(
-        selectedTrackId: trackId,
-        selectedClipIds: duplicated.map((clip) => clip.id).toIList(),
-        focusClipId: duplicated.last.id,
+      selectClips(
+        trackId: trackId,
+        clipIds: duplicated.map((clip) => clip.id).toList(),
       );
     }
     return Result.ok(null);
@@ -1307,17 +1740,18 @@ class TrackListNotifier extends Notifier<TrackListState> {
   /// Drops deleted clips from the selection so a batch delete cannot leave
   /// stale IDs behind.
   void _pruneSelection(int trackId, Set<int> deletedClipIds) {
-    if (state.selectedTrackId != trackId || state.selectedClipIds.isEmpty) {
-      return;
-    }
-    final remaining = state.selectedClipIds
+    final selected = state.clipsSelectedOn(trackId);
+    if (selected.isEmpty) return;
+    final remaining = selected
         .where((clipId) => !deletedClipIds.contains(clipId))
         .toIList();
-    if (remaining.length == state.selectedClipIds.length) return;
+    if (remaining.length == selected.length) return;
+    final selectedClips = remaining.isEmpty
+        ? state.selectedClips.remove(trackId)
+        : state.selectedClips.add(trackId, remaining);
     state = state.copyWith(
-      selectedClipIds: remaining,
-      focusClipId: remaining.isEmpty ? null : remaining.last,
-      selectedTrackId: remaining.isEmpty ? null : state.selectedTrackId,
+      selectedClips: selectedClips,
+      focusClipId: selectedClips.values.lastOrNull?.lastOrNull,
     );
   }
 

@@ -6,8 +6,13 @@ mod tests {
 
     use crate::test::helpers::{add_dc_audio_source, make_ctx, make_seeded_ctx};
     use karbeat_audio::context::DawContext;
-    use karbeat_core::core::project::{ClipboardContent, clip::ClipSourceType};
+    use karbeat_core::core::project::{
+        AudioWaveform, ClipboardContent,
+        clip::ClipSourceType,
+        track::audio_waveform::{AudioSampleMode, BeatGrid},
+    };
     use karbeat_core::shared::id::{AudioSourceId, ClipId, TrackId};
+    use std::sync::Arc;
 
     /// Clip IDs listed on a track, in track order.
     fn clips_on(ctx: &DawContext, track: TrackId) -> Vec<ClipId> {
@@ -192,5 +197,98 @@ mod tests {
         let ctx = make_ctx();
         let result = audio_waveform_api::get_audio_waveform(&ctx, 99999, |_w| true);
         assert!(result.is_err(), "Unknown source_id should return Err");
+    }
+
+    /// Mono audio of `frames` frames at `sample_rate`.
+    fn mono_audio(frames: usize, sample_rate: u32) -> AudioWaveform {
+        let samples = vec![0.25_f32; frames];
+        let bytes: &[u8] = bytemuck::cast_slice(&samples);
+        let mut map = memmap2::MmapOptions::new()
+            .len(bytes.len())
+            .map_anon()
+            .expect("anonymous map");
+        map.copy_from_slice(bytes);
+        AudioWaveform {
+            name: "replacement".into(),
+            buffer: Some(Arc::new(map.make_read_only().expect("read-only map"))),
+            original_sample_rate: sample_rate,
+            sample_rate,
+            channels: 1,
+            trim_end: u32::try_from(frames).expect("frames fit"),
+            ..AudioWaveform::default()
+        }
+    }
+
+    #[test]
+    fn replacing_a_source_keeps_its_clips_and_settings_and_undoes_in_one_step() {
+        let (mut ctx, audio, _midi, _) = make_seeded_ctx();
+        ctx.app_state.transport.bpm = 100.0;
+        let source = add_dc_audio_source(&mut ctx);
+        let clip = clip_api::add_clip(
+            &mut ctx,
+            Some(source.to_u64()),
+            ClipSourceType::Audio,
+            audio,
+            960,
+        )
+        .expect("audio clip")
+        .id;
+        let waveform = Arc::make_mut(&mut ctx.app_state.asset_library.source_map[source]);
+        waveform.root_note = 48;
+        waveform.trim_start = 100;
+        waveform.sample_mode = AudioSampleMode::Stretch;
+        waveform.original_bpm = Some(120.0);
+        waveform.envelope.fade_in.length = 4_800;
+        waveform.beat_grid = Some(BeatGrid {
+            bpm: 120.0,
+            confidence: 1.0,
+            beats: vec![0.0, 0.5],
+            downbeats: vec![0.0],
+        });
+        let clips = clips_on(&ctx, audio);
+        let history_depth = ctx.history.undo_stack.len();
+
+        audio_waveform_api::replace_audio_source(&mut ctx, source, mono_audio(12_000, 24_000))
+            .expect("replace");
+
+        let replaced = &ctx.app_state.asset_library.source_map[source];
+        assert_eq!(replaced.id, Some(source));
+        assert_eq!(replaced.name, "replacement");
+        assert_eq!((replaced.sample_rate, replaced.channels), (24_000, 1));
+        assert_eq!((replaced.trim_start, replaced.trim_end), (0, 12_000));
+        assert_eq!(replaced.root_note, 48);
+        assert_eq!(replaced.sample_mode, AudioSampleMode::Stretch);
+        // The tempo of the new audio is unknown: it plays as placed.
+        assert_eq!(replaced.original_bpm, Some(100.0));
+        assert!(replaced.beat_grid.is_none());
+        // 100 ms of fade in, at the new rate.
+        assert_eq!(replaced.envelope.fade_in.length, 2_400);
+        assert_eq!(clips_on(&ctx, audio), clips);
+        assert!(ctx.app_state.get_clip(&audio, &clip).is_some());
+        assert_eq!(ctx.history.undo_stack.len(), history_depth + 1);
+
+        undo(&mut ctx).expect("undo");
+        let restored = &ctx.app_state.asset_library.source_map[source];
+        assert_eq!((restored.sample_rate, restored.channels), (48_000, 2));
+        assert_eq!(restored.trim_start, 100);
+        assert_eq!(restored.original_bpm, Some(120.0));
+        assert!(restored.beat_grid.is_some());
+
+        redo(&mut ctx).expect("redo");
+        assert_eq!(
+            ctx.app_state.asset_library.source_map[source].sample_rate,
+            24_000
+        );
+    }
+
+    #[test]
+    fn replacing_a_missing_source_fails() {
+        let mut ctx = make_ctx();
+        let missing = AudioSourceId::from_u64(99_999);
+        assert!(
+            audio_waveform_api::replace_audio_source(&mut ctx, missing, mono_audio(10, 48_000))
+                .is_err()
+        );
+        assert!(ctx.history.undo_stack.is_empty());
     }
 }

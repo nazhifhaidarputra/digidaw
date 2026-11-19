@@ -150,7 +150,6 @@ track-recording-active = Recording. Click to stop and keep the take.
 track-recording = Recording
 track-input-stereo = Ch { $first }+{ $second } (stereo)
 track-input-mono = Ch { $channel } (mono)
-track-move-step = Move Step
 track-clips-selected = { $count ->
     [one] { $count } Clip
    *[other] { $count } Clips
@@ -196,3 +195,27 @@ track-hint-loop = Each repeat lasts the loop time where it starts, so a falling 
 track-hint-curve = Double-click to add a point, double-click a point to delete it. Drag a ring to bend a segment, double-click it to straighten. Right-click a point for its value and curve. Shift-drag moves a point freely.
 
 track-loop-follows-curve = Follows the curve
+track-regions-selected = { $count ->
+    [one] { $count } Region
+   *[other] { $count } Regions
+}
+track-loop-to-region = Set Loop Region to Region
+track-save-region-as-template = Save as template
+track-dissolve-regions = Dissolve (keep points)
+track-rename-region = Rename Region
+track-region-name = Region name
+track-paste-regions = Paste regions
+track-create-region-from-range = Create region from range
+track-clips-regions = Clips
+track-timeline-items-empty = No clips or automation regions yet.
+track-item-audio = Audio
+track-item-midi = MIDI
+track-item-empty = Empty
+track-item-region = Automation region
+track-item-details = { $kind } · { $owner }
+track-item-id = #{ $id }
+track-items-selected = { $count } Selected
+track-duplicate = Duplicate
+track-quantize-clips = Quantize
+track-quantize-clip-starts = Quantize start times
+track-legato-clips = Legato

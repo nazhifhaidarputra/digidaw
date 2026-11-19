@@ -18,13 +18,14 @@ use karbeat_core::core::project::{
 };
 use karbeat_core::shared::id::*;
 use karbeat_core_api::{
-    clip_api,
+    clip_api::{self, ClipRetiming},
     external_plugin_api::{
         InstalledPlugin, RemovedProjectItem, begin_add_instrument, begin_delete_track,
         begin_remove_generator, begin_replace_instrument, commit_install, commit_removal,
         descriptor, execute_install, execute_removal, track_targets,
     },
     jobs::{JobClass, JobKind, JobSpec},
+    timeline_selection_api::{self, TimelineSelection},
     track_api,
 };
 
@@ -391,6 +392,112 @@ pub fn duplicate_clip_groups(
     Ok(duplicated.iter().map(UiClip::from).collect())
 }
 
+/// Clips of one track in a timeline selection.
+#[derive(Clone, Debug)]
+pub struct UiSelectedClips {
+    pub track_id: u64,
+    pub clip_ids: Vec<u64>,
+}
+
+/// Automation regions of one lane in a timeline selection.
+#[derive(Clone, Debug)]
+pub struct UiSelectedRegions {
+    pub lane_id: u64,
+    pub region_ids: Vec<u64>,
+}
+
+fn timeline_selection(
+    clips: Vec<UiSelectedClips>,
+    regions: Vec<UiSelectedRegions>,
+) -> TimelineSelection {
+    TimelineSelection {
+        clips: clips
+            .into_iter()
+            .map(|group| {
+                (
+                    TrackId::from_u64(group.track_id),
+                    group.clip_ids.into_iter().map(ClipId::from_u64).collect(),
+                )
+            })
+            .collect(),
+        regions: regions
+            .into_iter()
+            .map(|group| {
+                (
+                    AutomationId::from_u64(group.lane_id),
+                    group
+                        .region_ids
+                        .into_iter()
+                        .map(AutomationRegionId::from_u64)
+                        .collect(),
+                )
+            })
+            .collect(),
+    }
+}
+
+/// Moves selected clips and automation regions on their own tracks and lanes as one undo step.
+/// Regions stop at the regions they would run into. Returns the move applied.
+pub fn move_selection(
+    ctx: &DawContext,
+    clips: Vec<UiSelectedClips>,
+    regions: Vec<UiSelectedRegions>,
+    delta_ticks: i64,
+) -> Result<i64, String> {
+    project_ctx!(ctx);
+    timeline_selection_api::move_selection(ctx, &timeline_selection(clips, regions), delta_ticks)
+        .map_err(|error| error.to_string())
+}
+
+/// Resizes one edge of selected clips and automation regions as one undo step. With `stretch`,
+/// audio clips stretch their audio. Returns the resize applied.
+pub fn resize_selection(
+    ctx: &DawContext,
+    clips: Vec<UiSelectedClips>,
+    regions: Vec<UiSelectedRegions>,
+    edge: UiResizeEdge,
+    delta_ticks: i64,
+    stretch: bool,
+) -> Result<i64, String> {
+    let applied = timeline_selection_api::resize_selection(
+        &mut ctx.project_write(),
+        &timeline_selection(clips, regions),
+        ResizeEdge::from(&edge),
+        delta_ticks,
+        stretch,
+    )
+    .map_err(|error| error.to_string())?;
+    if stretch {
+        // A stretching resize changes the source tempo; render it in the background.
+        schedule_source_renders(ctx, false);
+    }
+    Ok(applied)
+}
+
+/// Deletes selected clips and automation regions as one undo step.
+pub fn delete_selection(
+    ctx: &DawContext,
+    clips: Vec<UiSelectedClips>,
+    regions: Vec<UiSelectedRegions>,
+) -> Result<(), String> {
+    project_ctx!(ctx);
+    timeline_selection_api::delete_selection(ctx, &timeline_selection(clips, regions))
+        .map_err(|error| error.to_string())
+}
+
+/// Cuts the listed clips and automation regions at `at_tick` as one undo step. List only what
+/// the tick cuts through.
+pub fn slice_selection(
+    ctx: &DawContext,
+    clips: Vec<UiSelectedClips>,
+    regions: Vec<UiSelectedRegions>,
+    at_tick: u32,
+) -> Result<(), String> {
+    project_ctx!(ctx);
+    timeline_selection_api::slice_selection(ctx, &timeline_selection(clips, regions), at_tick)
+        .map_err(|error| error.to_string())
+}
+
 /// Delete clips in batch
 pub fn delete_clip_batch(
     ctx: &DawContext,
@@ -404,6 +511,63 @@ pub fn delete_clip_batch(
         .map_err(|e| format!("Failed to delete clips: {}", e))?;
 
     Ok(())
+}
+
+fn retime_clips(
+    ctx: &DawContext,
+    track_id: u64,
+    clip_ids: Vec<u64>,
+    timing: ClipRetiming,
+) -> Result<Vec<UiClip>, String> {
+    project_ctx!(ctx);
+    let track_id = TrackId::from_u64(track_id);
+    let clip_ids: Vec<ClipId> = clip_ids.into_iter().map(ClipId::from_u64).collect();
+    let changed = clip_api::retime_clips(ctx, track_id, &clip_ids, timing)
+        .map_err(|error| error.to_string())?;
+
+    Ok(changed.iter().map(UiClip::from).collect())
+}
+
+/// Snaps clip starts and ends to multiples of `step_ticks`, as one undo step. Returns the
+/// clips that changed.
+pub fn quantize_clips(
+    ctx: &DawContext,
+    track_id: u64,
+    clip_ids: Vec<u64>,
+    step_ticks: u64,
+) -> Result<Vec<UiClip>, String> {
+    retime_clips(
+        ctx,
+        track_id,
+        clip_ids,
+        ClipRetiming::Quantize { step_ticks },
+    )
+}
+
+/// Snaps clip starts to multiples of `step_ticks`, keeping lengths, as one undo step.
+/// Returns the clips that changed.
+pub fn quantize_clip_starts(
+    ctx: &DawContext,
+    track_id: u64,
+    clip_ids: Vec<u64>,
+    step_ticks: u64,
+) -> Result<Vec<UiClip>, String> {
+    retime_clips(
+        ctx,
+        track_id,
+        clip_ids,
+        ClipRetiming::QuantizeStart { step_ticks },
+    )
+}
+
+/// Makes each clip end where the next of `clip_ids` starts, as one undo step. Returns the
+/// clips that changed.
+pub fn legato_clips(
+    ctx: &DawContext,
+    track_id: u64,
+    clip_ids: Vec<u64>,
+) -> Result<Vec<UiClip>, String> {
+    retime_clips(ctx, track_id, clip_ids, ClipRetiming::Legato)
 }
 
 pub fn change_track_name(ctx: &DawContext, track_id: u64, new_name: &str) -> Result<(), String> {

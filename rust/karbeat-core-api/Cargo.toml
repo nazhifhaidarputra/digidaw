@@ -20,10 +20,13 @@ anyhow.workspace = true
 bytemuck.workspace = true
 futures-lite.workspace = true
 hashbrown.workspace = true
+hound.workspace = true
+ignore.workspace = true
 indexmap.workspace = true
 jiff.workspace = true
 tracing.workspace = true
 memmap2.workspace = true
+notify-debouncer-full.workspace = true
 parking_lot.workspace = true
 rtrb.workspace = true
 serde_json.workspace = true
@@ -35,7 +38,6 @@ tokio.workspace = true
 triple_buffer.workspace = true
 
 [dev-dependencies]
-hound.workspace = true
 slotmap.workspace = true
 karbeat-vst3.workspace = true
 karbeat-clap.workspace = true

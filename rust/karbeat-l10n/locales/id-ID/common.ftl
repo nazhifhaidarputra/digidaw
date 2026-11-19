@@ -26,12 +26,6 @@ common-no = Tidak
 common-loading = Memuat…
 common-unknown = Tidak diketahui
 
-## Grid and note lengths
-
-common-grid-bar = 1 Birama
-common-grid-beats = { $count } Ketukan
-common-grid-step = { $fraction } Langkah
-
 ## Color picker
 
 common-color-choose = Pilih warna

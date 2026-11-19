@@ -2,7 +2,7 @@ import 'dart:async';
 import 'package:fast_immutable_collections/fast_immutable_collections.dart';
 import 'package:karbeat/app/providers/automation_provider.dart';
 import 'package:karbeat/app/providers/export_project_state.dart';
-import 'package:karbeat/app/providers/piano_roll_state.dart';
+import 'package:karbeat/app/providers/mixer_state.dart';
 import 'package:karbeat/app/providers/project_provider.dart';
 import 'package:karbeat/app/providers/timeline_state.dart';
 import 'package:karbeat/app/providers/track_list_state.dart';
@@ -14,18 +14,21 @@ import 'package:karbeat/core/widgets/rainbow_sparkle.dart';
 import 'package:karbeat/features/mixer/view/mixer_channel_context_menu.dart';
 import 'package:karbeat/features/plugins/widgets/plugin_browser_dialog.dart';
 import 'package:karbeat/features/source/services/audio_source_import.dart';
-import 'package:karbeat/features/source/services/audio_waveform_services.dart';
-import 'package:karbeat/features/source/view/audio_properties_screen.dart';
 import 'package:karbeat/features/source/view/source_list_panel.dart';
-import 'package:karbeat/features/track/view/clip_properties_dialog.dart';
+import 'package:karbeat/features/track/view/clip_actions.dart';
 import 'package:karbeat/features/track/view/automation_lane_context_menu.dart';
+import 'package:karbeat/features/track/view/automation_range_context_menu.dart';
+import 'package:karbeat/features/track/view/automation_region_context_menu.dart';
+import 'package:karbeat/features/track/services/automation_template_service.dart';
 import 'package:karbeat/features/track/view/automation_lane_header.dart';
 import 'package:karbeat/features/track/view/automation_lane_slot.dart';
+import 'package:karbeat/features/track/services/automation_editor_service.dart';
 import 'package:karbeat/features/track/services/gain_envelope_evaluator.dart';
 import 'package:karbeat/features/track/view/gain_envelope_editor.dart';
 import 'package:karbeat/features/track/view/grid_painter.dart';
 import 'package:karbeat/features/track/view/mixer_channel_side_panel.dart';
 import 'package:karbeat/features/track/view/track_header.dart';
+import 'package:karbeat/features/track/view/timeline_items_panel.dart';
 import 'package:karbeat/shared/enums/global.dart';
 import 'package:karbeat/shared/models/export_audio.dart';
 import 'package:karbeat/shared/models/grid.dart';
@@ -37,6 +40,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:karbeat/core/widgets/color_picker_dialog.dart';
 import 'package:karbeat/core/widgets/context_menu.dart';
+import 'package:karbeat/core/widgets/db_level_meter.dart';
 import 'package:karbeat/core/widgets/overlap_shade.dart';
 import 'package:karbeat/core/widgets/rename_dialog.dart';
 import 'package:karbeat/core/widgets/daw_input_detector.dart';
@@ -48,8 +52,14 @@ import 'package:karbeat/app/providers/range_select_state.dart';
 import 'package:karbeat/features/track/view/track_ghost_clip.dart';
 import 'package:karbeat/features/track/view/track_recording_ghost.dart';
 import 'package:karbeat/features/track/view/track_range_select_overlay.dart';
+import 'package:karbeat/features/track/services/timeline_pointer.dart';
 import 'package:karbeat/shared/models/interaction_target.dart';
-import 'package:karbeat/src/rust/api/mixer.dart' show UiMixerChannelTarget;
+import 'package:karbeat/src/rust/api/mixer.dart'
+    show
+        UiMixerChannelTarget,
+        UiMixerChannelTarget_Bus,
+        UiMixerChannelTarget_Master,
+        UiMixerChannelTarget_Track;
 import 'package:karbeat/src/rust/api/plugin.dart' show KarbeatPluginType;
 import 'package:karbeat/src/rust/api/project.dart';
 import 'package:karbeat/src/rust/api/timeline.dart';

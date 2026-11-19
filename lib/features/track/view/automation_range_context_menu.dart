@@ -9,22 +9,90 @@ import 'package:karbeat/features/track/services/automation_template_service.dart
 import 'package:karbeat/features/track/view/automation_template_dialogs.dart';
 import 'package:karbeat/src/rust/api/automation.dart';
 
+/// Actions for the range selected on [lane] with the Select tool, led by
+/// "Create region"; empty when the lane has no range.
+List<DawContextAction> automationRangeActions({
+  required BuildContext context,
+  required WidgetRef ref,
+  required AutomationLaneDto lane,
+}) {
+  final editor = ref.read(automationEditorProvider.notifier);
+  final editorState = ref.read(automationEditorProvider);
+  final range = editorState.selectionOf(lane.id);
+  if (range == null) return const [];
+  final laneId = lane.id;
+
+  return [
+    DawContextAction(
+      title: tr('track-create-region-from-range'),
+      icon: Icons.crop_square,
+      onTap: () => editor.createRegionFromSelection(laneId, lane.label),
+    ),
+    DawContextAction(
+      title: tr('track-copy-curve'),
+      icon: Icons.copy,
+      onTap: () => editor.copySelection(laneId),
+    ),
+    DawContextAction(
+      title: tr('track-cut-curve'),
+      icon: Icons.content_cut,
+      onTap: () => editor.cutSelection(laneId),
+    ),
+    DawContextAction(
+      title: tr('track-delete-points-in-range'),
+      icon: Icons.delete_outline,
+      isDestructive: true,
+      onTap: () => editor.deleteSelection(laneId),
+    ),
+    DawContextAction(
+      title: tr('track-save-as-template'),
+      icon: Icons.bookmark_add_outlined,
+      onTap: () async {
+        final name = await showAutomationTemplateNameDialog(
+          context: context,
+          title: tr('track-save-curve-as-template'),
+          initialName: lane.label,
+        );
+        if (name != null) await editor.saveSelectionAsTemplate(laneId, name);
+      },
+    ),
+    if (editorState.clipboard is AutomationLanePointClipboardCurve)
+      DawContextAction(
+        title: tr('track-paste-curve-to-fit-range'),
+        icon: Icons.content_paste,
+        onTap: () => editor.pasteCurve(
+          laneId: laneId,
+          atTick: range.$1,
+          fitSelection: true,
+        ),
+      ),
+    ...automationTemplateActions(
+      ref: ref,
+      title: tr('track-insert-template-to-fit-range'),
+      onInsert: (template) => editor.insertTemplate(
+        laneId: laneId,
+        atTick: range.$1,
+        template: template,
+        fitSelection: true,
+      ),
+    ),
+    DawContextAction(
+      title: tr('track-clear-selection'),
+      icon: Icons.deselect,
+      onTap: editor.clearSelection,
+    ),
+  ];
+}
+
 /// Opens the actions for the range selected on [lane] with the Select tool.
 Future<void> showAutomationRangeContextMenu({
   required BuildContext context,
   required WidgetRef ref,
   required AutomationLaneDto lane,
 }) async {
-  final editor = ref.read(automationEditorProvider.notifier);
-  final editorState = ref.read(automationEditorProvider);
-  final range = editorState.selectionOf(lane.id);
+  final range = ref.read(automationEditorProvider).selectionOf(lane.id);
   if (range == null) return;
-  final laneId = lane.id;
   final colors = Theme.of(context).colorScheme;
-
-  // The name dialog opens after the menu has closed.
-  var saveRequested = false;
-
   await showDawContextMenu(
     context: context,
     title: tr('track-range', {'lane': lane.label}),
@@ -32,64 +100,8 @@ Future<void> showAutomationRangeContextMenu({
       tr('track-range-ticks', {'start': range.$1, 'end': range.$2}),
       style: TextStyle(color: colors.onSurfaceVariant, fontSize: 12),
     ),
-    actions: [
-      DawContextAction(
-        title: tr('track-copy-curve'),
-        icon: Icons.copy,
-        onTap: () => editor.copySelection(laneId),
-      ),
-      DawContextAction(
-        title: tr('track-cut-curve'),
-        icon: Icons.content_cut,
-        onTap: () => editor.cutSelection(laneId),
-      ),
-      DawContextAction(
-        title: tr('track-save-as-template'),
-        icon: Icons.bookmark_add_outlined,
-        onTap: () => saveRequested = true,
-      ),
-      if (editorState.clipboard is AutomationLanePointClipboardCurve)
-        DawContextAction(
-          title: tr('track-paste-curve-to-fit-range'),
-          icon: Icons.content_paste,
-          onTap: () => editor.pasteCurve(
-            laneId: laneId,
-            atTick: range.$1,
-            fitSelection: true,
-          ),
-        ),
-      ...automationTemplateActions(
-        ref: ref,
-        title: tr('track-insert-template-to-fit-range'),
-        onInsert: (template) => editor.insertTemplate(
-          laneId: laneId,
-          atTick: range.$1,
-          template: template,
-          fitSelection: true,
-        ),
-      ),
-      DawContextAction(
-        title: tr('track-clear-selection'),
-        icon: Icons.deselect,
-        onTap: editor.clearSelection,
-      ),
-      DawContextAction(
-        title: tr('track-delete-points-in-range'),
-        icon: Icons.delete_outline,
-        isDestructive: true,
-        onTap: () => editor.deleteSelection(laneId),
-      ),
-    ],
+    actions: automationRangeActions(context: context, ref: ref, lane: lane),
   );
-
-  if (saveRequested && context.mounted) {
-    final name = await showAutomationTemplateNameDialog(
-      context: context,
-      title: tr('track-save-curve-as-template'),
-      initialName: lane.label,
-    );
-    if (name != null) await editor.saveSelectionAsTemplate(laneId, name);
-  }
 }
 
 /// A submenu listing the template library, or nothing while it is empty.

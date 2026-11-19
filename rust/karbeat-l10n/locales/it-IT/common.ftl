@@ -26,15 +26,6 @@ common-no = No
 common-loading = Caricamento…
 common-unknown = Sconosciuto
 
-## Grid and note lengths
-
-common-grid-bar = 1 battuta
-common-grid-beats = { $count ->
-    [one] { $count } movimento
-   *[other] { $count } movimenti
-}
-common-grid-step = { $fraction } di passo
-
 ## Color picker
 
 common-color-choose = Scegli un colore

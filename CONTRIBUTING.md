@@ -136,6 +136,7 @@ Run only the command that matches the source you changed.
 * Log with `tracing::{debug, info, warn, error}`. Library code never prints directly.
 * Keep serialization changes compatible with project load and save. Add round-trip tests when you change persisted project structs or file manager code.
 * Prefer composing small traits and helper types over deep abstraction layers.
+* If you want to make a complex finite state machine on your code, use the existing `typestate!` macro so that we can reduce boilerplate when making a state machine.
 
 ---
 
@@ -249,4 +250,4 @@ Before adding a new file or abstraction:
 
 ## Regarding LLM Contributions
 
-I accept LLM contributions, since I also use LLMs to help me write some of the code. Keep in mind, though, that you should know what the LLM writes and not fully "vibe-code" the entire thing without reading, checking, testing, and debugging it. I prefer a well-crafted solution over low-quality generated code. Any code produced entirely by an AI agent without human guidance, supervision, and review will be rejected.
+We accept LLM contributions, since we also use LLMs to help us write many of the code (mainly about optimization). However, every architectural and system design are made by Digidaw developer. Therefore, keep in mind, though, that you should know what the LLM writes and not fully "vibe-code" the entire thing without reading, checking, testing, and debugging it. We prefer a well-crafted solution over low-quality generated code. Any code produced entirely by an AI agent without human guidance, supervision, and review will be rejected.

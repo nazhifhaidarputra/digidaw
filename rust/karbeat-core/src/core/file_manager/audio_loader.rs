@@ -3,7 +3,6 @@
 // Source code of file loader
 
 use hashbrown::HashMap;
-use karbeat_utils::audio_utils::resample_interleaved_stream;
 use std::{
     fs::{File, create_dir_all},
     io::{BufReader, BufWriter, Write},
@@ -12,7 +11,7 @@ use std::{
 };
 use tempfile::{tempfile, tempfile_in};
 
-use anyhow::{Context, Result, anyhow};
+use anyhow::{Context, Result};
 use memmap2::MmapOptions;
 use rodio::Source;
 
@@ -47,12 +46,10 @@ mod err {
     }
 }
 
-/// Main entry point for loading audio.
-pub fn load_audio_file(
-    path_str: &str,
-    name: Option<&str>,
-    target_sample_rate: u32,
-) -> Result<AudioWaveform> {
+/// Main entry point for loading audio. Decodes at the file's own sample rate: the project
+/// keeps every source at its original rate, and the engine converts to its own rate while
+/// playing.
+pub fn load_audio_file(path_str: &str, name: Option<&str>) -> Result<AudioWaveform> {
     let path = Path::new(path_str);
     let file =
         File::open(path).with_context(|| format!("Failed to open audio file: {}", path_str))?;
@@ -61,31 +58,15 @@ pub fn load_audio_file(
     let mut decoder =
         rodio::Decoder::new(reader).context("Failed to decode audio file (unsupported format)")?;
     let sample_rate = decoder.sample_rate().get();
-    let source_sample_rate = decoder.sample_rate().get();
     let channels_u16 = decoder.channels().get();
     let channels = channels_u16 as usize;
 
-    // Cache the loaded audio file
-    // let mut f32_decoder = decoder.into_iter();
     let mut cache_file = decoded_cache_file()?;
 
     // Use a BufWriter. It handles disk I/O incredibly efficiently behind the scenes.
     let total_samples = {
         let mut writer = BufWriter::new(&mut cache_file);
-
-        let written = if source_sample_rate == target_sample_rate {
-            stream_raw_to_disk(&mut decoder, &mut writer)?
-        } else {
-            resample_interleaved_stream(
-                &mut decoder,
-                source_sample_rate,
-                target_sample_rate,
-                channels,
-                &mut writer,
-            )
-            .map_err(|e| anyhow!("Failed to resample stream: {}", e.err_source))?
-        };
-
+        let written = stream_raw_to_disk(&mut decoder, &mut writer)?;
         writer.flush()?;
         written
     };
@@ -95,11 +76,6 @@ pub fn load_audio_file(
     } else {
         0
     };
-
-    // Write the raw f32 bytes directly to the disk cache
-    // bytemuck safely casts &[f32] into &[u8] for writing
-    // let byte_slice: &[u8] = bytemuck::cast_slice(&all_samples);
-    // cache_file.write_all(byte_slice)?;
 
     // SAFETY: The temporary file remains open while the immutable mapping is created, and the
     // returned mapping owns the mapped region independently of the file handle.
@@ -123,7 +99,8 @@ pub fn load_audio_file(
         buffer,
         file_path: path.to_path_buf(),
         name: final_name,
-        sample_rate: target_sample_rate,
+        original_sample_rate: sample_rate,
+        sample_rate,
         channels: channels_u16,
         duration: duration_seconds,
         trim_end: total_frames,
@@ -213,26 +190,16 @@ where
 
 // Trait AudioLoader
 pub trait AudioLoader {
-    fn load_audio(
-        &mut self,
-        path: &str,
-        name: Option<&str>,
-        target_sample_rate: u32,
-    ) -> Result<AudioSourceId>;
+    fn load_audio(&mut self, path: &str, name: Option<&str>) -> Result<AudioSourceId>;
     fn get_audio_source(&self, id: &AudioSourceId) -> Option<Arc<AudioWaveform>>;
     fn get_audio_sources(&self) -> HashMap<AudioSourceId, Arc<AudioWaveform>>;
 }
 
 impl AudioLoader for ApplicationState {
-    fn load_audio(
-        &mut self,
-        path: &str,
-        name: Option<&str>,
-        target_sample_rate: u32,
-    ) -> Result<AudioSourceId> {
+    fn load_audio(&mut self, path: &str, name: Option<&str>) -> Result<AudioSourceId> {
         // Load the actual audio data (Heavy I/O operation)
         // This parses the file into f32 samples
-        let mut waveform = match load_audio_file(path, name, target_sample_rate) {
+        let mut waveform = match load_audio_file(path, name) {
             Ok(waveform) => waveform,
             Err(e) => {
                 let error_msg = format!("Cannot decode audio file: {}", e);
