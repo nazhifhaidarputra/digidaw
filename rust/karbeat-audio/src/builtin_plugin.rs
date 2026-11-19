@@ -1,7 +1,10 @@
-use karbeat_plugin_api::{traits::AudioPlugin, types::BusConfig};
+use karbeat_plugin_api::types::BusConfig;
 use karbeat_plugins::registry::PluginFactory;
 
-use crate::commands::PreparedPluginTelemetry;
+use crate::{
+    commands::PreparedPluginTelemetry,
+    render_state::{PluginBox, retiring_plugin},
+};
 use karbeat_core::core::project::plugin::PluginInstance;
 use std::slice::from_ref;
 
@@ -11,7 +14,7 @@ pub fn prepare_builtin_plugin(
     plugin: &PluginInstance,
     sample_rate: u32,
     block_size: usize,
-) -> (Box<dyn AudioPlugin>, PreparedPluginTelemetry) {
+) -> (PluginBox, PreparedPluginTelemetry) {
     let mut prepared = factory();
     if plugin.plugin_state.is_empty() {
         // Without captured state the spec values are all that was persisted.
@@ -33,7 +36,7 @@ pub fn prepare_builtin_plugin(
     };
     prepared.set_io_layout(from_ref(&bus), from_ref(&bus));
     let telemetry = PreparedPluginTelemetry::new(prepared.as_ref());
-    (prepared, telemetry)
+    (retiring_plugin(prepared), telemetry)
 }
 
 #[cfg(test)]

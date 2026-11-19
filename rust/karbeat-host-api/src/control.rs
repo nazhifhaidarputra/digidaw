@@ -1,8 +1,9 @@
 use std::{
-    mem::forget,
     thread::sleep,
     time::{Duration, Instant},
 };
+
+use crate::retire::leak;
 
 /// A prepared control payload borrowed by DSP and returned for destruction off the audio thread.
 pub struct ControlTransfer<T: Send> {
@@ -38,7 +39,10 @@ impl<T: Send> Drop for ControlTransfer<T> {
     fn drop(&mut self) {
         if let Some(payload) = self.payload.take() {
             if let Err(rtrb::PushError::Full(payload)) = self.sender.push(payload) {
-                forget(payload);
+                leak(
+                    payload,
+                    "a control payload whose return slot was already used",
+                );
             }
         }
     }
@@ -90,8 +94,11 @@ impl<T: Send> Drop for ControlRetirement<T> {
     fn drop(&mut self) {
         if let Some(receiver) = self.receiver.take() {
             if !receiver.is_abandoned() {
-                tracing::error!("Plugin control owner shut down before command retirement");
-                forget(receiver);
+                // The audio thread could become the receiver's final owner.
+                leak(
+                    receiver,
+                    "a command return queue after its control owner shut down",
+                );
             }
         }
     }

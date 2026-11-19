@@ -2,10 +2,11 @@ use karbeat_plugin_types::ParameterSpec;
 use karbeat_plugins::registry::PluginInfo;
 
 use karbeat_audio::{
-    commands::{AudioCommand, EffectTarget},
+    commands::{AudioCommand, EffectTarget, retiring},
     context::DawContext,
     engine::PluginTelemetrySnapshot,
     event::PluginTarget,
+    message::TelemetryHub,
 };
 use karbeat_core::{
     core::history::actions::GeneratorRenamed,
@@ -662,7 +663,8 @@ pub fn set_plugin_telemetry_subs(
 ) -> anyhow::Result<()> {
     ctx.send_audio_command(AudioCommand::SetPluginTelemetrySubscription {
         target,
-        buffers,
+        // Built here so the audio thread can adopt the set without allocating.
+        buffers: retiring(buffers.into_iter().collect()),
         active,
     })
 }
@@ -688,18 +690,11 @@ pub fn end_generator_parameter_edit(
 // =============================================================
 
 /// Synchronously fetches the parameters and buffers for a specific plugin.
+///
+/// Takes the telemetry hub rather than the context, so callers read it without the core lock.
 pub fn get_plugin_telemetry_sync(
-    ctx: &mut DawContext,
+    telemetry: &TelemetryHub,
     target: PluginTarget,
 ) -> Option<PluginTelemetrySnapshot> {
-    ctx.drain_telemetry_registrations();
-
-    ctx.telemetry_registry
-        .as_mut()?
-        .param_telemetry_consumers
-        .get_mut(&target)
-        .map(|consumer| {
-            consumer.update();
-            consumer.read().clone()
-        })
+    telemetry.plugin_snapshot(target)
 }

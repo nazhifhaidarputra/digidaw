@@ -2,7 +2,7 @@ use anyhow::Context;
 use hashbrown::HashMap;
 use indexmap::IndexMap;
 use karbeat_audio::{
-    commands::{AudioCommand, EffectTarget, MixerChannelSeed},
+    commands::{AudioCommand, EffectTarget, MixerChannelSeed, retiring},
     context::{ControlHandles, DawContext, HostedTargetState},
     event::PluginTarget,
     hosted_plugin::{
@@ -201,7 +201,7 @@ pub(super) fn begin_replace(
     let has_engine = ctx.command_sender.lock().is_some();
     if has_engine {
         anyhow::ensure!(
-            ctx.telemetry_registry.is_some(),
+            ctx.telemetry.is_attached(),
             "Audio telemetry is not initialized"
         );
     }
@@ -305,7 +305,9 @@ pub(super) fn execute_replace(
     graph.sample_rate = pending.sample_rate;
     let mut commands = vec![
         AudioCommand::StopAndReset,
-        AudioCommand::ReplaceFullGraph { graph },
+        AudioCommand::ReplaceFullGraph {
+            graph: retiring(graph),
+        },
         hydration_command(
             &pending.staged,
             &pending.plugin_registry,
@@ -391,13 +393,12 @@ pub(super) fn execute_replace(
 }
 
 pub(super) fn commit_replace(ctx: &mut DawContext, completed: CompletedProjectRestore) {
-    ctx.drain_telemetry_registrations();
+    // A pending `BatchRegistered` from the new graph would wipe the hosted consumers below.
+    ctx.telemetry.drain_registrations();
     ctx.hosted_targets.clear();
     for (target, instance, mut receipt) in completed.receipts {
-        if let Some(registry) = &mut ctx.telemetry_registry {
-            if let Some(output) = receipt.take_telemetry() {
-                registry.insert_plugin_consumer(target, output);
-            }
+        if let Some(output) = receipt.take_telemetry() {
+            ctx.telemetry.insert_plugin_consumer(target, output);
         }
         ctx.activate_hosted_target(target, instance);
     }

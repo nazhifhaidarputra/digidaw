@@ -8,10 +8,11 @@ use super::{
 };
 use anyhow::Context;
 use karbeat_audio::{
-    commands::{AudioCommand, EffectTarget, MixerChannelTarget},
+    commands::{AudioCommand, EffectTarget, MixerChannelTarget, retiring},
     context::DawContext,
     engine::MixerTelemetrySnapshot,
     event::PluginTarget,
+    message::TelemetryHub,
 };
 use karbeat_core::{
     core::{
@@ -570,7 +571,9 @@ pub fn delete_bus(ctx: &mut DawContext, bus_id: BusId) -> anyhow::Result<()> {
     let _ = ctx.send_audio_command(AudioCommand::RemoveBus { bus_id });
     // Removing the bus relinks its orphaned inputs to master.
     let routing = ctx.app_state.mixer.routing.clone().into_boxed_slice();
-    let _ = ctx.send_audio_command(AudioCommand::UpdateRouting { routing });
+    let _ = ctx.send_audio_command(AudioCommand::UpdateRouting {
+        routing: retiring(routing),
+    });
     let action = structure_before.finish(&ctx.app_state, "Delete Bus");
     ctx.push_history(action);
     Ok(())
@@ -656,7 +659,9 @@ pub fn set_routing(ctx: &mut DawContext, conn: RoutingConnection) -> anyhow::Res
     let app = &mut ctx.app_state;
     app.mixer.add_routing(conn, &app.tracks)?;
     let routing = app.mixer.routing.clone().into_boxed_slice();
-    let _ = ctx.send_audio_command(AudioCommand::UpdateRouting { routing });
+    let _ = ctx.send_audio_command(AudioCommand::UpdateRouting {
+        routing: retiring(routing),
+    });
     let action = routing_before.finish(&ctx.app_state, "Add Route");
     ctx.push_history(action);
     Ok(())
@@ -673,7 +678,9 @@ pub fn remove_routing(
     let app = &mut ctx.app_state;
     app.mixer.remove_routing(source, destination, is_send)?;
     let routing = app.mixer.routing.clone().into_boxed_slice();
-    let _ = ctx.send_audio_command(AudioCommand::UpdateRouting { routing });
+    let _ = ctx.send_audio_command(AudioCommand::UpdateRouting {
+        routing: retiring(routing),
+    });
     let action = routing_before.finish(&ctx.app_state, "Remove Route");
     ctx.push_history(action);
     Ok(())
@@ -684,7 +691,9 @@ pub fn update_routing(ctx: &mut DawContext, conn: RoutingConnection) -> anyhow::
     let routing_before = RoutingRecorder::begin(&ctx.app_state);
     let app = &mut ctx.app_state;
     let routing = app.mixer.update_routing(conn, &app.tracks)?;
-    let _ = ctx.send_audio_command(AudioCommand::UpdateRouting { routing });
+    let _ = ctx.send_audio_command(AudioCommand::UpdateRouting {
+        routing: retiring(routing),
+    });
     let action = routing_before.finish(&ctx.app_state, "Change Route");
     ctx.push_history(action);
     Ok(())
@@ -696,21 +705,11 @@ pub fn update_routing(ctx: &mut DawContext, conn: RoutingConnection) -> anyhow::
 
 /// Reads the latest lock-free mixer telemetry snapshot.
 ///
-/// Pending telemetry registrations are drained first. If telemetry is not initialized, an empty
+/// Takes the telemetry hub rather than the context, so callers read it without the core lock.
+/// Pending plugin telemetry registrations are applied first. If no engine is attached, an empty
 /// default snapshot is returned.
-pub fn get_mixer_telemetry_sync(ctx: &mut DawContext) -> MixerTelemetrySnapshot {
-    // Drain any pending telemetry consumer registrations first, so plugin consumers
-    // are up to date before anyone calls get_plugin_telemetry_sync.
-    ctx.drain_telemetry_registrations();
-
-    // triple_buffer::Output::read() requires &mut self but is lock-free and wait-free.
-    // .clone() gives the caller an owned copy safe to pass across the FFI boundary.
-    if let Some(reg) = ctx.telemetry_registry.as_mut() {
-        reg.mixer_telemetry_consumer.update();
-        reg.mixer_telemetry_consumer.read().clone()
-    } else {
-        MixerTelemetrySnapshot::default()
-    }
+pub fn get_mixer_telemetry_sync(telemetry: &TelemetryHub) -> MixerTelemetrySnapshot {
+    telemetry.mixer_snapshot()
 }
 
 /// Enables or disables mixer telemetry production on the audio thread.
@@ -838,7 +837,9 @@ pub fn set_sidechain_source(
     }
 
     let routings = ctx.app_state.mixer.routing.clone().into_boxed_slice();
-    let _ = ctx.send_audio_command(AudioCommand::UpdateRouting { routing: routings });
+    let _ = ctx.send_audio_command(AudioCommand::UpdateRouting {
+        routing: retiring(routings),
+    });
     let action = routing_before.finish(&ctx.app_state, "Change Sidechain");
     ctx.push_history(action);
     Ok(())

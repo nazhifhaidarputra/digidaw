@@ -9,7 +9,6 @@ use karbeat_audio::{
     context::DawContext,
     engine::{AudioEngine, AudioEngineTelemetry},
     event::PluginTarget,
-    message::TelemetryRegistry,
 };
 use karbeat_core::core::{
     file_manager::project_loader::{load_daw_project, save_daw_project},
@@ -45,9 +44,9 @@ fn workflow(descriptor: PluginDescriptor) {
     let (sender, commands) = rtrb::RingBuffer::new(256);
     let (feedback, responses) = rtrb::RingBuffer::new(256);
     let (position, _positions) = rtrb::RingBuffer::new(256);
-    let (registration, _registrations) = sync_channel(256);
+    let (registration, registrations) = sync_channel(256);
     let (telemetry, output) = AudioEngineTelemetry::new();
-    ctx.telemetry_registry = Some(TelemetryRegistry::new(output));
+    ctx.telemetry.attach(output, registrations);
     *ctx.command_sender.lock() = Some(sender);
     *ctx.feedback_consumer.lock() = Some(responses);
     let stop = Arc::new(AtomicBool::new(false));

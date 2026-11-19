@@ -9,12 +9,13 @@ use crate::{
     wrapper::Vst3Processor,
 };
 use karbeat_host_api::bypass::BypassDelay;
+use karbeat_host_api::retire::leak;
 use karbeat_host_api::*;
 use karbeat_plugin_api::prelude::ParameterSpec;
 use std::{
     collections::HashMap,
     fs::canonicalize,
-    mem::{forget, zeroed},
+    mem::zeroed,
     path::PathBuf,
     rc::Rc,
     sync::{Arc, atomic::Ordering},
@@ -554,10 +555,10 @@ impl Drop for Vst3PluginHost {
                 .is_some_and(|s| Arc::strong_count(s) != 1)
             {
                 // Losing the UI owner before endpoint retirement cannot safely unload native code.
-                tracing::error!(
-                    "VST3 host dropped before audio endpoint retirement; retaining module for process lifetime"
+                leak(
+                    instance,
+                    "a VST3 module whose audio endpoint was not returned before its host shut down",
                 );
-                forget(instance);
             }
         }
         self.context.run_loop.clear();

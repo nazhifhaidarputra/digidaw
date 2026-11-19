@@ -1034,11 +1034,13 @@ pub fn update_routing(ctx: &DawContext, conn: UiRoutingConnection) -> Result<(),
     mixer_api::update_routing(ctx, conn.into()).map_err(|e| e.to_string())
 }
 
-/// Get the mixer snapshot telemetry. this uses a triple buffer last snapshot
+/// Get the latest mixer telemetry snapshot from the engine's triple buffer.
+///
+/// Reads the session's telemetry hub without the core lock, so it never waits for a project
+/// operation and is safe to call from the UI thread every frame.
 #[frb(sync)]
 pub fn get_mixer_telemetry_sync(ctx: &DawContext) -> MixerTelemetrySnapshotDto {
-    runtime_ctx!(ctx);
-    mixer_api::get_mixer_telemetry_sync(ctx).into()
+    mixer_api::get_mixer_telemetry_sync(ctx.telemetry()).into()
 }
 
 pub fn set_mixer_telemetry_subs(ctx: &DawContext, active: bool) -> Result<(), String> {

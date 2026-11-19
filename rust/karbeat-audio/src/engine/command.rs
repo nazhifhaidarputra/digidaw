@@ -1,5 +1,5 @@
 use super::{
-    engine::{AudioEngine, RetiredGraphState},
+    engine::AudioEngine,
     helper::*,
     telemetry::PluginTelemetrySnapshot,
     transport::PlaybackMode,
@@ -9,17 +9,17 @@ use super::{
 use crate::{
     commands::{
         AudioCommand, AudioFeedback, EffectParameterSnapshot, EffectTarget,
-        GeneratorParameterSnapshot, PreparedPluginTelemetry, TelemetryRegistration,
+        GeneratorParameterSnapshot, PreparedPluginTelemetry, TelemetryRegistration, retiring,
     },
     event::{FeedbackTiming, PluginTarget},
     hosted_plugin::HostedInstallResult,
-    render_state::{AudioEffectInstance, AudioGeneratorInstance},
+    render_state::{AudioEffectInstance, AudioGeneratorInstance, retiring_plugin},
 };
 use hashbrown::{HashMap, HashSet};
 use karbeat_core::core::project::clip::ClipTimeUnit;
 use karbeat_core::core::project::*;
 use karbeat_plugin_api::types::ProcessingMode;
-use std::mem::{replace, take as mem_take};
+use std::mem::swap;
 
 impl AudioEngine {
     /// Process incoming commands from command queue buffer
@@ -208,11 +208,13 @@ impl AudioEngine {
                 };
                 plugin.set_io_layout(&[bus_cfg.clone()], &[bus_cfg]);
 
+                // This legacy path already builds the plugin on the audio thread; wrapping it
+                // allocates its retirement node there too.
                 self.process_command(AudioCommand::InstallGenerator {
                     generator_id,
                     track_id,
                     registry_id,
-                    plugin,
+                    plugin: retiring_plugin(plugin),
                     telemetry: None,
                 });
             }
@@ -237,9 +239,10 @@ impl AudioEngine {
                     let initial_snapshot = plugin
                         .map(PluginTelemetrySnapshot::from_plugin)
                         .unwrap_or_default();
+                    // Fallback for commands without prepared telemetry; allocates here.
                     let (producer, consumer) = triple_buffer::triple_buffer(&initial_snapshot);
                     PreparedPluginTelemetry {
-                        producer,
+                        producer: retiring(producer),
                         consumer: Box::new(consumer),
                     }
                 });
@@ -269,16 +272,11 @@ impl AudioEngine {
 
                 // Remove the telemetry producer and notify DawContext.
                 let target = PluginTarget::Generator(generator_id);
-                if let Some(producer) = self.telemetry.param_telemetry_producers.remove(&target) {
-                    self.retire_graph_state(RetiredGraphState::TelemetryProducer(producer));
-                }
-                if let Some(subscription) = self
-                    .telemetry
+                // Dropping the producer and subscription retires them.
+                self.telemetry.param_telemetry_producers.remove(&target);
+                self.telemetry
                     .active_telemetry_subscriptions
-                    .remove(&target)
-                {
-                    self.retire_graph_state(RetiredGraphState::TelemetrySubscription(subscription));
-                }
+                    .remove(&target);
                 let _ = self
                     .io
                     .telemetry_reg_sender
@@ -382,7 +380,8 @@ impl AudioEngine {
                     target,
                     effect_id,
                     registry_id,
-                    plugin: effect,
+                    // Built on the audio thread by this legacy path; see `AddGenerator`.
+                    plugin: retiring_plugin(effect),
                     telemetry: None,
                 });
             }
@@ -437,9 +436,10 @@ impl AudioEngine {
                     let initial_snapshot = plugin
                         .map(PluginTelemetrySnapshot::from_plugin)
                         .unwrap_or_default();
+                    // Fallback for commands without prepared telemetry; allocates here.
                     let (producer, consumer) = triple_buffer::triple_buffer(&initial_snapshot);
                     PreparedPluginTelemetry {
-                        producer,
+                        producer: retiring(producer),
                         consumer: Box::new(consumer),
                     }
                 });
@@ -457,8 +457,8 @@ impl AudioEngine {
             AudioCommand::RemoveEffect { target, effect_id } => {
                 if let Some(effects) = self.get_effect_list_mut(&target) {
                     if let Some(pos) = effects.iter().position(|e| e.id == effect_id) {
-                        let plugin = effects.remove(pos).plugin;
-                        self.plugin_state.retire_plugin(plugin);
+                        // Dropping the instance retires its plugin.
+                        effects.remove(pos);
                     }
                 }
 
@@ -472,20 +472,13 @@ impl AudioEngine {
                 };
                 // Same command as the effect removal, so no block ever sees one without the other.
                 self.remove_plugin_modulations(plugin_target);
-                if let Some(producer) = self
-                    .telemetry
+                // Dropping the producer and subscription retires them.
+                self.telemetry
                     .param_telemetry_producers
-                    .remove(&plugin_target)
-                {
-                    self.retire_graph_state(RetiredGraphState::TelemetryProducer(producer));
-                }
-                if let Some(subscription) = self
-                    .telemetry
+                    .remove(&plugin_target);
+                self.telemetry
                     .active_telemetry_subscriptions
-                    .remove(&plugin_target)
-                {
-                    self.retire_graph_state(RetiredGraphState::TelemetrySubscription(subscription));
-                }
+                    .remove(&plugin_target);
                 let _ = self
                     .io
                     .telemetry_reg_sender
@@ -604,9 +597,8 @@ impl AudioEngine {
                 let id_index = bus_id.to_u32() as usize;
                 self.plugin_state.remove_bus(id_index);
                 self.current_state.graph.bus_ids.retain(|id| *id != bus_id);
-                if let Some(buffer) = self.workspace.bus_buffers.remove(&bus_id) {
-                    self.retire_graph_state(RetiredGraphState::AudioBuffer(buffer));
-                }
+                // Dropping the buffer retires it.
+                self.workspace.bus_buffers.remove(&bus_id);
                 self.mixer_state.bus_channels.remove(&bus_id);
                 let bus_ids = self.workspace.bus_buffers.keys().copied();
                 self.routing.cached_order = compute_routing_order(
@@ -617,15 +609,16 @@ impl AudioEngine {
 
                 tracing::info!("[AudioEngine] Removed bus {:?}", bus_id);
             }
-            AudioCommand::UpdateRouting { routing } => {
+            AudioCommand::UpdateRouting { mut routing } => {
                 // Routing is now directly owned by the audio thread — update and
                 // recompute the cached order immediately.
                 let bus_ids = self.workspace.bus_buffers.keys().copied();
                 self.routing.cached_order =
                     compute_routing_order(&self.current_state.graph.tracks, bus_ids, &routing);
                 self.routing.set_routes(&routing);
-                let previous = replace(&mut self.current_state.graph.routing, routing);
-                self.retire_graph_state(RetiredGraphState::Routing(previous));
+                // The command's node carries the previous routing away.
+                swap(&mut self.current_state.graph.routing, &mut *routing);
+                drop(routing);
                 self.sync_sidechain_buffers();
                 tracing::info!(
                     "[AudioEngine] UpdateRouting: {} connections",
@@ -675,17 +668,9 @@ impl AudioEngine {
                 self.routing.master_tail = 0;
 
                 // Clear all previous telemetry state.
-                let mut producers = mem_take(&mut self.telemetry.param_telemetry_producers);
-                for (_, producer) in producers.drain() {
-                    self.retire_graph_state(RetiredGraphState::TelemetryProducer(producer));
-                }
-                self.telemetry.param_telemetry_producers = producers;
-                let mut subscriptions =
-                    mem_take(&mut self.telemetry.active_telemetry_subscriptions);
-                for (_, subscription) in subscriptions.drain() {
-                    self.retire_graph_state(RetiredGraphState::TelemetrySubscription(subscription));
-                }
-                self.telemetry.active_telemetry_subscriptions = subscriptions;
+                // Clearing keeps each map's capacity; the dropped entries retire.
+                self.telemetry.param_telemetry_producers.clear();
+                self.telemetry.active_telemetry_subscriptions.clear();
 
                 self.modulation
                     .replace_from_graph(&self.current_state.graph);
@@ -848,10 +833,7 @@ impl AudioEngine {
                 tracing::info!("[AudioEngine] Metronome Active: {}", active);
             }
             AudioCommand::SetMetronomeClick(click) => {
-                if let Some(previous) = self.metronome_state.set_custom_click(click) {
-                    self.retire_graph_state(RetiredGraphState::AudioBuffer(previous.downbeat));
-                    self.retire_graph_state(RetiredGraphState::AudioBuffer(previous.offbeat));
-                }
+                self.metronome_state.set_custom_click(click);
             }
             AudioCommand::TogglePlayingWithPlaybackMode(playback_mode) => {
                 if self.transport.mode == playback_mode {
@@ -1083,34 +1065,34 @@ impl AudioEngine {
                     modulation_link_id
                 );
             }
-            AudioCommand::UpdateAudioSource { id, waveform } => {
-                // Swapping an existing slot never allocates; the old waveform is freed off the
-                // audio thread.
-                let retired = if let Some(slot) = self
+            AudioCommand::UpdateAudioSource { id, mut waveform } => {
+                // Swapping an existing slot never allocates; the command's node carries the old
+                // waveform away and retires it.
+                if let Some(slot) = self
                     .current_state
                     .graph
                     .asset_library
                     .source_map
                     .get_mut(id)
                 {
-                    replace(slot, waveform)
+                    swap(slot, &mut *waveform);
                 } else {
                     tracing::debug!("[AudioEngine] Ignored update for unknown audio source {id}");
-                    waveform
-                };
-                self.retire_graph_state(RetiredGraphState::AudioSource(retired));
+                }
+                drop(waveform);
             }
             AudioCommand::UpdateTrackGraph {
-                tracks,
-                clips,
-                patterns,
+                tracks: mut old_tracks,
+                clips: mut old_clips,
+                patterns: mut old_patterns,
             } => {
                 // Update only the track/pattern/sample-index portion of the local graph.
-                // Routing and automation lanes are untouched by this command.
+                // Routing and automation lanes are untouched by this command. Each command node
+                // takes the value it replaces and retires it when dropped below.
                 self.clip_schedule.invalidate();
-                let old_tracks = replace(&mut self.current_state.graph.tracks, tracks);
-                let old_clips = replace(&mut self.current_state.graph.clips, clips);
-                let old_patterns = replace(&mut self.current_state.graph.patterns, patterns);
+                swap(&mut self.current_state.graph.tracks, &mut *old_tracks);
+                swap(&mut self.current_state.graph.clips, &mut *old_clips);
+                swap(&mut self.current_state.graph.patterns, &mut *old_patterns);
                 // Notes sounding from a note or clip that just changed are released now;
                 // their scheduled note-offs would use the edited key and position.
                 let clips_matter = matches!(self.transport.mode, PlaybackMode::Song);
@@ -1127,11 +1109,7 @@ impl AudioEngine {
                     },
                     clips_matter,
                 );
-                self.retire_graph_state(RetiredGraphState::Tracks {
-                    tracks: old_tracks,
-                    clips: old_clips,
-                    patterns: old_patterns,
-                });
+                drop((old_tracks, old_clips, old_patterns));
 
                 let valid_track_ids: HashSet<_> = self
                     .current_state
@@ -1161,14 +1139,11 @@ impl AudioEngine {
             }
             AudioCommand::UpdateAutomationLane { id, lane } => {
                 tracing::info!("Receive update automation lane of Id {}", id);
-                if let Some(previous) = self.current_state.graph.automation_lanes.insert(id, lane) {
-                    self.retire_graph_state(RetiredGraphState::Automation(previous));
-                }
+                // A replaced lane retires when dropped.
+                self.current_state.graph.automation_lanes.insert(id, lane);
             }
             AudioCommand::RemoveAutomationLane { id } => {
-                if let Some(previous) = self.current_state.graph.automation_lanes.remove(&id) {
-                    self.retire_graph_state(RetiredGraphState::Automation(previous));
-                }
+                self.current_state.graph.automation_lanes.remove(&id);
             }
             AudioCommand::StartRecordingTake(take) => {
                 if let Err(rejected) = self.record.start(take) {
@@ -1260,7 +1235,7 @@ impl AudioEngine {
                     self.recalculate_max_sample_index();
                 }
             }
-            AudioCommand::ReplaceFullGraph { graph } => {
+            AudioCommand::ReplaceFullGraph { mut graph } => {
                 let sr_changed = graph.sample_rate != self.config.sample_rate;
                 let buf_changed = graph.buffer_size != self.current_state.graph.buffer_size;
 
@@ -1301,7 +1276,9 @@ impl AudioEngine {
                 self.routing.set_routes(&graph.routing);
 
                 self.clip_schedule.invalidate();
-                let previous = replace(&mut self.current_state.graph, graph);
+                // The command's node takes the previous graph and retires it when dropped below.
+                swap(&mut self.current_state.graph, &mut *graph);
+                let previous = graph;
                 let clips_matter = matches!(self.transport.mode, PlaybackMode::Song);
                 self.voices.release_changed_notes(
                     GraphView {
@@ -1316,7 +1293,7 @@ impl AudioEngine {
                     },
                     clips_matter,
                 );
-                self.retire_graph_state(RetiredGraphState::Full(previous));
+                drop(previous);
                 self.sync_sidechain_buffers();
 
                 self.modulation
@@ -1336,28 +1313,19 @@ impl AudioEngine {
             }
             AudioCommand::SetPluginTelemetrySubscription {
                 target,
-                buffers,
+                mut buffers,
                 active,
             } => {
-                if active {
-                    let entry = self
-                        .telemetry
-                        .active_telemetry_subscriptions
-                        .entry(target)
-                        .or_default();
-                    for buf in buffers {
-                        entry.insert(buf);
-                    }
+                let subscriptions = &mut self.telemetry.active_telemetry_subscriptions;
+                if !active {
+                    // Dropping the subscription and the command's set retires them.
+                    subscriptions.remove(&target);
+                } else if let Some(subscription) = subscriptions.get_mut(&target) {
+                    // Merging may grow the existing set; the emptied command set retires.
+                    subscription.extend(buffers.drain());
                 } else {
-                    if let Some(subscription) = self
-                        .telemetry
-                        .active_telemetry_subscriptions
-                        .remove(&target)
-                    {
-                        self.retire_graph_state(RetiredGraphState::TelemetrySubscription(
-                            subscription,
-                        ));
-                    }
+                    // The set built off the audio thread becomes the subscription as is.
+                    subscriptions.insert(target, buffers);
                 }
             }
             AudioCommand::SetMixerTelemetrySubscription { active } => {

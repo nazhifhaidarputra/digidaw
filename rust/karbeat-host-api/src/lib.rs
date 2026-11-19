@@ -67,6 +67,8 @@ mod lifecycle;
 pub mod native_host;
 pub mod native_ui;
 mod processor;
+/// Deferred, allocation-free destruction of values the audio thread drops.
+pub mod retire;
 pub mod scanner;
 mod traits;
 mod types;

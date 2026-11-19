@@ -8,7 +8,7 @@ use crate::{
         buffer::AudioBuffer,
         helper::*,
         input::{InputCapture, InputSource, InputState},
-        metronome::MetronomeState,
+        metronome::{ClickTiming, MetronomeState},
         modulation::{LiveModulationSource, ModulationState},
         record::{RecordBlock, RecordState, RecordTake},
         render_plan::{
@@ -18,7 +18,7 @@ use crate::{
         routing::RoutingState,
         runtime::*,
         schedule::{ClipSchedule, clip_span_samples},
-        telemetry::{AudioEngineTelemetry, PluginTelemetrySnapshot},
+        telemetry::AudioEngineTelemetry,
         transport::{PlaybackMode, TransportState},
         types::*,
         voices::{ClipSpan, GeneratorVoice, NeighbourCrossfade, VoiceState},
@@ -26,25 +26,26 @@ use crate::{
     },
     event::{FeedbackTiming, PluginTarget, TransportFeedback},
     render_state::{
-        AudioAutomationLane, AudioEffectInstance, AudioGraphState, AudioPluginSnapshotState,
-        AudioPluginState, AudioRenderState,
+        AudioEffectInstance, AudioPluginSnapshotState, AudioPluginState, AudioRenderState,
+        retiring_plugin,
     },
 };
-use hashbrown::{HashMap, HashSet};
+use hashbrown::HashMap;
 use karbeat_core::{core::project::*, shared::constants::f64::PPQ};
 use karbeat_dsp::interpolation::lerp;
-use karbeat_host::{HostError, HostInstanceId, HostedProcessor, PreparedProcessor};
+use karbeat_host::{
+    HostError, HostInstanceId, HostedProcessor, PreparedProcessor,
+    retire::{Owner, Retiree},
+};
 use karbeat_plugin_api::prelude::ZeroCopyBuffer;
 use karbeat_plugins::registry::PluginRegistry;
 use rtrb::{Consumer, Producer};
 use smallvec::SmallVec;
 use std::{
     any::Any,
-    mem::{forget, replace, take as mem_take},
+    mem::take as mem_take,
     slice::from_ref,
-    sync::{Arc, atomic::Ordering, mpsc},
-    thread::{sleep, spawn},
-    time::Duration,
+    sync::{atomic::Ordering, mpsc},
 };
 use thiserror::Error;
 
@@ -80,7 +81,6 @@ pub struct AudioEngine {
     pub(super) metronome_state: MetronomeState,
 
     pub(super) telemetry: AudioEngineTelemetry,
-    pub(super) graph_retirement: Producer<RetiredGraphState>,
 
     /// Offline bounces render what feeds the master bus, skipping its effects and fader.
     pub(super) bypass_master: bool,
@@ -89,71 +89,14 @@ pub struct AudioEngine {
     pub(super) clip_schedule: ClipSchedule,
 
     /// The routing graph compiled for the worker pool.
-    pub(super) render_plan: RenderPlan,
+    /// Retires off the audio thread when a rebuild replaces it.
+    pub(super) render_plan: Retiree<RenderPlan>,
     /// Threads that render the graph alongside this one; `None` renders serially.
     pub(super) workers: Option<AudioWorkerPool>,
     /// Device input feeding level −1 of the graph.
     pub(super) input: InputState,
     /// Takes recorded from the device input.
     pub(super) record: RecordState,
-}
-
-pub(super) enum RetiredGraphState {
-    Full(AudioGraphState),
-    Tracks {
-        tracks: Box<[AudioTrack]>,
-        clips: HashMap<ClipId, Clip>,
-        patterns: HashMap<PatternId, Pattern>,
-    },
-    Routing(Box<[RoutingConnection]>),
-    Automation(AudioAutomationLane),
-    AudioBuffer(Vec<f32>),
-    AudioSource(Arc<AudioWaveform>),
-    TelemetryProducer(triple_buffer::Input<PluginTelemetrySnapshot>),
-    TelemetrySubscription(HashSet<String>),
-    RenderPlan(Box<RenderPlan>),
-    RecordTake(Box<RecordTake>),
-}
-
-/// Hands `retired` to the retirement thread; a full queue leaks it rather than freeing it on
-/// the audio thread.
-fn push_retired(queue: &mut Producer<RetiredGraphState>, retired: RetiredGraphState) {
-    if let Err(rtrb::PushError::Full(retired)) = queue.push(retired) {
-        forget(retired);
-    }
-}
-
-fn graph_retirement_queue() -> Producer<RetiredGraphState> {
-    let (producer, mut consumer) = rtrb::RingBuffer::new(128);
-    spawn(move || {
-        loop {
-            // Checked before pop: once abandoned no push can follow, so empty is final.
-            let abandoned = consumer.is_abandoned();
-            match consumer.pop() {
-                Ok(retired) => match retired {
-                    RetiredGraphState::Full(graph) => drop(graph),
-                    RetiredGraphState::Tracks {
-                        tracks,
-                        clips,
-                        patterns,
-                    } => drop((tracks, clips, patterns)),
-                    RetiredGraphState::Routing(routes) => drop(routes),
-                    RetiredGraphState::Automation(lane) => drop(lane),
-                    RetiredGraphState::AudioBuffer(buffer) => drop(buffer),
-                    RetiredGraphState::AudioSource(waveform) => drop(waveform),
-                    RetiredGraphState::TelemetryProducer(producer) => drop(producer),
-                    RetiredGraphState::TelemetrySubscription(subscription) => drop(subscription),
-                    RetiredGraphState::RenderPlan(plan) => drop(plan),
-                    RetiredGraphState::RecordTake(take) => drop(take),
-                },
-                Err(rtrb::PopError::Empty) if abandoned => break,
-                Err(rtrb::PopError::Empty) => {
-                    sleep(Duration::from_millis(10));
-                }
-            }
-        }
-    });
-    producer
 }
 
 /// Live-engine data and separately prepared endpoints used to construct an offline renderer.
@@ -288,14 +231,9 @@ impl AudioExportSnapshot {
 }
 
 impl AudioEngine {
-    /// Ends `take` and hands it to the retirement thread, which drops its ring producer.
-    pub(super) fn retire_record_take(&mut self, mut take: Box<RecordTake>) {
+    /// Ends `take`; dropping it retires it off the audio thread, which drops its ring producer.
+    pub(super) fn retire_record_take(&mut self, mut take: Retiree<RecordTake>) {
         take.end();
-        self.retire_graph_state(RetiredGraphState::RecordTake(take));
-    }
-
-    pub(super) fn retire_graph_state(&mut self, retired: RetiredGraphState) {
-        push_retired(&mut self.graph_retirement, retired);
     }
 
     #[allow(
@@ -342,10 +280,9 @@ impl AudioEngine {
             modulation: ModulationState::default(),
             metronome_state: MetronomeState::default(),
             telemetry,
-            graph_retirement: graph_retirement_queue(),
             bypass_master: false,
             clip_schedule: ClipSchedule::default(),
-            render_plan: RenderPlan::default(),
+            render_plan: Retiree::new(Owner::AnyThread, RenderPlan::default()),
             workers: None,
             input: InputState::default(),
             record: RecordState::with_block(buffer_size),
@@ -437,7 +374,7 @@ impl AudioEngine {
                 id: generator.id,
                 track_id: generator.track_id,
                 registry_id: generator.registry_id,
-                plugin,
+                plugin: retiring_plugin(plugin),
             });
         }
 
@@ -487,10 +424,9 @@ impl AudioEngine {
             modulation,
             metronome_state: MetronomeState::default(),
             telemetry: AudioEngineTelemetry::new_for_export(),
-            graph_retirement: graph_retirement_queue(),
             bypass_master,
             clip_schedule: ClipSchedule::default(),
-            render_plan: RenderPlan::default(),
+            render_plan: Retiree::new(Owner::AnyThread, RenderPlan::default()),
             workers: None,
             input: InputState::default(),
             record: RecordState::with_block(buffer_size),
@@ -548,7 +484,7 @@ impl AudioEngine {
                     parked: true,
                     id: effect.id,
                     registry_id: effect.registry_id,
-                    plugin,
+                    plugin: retiring_plugin(plugin),
                     bypass: effect.bypass,
                 })
             })
@@ -682,6 +618,12 @@ impl AudioEngine {
             }
         } else {
             self.render_voices_to_buffer(output_buffer, channels, false);
+            self.metronome_state.render_tail(
+                output_buffer,
+                channels,
+                self.transport.render_frame,
+                self.config.sample_rate,
+            );
             self.cleanup_finished_voices(frame_count);
         }
 
@@ -703,11 +645,8 @@ impl AudioEngine {
         if !self.record.is_armed() {
             return;
         }
-        let queue = &mut self.graph_retirement;
-        let mut retire = |mut take: Box<RecordTake>| {
-            take.end();
-            push_retired(queue, RetiredGraphState::RecordTake(take));
-        };
+        // Dropping an ended take retires it.
+        let mut retire = |mut take: Retiree<RecordTake>| take.end();
         let song_playing =
             matches!(self.transport.mode, PlaybackMode::Song) && self.transport.song.is_playing;
         if song_playing {
@@ -896,14 +835,22 @@ impl AudioEngine {
         self.resolve_sequencer_events(buffer_size);
         self.evaluate_pre_block_modulations(buffer_size);
         self.render_voices_to_buffer(output_buffer, channels, true);
-        self.metronome_state.render(
-            output_buffer,
-            channels,
-            self.transport.song.playhead_samples,
-            self.transport.bpm,
-            self.config.sample_rate,
-        );
+        let timing = self.click_timing(self.transport.song.playhead_samples);
+        self.metronome_state.render(output_buffer, channels, timing);
         self.advance_song_playhead(buffer_size);
+    }
+
+    /// Places the metronome on the stretch of output starting at timeline sample `playhead`
+    /// and at the current output frame, behind the same delay compensation as the tracks.
+    fn click_timing(&self, playhead: u32) -> ClickTiming {
+        ClickTiming {
+            start_playhead: playhead,
+            render_frame: self.transport.render_frame,
+            latency: self.routing.system_latency,
+            bpm: self.transport.bpm,
+            sample_rate: self.config.sample_rate,
+            beats_per_bar: self.transport.time_sig_numerator,
+        }
     }
 
     fn process_pattern_mode(
@@ -993,13 +940,8 @@ impl AudioEngine {
         // Render voices to buffer
         self.render_voices_to_buffer(output_buffer, channels, true);
 
-        self.metronome_state.render(
-            output_buffer,
-            channels,
-            start_time,
-            self.transport.bpm,
-            self.config.sample_rate,
-        );
+        let timing = self.click_timing(start_time);
+        self.metronome_state.render(output_buffer, channels, timing);
 
         // Advance PATTERN playhead (not song playhead)
         self.advance_pattern_playhead(frame_count);
@@ -1069,22 +1011,22 @@ impl AudioEngine {
             PluginTarget::Generator(id) => self
                 .plugin_state
                 .get_generator_mut(*id)
-                .map(|i| &mut i.plugin),
+                .map(|i| &mut *i.plugin),
             PluginTarget::TrackEffect(track_id, effect_id) => self
                 .get_effect_list_mut(&EffectTarget::Track(*track_id))?
                 .iter_mut()
                 .find(|e| e.id == *effect_id)
-                .map(|e| &mut e.plugin),
+                .map(|e| &mut *e.plugin),
             PluginTarget::BusEffect(bus_id, effect_id) => self
                 .get_effect_list_mut(&EffectTarget::Bus(*bus_id))?
                 .iter_mut()
                 .find(|e| e.id == *effect_id)
-                .map(|e| &mut e.plugin),
+                .map(|e| &mut *e.plugin),
             PluginTarget::MasterEffect(effect_id) => self
                 .get_effect_list_mut(&EffectTarget::Master)?
                 .iter_mut()
                 .find(|e| e.id == *effect_id)
-                .map(|e| &mut e.plugin),
+                .map(|e| &mut *e.plugin),
         }
     }
 
@@ -1557,8 +1499,9 @@ impl AudioEngine {
                 1.0 + effects.map_or(0, Vec::len) as f32
             },
         );
-        let retired = replace(&mut self.render_plan, plan);
-        self.retire_graph_state(RetiredGraphState::RenderPlan(Box::new(retired)));
+        // Rebuilding allocates on the audio thread anyway; the node is one more allocation, and
+        // dropping the previous plan retires it.
+        self.render_plan = Retiree::new(Owner::AnyThread, plan);
     }
 
     fn resolve_sequencer_events(&mut self, buffer_size: usize) {
@@ -1738,9 +1681,8 @@ impl AudioEngine {
                 })
             })
         {
-            if let Some(buffer) = self.workspace.aux_buffers.remove(&stale) {
-                self.retire_graph_state(RetiredGraphState::AudioBuffer(buffer));
-            }
+            // Dropping the buffer retires it.
+            self.workspace.aux_buffers.remove(&stale);
         }
     }
 
@@ -1787,9 +1729,8 @@ impl AudioEngine {
                     .graph
                     .modulation_sources
                     .remove(&link.source_id);
-                if let Some(lane) = self.current_state.graph.automation_lanes.remove(&lane_id) {
-                    self.retire_graph_state(RetiredGraphState::Automation(lane));
-                }
+                // Dropping the lane retires it.
+                self.current_state.graph.automation_lanes.remove(&lane_id);
             }
         }
     }
@@ -2181,7 +2122,7 @@ impl AudioEngine {
             snapshot
                 .buffers
                 .retain(|name, _| buffer_names.contains(name));
-            for name in buffer_names {
+            for name in buffer_names.iter() {
                 if let Some(buffer) = plugin.get_zero_copy_buffer(name) {
                     if let Some(existing) = snapshot.buffers.get_mut(name) {
                         *existing = buffer;

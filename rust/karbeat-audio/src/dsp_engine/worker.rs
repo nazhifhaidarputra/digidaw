@@ -16,6 +16,8 @@ use std::{
     time::{Duration, Instant},
 };
 
+use karbeat_host::retire::mark_realtime_thread;
+
 use super::sync::{BlockClock, LevelBarrier, SHUTDOWN};
 
 /// Most threads, the DSP thread included, a pool is built with.
@@ -219,6 +221,7 @@ impl Drop for AudioWorkerPool {
 }
 
 fn worker_loop(shared: &Shared, index: usize, block_frames: usize, sample_rate: u32) {
+    mark_realtime_thread();
     let _priority = promote_current_thread(block_frames, sample_rate);
     let mut slice = RealtimeSlice::new(REALTIME_SLICE);
     let mut seen = 0;

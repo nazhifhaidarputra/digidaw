@@ -1,6 +1,13 @@
-use karbeat_host::{ControlRetirement, PluginKind, PreparedProcessor, ProcessingConfig};
+use karbeat_host::{
+    ControlRetirement, PluginKind, PreparedProcessor, ProcessingConfig, retire::Retiree,
+};
 
-use crate::{commands::AudioCommand, engine::PluginTelemetrySnapshot, event::PluginTarget};
+use crate::{
+    commands::{AudioCommand, retiring},
+    engine::PluginTelemetrySnapshot,
+    event::PluginTarget,
+    render_state::{PluginBox, retiring_plugin},
+};
 use futures_lite::future::yield_now;
 use karbeat_core::{
     core::project::{ApplicationState, AudioTrack, Clip, Pattern, RoutingConnection},
@@ -76,14 +83,22 @@ impl HostedInstallReceipt {
     }
 }
 
+/// Takes the processor out of its transfer and wraps it so the engine can drop it on the audio
+/// thread. Dropping the wrapper calls `retire`, which returns the endpoint to its host exactly as
+/// dropping the transfer would. Allocates; runs on the control worker building the command.
+fn wrap_endpoint(endpoint: PreparedProcessor) -> Option<PluginBox> {
+    endpoint.install().ok().map(retiring_plugin)
+}
+
 pub struct HostedPluginInstall {
     pub target: PluginTarget,
     pub(crate) generator_track: Option<TrackId>,
     pub(crate) registry_id: u32,
     pub(crate) config: ProcessingConfig,
-    pub(crate) endpoint: Option<PreparedProcessor>,
+    /// The endpoint, already wrapped off the audio thread so the engine can drop it there.
+    pub(crate) endpoint: Option<PluginBox>,
     pub(crate) graph: Option<HostedTrackGraph>,
-    pub(crate) telemetry: Option<triple_buffer::Input<PluginTelemetrySnapshot>>,
+    pub(crate) telemetry: Option<Retiree<triple_buffer::Input<PluginTelemetrySnapshot>>>,
     pub(crate) bypass: bool,
     pub(crate) replace_missing: bool,
     result: Option<rtrb::Producer<HostedInstallResult>>,
@@ -112,11 +127,11 @@ impl HostedPluginInstall {
                 generator_track,
                 registry_id,
                 config,
-                endpoint: Some(endpoint),
+                endpoint: wrap_endpoint(endpoint),
                 bypass: false,
                 replace_missing: false,
                 graph: None,
-                telemetry: Some(input),
+                telemetry: Some(retiring(input)),
                 result: Some(result_tx),
             },
             receipt,
@@ -147,11 +162,12 @@ impl HostedPluginInstall {
 }
 
 /// Track publication prepared alongside an external instrument, before DSP can accept either.
+/// Every part is wrapped off the audio thread, which swaps it in and retires what it replaced.
 pub struct HostedTrackGraph {
-    pub(crate) tracks: Box<[AudioTrack]>,
-    pub(crate) clips: hashbrown::HashMap<ClipId, Clip>,
-    pub(crate) patterns: hashbrown::HashMap<PatternId, Pattern>,
-    pub(crate) routing: Box<[RoutingConnection]>,
+    pub(crate) tracks: Retiree<Box<[AudioTrack]>>,
+    pub(crate) clips: Retiree<hashbrown::HashMap<ClipId, Clip>>,
+    pub(crate) patterns: Retiree<hashbrown::HashMap<PatternId, Pattern>>,
+    pub(crate) routing: Retiree<Box<[RoutingConnection]>>,
 }
 
 impl From<&ApplicationState> for HostedTrackGraph {
@@ -159,18 +175,20 @@ impl From<&ApplicationState> for HostedTrackGraph {
         let mut tracks: Vec<_> = app.tracks.values().cloned().collect();
         tracks.sort_by_key(|track| track.id);
         Self {
-            tracks: tracks.into_boxed_slice(),
-            clips: app
-                .clips_pool
-                .iter()
-                .map(|(id, clip)| (id, clip.clone()))
-                .collect(),
-            patterns: app
-                .pattern_pool
-                .iter()
-                .map(|(id, pattern)| (id, pattern.clone()))
-                .collect(),
-            routing: app.mixer.routing.clone().into_boxed_slice(),
+            tracks: retiring(tracks.into_boxed_slice()),
+            clips: retiring(
+                app.clips_pool
+                    .iter()
+                    .map(|(id, clip)| (id, clip.clone()))
+                    .collect(),
+            ),
+            patterns: retiring(
+                app.pattern_pool
+                    .iter()
+                    .map(|(id, pattern)| (id, pattern.clone()))
+                    .collect(),
+            ),
+            routing: retiring(app.mixer.routing.clone().into_boxed_slice()),
         }
     }
 }
@@ -178,7 +196,8 @@ pub struct HostedPluginReplacement {
     pub(crate) target: PluginTarget,
     pub(crate) expected: karbeat_host::HostInstanceId,
     pub(crate) config: ProcessingConfig,
-    pub(crate) endpoint: Option<PreparedProcessor>,
+    /// The endpoint, already wrapped off the audio thread so the engine can drop it there.
+    pub(crate) endpoint: Option<PluginBox>,
     pub(crate) bypass: bool,
 }
 
@@ -194,7 +213,7 @@ impl HostedPluginReplacement {
             target,
             expected,
             config,
-            endpoint: Some(endpoint),
+            endpoint: wrap_endpoint(endpoint),
             bypass,
         }
     }
@@ -270,7 +289,7 @@ pub struct HostedPluginRemoval {
     pub(crate) bus: Option<BusId>,
     pub(crate) targets: Box<[(PluginTarget, Option<karbeat_host::HostInstanceId>)]>,
     pub(crate) graph: Option<HostedTrackGraph>,
-    pub(crate) telemetry: Vec<triple_buffer::Input<PluginTelemetrySnapshot>>,
+    pub(crate) telemetry: Vec<Retiree<triple_buffer::Input<PluginTelemetrySnapshot>>>,
     result: Option<rtrb::Producer<HostedRemovalResult>>,
 }
 impl HostedPluginRemoval {

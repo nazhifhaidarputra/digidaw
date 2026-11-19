@@ -11,6 +11,7 @@ use std::sync::{
 };
 
 use karbeat_core::shared::TrackId;
+use karbeat_host::retire::Retiree;
 use rtrb::Producer;
 
 use super::input::{InputSource, extract_source};
@@ -197,7 +198,7 @@ pub(super) struct RecordState {
         clippy::vec_box,
         reason = "takes are retired as the boxes their commands carried"
     )]
-    takes: Vec<Box<RecordTake>>,
+    takes: Vec<Retiree<RecordTake>>,
     /// One stereo block of a take's input.
     scratch: Vec<f32>,
 }
@@ -246,7 +247,7 @@ impl RecordState {
 
     /// Adds `take`, returning it back when the engine already records that track or holds as
     /// many takes as it can.
-    pub fn start(&mut self, take: Box<RecordTake>) -> Result<(), Box<RecordTake>> {
+    pub fn start(&mut self, take: Retiree<RecordTake>) -> Result<(), Retiree<RecordTake>> {
         if self.takes.len() >= MAX_RECORD_TAKES
             || self.takes.iter().any(|held| held.track_id == take.track_id)
         {
@@ -257,7 +258,7 @@ impl RecordState {
     }
 
     /// Ends and removes the take of `track_id`, so it can be retired off the audio thread.
-    pub fn end(&mut self, track_id: TrackId) -> Option<Box<RecordTake>> {
+    pub fn end(&mut self, track_id: TrackId) -> Option<Retiree<RecordTake>> {
         let index = self
             .takes
             .iter()
@@ -269,7 +270,7 @@ impl RecordState {
 
     /// Ends every take that started recording, because the song stopped. Takes still waiting
     /// for playback keep waiting.
-    pub fn end_started(&mut self, mut retire: impl FnMut(Box<RecordTake>)) {
+    pub fn end_started(&mut self, mut retire: impl FnMut(Retiree<RecordTake>)) {
         let mut index = 0;
         while index < self.takes.len() {
             if self.takes[index].next_playhead.is_some() {
@@ -284,7 +285,7 @@ impl RecordState {
 
     /// Records one song block into every take. A take whose playhead jumped since its last
     /// block was seeked, so it ends and is handed to `retire`. Real-time safe.
-    pub fn record(&mut self, block: &RecordBlock<'_>, mut retire: impl FnMut(Box<RecordTake>)) {
+    pub fn record(&mut self, block: &RecordBlock<'_>, mut retire: impl FnMut(Retiree<RecordTake>)) {
         let samples = block.frames * 2;
         let mut index = 0;
         while index < self.takes.len() {
@@ -341,7 +342,7 @@ mod tests {
         TrackId::from(id)
     }
 
-    fn take(channels: u16) -> (Box<RecordTake>, rtrb::Consumer<f32>, Arc<TakeShared>) {
+    fn take(channels: u16) -> (Retiree<RecordTake>, rtrb::Consumer<f32>, Arc<TakeShared>) {
         let (producer, consumer) = rtrb::RingBuffer::new(64);
         let shared = Arc::new(TakeShared::default());
         let take = RecordTake::new(
@@ -353,7 +354,7 @@ mod tests {
             producer,
             Arc::clone(&shared),
         );
-        (Box::new(take), consumer, shared)
+        (crate::commands::retiring(take), consumer, shared)
     }
 
     fn block(device: &[f32], playhead: u64) -> RecordBlock<'_> {
@@ -454,7 +455,7 @@ mod tests {
             producer,
             Arc::clone(&shared),
         );
-        assert!(state.start(Box::new(take)).is_ok());
+        assert!(state.start(crate::commands::retiring(take)).is_ok());
         let silent = RecordBlock {
             device: None,
             device_channels: 2,

@@ -1,5 +1,6 @@
-use hashbrown::HashMap;
+use hashbrown::{HashMap, HashSet};
 use indexmap::IndexMap;
+use karbeat_host::retire::{Owner, Retiree};
 use karbeat_plugin_api::types::MidiEvent;
 use karbeat_plugin_api::types::ZeroCopyBuffer;
 use karbeat_plugins::registry::PluginFactory;
@@ -12,7 +13,7 @@ use crate::{
     hosted_plugin::{
         HostedPluginInstall, HostedPluginReconfiguration, HostedPluginRemoval, HostedProjectInstall,
     },
-    render_state::{AudioAutomationLane, AudioGraphState},
+    render_state::{AudioAutomationLane, AudioGraphState, PluginBox},
 };
 pub use karbeat_core::core::project::{EffectTarget, MixerChannelTarget};
 
@@ -27,10 +28,16 @@ use karbeat_core::{
 };
 use std::sync::{Arc, mpsc::Sender};
 
+/// Wraps a command payload that the audio thread will later drop, so it retires off the audio
+/// thread instead. Allocates; call it while building the command.
+pub fn retiring<T: Send + 'static>(value: T) -> Retiree<T> {
+    Retiree::new(Owner::AnyThread, value)
+}
+
 /// Preallocated triple-buffer endpoints used to publish one plugin's telemetry without locking.
 pub struct PreparedPluginTelemetry {
-    /// Audio-thread writer retained beside the plugin instance.
-    pub producer: triple_buffer::Input<PluginTelemetrySnapshot>,
+    /// Audio-thread writer retained beside the plugin instance; retires with it.
+    pub producer: Retiree<triple_buffer::Input<PluginTelemetrySnapshot>>,
     /// UI-side reader transferred through [`TelemetryRegistration`].
     pub consumer: Box<triple_buffer::Output<PluginTelemetrySnapshot>>,
 }
@@ -41,7 +48,7 @@ impl PreparedPluginTelemetry {
         let initial = PluginTelemetrySnapshot::from_plugin(plugin);
         let (producer, consumer) = triple_buffer::triple_buffer(&initial);
         Self {
-            producer,
+            producer: retiring(producer),
             consumer: Box::new(consumer),
         }
     }
@@ -153,7 +160,7 @@ pub enum AudioCommand {
         /// Internal plugin registry identifier.
         registry_id: u32,
         /// Prepared plugin endpoint transferred into audio-thread ownership.
-        plugin: Box<dyn AudioPlugin>,
+        plugin: PluginBox,
         /// Optional preallocated telemetry producer/consumer pair.
         telemetry: Option<PreparedPluginTelemetry>,
     },
@@ -207,7 +214,7 @@ pub enum AudioCommand {
         /// Internal plugin registry identifier.
         registry_id: u32,
         /// Prepared effect endpoint transferred into audio-thread ownership.
-        plugin: Box<dyn AudioPlugin>,
+        plugin: PluginBox,
         /// Optional preallocated telemetry producer/consumer pair.
         telemetry: Option<PreparedPluginTelemetry>,
     },
@@ -297,25 +304,20 @@ pub enum AudioCommand {
     /// This bypasses the triple-buffer; routing is owned by the ring-buffer path.
     UpdateRouting {
         /// Complete routing connection list replacing the current matrix.
-        routing: Box<[RoutingConnection]>,
+        routing: Retiree<Box<[RoutingConnection]>>,
     },
     /// Prepare all plugins and seed the audio thread's mixer channel state.
     /// Called on project load / new project to fully hydrate the audio thread.
     HydratePlugin {
         /// Prepared effects grouped by track and effect identifier.
-        track_effects: IndexMap<
-            TrackId,
-            IndexMap<EffectId, (u32, Box<dyn AudioPlugin>, PreparedPluginTelemetry)>,
-        >,
+        track_effects:
+            IndexMap<TrackId, IndexMap<EffectId, (u32, PluginBox, PreparedPluginTelemetry)>>,
         /// Prepared effects in master-chain order.
-        master_effects: IndexMap<EffectId, (u32, Box<dyn AudioPlugin>, PreparedPluginTelemetry)>,
+        master_effects: IndexMap<EffectId, (u32, PluginBox, PreparedPluginTelemetry)>,
         /// Prepared effects grouped by bus and effect identifier.
-        bus_effects: IndexMap<
-            BusId,
-            IndexMap<EffectId, (u32, Box<dyn AudioPlugin>, PreparedPluginTelemetry)>,
-        >,
+        bus_effects: IndexMap<BusId, IndexMap<EffectId, (u32, PluginBox, PreparedPluginTelemetry)>>,
         /// Prepared generator plugins keyed by project generator identifier.
-        generators: IndexMap<GeneratorId, (u32, Box<dyn AudioPlugin>, PreparedPluginTelemetry)>,
+        generators: IndexMap<GeneratorId, (u32, PluginBox, PreparedPluginTelemetry)>,
         /// Initial DSP values for every track channel (volume, pan, mute, solo, inverted_phase)
         track_channels: IndexMap<TrackId, MixerChannelSeed>,
         /// Initial DSP values for every bus channel
@@ -326,7 +328,7 @@ pub enum AudioCommand {
     /// Enables or disables metronome rendering.
     SetMetronomeActive(bool),
     /// Replaces the metronome's sound with a custom click, or restores the built-in one.
-    SetMetronomeClick(Option<MetronomeClick>),
+    SetMetronomeClick(Option<Retiree<MetronomeClick>>),
 
     /// Send command to execute command from real-time plugin state. to use this
     /// effectively, use a message passing channel for real-time data streaming
@@ -374,11 +376,11 @@ pub enum AudioCommand {
     /// are modified, or BPM changes the max_sample_index.
     UpdateTrackGraph {
         /// Ordered track snapshots used by rendering and routing lookup.
-        tracks: Box<[AudioTrack]>,
+        tracks: Retiree<Box<[AudioTrack]>>,
         /// Clip pool referenced by track clip identifiers.
-        clips: HashMap<ClipId, Clip>,
+        clips: Retiree<HashMap<ClipId, Clip>>,
         /// MIDI pattern pool referenced by MIDI clips.
-        patterns: HashMap<PatternId, Pattern>,
+        patterns: Retiree<HashMap<PatternId, Pattern>>,
     },
 
     /// Replaces one audio source's waveform in the render graph, e.g. after its envelope changed.
@@ -387,7 +389,7 @@ pub enum AudioCommand {
         /// Source whose waveform is replaced.
         id: AudioSourceId,
         /// Waveform snapshot to render from.
-        waveform: Arc<AudioWaveform>,
+        waveform: Retiree<Arc<AudioWaveform>>,
     },
 
     /// Add or replace a single automation lane on the audio thread.
@@ -396,7 +398,7 @@ pub enum AudioCommand {
         /// Stable lane identifier used in the render graph.
         id: AutomationId,
         /// Fully rebuilt audio-thread automation lane.
-        lane: AudioAutomationLane,
+        lane: Retiree<AudioAutomationLane>,
     },
 
     /// Remove an automation lane from the audio thread's local graph.
@@ -407,7 +409,7 @@ pub enum AudioCommand {
 
     /// Starts a take on a track. It records once the song plays; a take the engine cannot hold
     /// ends at once, without frames.
-    StartRecordingTake(Box<RecordTake>),
+    StartRecordingTake(Retiree<RecordTake>),
 
     /// Ends the take recording on a track.
     EndRecordingTake {
@@ -429,7 +431,7 @@ pub enum AudioCommand {
     /// may have changed and enumerating diffs would be impractical.
     ReplaceFullGraph {
         /// Complete immutable graph snapshot replacing all current graph sub-state.
-        graph: AudioGraphState,
+        graph: Retiree<AudioGraphState>,
     },
 
     /// Spawn a new generator in the DSP thread (e.g., an LFO)
@@ -484,7 +486,7 @@ pub enum AudioCommand {
         /// Plugin whose telemetry selection changes.
         target: PluginTarget,
         /// Plugin-defined buffer names to publish.
-        buffers: Vec<String>,
+        buffers: Retiree<HashSet<String>>,
         /// Whether to subscribe to or clear the selection.
         active: bool,
     },

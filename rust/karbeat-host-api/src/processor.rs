@@ -1,8 +1,7 @@
-use crate::{HostError, HostInstanceId};
+use crate::{HostError, HostInstanceId, retire::leak};
 use karbeat_plugin_api::prelude::*;
 use std::{
     any::Any,
-    mem::forget,
     sync::{
         Arc,
         atomic::{AtomicI32, Ordering},
@@ -168,8 +167,10 @@ impl Drop for ProcessorRetirement {
             if !receiver.is_abandoned() {
                 // A premature control-owner shutdown must not make the audio thread the final
                 // owner of the return queue. Retain it until process exit rather than unload code.
-                tracing::error!("Hosted plugin owner shut down before endpoint retirement");
-                forget(receiver);
+                leak(
+                    receiver,
+                    "an endpoint return queue after its plugin owner shut down",
+                );
             }
         }
     }
@@ -179,7 +180,10 @@ impl AudioPlugin for HostedProcessor {
         if let Some(mut sender) = self.retirement.take() {
             // This private producer is used exactly once, with capacity reserved at creation.
             if let Err(rtrb::PushError::Full(endpoint)) = sender.push(self) {
-                forget(endpoint);
+                leak(
+                    endpoint,
+                    "a hosted endpoint whose return slot was already used",
+                );
             }
         }
     }

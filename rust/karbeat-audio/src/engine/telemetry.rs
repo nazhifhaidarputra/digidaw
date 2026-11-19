@@ -1,6 +1,7 @@
 use std::sync::atomic::{AtomicU32, Ordering};
 
 use hashbrown::{HashMap, HashSet};
+use karbeat_host::retire::Retiree;
 use karbeat_plugin_api::types::ZeroCopyBuffer;
 use triple_buffer::Input;
 
@@ -47,12 +48,12 @@ pub struct MixerTelemetrySnapshot {
 pub struct AudioEngineTelemetry {
     /// Producer for the complete mixer snapshot.
     pub mixer_telemetry_producer: Input<MixerTelemetrySnapshot>,
-    /// Producers created for individual plugin subscriptions.
-    pub param_telemetry_producers: HashMap<PluginTarget, Input<PluginTelemetrySnapshot>>,
+    /// Producers created for individual plugin subscriptions; retire when removed.
+    pub param_telemetry_producers: HashMap<PluginTarget, Retiree<Input<PluginTelemetrySnapshot>>>,
     /// Whether mixer snapshots currently have a consumer.
     pub mixer_snapshot_active: bool,
-    /// Requested custom buffer names for each subscribed plugin.
-    pub active_telemetry_subscriptions: HashMap<PluginTarget, HashSet<String>>,
+    /// Requested custom buffer names for each subscribed plugin; retire when removed.
+    pub active_telemetry_subscriptions: HashMap<PluginTarget, Retiree<HashSet<String>>>,
     pub(super) samples_since_last_snapshot: usize,
 }
 

@@ -28,6 +28,7 @@ use karbeat_core::{
     core::project::{RoutingConnection, RoutingNode, RoutingTap, SidechainRoute},
     shared::{BusId, EffectId, TrackId},
 };
+use karbeat_host::retire::Retiree;
 use karbeat_plugin_api::types::{ParamChange, ProcessContext};
 
 use crate::{
@@ -241,8 +242,8 @@ pub(super) struct GatherSources<'a> {
     pub master_tail: &'a mut u32,
     pub track_input_delays: &'a mut HashMap<TrackId, DelayLine>,
     pub edge_delays: &'a mut HashMap<(RoutingNode, RoutingNode), DelayLine>,
-    pub bus_buffers: &'a mut HashMap<BusId, Vec<f32>>,
-    pub sidechain_buffers: &'a mut HashMap<SidechainRoute, Vec<f32>>,
+    pub bus_buffers: &'a mut HashMap<BusId, Retiree<Vec<f32>>>,
+    pub sidechain_buffers: &'a mut HashMap<SidechainRoute, Retiree<Vec<f32>>>,
 }
 
 /// What the plan is built from.
@@ -580,7 +581,7 @@ impl RenderPlan {
                     refs.tail = SendPtr::of(track_tails.get_mut(&id));
                 }
                 PlanNodeKind::Bus(id) => {
-                    refs.bus = SendPtr::of(bus_buffers.get_mut(&id));
+                    refs.bus = SendPtr::of(bus_buffers.get_mut(&id).map(|buffer| &mut **buffer));
                     if !refs.bus.0.is_null() {
                         refs.channel = SendPtr::of(mixer.bus_channels.get_mut(&id));
                         refs.effects =
@@ -603,7 +604,7 @@ impl RenderPlan {
             .iter()
             .zip(self.sidechain_buffers.iter_mut())
         {
-            *buffer = SendPtr::of(sidechain_buffers.get_mut(route));
+            *buffer = SendPtr::of(sidechain_buffers.get_mut(route).map(|buffer| &mut **buffer));
         }
     }
 
@@ -868,7 +869,7 @@ impl RenderJob<'_> {
                 return;
             };
             if !process_plugin_planar(
-                &mut *effect.plugin,
+                &mut **effect.plugin,
                 aux,
                 channels,
                 frames,
@@ -1003,7 +1004,7 @@ impl RenderJob<'_> {
             generator_ctx.midi_events = &voice.midi_events;
             generator_ctx.param_changes = ctx.changes(&PluginTarget::Generator(voice.id));
             process_plugin_wrapper(
-                &mut *generator.plugin,
+                &mut **generator.plugin,
                 &mut slot.post,
                 aux,
                 channels,

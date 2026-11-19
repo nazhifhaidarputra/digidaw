@@ -14,16 +14,18 @@ use std::{
     sync::{Arc, mpsc},
 };
 
+use karbeat_host::{ProcessorRetirement, retire::RetirementService};
 use karbeat_plugins::registry::PluginRegistry;
 use karbeat_utils::hash::hash_str;
 use rtrb::RingBuffer;
 
 use crate::{
-    commands::{AudioCommand, AudioFeedback, EffectTarget, MixerChannelTarget},
+    commands::{AudioCommand, AudioFeedback, EffectTarget, MixerChannelTarget, retiring},
     engine::{AudioEngine, AudioEngineTelemetry, PlaybackMode},
     event::{PluginTarget, TransportFeedback},
     missing_plugin::MissingPlugin,
     render_state::AudioGraphState,
+    render_state::retiring_plugin,
 };
 use karbeat_core::{
     core::project::{
@@ -175,7 +177,7 @@ pub fn add_synth_track(app: &mut ApplicationState, registry_name: &str) -> (Trac
 /// Publishes `app` to the engine in song mode.
 pub fn publish(engine: &mut AudioEngine, app: &ApplicationState) {
     engine.process_command(AudioCommand::ReplaceFullGraph {
-        graph: AudioGraphState::from(app),
+        graph: retiring(AudioGraphState::from(app)),
     });
     engine.process_command(AudioCommand::SetPlaybackMode(PlaybackMode::Song));
 }
@@ -350,7 +352,7 @@ pub fn bench_engine(shape: BenchProject, block: usize) -> (AudioEngine, Vec<Trac
             )
             .collect();
         engine.process_command(AudioCommand::UpdateRouting {
-            routing: routing.into_boxed_slice(),
+            routing: retiring(routing.into_boxed_slice()),
         });
     }
     for track in &tracks {
@@ -359,7 +361,7 @@ pub fn bench_engine(shape: BenchProject, block: usize) -> (AudioEngine, Vec<Trac
                 target: EffectTarget::Track(*track),
                 effect_id: EffectId::from(100 + index as u32),
                 registry_id: 0,
-                plugin: MissingPlugin::effect(),
+                plugin: retiring_plugin(MissingPlugin::effect()),
                 telemetry: None,
             });
         }
@@ -383,4 +385,13 @@ pub fn bench_engine(shape: BenchProject, block: usize) -> (AudioEngine, Vec<Trac
         }
     }
     (engine, tracks)
+}
+
+/// Whether `retirement` got its endpoint back, after every value retired so far was disposed.
+///
+/// Endpoints return asynchronously through the retirement service, so tests pass its barrier
+/// before looking at the return queue.
+pub fn endpoint_returned(retirement: &mut ProcessorRetirement) -> bool {
+    assert!(RetirementService::global().drain_all(std::time::Duration::from_secs(5)));
+    retirement.take().is_some()
 }

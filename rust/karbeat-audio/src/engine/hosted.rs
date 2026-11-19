@@ -10,7 +10,7 @@ use crate::{
     missing_plugin::MissingPlugin,
     render_state::{AudioEffectInstance, AudioGeneratorInstance},
 };
-use karbeat_plugin_api::{traits::AudioPlugin, types::ProcessingMode};
+use karbeat_plugin_api::types::ProcessingMode;
 use std::mem::replace;
 
 impl AudioEngine {
@@ -53,26 +53,13 @@ impl AudioEngine {
 
         let mut prepared = Vec::with_capacity(reconfiguration.replacements.len());
         for replacement in &mut reconfiguration.replacements {
-            let Some(endpoint) = replacement.endpoint.take() else {
-                for endpoint in prepared {
-                    AudioPlugin::retire(endpoint);
-                }
+            // Dropping `prepared` on an early return retires every endpoint taken so far.
+            let Some(mut endpoint) = replacement.endpoint.take() else {
                 reconfiguration.complete(HostedInstallResult::InvalidConfiguration);
                 return;
             };
-            match endpoint.install() {
-                Ok(mut endpoint) => {
-                    endpoint.set_bypass(replacement.bypass);
-                    prepared.push(endpoint);
-                }
-                Err(_) => {
-                    for endpoint in prepared {
-                        AudioPlugin::retire(endpoint);
-                    }
-                    reconfiguration.complete(HostedInstallResult::InvalidConfiguration);
-                    return;
-                }
-            }
+            endpoint.set_bypass(replacement.bypass);
+            prepared.push(endpoint);
         }
 
         self.process_command(AudioCommand::UpdateAudioConfig {
@@ -103,9 +90,8 @@ impl AudioEngine {
                     .find(|item| item.id == effect)
                     .map(|item| replace(&mut item.plugin, endpoint)),
             };
-            if let Some(plugin) = plugin {
-                self.plugin_state.retire_plugin(plugin);
-            }
+            // The replaced plugin retires when dropped.
+            drop(plugin);
         }
         self.recalculate_latencies();
         reconfiguration.complete(HostedInstallResult::Installed);
@@ -264,11 +250,7 @@ impl AudioEngine {
                     install.complete(HostedInstallResult::OccupiedTarget);
                     return;
                 }
-                let Some(endpoint) = install.endpoint.take() else {
-                    install.complete(HostedInstallResult::InvalidConfiguration);
-                    return;
-                };
-                let Ok(mut plugin) = endpoint.install() else {
+                let Some(mut plugin) = install.endpoint.take() else {
                     install.complete(HostedInstallResult::InvalidConfiguration);
                     return;
                 };
@@ -335,11 +317,7 @@ impl AudioEngine {
             install.complete(HostedInstallResult::OccupiedTarget);
             return;
         }
-        let Some(endpoint) = install.endpoint.take() else {
-            install.complete(HostedInstallResult::InvalidConfiguration);
-            return;
-        };
-        let Ok(mut plugin) = endpoint.install() else {
+        let Some(mut plugin) = install.endpoint.take() else {
             install.complete(HostedInstallResult::InvalidConfiguration);
             return;
         };
@@ -352,12 +330,12 @@ impl AudioEngine {
             bypass: install.bypass,
         };
         if install.replace_missing {
-            let retired = self
+            // The replaced placeholder retires when dropped.
+            if let Some(existing) = self
                 .get_effect_list_mut(&effect_target)
                 .and_then(|chain| chain.iter_mut().find(|item| item.id == effect_id))
-                .map(|existing| replace(existing, effect).plugin);
-            if let Some(plugin) = retired {
-                self.plugin_state.retire_plugin(plugin);
+            {
+                *existing = effect;
             }
         } else {
             match effect_target {
@@ -387,8 +365,9 @@ impl AudioEngine {
 )]
 mod tests {
     use super::*;
+    use crate::engine::test_support::endpoint_returned;
     use crate::{
-        commands::{AudioCommand, AudioFeedback, TelemetryRegistration},
+        commands::{AudioCommand, AudioFeedback, TelemetryRegistration, retiring},
         engine::{AudioEngineTelemetry, AudioExportSnapshot},
         event::TransportFeedback,
         hosted_plugin::{
@@ -396,10 +375,14 @@ mod tests {
             HostedProjectInstall, HostedRemovalResult, hosted_processing_config,
         },
         render_state::EffectPluginSnapshot,
+        render_state::retiring_plugin,
     };
     use futures_lite::future::block_on;
     use karbeat_core::shared::EffectId;
-    use karbeat_host::{HostInstanceId, HostedProcessor, ProcessingConfig, ProcessorRetirement};
+    use karbeat_host::{
+        HostInstanceId, HostedProcessor, ProcessingConfig, ProcessorRetirement,
+        retire::RetirementService,
+    };
     use karbeat_plugin_api::traits::{AudioPlugin, AudioPluginBuilder};
     use karbeat_plugins::{effect::delay::DigidawDelay, registry::PluginRegistry};
     use std::sync::{
@@ -505,10 +488,10 @@ mod tests {
             .and_then(|plugin| plugin.as_any().downcast_ref::<HostedProcessor>())
             .expect("replacement should be installed");
         assert_eq!(active.instance, HostInstanceId(2));
-        assert!(old_retirement.take().is_some());
-        assert!(replacement_retirement.take().is_none());
+        assert!(endpoint_returned(&mut old_retirement));
+        assert!(!endpoint_returned(&mut replacement_retirement));
         drop(engine);
-        assert!(replacement_retirement.take().is_some());
+        assert!(endpoint_returned(&mut replacement_retirement));
     }
 
     #[test]
@@ -557,9 +540,9 @@ mod tests {
             .and_then(|plugin| plugin.as_any().downcast_ref::<HostedProcessor>())
             .expect("original endpoint should remain installed");
         assert_eq!(active.instance, HostInstanceId(1));
-        assert!(replacement_retirement.take().is_some());
+        assert!(endpoint_returned(&mut replacement_retirement));
         drop(engine);
-        assert!(old_retirement.take().is_some());
+        assert!(endpoint_returned(&mut old_retirement));
     }
 
     #[test]
@@ -584,7 +567,7 @@ mod tests {
         } if actual == target && state.is_empty())
         );
         drop(engine);
-        assert!(retirement.take().is_some());
+        assert!(endpoint_returned(&mut retirement));
     }
 
     #[test]
@@ -597,13 +580,13 @@ mod tests {
             HostedInstallResult::Installed
         );
         assert_eq!(engine.plugin_state.master_effects.len(), 1);
-        assert!(retirement.take().is_none());
+        assert!(!endpoint_returned(&mut retirement));
         engine.process_command(AudioCommand::RemoveEffect {
             target: EffectTarget::Master,
             effect_id: EffectId::from(11),
         });
         assert!(engine.plugin_state.master_effects.is_empty());
-        assert!(retirement.take().is_some());
+        assert!(endpoint_returned(&mut retirement));
     }
 
     #[test]
@@ -612,14 +595,14 @@ mod tests {
         let (command, mut receipt, mut retirement) = install(48_000.0);
         drop(command);
         assert!(block_on(receipt.wait()).is_err());
-        assert!(retirement.take().is_some());
+        assert!(endpoint_returned(&mut retirement));
         let (command, mut receipt, mut retirement) = install(44_100.0);
         process_install(&mut engine, command);
         assert_eq!(
             block_on(receipt.wait()).unwrap(),
             HostedInstallResult::InvalidConfiguration
         );
-        assert!(retirement.take().is_some());
+        assert!(endpoint_returned(&mut retirement));
         assert!(engine.plugin_state.master_effects.is_empty());
     }
 
@@ -638,10 +621,10 @@ mod tests {
             block_on(receipt.wait()).unwrap(),
             HostedInstallResult::OccupiedTarget
         );
-        assert!(rejected.take().is_some());
-        assert!(original.take().is_none());
+        assert!(endpoint_returned(&mut rejected));
+        assert!(!endpoint_returned(&mut original));
         drop(engine);
-        assert!(original.take().is_some());
+        assert!(endpoint_returned(&mut original));
     }
 
     #[test]
@@ -655,7 +638,7 @@ mod tests {
         drop(rejected);
         assert!(control.collect());
         assert!(block_on(receipt.wait()).is_err());
-        assert!(retirement.take().is_some());
+        assert!(endpoint_returned(&mut retirement));
     }
 
     #[test]
@@ -675,7 +658,7 @@ mod tests {
                 HostedRemovalResult::StaleTarget
             );
             assert_eq!(engine.plugin_state.master_effects.len(), 1);
-            assert!(returned.take().is_none());
+            assert!(!endpoint_returned(&mut returned));
         }
         let (removal, mut receipt) =
             HostedPluginRemoval::new(vec![(target, Some(HostInstanceId(1)))], None);
@@ -692,7 +675,7 @@ mod tests {
                 .param_telemetry_producers
                 .contains_key(&target)
         );
-        assert!(returned.take().is_some());
+        assert!(endpoint_returned(&mut returned));
         assert!(control.collect());
     }
 
@@ -708,7 +691,7 @@ mod tests {
             .id;
         engine.telemetry.active_telemetry_subscriptions.insert(
             PluginTarget::MasterEffect(EffectId::from(11)),
-            Default::default(),
+            retiring(Default::default()),
         );
         for value in [0.15, 0.25, 0.35, 0.45, 0.55] {
             engine.plugin_state.master_effects[0]
@@ -722,7 +705,7 @@ mod tests {
             assert!((actual - value).abs() < 0.0001);
         }
         drop(engine);
-        assert!(returned.take().is_some());
+        assert!(endpoint_returned(&mut returned));
     }
 
     #[test]
@@ -747,10 +730,10 @@ mod tests {
             assert_eq!(block_on(receipt.wait()).unwrap(), expected);
             if expected == HostedInstallResult::Installed {
                 assert!(engine.plugin_state.master_effects.is_empty());
-                assert!(returned.take().is_some());
+                assert!(endpoint_returned(&mut returned));
             } else {
                 assert_eq!(engine.plugin_state.master_effects.len(), 1);
-                assert!(returned.take().is_none());
+                assert!(!endpoint_returned(&mut returned));
             }
         }
     }
@@ -818,10 +801,10 @@ mod tests {
                 < 0.0001
         );
         drop(offline);
-        assert!(retirement.as_mut().unwrap().take().is_some());
-        assert!(live_retirement.take().is_none());
+        assert!(endpoint_returned(retirement.as_mut().unwrap()));
+        assert!(!endpoint_returned(&mut live_retirement));
         drop(engine);
-        assert!(live_retirement.take().is_some());
+        assert!(endpoint_returned(&mut live_retirement));
     }
 
     #[test]
@@ -842,7 +825,7 @@ mod tests {
                 parked: true,
                 id: EffectId::from(12),
                 registry_id: 124,
-                plugin: second.install().unwrap(),
+                plugin: retiring_plugin(second.install().unwrap()),
                 bypass: false,
             });
         let mut snapshot = engine.export_snapshot();
@@ -862,11 +845,11 @@ mod tests {
             Ok(prepared)
         });
         assert!(result.is_err());
-        assert!(retired.as_mut().unwrap().take().is_some());
+        assert!(endpoint_returned(retired.as_mut().unwrap()));
         assert!(offline(snapshot).is_err());
         drop(engine);
-        assert!(live_retirement.take().is_some());
-        assert!(second_retirement.take().is_some());
+        assert!(endpoint_returned(&mut live_retirement));
+        assert!(endpoint_returned(&mut second_retirement));
     }
 
     #[test]
@@ -881,7 +864,7 @@ mod tests {
                 parked: true,
                 id: EffectId::from(12),
                 registry_id: u32::MAX,
-                plugin: Box::new(DigidawDelay::build()),
+                plugin: retiring_plugin(Box::new(DigidawDelay::build())),
                 bypass: false,
             });
         let mut snapshot = engine.export_snapshot();
@@ -901,9 +884,10 @@ mod tests {
             offline(snapshot),
             Err(AudioExportSnapshotError::PluginNotFound { .. })
         ));
+        assert!(RetirementService::global().drain_all(std::time::Duration::from_secs(5)));
         assert!(retired.as_ref().unwrap().is_abandoned());
         drop(engine);
-        assert!(live_retirement.take().is_some());
+        assert!(endpoint_returned(&mut live_retirement));
     }
 
     #[test]
@@ -920,7 +904,7 @@ mod tests {
                 parked: true,
                 id: EffectId::from(1),
                 registry_id: 123,
-                plugin: Box::new(endpoint),
+                plugin: retiring_plugin(Box::new(endpoint)),
                 bypass: false,
             });
         assert!(engine.validate_hosted_processing().is_ok());

@@ -247,7 +247,7 @@ fn begin_install(
         "Audio engine is unavailable"
     );
     anyhow::ensure!(
-        ctx.telemetry_registry.is_some(),
+        ctx.telemetry.is_attached(),
         "Audio telemetry is not initialized"
     );
     let entry = ctx
@@ -505,10 +505,9 @@ pub fn execute_install(
 }
 
 pub fn commit_install(ctx: &mut DawContext, completed: CompletedPluginInstall) -> InstalledPlugin {
-    if let Some(output) = completed.telemetry
-        && let Some(registry) = &mut ctx.telemetry_registry
-    {
-        registry.insert_plugin_consumer(completed.target, output);
+    if let Some(output) = completed.telemetry {
+        ctx.telemetry
+            .insert_plugin_consumer(completed.target, output);
     }
     let session = take(&mut ctx.app_state.session);
     ctx.app_state = completed.staged;
@@ -725,11 +724,7 @@ pub fn commit_removal(
     ctx: &mut DawContext,
     completed: CompletedPluginRemoval,
 ) -> RemovedProjectItem {
-    if let Some(registry) = &mut ctx.telemetry_registry {
-        for target in &completed.targets {
-            registry.remove_plugin_consumer(target);
-        }
-    }
+    ctx.telemetry.remove_plugin_consumers(&completed.targets);
     for target in completed.targets {
         ctx.external_plugin_failures.remove(&target);
         ctx.hosted_targets.remove(&target);
@@ -1107,10 +1102,9 @@ pub fn execute_retry(pending: PendingPluginRetry) -> anyhow::Result<CompletedPlu
 }
 
 pub fn commit_retry(ctx: &mut DawContext, completed: CompletedPluginRetry) {
-    if let Some(output) = completed.telemetry
-        && let Some(registry) = &mut ctx.telemetry_registry
-    {
-        registry.insert_plugin_consumer(completed.target, output);
+    if let Some(output) = completed.telemetry {
+        ctx.telemetry
+            .insert_plugin_consumer(completed.target, output);
     }
     ctx.external_plugin_failures.remove(&completed.target);
     ctx.activate_hosted_target(completed.target, completed.instance);

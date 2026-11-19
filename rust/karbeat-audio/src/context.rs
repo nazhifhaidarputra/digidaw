@@ -8,7 +8,6 @@ use std::{
     sync::{
         Arc, Once,
         atomic::{AtomicU64, Ordering},
-        mpsc,
     },
 };
 
@@ -21,14 +20,14 @@ use rtrb::{Consumer, Producer};
 use crate::{
     backend::{AudioDeviceConfig, AudioRuntimeSettings},
     builtin_plugin::prepare_builtin_plugin,
-    commands::{AudioCommand, AudioFeedback, PreparedPluginTelemetry, TelemetryRegistration},
+    commands::{AudioCommand, AudioFeedback, PreparedPluginTelemetry, retiring},
     event::{PluginTarget, TransportFeedback},
-    message::TelemetryRegistry,
+    message::TelemetryHub,
     playback_sync::{InputClock, OutputClock},
     plugin_catalog::PluginCatalog,
     project_state::ProjectStateFeedback,
     recording::RecordingRegistry,
-    render_state::{AudioAutomationLane, AudioGraphState},
+    render_state::{AudioAutomationLane, AudioGraphState, PluginBox, retiring_plugin},
 };
 use karbeat_core::{
     core::{
@@ -41,7 +40,7 @@ use karbeat_core::{
     },
     shared::{AudioSourceId, AutomationId, ClipId, PatternId},
 };
-use karbeat_plugin_api::{traits::AudioPlugin, types::BusConfig};
+use karbeat_plugin_api::types::BusConfig;
 
 /// Application-owned coordination point for project state, history, audio queues, and telemetry.
 ///
@@ -107,15 +106,9 @@ pub struct DawContext {
     /// Requested and active stream/DSP settings shared with the backend supervisor.
     pub audio_runtime_settings: Arc<RwLock<AudioRuntimeSettings>>,
 
-    /// UI-thread telemetry consumers after the audio engine has initialized them.
-    pub telemetry_registry: Option<TelemetryRegistry>,
-
-    /// Receiver for per-plugin triple-buffer `Output` consumers sent from the audio thread.
-    ///
-    /// The audio thread sends a `TelemetryRegistration` message whenever a plugin is
-    /// added or removed. The UI thread polls this receiver (e.g. on every frame) to
-    /// keep `telemetry_registry.param_telemetry_consumers` in sync.
-    pub telemetry_reg_receiver: Option<Mutex<mpsc::Receiver<TelemetryRegistration>>>,
+    /// Telemetry consumers, shared with the FFI session so that reading telemetry never takes
+    /// the core lock. Created here and never replaced; engines attach to it.
+    pub telemetry: Arc<TelemetryHub>,
 }
 
 karbeat_utils::typestate! {
@@ -228,8 +221,7 @@ impl DawContext {
             hosted_targets: HashMap::new(),
             active_audio_config: Arc::new(RwLock::new(AudioDeviceConfig::default())),
             audio_runtime_settings: Arc::new(RwLock::new(AudioRuntimeSettings::default())),
-            telemetry_registry: None,
-            telemetry_reg_receiver: None,
+            telemetry: Arc::new(TelemetryHub::new()),
         }
     }
 
@@ -291,7 +283,7 @@ impl DawContext {
     pub fn prepare_plugin_install(
         &self,
         factory: PluginFactory,
-    ) -> (Box<dyn AudioPlugin>, PreparedPluginTelemetry) {
+    ) -> (PluginBox, PreparedPluginTelemetry) {
         let config = self.audio_runtime_settings.read().requested_dsp;
         let mut plugin = factory();
         plugin.prepare(config.sample_rate as f32, config.block_size as usize);
@@ -302,7 +294,7 @@ impl DawContext {
         };
         plugin.set_io_layout(from_ref(&bus), from_ref(&bus));
         let telemetry = PreparedPluginTelemetry::new(plugin.as_ref());
-        (plugin, telemetry)
+        (retiring_plugin(plugin), telemetry)
     }
 
     // ======================================
@@ -339,9 +331,9 @@ impl DawContext {
         let (patterns, clips, tracks) = self.update_track_graph();
         let (tracks_len, patterns_len) = (tracks.len(), patterns.len());
         let _ = self.send_audio_command(AudioCommand::UpdateTrackGraph {
-            tracks: tracks,
-            clips,
-            patterns: patterns,
+            tracks: retiring(tracks),
+            clips: retiring(clips),
+            patterns: retiring(patterns),
         });
         tracing::debug!(
             "number of tracks: {}, number of patterns: {}",
@@ -356,7 +348,9 @@ impl DawContext {
     /// tracks: a track without its route to the master is silent.
     pub fn broadcast_routing(&mut self) {
         let routing = self.app_state.mixer.routing.clone().into_boxed_slice();
-        let _ = self.send_audio_command(AudioCommand::UpdateRouting { routing });
+        let _ = self.send_audio_command(AudioCommand::UpdateRouting {
+            routing: retiring(routing),
+        });
     }
 
     /// Best-effort publishes one audio source's current waveform to the audio thread.
@@ -364,7 +358,10 @@ impl DawContext {
         let Some(waveform) = self.app_state.asset_library.source_map.get(id).cloned() else {
             return;
         };
-        let _ = self.send_audio_command(AudioCommand::UpdateAudioSource { id, waveform });
+        let _ = self.send_audio_command(AudioCommand::UpdateAudioSource {
+            id,
+            waveform: retiring(waveform),
+        });
     }
 
     /// Best-effort publishes the project's song loop region to the audio thread.
@@ -380,7 +377,9 @@ impl DawContext {
     /// Builds a complete render graph snapshot and best-effort replaces audio-thread graph state.
     pub fn broadcast_full_graph(&mut self) {
         let graph = AudioGraphState::from(&self.app_state);
-        let _ = self.send_audio_command(AudioCommand::ReplaceFullGraph { graph });
+        let _ = self.send_audio_command(AudioCommand::ReplaceFullGraph {
+            graph: retiring(graph),
+        });
     }
 
     /// Converts one project automation lane into its audio-only form and publishes it.
@@ -392,7 +391,7 @@ impl DawContext {
         };
         let _ = self.send_audio_command(AudioCommand::UpdateAutomationLane {
             id,
-            lane: lane_audio_graph,
+            lane: retiring(lane_audio_graph),
         });
     }
 
@@ -555,7 +554,7 @@ impl DawContext {
     fn prepare_restored_plugin(
         &self,
         instance: &PluginInstance,
-    ) -> Option<(Box<dyn AudioPlugin>, PreparedPluginTelemetry)> {
+    ) -> Option<(PluginBox, PreparedPluginTelemetry)> {
         let Some(factory) = self.get_plugin_factory(instance.registry_id) else {
             tracing::warn!(
                 "Cannot restore plugin {}: registry id {} is not available",
@@ -595,45 +594,6 @@ impl DawContext {
     /// Extracts the feedback consumer.
     pub fn take_feedback_consumer(&self) -> Option<Consumer<AudioFeedback>> {
         self.feedback_consumer.lock().take()
-    }
-
-    /// Replaces the UI-owned telemetry registry after engine initialization or restart.
-    pub fn update_telemetry_reg(&mut self, new_reg: TelemetryRegistry) {
-        self.telemetry_registry = Some(new_reg);
-    }
-
-    /// Drain all pending `TelemetryRegistration` messages from the audio thread and
-    /// apply them to `telemetry_registry`.
-    ///
-    /// Call this on every UI frame (e.g. alongside `get_mixer_telemetry_sync`).
-    /// It is entirely non-blocking: if no messages are pending it returns immediately.
-    pub fn drain_telemetry_registrations(&mut self) {
-        let Some(receiver_mutex) = &self.telemetry_reg_receiver else {
-            return;
-        };
-
-        // Lock the receiver to poll messages
-        let receiver = receiver_mutex.lock();
-        let Some(reg) = &mut self.telemetry_registry else {
-            return;
-        };
-
-        while let Ok(msg) = receiver.try_recv() {
-            match msg {
-                TelemetryRegistration::Registered { target, consumer } => {
-                    reg.insert_plugin_consumer(target, *consumer);
-                }
-                TelemetryRegistration::Removed { target } => {
-                    reg.remove_plugin_consumer(&target);
-                }
-                TelemetryRegistration::BatchRegistered { consumers } => {
-                    reg.param_telemetry_consumers.clear();
-                    for (target, consumer) in consumers {
-                        reg.insert_plugin_consumer(target, *consumer);
-                    }
-                }
-            }
-        }
     }
 }
 

@@ -5,14 +5,15 @@
     reason = "engine tests fail immediately when deterministic fixtures violate their invariants"
 )]
 
+use crate::engine::test_support::endpoint_returned;
 use crate::engine::voices::VoiceState;
 use crate::engine::{AudioBuffer, AudioEngine, AudioEngineTelemetry};
 use crate::event::{PluginTarget, TransportFeedback};
-use crate::render_state::AudioGraphState;
+use crate::render_state::{AudioGraphState, retiring_plugin};
 #[cfg(test)]
 use crate::{commands::MixerChannelTarget, engine::GeneratorVoice};
 use crate::{
-    commands::{AudioCommand, AudioFeedback, EffectTarget, TelemetryRegistration},
+    commands::{AudioCommand, AudioFeedback, EffectTarget, TelemetryRegistration, retiring},
     engine::AudioMixerChannelValues,
 };
 #[cfg(test)]
@@ -142,7 +143,7 @@ fn export_snapshot_builds_fresh_offline_runtime() {
         )
     });
     engine.process_command(AudioCommand::ReplaceFullGraph {
-        graph: AudioGraphState::from(&app_state),
+        graph: retiring(AudioGraphState::from(&app_state)),
     });
     engine.process_command(AudioCommand::SetBPM(96.0));
     engine.transport.time_sig_numerator = 7;
@@ -151,7 +152,10 @@ fn export_snapshot_builds_fresh_offline_runtime() {
     engine.transport.song.is_playing = true;
     engine.workspace.mix_buffer.extend_from_slice(&[0.5, -0.5]);
     let bus_id = BusId::from(3);
-    engine.workspace.bus_buffers.insert(bus_id, vec![0.25]);
+    engine
+        .workspace
+        .bus_buffers
+        .insert(bus_id, retiring(vec![0.25]));
     engine.routing.track_tails.insert(track_id, 1_024);
     engine.mixer_state.master.mute = true;
 
@@ -232,7 +236,7 @@ fn export_snapshot_builds_fresh_offline_runtime() {
             .workspace
             .bus_buffers
             .get(&bus_id)
-            .is_some_and(Vec::is_empty)
+            .is_some_and(|buffer| buffer.is_empty())
     );
     assert!(offline_engine.routing.track_tails.is_empty());
     assert!(offline_engine.mixer_state.master.mute);
@@ -497,7 +501,7 @@ fn test_automation_lane_applied_to_mixer_volume() {
 
     // Initialize Engine State
     engine.process_command(AudioCommand::ReplaceFullGraph {
-        graph: AudioGraphState::from(&app_state),
+        graph: retiring(AudioGraphState::from(&app_state)),
     });
 
     let mut new_val = AudioMixerChannelValues::default();
@@ -522,7 +526,7 @@ fn test_automation_lane_applied_to_mixer_volume() {
     });
     engine.process_command(AudioCommand::UpdateAutomationLane {
         id: automation_id,
-        lane: automation_lane.into(),
+        lane: retiring(automation_lane.into()),
     });
 
     // Let's set playhead to 0 and playback mode
@@ -605,7 +609,7 @@ fn manual_mixer_edit_suspends_automation_until_a_transport_seek() {
             });
 
     engine.process_command(AudioCommand::ReplaceFullGraph {
-        graph: AudioGraphState::from(&app_state),
+        graph: retiring(AudioGraphState::from(&app_state)),
     });
 
     let mut channel = AudioMixerChannelValues::default();
@@ -630,7 +634,7 @@ fn manual_mixer_edit_suspends_automation_until_a_transport_seek() {
     });
     engine.process_command(AudioCommand::UpdateAutomationLane {
         id: automation_id,
-        lane: automation_lane.into(),
+        lane: retiring(automation_lane.into()),
     });
 
     engine.process_command(AudioCommand::SetPlayhead(0));
@@ -729,7 +733,7 @@ fn tempo_automation_maps_the_normalized_lane_to_bpm() {
         )
         .expect("tempo lane should be created");
     engine.process_command(AudioCommand::ReplaceFullGraph {
-        graph: AudioGraphState::from(&app_state),
+        graph: retiring(AudioGraphState::from(&app_state)),
     });
     engine.process_command(AudioCommand::SetPlayhead(0));
 
@@ -762,7 +766,7 @@ fn effect_bypass_skips_latency_and_survives_export_snapshot() {
         telemetry_sender,
     );
     engine.process_command(AudioCommand::ReplaceFullGraph {
-        graph: AudioGraphState::from(&ApplicationState::default()),
+        graph: retiring(AudioGraphState::from(&ApplicationState::default())),
     });
 
     let plugin_registry = PluginRegistry::new_with_defaults();
@@ -851,7 +855,7 @@ fn removing_an_effect_drops_its_automation_in_the_same_command() {
     let effect_source = app_state.modulation_links[effect_link].prop.source_id;
     let volume_source = app_state.modulation_links[volume_link].prop.source_id;
     engine.process_command(AudioCommand::ReplaceFullGraph {
-        graph: AudioGraphState::from(&app_state),
+        graph: retiring(AudioGraphState::from(&app_state)),
     });
     engine
         .modulation
@@ -1020,20 +1024,24 @@ fn render_with_crashing_track(workers: usize, crash: bool) -> Vec<f32> {
         })
         .collect();
     engine.process_command(AudioCommand::ReplaceFullGraph {
-        graph: AudioGraphState::from(&app_state),
+        graph: retiring(AudioGraphState::from(&app_state)),
     });
     engine.process_command(AudioCommand::UpdateRouting {
-        routing: tracks
-            .iter()
-            .map(|&track| RoutingConnection::new(RoutingNode::Track(track), RoutingNode::Master))
-            .collect(),
+        routing: retiring(
+            tracks
+                .iter()
+                .map(|&track| {
+                    RoutingConnection::new(RoutingNode::Track(track), RoutingNode::Master)
+                })
+                .collect(),
+        ),
     });
     for (index, &track) in tracks.iter().enumerate() {
         engine.process_command(AudioCommand::InstallEffect {
             target: EffectTarget::Track(track),
             effect_id: EffectId::from(index as u32 * 2 + 1),
             registry_id: 0,
-            plugin: Box::new(ToneEffect),
+            plugin: retiring_plugin(Box::new(ToneEffect)),
             telemetry: None,
         });
         // The tone effects have no clips to render, so a ringing tail keeps them processing.
@@ -1044,7 +1052,7 @@ fn render_with_crashing_track(workers: usize, crash: bool) -> Vec<f32> {
             target: EffectTarget::Track(tracks[1]),
             effect_id: EffectId::from(4),
             registry_id: 0,
-            plugin: Box::new(PanicEffect),
+            plugin: retiring_plugin(Box::new(PanicEffect)),
             telemetry: None,
         });
     } else {
@@ -1098,7 +1106,7 @@ fn render_bus_keyed_sidechain(tap: RoutingTap) -> f32 {
         AudioTrack::new(id, "Source", Color::new_from_rgb(0, 0, 0), TrackType::Audio)
     });
     engine.process_command(AudioCommand::ReplaceFullGraph {
-        graph: AudioGraphState::from(&app_state),
+        graph: retiring(AudioGraphState::from(&app_state)),
     });
     let bus = BusId::from(1);
     engine.process_command(AudioCommand::AddBus {
@@ -1112,30 +1120,32 @@ fn render_bus_keyed_sidechain(tap: RoutingTap) -> f32 {
         target: EffectTarget::Track(source),
         effect_id: tone,
         registry_id: 0,
-        plugin: Box::new(ToneEffect),
+        plugin: retiring_plugin(Box::new(ToneEffect)),
         telemetry: None,
     });
     engine.process_command(AudioCommand::InstallEffect {
         target: EffectTarget::Track(keyed),
         effect_id: probe,
         registry_id: 0,
-        plugin: Box::new(AuxProbe(energy.clone())),
+        plugin: retiring_plugin(Box::new(AuxProbe(energy.clone()))),
         telemetry: None,
     });
     let mut key =
         RoutingConnection::new_send(RoutingNode::Track(source), RoutingNode::Bus(bus), 1.0);
     key.tap = tap;
     engine.process_command(AudioCommand::UpdateRouting {
-        routing: vec![
-            key,
-            RoutingConnection::new_send(
-                RoutingNode::Bus(bus),
-                RoutingNode::PluginSidechain(SidechainRoute::TrackEffect(keyed, probe)),
-                1.0,
-            ),
-            RoutingConnection::new(RoutingNode::Track(keyed), RoutingNode::Master),
-        ]
-        .into_boxed_slice(),
+        routing: retiring(
+            vec![
+                key,
+                RoutingConnection::new_send(
+                    RoutingNode::Bus(bus),
+                    RoutingNode::PluginSidechain(SidechainRoute::TrackEffect(keyed, probe)),
+                    1.0,
+                ),
+                RoutingConnection::new(RoutingNode::Track(keyed), RoutingNode::Master),
+            ]
+            .into_boxed_slice(),
+        ),
     });
     let mut source_channel = AudioMixerChannelValues::default();
     source_channel.volume.set_base(-100.0);
@@ -1197,13 +1207,13 @@ fn render_tone_track(linked_to_master: bool) -> f32 {
         AudioTrack::new(id, "Tone", Color::new_from_rgb(0, 0, 0), TrackType::Audio)
     });
     engine.process_command(AudioCommand::ReplaceFullGraph {
-        graph: AudioGraphState::from(&app_state),
+        graph: retiring(AudioGraphState::from(&app_state)),
     });
     engine.process_command(AudioCommand::InstallEffect {
         target: EffectTarget::Track(track),
         effect_id: EffectId::from(1),
         registry_id: 0,
-        plugin: Box::new(ToneEffect),
+        plugin: retiring_plugin(Box::new(ToneEffect)),
         telemetry: None,
     });
     let routing = if linked_to_master {
@@ -1215,7 +1225,7 @@ fn render_tone_track(linked_to_master: bool) -> f32 {
         Vec::new()
     };
     engine.process_command(AudioCommand::UpdateRouting {
-        routing: routing.into_boxed_slice(),
+        routing: retiring(routing.into_boxed_slice()),
     });
     engine.routing.track_tails.insert(track, u32::MAX);
 
@@ -1284,7 +1294,7 @@ fn render_idle_probe(
         AudioTrack::new(id, "Idle", Color::new_from_rgb(0, 0, 0), TrackType::Audio)
     });
     engine.process_command(AudioCommand::ReplaceFullGraph {
-        graph: AudioGraphState::from(&app_state),
+        graph: retiring(AudioGraphState::from(&app_state)),
     });
     let bus = BusId::from(1);
     engine.process_command(AudioCommand::AddBus {
@@ -1292,11 +1302,13 @@ fn render_idle_probe(
         name: "Idle".into(),
     });
     engine.process_command(AudioCommand::UpdateRouting {
-        routing: vec![
-            RoutingConnection::new(RoutingNode::Track(track), RoutingNode::Master),
-            RoutingConnection::new(RoutingNode::Bus(bus), RoutingNode::Master),
-        ]
-        .into_boxed_slice(),
+        routing: retiring(
+            vec![
+                RoutingConnection::new(RoutingNode::Track(track), RoutingNode::Master),
+                RoutingConnection::new(RoutingNode::Bus(bus), RoutingNode::Master),
+            ]
+            .into_boxed_slice(),
+        ),
     });
     let target = target(track, bus);
     let effect_id = EffectId::from(1);
@@ -1305,11 +1317,11 @@ fn render_idle_probe(
         target,
         effect_id,
         registry_id: 0,
-        plugin: Box::new(IdleProbe {
+        plugin: retiring_plugin(Box::new(IdleProbe {
             calls: calls.clone(),
             ringing: usize::MAX,
             continuous,
-        }),
+        })),
         telemetry: None,
     });
     engine.process_command(AudioCommand::SetEffectBypass {
@@ -1363,7 +1375,7 @@ fn hosted_effects_park_on_silent_channels_by_default() {
         telemetry_sender,
     );
     engine.process_command(AudioCommand::UpdateRouting {
-        routing: Box::default(),
+        routing: retiring(Box::default()),
     });
     let calls = Arc::new(AtomicUsize::new(0));
     let endpoint = Box::new(HostedProcessor::new(
@@ -1399,7 +1411,7 @@ fn hosted_effects_park_on_silent_channels_by_default() {
     }
     assert_eq!(calls.load(Ordering::Relaxed), 0);
     drop(engine);
-    assert!(retirement.take().is_some());
+    assert!(endpoint_returned(&mut retirement));
 }
 
 #[test]
@@ -1429,7 +1441,7 @@ fn pattern_transport_pauses_seeks_and_loops_a_region() {
         ..Pattern::default()
     });
     engine.process_command(AudioCommand::ReplaceFullGraph {
-        graph: AudioGraphState::from(&app_state),
+        graph: retiring(AudioGraphState::from(&app_state)),
     });
     let registry = PluginRegistry::new_with_defaults();
     let registry_id = hash_str("synth_karbeatzer_v2");
@@ -1622,7 +1634,7 @@ impl PatternRig {
             .add_note(key, 0, Some(960 * 8))
             .expect("valid note");
         engine.process_command(AudioCommand::ReplaceFullGraph {
-            graph: AudioGraphState::from(&app_state),
+            graph: retiring(AudioGraphState::from(&app_state)),
         });
         let held = Arc::new(Mutex::new(Vec::new()));
         let generator_id = GeneratorId::from(1);
@@ -1630,7 +1642,7 @@ impl PatternRig {
             generator_id,
             track_id,
             registry_id: 0,
-            plugin: Box::new(HeldKeysRecorder(held.clone())),
+            plugin: retiring_plugin(Box::new(HeldKeysRecorder(held.clone()))),
             telemetry: None,
         });
         Self {
@@ -1662,9 +1674,9 @@ impl PatternRig {
     fn publish(&mut self) {
         let graph = AudioGraphState::from(&self.app_state);
         self.engine.process_command(AudioCommand::UpdateTrackGraph {
-            tracks: graph.tracks,
-            clips: graph.clips,
-            patterns: graph.patterns,
+            tracks: retiring(graph.tracks),
+            clips: retiring(graph.clips),
+            patterns: retiring(graph.patterns),
         });
     }
 
@@ -1764,7 +1776,7 @@ fn update_audio_source_swaps_only_that_waveform() {
         })
     });
     engine.process_command(AudioCommand::ReplaceFullGraph {
-        graph: AudioGraphState::from(&app),
+        graph: retiring(AudioGraphState::from(&app)),
     });
 
     app.set_audio_source_envelope(
@@ -1781,7 +1793,7 @@ fn update_audio_source_swaps_only_that_waveform() {
     let updated = Arc::clone(&app.asset_library.source_map[id]);
     engine.process_command(AudioCommand::UpdateAudioSource {
         id,
-        waveform: Arc::clone(&updated),
+        waveform: retiring(Arc::clone(&updated)),
     });
 
     let rendered = &engine.current_state.graph.asset_library.source_map[id];
@@ -1795,7 +1807,7 @@ fn update_audio_source_swaps_only_that_waveform() {
         .insert(Arc::new(AudioWaveform::default()));
     engine.process_command(AudioCommand::UpdateAudioSource {
         id: unknown,
-        waveform: Arc::new(AudioWaveform::default()),
+        waveform: retiring(Arc::new(AudioWaveform::default())),
     });
     assert!(
         !engine
@@ -1850,7 +1862,7 @@ fn audio_clip_plays_live_and_in_export() {
     app.create_new_clip(Some(source.to_u64()), ClipSourceType::Audio, track, 0)
         .expect("clip");
     engine.process_command(AudioCommand::ReplaceFullGraph {
-        graph: AudioGraphState::from(&app),
+        graph: retiring(AudioGraphState::from(&app)),
     });
     engine.process_command(AudioCommand::SetPlaybackMode(PlaybackMode::Song));
     engine.process_command(AudioCommand::SetPlayhead(0));
@@ -1940,7 +1952,7 @@ pub(crate) fn song_engine_with_ramp_clip() -> AudioEngine {
     app.create_new_clip(Some(source.to_u64()), ClipSourceType::Audio, track, 0)
         .expect("clip");
     engine.process_command(AudioCommand::ReplaceFullGraph {
-        graph: AudioGraphState::from(&app),
+        graph: retiring(AudioGraphState::from(&app)),
     });
     engine.process_command(AudioCommand::SetPlaybackMode(PlaybackMode::Song));
     engine
@@ -2000,7 +2012,7 @@ fn a_take_waits_for_the_song_and_holds_the_loop_while_it_records() {
     let mut engine = song_engine_with_ramp_clip();
     let (producer, consumer) = RingBuffer::<f32>::new(48_000);
     let shared = Arc::new(TakeShared::default());
-    engine.process_command(AudioCommand::StartRecordingTake(Box::new(RecordTake::new(
+    engine.process_command(AudioCommand::StartRecordingTake(retiring(RecordTake::new(
         TrackId::from(1),
         InputSource {
             first_channel: 0,
@@ -2110,14 +2122,16 @@ fn a_stop_applied_in_an_empty_block_still_releases_held_notes() {
         AudioTrack::new(id, "Synth", Color::new_from_rgb(0, 0, 0), TrackType::Midi)
     });
     engine.process_command(AudioCommand::ReplaceFullGraph {
-        graph: AudioGraphState::from(&app_state),
+        graph: retiring(AudioGraphState::from(&app_state)),
     });
     engine.process_command(AudioCommand::UpdateRouting {
-        routing: vec![RoutingConnection::new(
-            RoutingNode::Track(track_id),
-            RoutingNode::Master,
-        )]
-        .into_boxed_slice(),
+        routing: retiring(
+            vec![RoutingConnection::new(
+                RoutingNode::Track(track_id),
+                RoutingNode::Master,
+            )]
+            .into_boxed_slice(),
+        ),
     });
     let generator_id = GeneratorId::from(1);
     engine.process_command(AudioCommand::AddGenerator {
@@ -2193,14 +2207,16 @@ fn plugins_with_pending_work_are_processed_while_parked() {
         AudioTrack::new(id, "Sampler", Color::new_from_rgb(0, 0, 0), TrackType::Midi)
     });
     engine.process_command(AudioCommand::ReplaceFullGraph {
-        graph: AudioGraphState::from(&app_state),
+        graph: retiring(AudioGraphState::from(&app_state)),
     });
     engine.process_command(AudioCommand::UpdateRouting {
-        routing: vec![RoutingConnection::new(
-            RoutingNode::Track(track_id),
-            RoutingNode::Master,
-        )]
-        .into_boxed_slice(),
+        routing: retiring(
+            vec![RoutingConnection::new(
+                RoutingNode::Track(track_id),
+                RoutingNode::Master,
+            )]
+            .into_boxed_slice(),
+        ),
     });
     let probe = || {
         let calls = Arc::new(AtomicUsize::new(0));
@@ -2216,7 +2232,7 @@ fn plugins_with_pending_work_are_processed_while_parked() {
         generator_id: GeneratorId::from(1),
         track_id,
         registry_id: 0,
-        plugin: generator,
+        plugin: retiring_plugin(generator),
         telemetry: None,
     });
     let (effect, effect_calls, effect_pending) = probe();
@@ -2224,7 +2240,7 @@ fn plugins_with_pending_work_are_processed_while_parked() {
         target: EffectTarget::Master,
         effect_id: EffectId::from(1),
         registry_id: 0,
-        plugin: effect,
+        plugin: retiring_plugin(effect),
         telemetry: None,
     });
     let mut block = vec![0.0_f32; 512 * 2];

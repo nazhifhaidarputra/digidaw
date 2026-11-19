@@ -23,7 +23,6 @@ mod lv2 {
     use karbeat_audio::{
         commands::{EffectTarget, MixerChannelTarget},
         context::DawContext,
-        message::TelemetryRegistry,
         {
             engine::{AudioEngine, AudioEngineTelemetry},
             event::PluginTarget,
@@ -89,9 +88,9 @@ mod lv2 {
         let (sender, commands) = rtrb::RingBuffer::new(256);
         let (feedback, responses) = rtrb::RingBuffer::new(256);
         let (position, _positions) = rtrb::RingBuffer::new(256);
-        let (registration, _registrations) = sync_channel(256);
+        let (registration, registrations) = sync_channel(256);
         let (telemetry, output) = AudioEngineTelemetry::new();
-        ctx.telemetry_registry = Some(TelemetryRegistry::new(output));
+        ctx.telemetry.attach(output, registrations);
         *ctx.command_sender.lock() = Some(sender);
         *ctx.feedback_consumer.lock() = Some(responses);
         let stop = Arc::new(AtomicBool::new(false));

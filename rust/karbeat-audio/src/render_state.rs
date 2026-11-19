@@ -9,19 +9,35 @@ use karbeat_core::core::project::{
 };
 use karbeat_core::core::project::{AutomationLane, ModulationLink, ModulationSource};
 use karbeat_core::shared::id::*;
-use karbeat_host::HostedProcessor;
+use karbeat_host::{
+    HostedProcessor,
+    retire::{Owner, Retiree},
+};
 use karbeat_utils::math::is_power_of_two;
 use karbeat_utils::types::NormalizedF64;
 use slab::Slab;
-use std::{
-    mem::{forget, replace},
-    thread::{sleep, spawn},
-    time::Duration,
-};
 
 // =============================================================================
 // Audio Thread Owned Plugin State
 // =============================================================================
+
+/// A plugin the audio thread can drop without destroying it there.
+pub type PluginBox = Retiree<Box<dyn AudioPlugin>>;
+
+/// Wraps a plugin so dropping it hands it to [`AudioPlugin::retire`] off the audio thread.
+/// Allocates; call it where the plugin is created, never on the audio thread.
+///
+/// Hosted endpoints retire on the native UI owner. Their `retire` returns them to their host
+/// through a reserved queue, and running it there keeps every hosted object on that thread even
+/// if the endpoint has no return queue.
+pub fn retiring_plugin(plugin: Box<dyn AudioPlugin>) -> PluginBox {
+    let owner = if plugin.as_any().is::<HostedProcessor>() {
+        Owner::UiThread
+    } else {
+        Owner::AnyThread
+    };
+    Retiree::with_dispose(owner, plugin, |plugin| plugin.retire())
+}
 
 /// A generator plugin instance owned by the audio thread
 pub struct AudioGeneratorInstance {
@@ -29,14 +45,14 @@ pub struct AudioGeneratorInstance {
     pub track_id: TrackId,
     /// Stable plugin type identifier used to create another instance.
     pub registry_id: u32,
-    pub plugin: Box<dyn AudioPlugin>,
+    pub plugin: PluginBox,
 }
 
 pub struct AudioEffectInstance {
     pub id: EffectId,
     /// Stable plugin type identifier used to create another instance.
     pub registry_id: u32,
-    pub plugin: Box<dyn AudioPlugin>,
+    pub plugin: PluginBox,
     /// Bypassed effects pass audio through untouched and report no latency.
     pub bypass: bool,
     /// Whether the chain did not process this effect in the last block. A new instance starts
@@ -128,55 +144,21 @@ pub struct AudioPluginState {
 
     /// Bus effect chains. Index = BusId as usize.
     pub bus_effects: Vec<Vec<AudioEffectInstance>>,
-
-    retirement: rtrb::Producer<Box<dyn AudioPlugin>>,
 }
 
 impl Default for AudioPluginState {
     fn default() -> Self {
-        let (retirement, mut consumer) = rtrb::RingBuffer::<Box<dyn AudioPlugin>>::new(1_024);
-        spawn(move || {
-            loop {
-                // Checked before pop: once abandoned no push can follow, so empty is final.
-                let abandoned = consumer.is_abandoned();
-                match consumer.pop() {
-                    Ok(plugin) => plugin.retire(),
-                    Err(rtrb::PopError::Empty) if abandoned => break,
-                    Err(rtrb::PopError::Empty) => {
-                        sleep(Duration::from_millis(10));
-                    }
-                }
-            }
-        });
         Self {
             generators: Slab::new(),
             generator_keys: HashMap::new(),
             track_effects: Vec::new(),
             master_effects: Vec::new(),
             bus_effects: Vec::new(),
-            retirement,
         }
     }
 }
 
 impl AudioPluginState {
-    pub fn retire_plugin(&mut self, plugin: Box<dyn AudioPlugin>) {
-        Self::enqueue_retirement(&mut self.retirement, plugin);
-    }
-
-    fn enqueue_retirement(
-        retirement: &mut rtrb::Producer<Box<dyn AudioPlugin>>,
-        plugin: Box<dyn AudioPlugin>,
-    ) {
-        if plugin.as_any().is::<HostedProcessor>() {
-            plugin.retire();
-            return;
-        }
-        if let Err(rtrb::PushError::Full(plugin)) = retirement.push(plugin) {
-            forget(plugin);
-        }
-    }
-
     pub fn plugin(&self, target: &PluginTarget) -> Option<&dyn AudioPlugin> {
         let effect = match target {
             PluginTarget::Generator(id) => {
@@ -208,8 +190,8 @@ impl AudioPluginState {
     /// Insert a generator or replace the existing instance with the same ID.
     pub fn insert_generator(&mut self, instance: AudioGeneratorInstance) {
         if let Some(&key) = self.generator_keys.get(&instance.id) {
-            let previous = replace(&mut self.generators[key], instance).plugin;
-            self.retire_plugin(previous);
+            // Dropping the previous plugin retires it off the audio thread.
+            self.generators[key] = instance;
             return;
         }
 
@@ -221,37 +203,21 @@ impl AudioPluginState {
     /// Remove a generator without shifting other arena entries.
     pub fn remove_generator(&mut self, id: GeneratorId) {
         if let Some(key) = self.generator_keys.remove(&id) {
-            let plugin = self.generators.remove(key).plugin;
-            self.retire_plugin(plugin);
+            self.generators.remove(key);
         }
     }
 
     /// Remove every generator and its ID-to-arena-key mapping.
     pub fn clear_generators(&mut self) {
-        let retirement = &mut self.retirement;
-        for generator in self.generators.drain() {
-            Self::enqueue_retirement(retirement, generator.plugin);
-        }
+        self.generators.clear();
         self.generator_keys.clear();
     }
 
-    /// Return hosted endpoints before replacing or dropping effect chains.
+    /// Drops every effect chain; each plugin retires off the audio thread.
     pub fn clear_effects(&mut self) {
-        let retirement = &mut self.retirement;
-        for chain in self
-            .track_effects
-            .iter_mut()
-            .chain(self.bus_effects.iter_mut())
-        {
-            for effect in chain.drain(..) {
-                Self::enqueue_retirement(retirement, effect.plugin);
-            }
-        }
-        for effect in self.master_effects.drain(..) {
-            Self::enqueue_retirement(retirement, effect.plugin);
-        }
         self.track_effects.clear();
         self.bus_effects.clear();
+        self.master_effects.clear();
     }
 
     /// Get a mutable reference to a specific generator
@@ -309,18 +275,13 @@ impl AudioPluginState {
         if bus_id_index >= self.bus_effects.len() {
             self.bus_effects.resize_with(bus_id_index + 1, Vec::new);
         }
-        let retirement = &mut self.retirement;
-        for effect in self.bus_effects[bus_id_index].drain(..) {
-            Self::enqueue_retirement(retirement, effect.plugin);
-        }
+        // A reused bus index starts with an empty chain; the old plugins retire.
+        self.bus_effects[bus_id_index].clear();
     }
 
     pub fn remove_bus(&mut self, bus_id_index: usize) {
-        let retirement = &mut self.retirement;
         if let Some(bus) = self.bus_effects.get_mut(bus_id_index) {
-            for effect in bus.drain(..) {
-                Self::enqueue_retirement(retirement, effect.plugin);
-            }
+            bus.clear();
         }
     }
 
@@ -454,7 +415,8 @@ pub struct AudioGraphState {
     pub bus_ids: Vec<BusId>,
     pub asset_library: AssetLibrary,
     /// Automation lanes for real-time parameter modulation
-    pub automation_lanes: HashMap<AutomationId, AudioAutomationLane>,
+    /// Lanes retire off the audio thread when replaced or removed.
+    pub automation_lanes: HashMap<AutomationId, Retiree<AudioAutomationLane>>,
     pub max_sample_index: u32,
     pub sample_rate: u32,
     pub buffer_size: usize,
@@ -498,7 +460,7 @@ impl From<&ApplicationState> for AudioGraphState {
                 .automation_pool
                 .clone()
                 .into_iter()
-                .map(|(id, l)| (id, l.into()))
+                .map(|(id, l)| (id, Retiree::new(Owner::AnyThread, l.into())))
                 .collect(),
             max_sample_index: 0,
             sample_rate: app.audio_config.sample_rate,
@@ -546,14 +508,14 @@ mod tests {
             Arc,
             atomic::{AtomicUsize, Ordering},
         },
-        thread::sleep,
-        time::{Duration, Instant},
+        time::Duration,
     };
 
     use karbeat_core::{
         core::project::{ApplicationState, AutomationCurveType, AutomationLane, AutomationPoint},
-        shared::AutomationId,
+        shared::{AutomationId, EffectId},
     };
+    use karbeat_host::retire::RetirementService;
     use karbeat_plugin_api::{
         prelude::ParameterSpec,
         traits::{AudioPlugin, HashMap},
@@ -561,7 +523,10 @@ mod tests {
     };
     use karbeat_utils::types::{BipolarF64, NormalizedF64};
 
-    use super::{AudioAutomationLane, AudioGraphState, AudioPluginState};
+    use super::{
+        AudioAutomationLane, AudioEffectInstance, AudioGraphState, AudioPluginState,
+        retiring_plugin,
+    };
 
     #[test]
     fn audio_lane_matches_project_lane_evaluation() {
@@ -628,24 +593,29 @@ mod tests {
     }
 
     #[test]
-    fn plugins_queued_before_state_drop_are_all_retired() {
+    fn plugins_dropped_with_the_state_are_all_retired() {
         const ROUNDS: usize = 25;
         const PER_ROUND: usize = 16;
         let retired = Arc::new(AtomicUsize::new(0));
 
         for _ in 0..ROUNDS {
             let mut state = AudioPluginState::default();
-            for _ in 0..PER_ROUND {
-                state.retire_plugin(Box::new(CountingPlugin(Arc::clone(&retired))));
+            for index in 0..PER_ROUND {
+                state.add_track_effect(
+                    0,
+                    AudioEffectInstance {
+                        id: EffectId::from(index as u32),
+                        registry_id: 0,
+                        plugin: retiring_plugin(Box::new(CountingPlugin(Arc::clone(&retired)))),
+                        bypass: false,
+                        parked: false,
+                    },
+                );
             }
             drop(state);
         }
 
-        let expected = ROUNDS * PER_ROUND;
-        let deadline = Instant::now() + Duration::from_secs(5);
-        while retired.load(Ordering::SeqCst) < expected && Instant::now() < deadline {
-            sleep(Duration::from_millis(5));
-        }
-        assert_eq!(retired.load(Ordering::SeqCst), expected);
+        assert!(RetirementService::global().drain_all(Duration::from_secs(5)));
+        assert_eq!(retired.load(Ordering::SeqCst), ROUNDS * PER_ROUND);
     }
 }

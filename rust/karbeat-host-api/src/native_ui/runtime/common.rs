@@ -8,6 +8,7 @@ use mpsc::error::{TryRecvError, TrySendError};
 use tokio::sync::{mpsc, oneshot};
 
 use super::{super::NativeUiError, initialize_dispatcher, wake_ui_owner};
+use crate::retire::{UiPostError, UiTask as RetireTask};
 
 pub(super) const REQUEST_QUEUE_CAPACITY: usize = 128;
 pub(super) const MAX_UI_TASKS_PER_TICK: usize = 4;
@@ -47,6 +48,26 @@ impl NativeUiDispatcher {
     /// Returns whether the current thread owns native UI objects.
     pub fn is_owner_thread() -> bool {
         IS_UI_OWNER.with(Cell::get)
+    }
+
+    /// Enqueues a fire-and-forget task for the native owner without waiting for it.
+    ///
+    /// Hands the task back when the queue is full or no native UI runtime exists, so the
+    /// caller can retry or choose another thread. Never blocks.
+    pub fn post(task: RetireTask) -> Result<(), UiPostError> {
+        let Some(sender) = TASK_SENDER.get() else {
+            return Err(UiPostError::Unavailable(task));
+        };
+        let permit = match sender.try_reserve() {
+            Ok(permit) => permit,
+            Err(TrySendError::Full(())) => return Err(UiPostError::Full(task)),
+            Err(TrySendError::Closed(())) => return Err(UiPostError::Unavailable(task)),
+        };
+        permit.send(Box::new(move |_| task()));
+        if let Err(error) = wake_ui_owner() {
+            tracing::debug!("Native UI owner was not woken for a posted task: {error}");
+        }
+        Ok(())
     }
 
     /// Enqueues a closure and asynchronously receives its native-owner result.

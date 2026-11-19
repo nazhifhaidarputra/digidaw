@@ -831,6 +831,7 @@ fn validate_rendered_block(engine: &AudioEngine, samples: &[f32]) -> Result<(), 
 )]
 mod tests {
     use super::*;
+    use crate::{commands::retiring, engine::test_support::endpoint_returned};
     use crate::{
         commands::{EffectTarget, MixerChannelTarget},
         engine::{
@@ -962,7 +963,7 @@ mod tests {
         assert_eq!(result.unwrap_err().error_source, "HostedPlugin");
         assert_eq!(read(path).unwrap(), b"previous export");
         drop(engine);
-        assert!(retirement.take().is_some());
+        assert!(endpoint_returned(&mut retirement));
     }
 
     /// Installs a hosted effect on the master that rings for `ringing` blocks and counts its
@@ -1007,7 +1008,7 @@ mod tests {
         assert!(control.collect());
         // Publishing the routing schedules the master node, as loading any project does.
         engine.process_command(AudioCommand::UpdateRouting {
-            routing: Box::default(),
+            routing: retiring(Box::default()),
         });
         (engine, calls, retirement)
     }
@@ -1044,7 +1045,7 @@ mod tests {
         assert!(calls.load(Ordering::Relaxed) > 0);
         assert_eq!(engine.get_export_length(), 0);
         drop(engine);
-        assert!(retirement.take().is_some());
+        assert!(endpoint_returned(&mut retirement));
     }
 
     #[test]
@@ -1060,7 +1061,7 @@ mod tests {
         }
         assert_eq!(audible_blocks, 5);
         drop(engine);
-        assert!(retirement.take().is_some());
+        assert!(endpoint_returned(&mut retirement));
     }
 
     const RENDER_RATE: u32 = 48_000;

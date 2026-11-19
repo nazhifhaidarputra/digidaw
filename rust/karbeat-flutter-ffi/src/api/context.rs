@@ -4,7 +4,7 @@ use std::{
 };
 
 use crate::sync::{Mutex, MutexGuard, RwLock, RwLockReadGuard, RwLockWriteGuard};
-use karbeat_audio::context::DawContext as CoreDawContext;
+use karbeat_audio::{context::DawContext as CoreDawContext, message::TelemetryHub};
 use karbeat_core_api::tempo_edit::TempoEdit;
 
 pub(crate) use crate::api::project::DawContext;
@@ -25,6 +25,9 @@ pub(crate) struct DawSessionInner {
     ///
     /// A plain OS lock, never held while taking the core lock.
     tempo_edit: parking_lot::Mutex<TempoEdit>,
+    /// The core context's telemetry hub, held here so that the synchronous telemetry polls on
+    /// the UI thread never wait for the core lock.
+    telemetry: Arc<TelemetryHub>,
 }
 
 /// Receives whether the project has no unsaved changes. Returns `false` once it stops
@@ -118,6 +121,8 @@ impl ProjectOperationGuard<'_> {
 
 impl DawContext {
     pub(crate) fn new(core: CoreDawContext) -> Self {
+        // The core never replaces its hub, so this clone stays the one engines attach to.
+        let telemetry = Arc::clone(&core.telemetry);
         Self {
             inner: Arc::new(DawSessionInner {
                 core: RwLock::new(core),
@@ -125,6 +130,7 @@ impl DawContext {
                 auto_save_wake: parking_lot::Mutex::new(None),
                 save_status_listener: parking_lot::Mutex::new(None),
                 tempo_edit: parking_lot::Mutex::new(TempoEdit::default()),
+                telemetry,
             }),
         }
     }
@@ -168,6 +174,11 @@ impl DawContext {
         self.inner.project_operation.try_lock()
     }
 
+    /// Telemetry consumers, readable without the core lock.
+    pub(crate) fn telemetry(&self) -> &TelemetryHub {
+        &self.inner.telemetry
+    }
+
     /// The tempo edit. Never take the core lock while holding it.
     pub(crate) fn tempo_edit(&self) -> parking_lot::MutexGuard<'_, TempoEdit> {
         self.inner.tempo_edit.lock()
@@ -202,9 +213,14 @@ pub(crate) use runtime_ctx;
 #[cfg(test)]
 mod tests {
     use super::DawContext;
+    use crate::api::mixer::get_mixer_telemetry_sync;
     use crate::sync::{check_random, mpsc, thread};
-    use karbeat_audio::context::DawContext as CoreDawContext;
-    use std::sync::Arc;
+    use karbeat_audio::{
+        commands::{MixerChannelSnapshot, MixerChannelTarget},
+        context::DawContext as CoreDawContext,
+        engine::{AudioEngineTelemetry, MixerTelemetrySnapshot},
+    };
+    use std::sync::{Arc, mpsc::sync_channel};
 
     fn project_name(ctx: &CoreDawContext) -> &str {
         &ctx.app_state.metadata.name
@@ -310,6 +326,39 @@ mod tests {
                 writer.join().expect("writer thread should complete");
             },
             100,
+        );
+    }
+    #[test]
+    fn telemetry_reads_do_not_wait_for_the_core_lock() {
+        check_random(
+            || {
+                let session = DawContext::new(CoreDawContext::new());
+                let (mut telemetry, output) = AudioEngineTelemetry::new();
+                let (_registration, registrations) = sync_channel(1);
+                session.read().telemetry.attach(output, registrations);
+                telemetry
+                    .mixer_telemetry_producer
+                    .write(MixerTelemetrySnapshot {
+                        master: Some(MixerChannelSnapshot {
+                            target: MixerChannelTarget::Master,
+                            request_id: None,
+                            magnitude: 0.5,
+                            volume: 0.0,
+                            pan: 0.0,
+                            mute: false,
+                            solo: false,
+                            inverted_phase: false,
+                        }),
+                        ..Default::default()
+                    });
+
+                // A project operation can hold the core write lock for seconds. Under Shuttle,
+                // a read that took the core lock here would fail as a deadlock.
+                let _core = session.project_write();
+                let master = get_mixer_telemetry_sync(&session).master;
+                assert_eq!(master.map(|channel| channel.magnitude), Some(0.5));
+            },
+            1,
         );
     }
 }

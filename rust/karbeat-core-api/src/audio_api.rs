@@ -3,7 +3,10 @@ use std::{fs::create_dir_all, io::BufWriter, path::Path};
 use anyhow::Context;
 use hound::{SampleFormat, WavReader, WavSpec, WavWriter};
 use karbeat_audio::{
-    commands::AudioCommand, context::DawContext, engine::MetronomeClick, event::TransportFeedback,
+    commands::{AudioCommand, retiring},
+    context::DawContext,
+    engine::MetronomeClick,
+    event::TransportFeedback,
 };
 use karbeat_core::core::{
     file_manager::audio_loader::{AudioLoader, load_audio_file},
@@ -103,7 +106,7 @@ pub fn set_metronome_click(
     ctx: &mut DawContext,
     click: Option<MetronomeClick>,
 ) -> anyhow::Result<()> {
-    ctx.send_audio_command(AudioCommand::SetMetronomeClick(click))
+    ctx.send_audio_command(AudioCommand::SetMetronomeClick(click.map(retiring)))
 }
 
 /// Decodes an audio file into mono samples of bounded length and their sample rate.

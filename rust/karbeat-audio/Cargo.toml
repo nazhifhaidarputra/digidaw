@@ -39,6 +39,7 @@ wide.workspace = true
 itertools.workspace = true
 mp3lame-encoder = "0.2.4"
 triple_buffer.workspace = true
+arc-swap.workspace = true
 slab.workspace = true
 rubato.workspace = true
 futures-lite.workspace = true

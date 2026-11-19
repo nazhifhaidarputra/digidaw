@@ -1,4 +1,5 @@
 use hashbrown::{HashMap, HashSet};
+use karbeat_host::retire::Retiree;
 use karbeat_plugin_api::types::ParamChange;
 
 use crate::{
@@ -88,7 +89,7 @@ impl ModulationState {
         bpm: f32,
         sample_rate: u32,
         playhead_samples: u32,
-        automation_lanes: &HashMap<AutomationId, AudioAutomationLane>,
+        automation_lanes: &HashMap<AutomationId, Retiree<AudioAutomationLane>>,
         accumulators: &mut HashMap<AutomationTarget, (Option<f32>, f32)>,
     ) {
         accumulators.clear();

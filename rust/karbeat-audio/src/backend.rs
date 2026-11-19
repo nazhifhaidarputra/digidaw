@@ -15,6 +15,7 @@ use cpal::{
     DeviceId, FromSample, OutputCallbackInfo, SizedSample,
     traits::{DeviceTrait, HostTrait, StreamTrait},
 };
+use karbeat_host::retire::{RetirementService, mark_realtime_thread, report_leaks};
 use karbeat_utils::typestate::InvalidState;
 use parking_lot::Mutex;
 use rtrb::{Consumer, Producer, RingBuffer};
@@ -28,7 +29,6 @@ use crate::{
         AudioEngine, AudioEngineTelemetry, InputCapture, record_dsp_load, record_stream_load,
     },
     event::TransportFeedback,
-    message::TelemetryRegistry,
     playback_sync::{InputClock, OutputEpoch},
     rate_bridge::DeviceRateBridge,
 };
@@ -36,6 +36,8 @@ use crate::{
 static OUTPUT_UNDERRUN_SAMPLES: AtomicU64 = AtomicU64::new(0);
 static INPUT_OVERRUN_FRAMES: AtomicU64 = AtomicU64::new(0);
 const OUTPUT_CHANNELS: usize = 2;
+/// How long engine teardown waits for everything the engine owned to be destroyed.
+const TEARDOWN_DRAIN_TIMEOUT: Duration = Duration::from_secs(5);
 const OUTPUT_CHANNELS_U16: u16 = 2;
 const OUTPUT_CHANNELS_U64: u64 = 2;
 type OutputFrame = [f32; OUTPUT_CHANNELS];
@@ -1008,9 +1010,7 @@ pub fn start_audio_stream(
     let (engine_telemetry, mixer_consumer) = AudioEngineTelemetry::new();
     let (telemetry_reg_sender, telemetry_reg_receiver) = sync_channel::<TelemetryRegistration>(64);
 
-    let telemetry_registry = TelemetryRegistry::new(mixer_consumer);
-    ctx.update_telemetry_reg(telemetry_registry);
-    ctx.telemetry_reg_receiver = Some(Mutex::new(telemetry_reg_receiver));
+    ctx.telemetry.attach(mixer_consumer, telemetry_reg_receiver);
 
     let (dsp_control_tx, dsp_control_rx) = sync_channel::<DspControl>(1);
 
@@ -1027,6 +1027,8 @@ pub fn start_audio_stream(
             engine_telemetry,
             telemetry_reg_sender,
         );
+        // Leaks on this thread are counted without logging.
+        mark_realtime_thread();
 
         let mut _priority = None;
         let mut realtime_slice = RealtimeSlice::new(REALTIME_SLICE);
@@ -1171,7 +1173,13 @@ pub fn start_audio_stream(
             }
         }
 
-        // `engine` is dropped here, on the same DSP thread where it was created.
+        // Dropping the engine on its own thread retires everything it owns; the teardown
+        // barrier then waits until all of it is destroyed and reports any leak once.
+        drop(engine);
+        if !RetirementService::global().drain_all(TEARDOWN_DRAIN_TIMEOUT) {
+            tracing::warn!("Engine teardown left values waiting for retirement");
+        }
+        report_leaks();
         tracing::info!("DSP thread shut down; AudioEngine dropped on DSP thread.");
     });
 

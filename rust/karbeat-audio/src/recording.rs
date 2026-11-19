@@ -17,10 +17,12 @@ use std::{
 use anyhow::Context;
 use hashbrown::HashMap;
 use karbeat_core::shared::TrackId;
+use karbeat_host::retire::Retiree;
 use parking_lot::Mutex;
 use rtrb::{Consumer, RingBuffer};
 
 use crate::{
+    commands::retiring,
     engine::{InputSource, RecordTake, TakeShared, TakeStart},
     playback_sync::{InputClock, OutputClock},
     writer::{
@@ -146,7 +148,7 @@ impl RecordingRegistry {
         &mut self,
         request: TakeRequest,
         clocks: TakeClocks,
-    ) -> anyhow::Result<Box<RecordTake>> {
+    ) -> anyhow::Result<Retiree<RecordTake>> {
         anyhow::ensure!(
             !self.takes.contains_key(&request.track_id),
             "The track is already recording"
@@ -170,7 +172,8 @@ impl RecordingRegistry {
             sample_rate: request.sample_rate,
             ..TakePreview::default()
         }));
-        let take = Box::new(RecordTake::new(
+        // The engine drops the take on the audio thread when it ends; it retires from there.
+        let take = retiring(RecordTake::new(
             request.track_id,
             request.source,
             producer,

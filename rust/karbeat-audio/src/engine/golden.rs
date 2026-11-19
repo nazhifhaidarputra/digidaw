@@ -34,7 +34,7 @@ use super::test_support::{
     install_generator, play, project, publish, set_mixer, tone,
 };
 use crate::{
-    commands::{AudioCommand, AudioFeedback, EffectTarget, MixerChannelTarget},
+    commands::{AudioCommand, AudioFeedback, EffectTarget, MixerChannelTarget, retiring},
     engine::{AudioEngine, PlaybackMode, tests::IdleProbe},
     event::{PluginTarget, TransportFeedback},
     hosted_plugin::HostedPluginInstall,
@@ -416,18 +416,20 @@ fn routing_pdc() -> Scenario {
         RoutingConnection::new_send(RoutingNode::Track(lead), RoutingNode::Bus(bus), 0.5);
     send.tap = RoutingTap::PreFader;
     engine.process_command(AudioCommand::UpdateRouting {
-        routing: vec![
-            RoutingConnection::new(RoutingNode::Track(lead), RoutingNode::Master),
-            send,
-            RoutingConnection::new_send(
-                RoutingNode::Track(lead),
-                RoutingNode::PluginSidechain(SidechainRoute::TrackEffect(pad, ducker)),
-                1.0,
-            ),
-            RoutingConnection::new(RoutingNode::Track(pad), RoutingNode::Bus(bus)),
-            RoutingConnection::new(RoutingNode::Bus(bus), RoutingNode::Master),
-        ]
-        .into_boxed_slice(),
+        routing: retiring(
+            vec![
+                RoutingConnection::new(RoutingNode::Track(lead), RoutingNode::Master),
+                send,
+                RoutingConnection::new_send(
+                    RoutingNode::Track(lead),
+                    RoutingNode::PluginSidechain(SidechainRoute::TrackEffect(pad, ducker)),
+                    1.0,
+                ),
+                RoutingConnection::new(RoutingNode::Track(pad), RoutingNode::Bus(bus)),
+                RoutingConnection::new(RoutingNode::Bus(bus), RoutingNode::Master),
+            ]
+            .into_boxed_slice(),
+        ),
     });
     set_mixer(
         &mut engine,
@@ -535,12 +537,12 @@ fn channel_switches() -> Scenario {
         })
         .at(3_200, move |engine| {
             engine.process_command(AudioCommand::UpdateRouting {
-                routing: unlinked.clone().into_boxed_slice(),
+                routing: retiring(unlinked.clone().into_boxed_slice()),
             });
         })
         .at(3_600, move |engine| {
             engine.process_command(AudioCommand::UpdateRouting {
-                routing: routing.clone().into_boxed_slice(),
+                routing: retiring(routing.clone().into_boxed_slice()),
             });
         })
 }

@@ -3,7 +3,6 @@
 use std::{
     collections::HashMap,
     fs::canonicalize,
-    mem::forget,
     path::{Path, PathBuf},
     rc::Rc,
     sync::{Arc, atomic::Ordering},
@@ -16,6 +15,7 @@ use karbeat_host_api::{
     NativeSurfacePreference, NativeWindowConstraints, NativeWindowSize, PluginController,
     PluginDescriptor, PluginEditorManager, PluginFormat, PluginInstanceManager, PluginScanner,
     PluginState, ProcessingConfig, bypass::BypassDelay, native_host::EditorResizeHandler,
+    retire::leak,
 };
 use karbeat_plugin_api::prelude::ParameterSpec;
 
@@ -440,10 +440,10 @@ impl Drop for ClapPluginHost {
                 .is_some_and(|slot| Arc::strong_count(slot) != 1)
             {
                 // Losing the UI owner before endpoint retirement cannot safely destroy the plugin.
-                tracing::error!(
-                    "CLAP host dropped before audio endpoint retirement; retaining instance for process lifetime"
+                leak(
+                    instance,
+                    "a CLAP instance whose audio endpoint was not returned before its host shut down",
                 );
-                forget(instance);
             }
         }
     }

@@ -442,15 +442,16 @@ pub fn execute_live_plugin_command(
 // ============================================================================
 
 /// Get the snapshot telemetry from the audio engine.
-/// This utilizes an atomic ArcSwap which enables lock-free reading.
-/// If empty, it means that the snapshot is not currently available.
+///
+/// Reads the session's telemetry hub without the core lock: the plugin map is an `ArcSwap` and
+/// each plugin's triple buffer has its own leaf lock, so this never waits for a project
+/// operation. `None` means the plugin has no telemetry consumer yet.
 #[frb(sync)]
 pub fn get_plugin_snapshot_telemetry_sync(
     ctx: &DawContext,
     target: UiPluginTarget,
 ) -> Option<PluginTelemetrySnapshotDto> {
-    runtime_ctx!(ctx);
-    plugin_api::get_plugin_telemetry_sync(ctx, target.into()).map(|t| t.into())
+    plugin_api::get_plugin_telemetry_sync(ctx.telemetry(), target.into()).map(|t| t.into())
 }
 
 /// Start or stop the telemetry packing for a specific plugin on the audio thread.
