@@ -1,6 +1,7 @@
 use karbeat_host::{
     ControlRetirement, PluginKind, PreparedProcessor, ProcessingConfig, retire::Retiree,
 };
+use karbeat_utils::types::NormalizedF32;
 
 use crate::{
     commands::{AudioCommand, retiring},
@@ -100,6 +101,8 @@ pub struct HostedPluginInstall {
     pub(crate) graph: Option<HostedTrackGraph>,
     pub(crate) telemetry: Option<Retiree<triple_buffer::Input<PluginTelemetrySnapshot>>>,
     pub(crate) bypass: bool,
+    /// Host dry/wet mix the effect slot starts with.
+    pub(crate) mix: NormalizedF32,
     pub(crate) replace_missing: bool,
     result: Option<rtrb::Producer<HostedInstallResult>>,
 }
@@ -129,6 +132,7 @@ impl HostedPluginInstall {
                 config,
                 endpoint: wrap_endpoint(endpoint),
                 bypass: false,
+                mix: NormalizedF32::new(NormalizedF32::MAX),
                 replace_missing: false,
                 graph: None,
                 telemetry: Some(retiring(input)),
@@ -145,6 +149,12 @@ impl HostedPluginInstall {
 
     pub fn with_bypass(mut self, bypass: bool) -> Self {
         self.bypass = bypass;
+        self
+    }
+
+    /// Starts an effect slot at host dry/wet `mix`.
+    pub fn with_mix(mut self, mix: NormalizedF32) -> Self {
+        self.mix = mix;
         self
     }
 

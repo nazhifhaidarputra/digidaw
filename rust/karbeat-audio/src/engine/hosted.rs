@@ -1,4 +1,4 @@
-use super::AudioEngine;
+use super::{AudioEngine, EffectMix};
 use crate::{
     commands::{AudioCommand, EffectTarget},
     engine::AudioExportSnapshotError,
@@ -328,6 +328,7 @@ impl AudioEngine {
             registry_id: install.registry_id,
             plugin,
             bypass: install.bypass,
+            mix: EffectMix::new(install.mix),
         };
         if install.replace_missing {
             // The replaced placeholder retires when dropped.
@@ -827,6 +828,7 @@ mod tests {
                 registry_id: 124,
                 plugin: retiring_plugin(second.install().unwrap()),
                 bypass: false,
+                mix: EffectMix::default(),
             });
         let mut snapshot = engine.export_snapshot();
         let mut retired = None;
@@ -866,6 +868,7 @@ mod tests {
                 registry_id: u32::MAX,
                 plugin: retiring_plugin(Box::new(DigidawDelay::build())),
                 bypass: false,
+                mix: EffectMix::default(),
             });
         let mut snapshot = engine.export_snapshot();
         let mut retired = None;
@@ -906,6 +909,7 @@ mod tests {
                 registry_id: 123,
                 plugin: retiring_plugin(Box::new(endpoint)),
                 bypass: false,
+                mix: EffectMix::default(),
             });
         assert!(engine.validate_hosted_processing().is_ok());
         status.store(-1, Ordering::Release);

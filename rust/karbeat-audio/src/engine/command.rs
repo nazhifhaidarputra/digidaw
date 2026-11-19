@@ -1,4 +1,5 @@
 use super::{
+    effect_mix::EffectMix,
     engine::AudioEngine,
     helper::*,
     telemetry::PluginTelemetrySnapshot,
@@ -398,6 +399,7 @@ impl AudioEngine {
                     registry_id,
                     plugin: effect,
                     bypass: false,
+                    mix: EffectMix::default(),
                 };
 
                 // Derive the PluginTarget for this effect.
@@ -521,6 +523,22 @@ impl AudioEngine {
                     });
                 if changed {
                     self.recalculate_latencies();
+                }
+            }
+            AudioCommand::SetEffectMix {
+                target,
+                effect_id,
+                mix,
+            } => {
+                let channels = self.config.num_channels as usize;
+                if let Some(effect) = self
+                    .get_effect_list_mut(&target)
+                    .and_then(|effects| effects.iter_mut().find(|effect| effect.id == effect_id))
+                {
+                    effect.mix.set(mix);
+                    effect
+                        .mix
+                        .sync_delay(effect.plugin.latency_samples(), channels);
                 }
             }
 
@@ -755,6 +773,7 @@ impl AudioEngine {
                                 registry_id,
                                 plugin,
                                 bypass: false,
+                                mix: EffectMix::default(),
                             },
                         );
 
@@ -781,6 +800,7 @@ impl AudioEngine {
                                 registry_id,
                                 plugin,
                                 bypass: false,
+                                mix: EffectMix::default(),
                             },
                         );
 
@@ -809,6 +829,7 @@ impl AudioEngine {
                         registry_id,
                         plugin,
                         bypass: false,
+                        mix: EffectMix::default(),
                     });
 
                     let target = PluginTarget::MasterEffect(effect_id);

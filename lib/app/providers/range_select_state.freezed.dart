@@ -304,13 +304,147 @@ as int,
 }
 
 /// @nodoc
+mixin _$TickSpan {
+
+ int get start; int get end;
+/// Create a copy of TickSpan
+/// with the given fields replaced by the non-null parameter values.
+@JsonKey(includeFromJson: false, includeToJson: false)
+@pragma('vm:prefer-inline')
+$TickSpanCopyWith<TickSpan> get copyWith => _$TickSpanCopyWithImpl<TickSpan>(this as TickSpan, _$identity);
+
+
+
+@override
+bool operator ==(Object other) {
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is TickSpan&&(identical(other.start, start) || other.start == start)&&(identical(other.end, end) || other.end == end));
+}
+
+
+@override
+int get hashCode => Object.hash(runtimeType,start,end);
+
+@override
+String toString() {
+  return 'TickSpan(start: $start, end: $end)';
+}
+
+
+}
+
+/// @nodoc
+abstract mixin class $TickSpanCopyWith<$Res>  {
+  factory $TickSpanCopyWith(TickSpan value, $Res Function(TickSpan) _then) = _$TickSpanCopyWithImpl;
+@useResult
+$Res call({
+ int start, int end
+});
+
+
+
+
+}
+/// @nodoc
+class _$TickSpanCopyWithImpl<$Res>
+    implements $TickSpanCopyWith<$Res> {
+  _$TickSpanCopyWithImpl(this._self, this._then);
+
+  final TickSpan _self;
+  final $Res Function(TickSpan) _then;
+
+/// Create a copy of TickSpan
+/// with the given fields replaced by the non-null parameter values.
+@pragma('vm:prefer-inline') @override $Res call({Object? start = null,Object? end = null,}) {
+  return _then(_self.copyWith(
+start: null == start ? _self.start : start // ignore: cast_nullable_to_non_nullable
+as int,end: null == end ? _self.end : end // ignore: cast_nullable_to_non_nullable
+as int,
+  ));
+}
+
+}
+
+
+
+/// @nodoc
+
+
+class _TickSpan extends TickSpan {
+  const _TickSpan({required this.start, required this.end}): super._();
+  
+
+@override final  int start;
+@override final  int end;
+
+/// Create a copy of TickSpan
+/// with the given fields replaced by the non-null parameter values.
+@override @JsonKey(includeFromJson: false, includeToJson: false)
+@pragma('vm:prefer-inline')
+_$TickSpanCopyWith<_TickSpan> get copyWith => __$TickSpanCopyWithImpl<_TickSpan>(this, _$identity);
+
+
+
+@override
+bool operator ==(Object other) {
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is _TickSpan&&(identical(other.start, start) || other.start == start)&&(identical(other.end, end) || other.end == end));
+}
+
+
+@override
+int get hashCode => Object.hash(runtimeType,start,end);
+
+@override
+String toString() {
+  return 'TickSpan._raw(start: $start, end: $end)';
+}
+
+
+}
+
+/// @nodoc
+abstract mixin class _$TickSpanCopyWith<$Res> implements $TickSpanCopyWith<$Res> {
+  factory _$TickSpanCopyWith(_TickSpan value, $Res Function(_TickSpan) _then) = __$TickSpanCopyWithImpl;
+@override @useResult
+$Res call({
+ int start, int end
+});
+
+
+
+
+}
+/// @nodoc
+class __$TickSpanCopyWithImpl<$Res>
+    implements _$TickSpanCopyWith<$Res> {
+  __$TickSpanCopyWithImpl(this._self, this._then);
+
+  final _TickSpan _self;
+  final $Res Function(_TickSpan) _then;
+
+/// Create a copy of TickSpan
+/// with the given fields replaced by the non-null parameter values.
+@override @pragma('vm:prefer-inline') $Res call({Object? start = null,Object? end = null,}) {
+  return _then(_TickSpan(
+start: null == start ? _self.start : start // ignore: cast_nullable_to_non_nullable
+as int,end: null == end ? _self.end : end // ignore: cast_nullable_to_non_nullable
+as int,
+  ));
+}
+
+
+}
+
+/// @nodoc
 mixin _$RangeSelectState {
 
  bool get isSelecting;/// Row where the drag started; null for a range drawn on the ruler.
  TimelineRow? get anchorRow;/// Row under the pointer, or the last row it passed over.
  TimelineRow? get focusRow;/// Drag start in ticks.
  double get startTick;/// Current drag end in ticks.
- double get endTick;
+ double get endTick;/// Time range kept highlighted on the ruler after a range drawn there
+/// ends. It outlives the clip selection it made; a double click on it, or
+/// Escape with nothing else selected, clears it.
+ TickSpan? get timeRange;
 /// Create a copy of RangeSelectState
 /// with the given fields replaced by the non-null parameter values.
 @JsonKey(includeFromJson: false, includeToJson: false)
@@ -321,16 +455,16 @@ $RangeSelectStateCopyWith<RangeSelectState> get copyWith => _$RangeSelectStateCo
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is RangeSelectState&&(identical(other.isSelecting, isSelecting) || other.isSelecting == isSelecting)&&(identical(other.anchorRow, anchorRow) || other.anchorRow == anchorRow)&&(identical(other.focusRow, focusRow) || other.focusRow == focusRow)&&(identical(other.startTick, startTick) || other.startTick == startTick)&&(identical(other.endTick, endTick) || other.endTick == endTick));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is RangeSelectState&&(identical(other.isSelecting, isSelecting) || other.isSelecting == isSelecting)&&(identical(other.anchorRow, anchorRow) || other.anchorRow == anchorRow)&&(identical(other.focusRow, focusRow) || other.focusRow == focusRow)&&(identical(other.startTick, startTick) || other.startTick == startTick)&&(identical(other.endTick, endTick) || other.endTick == endTick)&&(identical(other.timeRange, timeRange) || other.timeRange == timeRange));
 }
 
 
 @override
-int get hashCode => Object.hash(runtimeType,isSelecting,anchorRow,focusRow,startTick,endTick);
+int get hashCode => Object.hash(runtimeType,isSelecting,anchorRow,focusRow,startTick,endTick,timeRange);
 
 @override
 String toString() {
-  return 'RangeSelectState(isSelecting: $isSelecting, anchorRow: $anchorRow, focusRow: $focusRow, startTick: $startTick, endTick: $endTick)';
+  return 'RangeSelectState(isSelecting: $isSelecting, anchorRow: $anchorRow, focusRow: $focusRow, startTick: $startTick, endTick: $endTick, timeRange: $timeRange)';
 }
 
 
@@ -341,11 +475,11 @@ abstract mixin class $RangeSelectStateCopyWith<$Res>  {
   factory $RangeSelectStateCopyWith(RangeSelectState value, $Res Function(RangeSelectState) _then) = _$RangeSelectStateCopyWithImpl;
 @useResult
 $Res call({
- bool isSelecting, TimelineRow? anchorRow, TimelineRow? focusRow, double startTick, double endTick
+ bool isSelecting, TimelineRow? anchorRow, TimelineRow? focusRow, double startTick, double endTick, TickSpan? timeRange
 });
 
 
-$TimelineRowCopyWith<$Res>? get anchorRow;$TimelineRowCopyWith<$Res>? get focusRow;
+$TimelineRowCopyWith<$Res>? get anchorRow;$TimelineRowCopyWith<$Res>? get focusRow;$TickSpanCopyWith<$Res>? get timeRange;
 
 }
 /// @nodoc
@@ -358,14 +492,15 @@ class _$RangeSelectStateCopyWithImpl<$Res>
 
 /// Create a copy of RangeSelectState
 /// with the given fields replaced by the non-null parameter values.
-@pragma('vm:prefer-inline') @override $Res call({Object? isSelecting = null,Object? anchorRow = freezed,Object? focusRow = freezed,Object? startTick = null,Object? endTick = null,}) {
+@pragma('vm:prefer-inline') @override $Res call({Object? isSelecting = null,Object? anchorRow = freezed,Object? focusRow = freezed,Object? startTick = null,Object? endTick = null,Object? timeRange = freezed,}) {
   return _then(_self.copyWith(
 isSelecting: null == isSelecting ? _self.isSelecting : isSelecting // ignore: cast_nullable_to_non_nullable
 as bool,anchorRow: freezed == anchorRow ? _self.anchorRow : anchorRow // ignore: cast_nullable_to_non_nullable
 as TimelineRow?,focusRow: freezed == focusRow ? _self.focusRow : focusRow // ignore: cast_nullable_to_non_nullable
 as TimelineRow?,startTick: null == startTick ? _self.startTick : startTick // ignore: cast_nullable_to_non_nullable
 as double,endTick: null == endTick ? _self.endTick : endTick // ignore: cast_nullable_to_non_nullable
-as double,
+as double,timeRange: freezed == timeRange ? _self.timeRange : timeRange // ignore: cast_nullable_to_non_nullable
+as TickSpan?,
   ));
 }
 /// Create a copy of RangeSelectState
@@ -391,6 +526,18 @@ $TimelineRowCopyWith<$Res>? get focusRow {
 
   return $TimelineRowCopyWith<$Res>(_self.focusRow!, (value) {
     return _then(_self.copyWith(focusRow: value));
+  });
+}/// Create a copy of RangeSelectState
+/// with the given fields replaced by the non-null parameter values.
+@override
+@pragma('vm:prefer-inline')
+$TickSpanCopyWith<$Res>? get timeRange {
+    if (_self.timeRange == null) {
+    return null;
+  }
+
+  return $TickSpanCopyWith<$Res>(_self.timeRange!, (value) {
+    return _then(_self.copyWith(timeRange: value));
   });
 }
 }
@@ -474,10 +621,10 @@ return $default(_that);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( bool isSelecting,  TimelineRow? anchorRow,  TimelineRow? focusRow,  double startTick,  double endTick)?  $default,{required TResult orElse(),}) {final _that = this;
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( bool isSelecting,  TimelineRow? anchorRow,  TimelineRow? focusRow,  double startTick,  double endTick,  TickSpan? timeRange)?  $default,{required TResult orElse(),}) {final _that = this;
 switch (_that) {
 case _RangeSelectState() when $default != null:
-return $default(_that.isSelecting,_that.anchorRow,_that.focusRow,_that.startTick,_that.endTick);case _:
+return $default(_that.isSelecting,_that.anchorRow,_that.focusRow,_that.startTick,_that.endTick,_that.timeRange);case _:
   return orElse();
 
 }
@@ -495,10 +642,10 @@ return $default(_that.isSelecting,_that.anchorRow,_that.focusRow,_that.startTick
 /// }
 /// ```
 
-@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( bool isSelecting,  TimelineRow? anchorRow,  TimelineRow? focusRow,  double startTick,  double endTick)  $default,) {final _that = this;
+@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( bool isSelecting,  TimelineRow? anchorRow,  TimelineRow? focusRow,  double startTick,  double endTick,  TickSpan? timeRange)  $default,) {final _that = this;
 switch (_that) {
 case _RangeSelectState():
-return $default(_that.isSelecting,_that.anchorRow,_that.focusRow,_that.startTick,_that.endTick);case _:
+return $default(_that.isSelecting,_that.anchorRow,_that.focusRow,_that.startTick,_that.endTick,_that.timeRange);case _:
   throw StateError('Unexpected subclass');
 
 }
@@ -515,10 +662,10 @@ return $default(_that.isSelecting,_that.anchorRow,_that.focusRow,_that.startTick
 /// }
 /// ```
 
-@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( bool isSelecting,  TimelineRow? anchorRow,  TimelineRow? focusRow,  double startTick,  double endTick)?  $default,) {final _that = this;
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( bool isSelecting,  TimelineRow? anchorRow,  TimelineRow? focusRow,  double startTick,  double endTick,  TickSpan? timeRange)?  $default,) {final _that = this;
 switch (_that) {
 case _RangeSelectState() when $default != null:
-return $default(_that.isSelecting,_that.anchorRow,_that.focusRow,_that.startTick,_that.endTick);case _:
+return $default(_that.isSelecting,_that.anchorRow,_that.focusRow,_that.startTick,_that.endTick,_that.timeRange);case _:
   return null;
 
 }
@@ -530,7 +677,7 @@ return $default(_that.isSelecting,_that.anchorRow,_that.focusRow,_that.startTick
 
 
 class _RangeSelectState extends RangeSelectState {
-  const _RangeSelectState({this.isSelecting = false, this.anchorRow, this.focusRow, this.startTick = 0, this.endTick = 0}): super._();
+  const _RangeSelectState({this.isSelecting = false, this.anchorRow, this.focusRow, this.startTick = 0, this.endTick = 0, this.timeRange}): super._();
   
 
 @override@JsonKey() final  bool isSelecting;
@@ -542,6 +689,10 @@ class _RangeSelectState extends RangeSelectState {
 @override@JsonKey() final  double startTick;
 /// Current drag end in ticks.
 @override@JsonKey() final  double endTick;
+/// Time range kept highlighted on the ruler after a range drawn there
+/// ends. It outlives the clip selection it made; a double click on it, or
+/// Escape with nothing else selected, clears it.
+@override final  TickSpan? timeRange;
 
 /// Create a copy of RangeSelectState
 /// with the given fields replaced by the non-null parameter values.
@@ -553,16 +704,16 @@ _$RangeSelectStateCopyWith<_RangeSelectState> get copyWith => __$RangeSelectStat
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is _RangeSelectState&&(identical(other.isSelecting, isSelecting) || other.isSelecting == isSelecting)&&(identical(other.anchorRow, anchorRow) || other.anchorRow == anchorRow)&&(identical(other.focusRow, focusRow) || other.focusRow == focusRow)&&(identical(other.startTick, startTick) || other.startTick == startTick)&&(identical(other.endTick, endTick) || other.endTick == endTick));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is _RangeSelectState&&(identical(other.isSelecting, isSelecting) || other.isSelecting == isSelecting)&&(identical(other.anchorRow, anchorRow) || other.anchorRow == anchorRow)&&(identical(other.focusRow, focusRow) || other.focusRow == focusRow)&&(identical(other.startTick, startTick) || other.startTick == startTick)&&(identical(other.endTick, endTick) || other.endTick == endTick)&&(identical(other.timeRange, timeRange) || other.timeRange == timeRange));
 }
 
 
 @override
-int get hashCode => Object.hash(runtimeType,isSelecting,anchorRow,focusRow,startTick,endTick);
+int get hashCode => Object.hash(runtimeType,isSelecting,anchorRow,focusRow,startTick,endTick,timeRange);
 
 @override
 String toString() {
-  return 'RangeSelectState(isSelecting: $isSelecting, anchorRow: $anchorRow, focusRow: $focusRow, startTick: $startTick, endTick: $endTick)';
+  return 'RangeSelectState(isSelecting: $isSelecting, anchorRow: $anchorRow, focusRow: $focusRow, startTick: $startTick, endTick: $endTick, timeRange: $timeRange)';
 }
 
 
@@ -573,11 +724,11 @@ abstract mixin class _$RangeSelectStateCopyWith<$Res> implements $RangeSelectSta
   factory _$RangeSelectStateCopyWith(_RangeSelectState value, $Res Function(_RangeSelectState) _then) = __$RangeSelectStateCopyWithImpl;
 @override @useResult
 $Res call({
- bool isSelecting, TimelineRow? anchorRow, TimelineRow? focusRow, double startTick, double endTick
+ bool isSelecting, TimelineRow? anchorRow, TimelineRow? focusRow, double startTick, double endTick, TickSpan? timeRange
 });
 
 
-@override $TimelineRowCopyWith<$Res>? get anchorRow;@override $TimelineRowCopyWith<$Res>? get focusRow;
+@override $TimelineRowCopyWith<$Res>? get anchorRow;@override $TimelineRowCopyWith<$Res>? get focusRow;@override $TickSpanCopyWith<$Res>? get timeRange;
 
 }
 /// @nodoc
@@ -590,14 +741,15 @@ class __$RangeSelectStateCopyWithImpl<$Res>
 
 /// Create a copy of RangeSelectState
 /// with the given fields replaced by the non-null parameter values.
-@override @pragma('vm:prefer-inline') $Res call({Object? isSelecting = null,Object? anchorRow = freezed,Object? focusRow = freezed,Object? startTick = null,Object? endTick = null,}) {
+@override @pragma('vm:prefer-inline') $Res call({Object? isSelecting = null,Object? anchorRow = freezed,Object? focusRow = freezed,Object? startTick = null,Object? endTick = null,Object? timeRange = freezed,}) {
   return _then(_RangeSelectState(
 isSelecting: null == isSelecting ? _self.isSelecting : isSelecting // ignore: cast_nullable_to_non_nullable
 as bool,anchorRow: freezed == anchorRow ? _self.anchorRow : anchorRow // ignore: cast_nullable_to_non_nullable
 as TimelineRow?,focusRow: freezed == focusRow ? _self.focusRow : focusRow // ignore: cast_nullable_to_non_nullable
 as TimelineRow?,startTick: null == startTick ? _self.startTick : startTick // ignore: cast_nullable_to_non_nullable
 as double,endTick: null == endTick ? _self.endTick : endTick // ignore: cast_nullable_to_non_nullable
-as double,
+as double,timeRange: freezed == timeRange ? _self.timeRange : timeRange // ignore: cast_nullable_to_non_nullable
+as TickSpan?,
   ));
 }
 
@@ -624,6 +776,18 @@ $TimelineRowCopyWith<$Res>? get focusRow {
 
   return $TimelineRowCopyWith<$Res>(_self.focusRow!, (value) {
     return _then(_self.copyWith(focusRow: value));
+  });
+}/// Create a copy of RangeSelectState
+/// with the given fields replaced by the non-null parameter values.
+@override
+@pragma('vm:prefer-inline')
+$TickSpanCopyWith<$Res>? get timeRange {
+    if (_self.timeRange == null) {
+    return null;
+  }
+
+  return $TickSpanCopyWith<$Res>(_self.timeRange!, (value) {
+    return _then(_self.copyWith(timeRange: value));
   });
 }
 }

@@ -25,8 +25,10 @@ Future<void> main() async {
     // Set the initial title
     await windowManager.setTitle('DigiDAW — Untitled');
 
-    await windowManager.setMinimumSize(const Size(1000, 600));
-    await windowManager.setAspectRatio(16 / 9);
+    // Small enough to shrink the window to a phone held sideways (about
+    // 640 x 360 logical pixels and up), so the mobile layout can be checked on
+    // desktop. No aspect ratio lock: phones are much wider than 16:9.
+    await windowManager.setMinimumSize(const Size(640, 360));
     await windowManager.maximize();
   } else {
     if (kIsWeb) {

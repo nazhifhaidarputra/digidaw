@@ -89,6 +89,7 @@ track-marker-name = Marker name
 track-cue-marker-color = Cue Marker Color
 track-timeline = Timeline
 track-add-cue-marker-here = Add Cue Marker Here
+track-make-range-loop-region = Make this range a loop region
 track-set-loop-start-here = Set Loop Start Here
 track-set-loop-end-here = Set Loop End Here
 track-loop-selected-clips = Loop Selected Clips

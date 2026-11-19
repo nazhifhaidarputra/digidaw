@@ -190,8 +190,9 @@ class ContextMenuWrapper extends StatelessWidget {
   }
 }
 
-/// A floating panel that displays context-specific actions at the bottom of the screen.
-/// Uses the shared [DawContextAction] model.
+/// A floating panel that displays context-specific actions at the bottom of
+/// its view, just above the workspace control dock. Uses the shared
+/// [DawContextAction] model.
 ///
 /// Actions are shown in order. When they don't all fit the available width,
 /// the ones that don't fit move behind a [moreLabel] button that opens them
@@ -210,6 +211,10 @@ class FloatingContextPanel extends StatelessWidget {
 
   /// Outer horizontal margin kept free on each side of the panel.
   static const double _margin = 16;
+
+  /// Gap between the panel and the bottom of its view, which borders the
+  /// control dock.
+  static const double _bottomGap = 6;
 
   /// Width of one action button: its padding and the wider of the icon and
   /// the label.
@@ -269,7 +274,7 @@ class FloatingContextPanel extends StatelessWidget {
     final moreLabel = tr('common-more-actions');
 
     return Positioned(
-      bottom: 20,
+      bottom: _bottomGap,
       left: 0,
       right: 0,
       child: LayoutBuilder(

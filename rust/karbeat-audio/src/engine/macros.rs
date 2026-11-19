@@ -13,7 +13,13 @@ macro_rules! apply_mix_param {
                 }
             }
             MixerChannelParamTarget::Plugin { effect_id, target } => match target {
-                EffectAutomationTarget::Mix => todo!(),
+                EffectAutomationTarget::Mix => {
+                    if let Some(effects) = $effects {
+                        if let Some(e) = effects.iter_mut().find(|e| e.id == *effect_id) {
+                            e.mix.apply_automation($final_value);
+                        }
+                    }
+                }
                 EffectAutomationTarget::PluginParam { param_id } => {
                     if let Some(effects) = $effects {
                         if let Some(e) = effects.iter_mut().find(|e| e.id == *effect_id) {

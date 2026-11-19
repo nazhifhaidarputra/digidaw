@@ -198,6 +198,8 @@ struct WorkerScratch {
     channels_in: Vec<Vec<f32>>,
     channels_out: Vec<Vec<f32>>,
     aux_channels: Vec<Vec<f32>>,
+    /// Dry input of the effect being blended by its host mix.
+    dry_channels: Vec<Vec<f32>>,
     /// Holds one delayed connection.
     edge: Vec<f32>,
 }
@@ -486,6 +488,7 @@ impl RenderPlan {
                         channels_in: planar(),
                         channels_out: planar(),
                         aux_channels: planar(),
+                        dry_channels: planar(),
                         edge: Vec::with_capacity(graph.block_samples),
                     })))
                 })
@@ -868,6 +871,12 @@ impl RenderJob<'_> {
                 buffer.fill(0.0);
                 return;
             };
+            let blends = effect.mix.capture_dry(
+                &scratch.channels_in,
+                &mut scratch.dry_channels,
+                channels,
+                frames,
+            );
             if !process_plugin_planar(
                 &mut **effect.plugin,
                 aux,
@@ -880,6 +889,14 @@ impl RenderJob<'_> {
             ) {
                 buffer.fill(0.0);
                 return;
+            }
+            if blends {
+                effect.mix.blend(
+                    &mut scratch.channels_in,
+                    &mut scratch.dry_channels,
+                    channels,
+                    frames,
+                );
             }
         }
         if let Some(frames) = frames {

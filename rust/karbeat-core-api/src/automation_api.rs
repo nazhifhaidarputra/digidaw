@@ -516,11 +516,11 @@ pub fn target_parameter_spec(
             ..engine_channel.pan.to_spec()
         }),
         MixerChannelParamTarget::Plugin {
+            effect_id,
             target: EffectAutomationTarget::Mix,
-            ..
-        } => Some(ParameterSpec::new_float(
-            0, "Mix", "Effect", 1.0, 0.0, 1.0, 1.0, 0.0,
-        )),
+        } => channel
+            .and_then(|c| c.effects.get(*effect_id))
+            .map(|effect| effect.instance.mix.to_spec()),
         MixerChannelParamTarget::Plugin {
             target: EffectAutomationTarget::PluginParam { param_id },
             ..

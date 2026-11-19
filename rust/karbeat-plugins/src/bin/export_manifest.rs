@@ -1,6 +1,9 @@
 use karbeat_plugin_api::manifest::Manifestable;
 use karbeat_plugins::{
-    effect::{pitch_shifter::PitchShifter, sidechain::DigidawSidechainCompressor},
+    effect::{
+        pitch_shifter::PitchShifter, sidechain::DigidawSidechainCompressor,
+        stereo_shaper::DigidawStereoShaper,
+    },
     plugins::*,
 };
 use std::env::var;
@@ -35,7 +38,8 @@ fn main() {
         DigiParametricEQ,
         PitchShifter,
         DigidawSidechainCompressor,
-        DigidawDelay
+        DigidawDelay,
+        DigidawStereoShaper
     );
 
     println!("INFO: All manifests exported successfully to Flutter assets!");

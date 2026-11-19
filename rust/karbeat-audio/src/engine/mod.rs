@@ -1,5 +1,6 @@
 mod buffer;
 mod command;
+mod effect_mix;
 mod engine;
 pub mod factory;
 mod golden;
@@ -25,6 +26,7 @@ mod voices;
 mod workspace;
 
 pub use buffer::*;
+pub use effect_mix::EffectMix;
 pub use engine::*;
 pub use input::{InputCapture, InputSource};
 pub use metronome::*;

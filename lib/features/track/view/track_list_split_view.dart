@@ -545,6 +545,23 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
     return null;
   }
 
+  /// The row drawn at or nearest above [viewportY] in the timeline's vertical
+  /// scroll view; the first row when [viewportY] is above every row.
+  TimelineRow? _timelineRowNear(double viewportY) {
+    final scroll = _timelineController.hasClients
+        ? _timelineController.offset
+        : 0.0;
+    final y = viewportY + scroll;
+    TimelineRow? nearest;
+    for (final row in ref.read(timelineRowsProvider)) {
+      final top = _timelineRowOffset(row);
+      if (top == null) continue;
+      if (top > y) return nearest ?? row;
+      nearest = row;
+    }
+    return nearest;
+  }
+
   /// Effective arranger row height of a track, honoring shrunk tracks.
   double _trackHeightOf(TrackListState state, int trackId) =>
       state.collapsedTrackIds.contains(trackId)
@@ -1070,22 +1087,25 @@ class _SplitTrackViewState extends ConsumerState<_SplitTrackView> {
                                     },
                                   ),
                                 ],
-                                child: CustomScrollView(
-                                  controller: _timelineController,
-                                  physics: isZooming
-                                      ? const UnclampedNeverScrollableScrollPhysics()
-                                      : const ClampingScrollPhysics(),
-                                  slivers: [
-                                    SliverToBoxAdapter(
-                                      child:
-                                          _buildMasterTimelineAutomationLanes(),
-                                    ),
-                                    _buildBusAutomationTimelineSection(),
-                                    _buildTimelineTrackWidget(),
-                                    const SliverToBoxAdapter(
-                                      child: SizedBox(height: 60),
-                                    ),
-                                  ],
+                                child: TimelineRangeSelectArea(
+                                  rowNear: _timelineRowNear,
+                                  child: CustomScrollView(
+                                    controller: _timelineController,
+                                    physics: isZooming
+                                        ? const UnclampedNeverScrollableScrollPhysics()
+                                        : const ClampingScrollPhysics(),
+                                    slivers: [
+                                      SliverToBoxAdapter(
+                                        child:
+                                            _buildMasterTimelineAutomationLanes(),
+                                      ),
+                                      _buildBusAutomationTimelineSection(),
+                                      _buildTimelineTrackWidget(),
+                                      const SliverToBoxAdapter(
+                                        child: SizedBox(height: 60),
+                                      ),
+                                    ],
+                                  ),
                                 ),
                               ),
                             ),

@@ -16,6 +16,7 @@ import 'package:karbeat/features/piano_roll/view/piano_roll_screen.dart';
 import 'package:karbeat/features/source/view/source_list_screen.dart';
 import 'package:karbeat/features/setting/services/appearance_settings_provider.dart';
 import 'package:karbeat/features/track/view/track_list_screen.dart';
+import 'package:karbeat/features/workspace/view/workspace_info_bar.dart';
 import 'package:karbeat/shared/enums/global.dart';
 import 'package:karbeat/src/rust/api/project.dart';
 import 'package:karbeat/src/rust/api/mixer.dart';
@@ -123,18 +124,30 @@ class _MainContentState extends ConsumerState<MainContent>
 
     return Container(
       color: hasBackground ? Colors.transparent : colors.surface,
-      child: Column(
-        children: [
-          SafeArea(
-            top: true,
-            bottom: false,
-            child: Container(
-              color: colors.surfaceContainer,
-              child: const DefaultControlPanel(),
-            ),
-          ),
-          Expanded(child: _buildMainContentNavigator(currentView)),
-        ],
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          // Information only fits beside the editor on large screens.
+          final showInfoBar =
+              DockDensity.forWidth(constraints.maxWidth) == DockDensity.wide;
+          return Column(
+            children: [
+              SafeArea(
+                bottom: false,
+                left: false,
+                child: showInfoBar
+                    ? const WorkspaceInfoBar()
+                    : const SizedBox.shrink(),
+              ),
+              Expanded(child: _buildMainContentNavigator(currentView)),
+              // Floating action panels in the views sit right above the dock.
+              SafeArea(
+                top: false,
+                left: false,
+                child: const WorkspaceControlDock(),
+              ),
+            ],
+          );
+        },
       ),
     );
   }

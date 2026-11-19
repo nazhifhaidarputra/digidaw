@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:karbeat/app/providers/automation_provider.dart';
 import 'package:karbeat/app/providers/mixer_state.dart';
 import 'package:karbeat/app/providers/project_provider.dart';
 import 'package:karbeat/core/l10n/localizer.dart';
 import 'package:karbeat/core/widgets/context_menu.dart';
+import 'package:karbeat/core/widgets/digidaw_plugin_widgets/parameter_knob.dart';
 import 'package:karbeat/features/mixer/services/mixer_channel_targets.dart';
 import 'package:karbeat/features/mixer/view/sidechain_input_dialog.dart';
 import 'package:karbeat/features/plugins/services/plugin_ui_launcher.dart';
@@ -184,6 +186,12 @@ class _EffectRackItem extends ConsumerWidget {
         );
   }
 
+  void _setMix(WidgetRef ref, double mix) {
+    ref
+        .read(mixerStateProvider.notifier)
+        .setEffectMix(target: channelTarget, effectId: effect.id, mix: mix);
+  }
+
   void _remove(WidgetRef ref) {
     ref
         .read(mixerStateProvider.notifier)
@@ -224,6 +232,17 @@ class _EffectRackItem extends ConsumerWidget {
             target: pluginTarget,
             ownerName: effect.name,
           ),
+        ),
+        DawContextAction(
+          title: tr('mixer-automate-effect-mix'),
+          icon: Icons.tune,
+          onTap: () => ref
+              .read(automationProvider.notifier)
+              .handleAddEffectMixAutomation(
+                target: pluginTarget,
+                label: tr('mixer-effect-mix-lane', {'name': effect.name}),
+                mix: effect.mix,
+              ),
         ),
         DawContextAction(
           title: enabled
@@ -283,6 +302,11 @@ class _EffectRackItem extends ConsumerWidget {
           trailing: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
+              _EffectMixKnob(
+                mix: effect.mix,
+                enabled: enabled,
+                onChanged: (mix) => _setMix(ref, mix),
+              ),
               IconButton(
                 tooltip: tr('mixer-remove-effect'),
                 visualDensity: VisualDensity.compact,
@@ -304,6 +328,50 @@ class _EffectRackItem extends ConsumerWidget {
           ),
           onTap: () => _openPlugin(context, ref),
         ),
+      ),
+    );
+  }
+}
+
+/// The slot's host dry/wet mix: a small knob over its percentage. Works for
+/// every effect, including plugins without a mix control of their own.
+/// Double-click returns it to fully wet.
+class _EffectMixKnob extends StatelessWidget {
+  final double mix;
+  final bool enabled;
+  final ValueChanged<double> onChanged;
+
+  const _EffectMixKnob({
+    required this.mix,
+    required this.enabled,
+    required this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    final percent = (mix * 100).round();
+    return Tooltip(
+      message: tr('mixer-effect-mix-tooltip', {'percent': percent}),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          DigidawParameterKnob(
+            value: mix,
+            min: 0,
+            max: 1,
+            defaultValue: 1,
+            step: 0.01,
+            diameter: 24,
+            sensitivity: 120,
+            activeColor: enabled ? colors.primary : colors.outline,
+            onChanged: onChanged,
+          ),
+          Text(
+            tr('mixer-effect-mix-percent', {'percent': percent}),
+            style: TextStyle(color: colors.onSurfaceVariant, fontSize: 9),
+          ),
+        ],
       ),
     );
   }

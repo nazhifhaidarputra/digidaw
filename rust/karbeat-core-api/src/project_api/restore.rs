@@ -21,6 +21,7 @@ use karbeat_core::{
     heap::schedule_release_to_os,
 };
 use karbeat_plugins::registry::{PluginFactory, PluginRegistry};
+use karbeat_utils::types::NormalizedF32;
 
 pub(super) fn plugins(app: &ApplicationState) -> Vec<(PluginTarget, &PluginInstance)> {
     let mut plugins = Vec::new();
@@ -153,24 +154,33 @@ pub(super) fn hydration_command(
     }
 }
 
-/// Re-applies persisted effect bypass flags after the effect chains are hydrated.
-fn bypass_commands(app: &ApplicationState) -> Vec<AudioCommand> {
+/// Re-applies persisted effect bypass flags and host mixes after the effect chains are
+/// hydrated.
+fn effect_slot_commands(app: &ApplicationState) -> Vec<AudioCommand> {
     plugins(app)
         .into_iter()
-        .filter(|(_, plugin)| plugin.bypass)
-        .filter_map(|(target, _)| {
+        .filter_map(|(target, plugin)| {
             let (target, effect_id) = match target {
                 PluginTarget::TrackEffect(track, effect) => (EffectTarget::Track(track), effect),
                 PluginTarget::BusEffect(bus, effect) => (EffectTarget::Bus(bus), effect),
                 PluginTarget::MasterEffect(effect) => (EffectTarget::Master, effect),
                 PluginTarget::Generator(_) => return None,
             };
-            Some(AudioCommand::SetEffectBypass {
+            let bypass = plugin.bypass.then_some(AudioCommand::SetEffectBypass {
                 target,
                 effect_id,
                 bypass: true,
-            })
+            });
+            let mix = plugin.mix();
+            let mix = (mix.get() < NormalizedF32::MAX).then_some(AudioCommand::SetEffectMix {
+                target,
+                effect_id,
+                mix,
+            });
+            Some([bypass, mix])
         })
+        .flatten()
+        .flatten()
         .collect()
 }
 
@@ -295,7 +305,7 @@ pub(super) fn execute_replace(
             config,
             prepared.processor,
         );
-        let install = install.with_bypass(plugin.bypass);
+        let install = install.with_bypass(plugin.bypass).with_mix(plugin.mix());
         let (command, retirement) = karbeat_host::ControlTransfer::new(install);
         installs.push(AudioCommand::InstallHostedPlugin(command));
         control_retirements.push(retirement);
@@ -349,7 +359,7 @@ pub(super) fn execute_replace(
                 new_position,
             }),
     );
-    commands.extend(bypass_commands(&pending.staged));
+    commands.extend(effect_slot_commands(&pending.staged));
     commands.push(AudioCommand::SetBPM(pending.staged.transport.bpm));
     commands.push(AudioCommand::SetSongLoopRegion(
         pending

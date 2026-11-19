@@ -1,9 +1,11 @@
 use anyhow::Context;
+use karbeat_core::core::project::plugin::effect_mix_param;
 use karbeat_host::{
     ConvertParameterRequest, ExternalPluginInstanceHandle, HostCapabilities, HostClient,
     OpenEditorRequest, ParameterTextRequest, ParseParameterRequest, PluginKind, PrepareRequest,
     ProcessingConfig, ReconfigureRequest, SetParameterRequest,
 };
+use karbeat_utils::types::NormalizedF32;
 
 use karbeat_audio::{
     commands::{AudioCommand, EffectTarget},
@@ -204,11 +206,23 @@ enum PendingInstallTarget {
 }
 
 /// Saved settings an install starts from. The default is a fresh plugin.
-#[derive(Default)]
 struct InstallPreset {
     state: Option<karbeat_host::PluginState>,
     bypass: bool,
+    /// Host dry/wet mix of an effect slot.
+    mix: NormalizedF32,
     display_name: Option<String>,
+}
+
+impl Default for InstallPreset {
+    fn default() -> Self {
+        Self {
+            state: None,
+            bypass: false,
+            mix: NormalizedF32::new(NormalizedF32::MAX),
+            display_name: None,
+        }
+    }
 }
 
 pub struct PendingPluginInstall {
@@ -354,6 +368,7 @@ pub fn begin_add_template_effect(
     pending.preset = InstallPreset {
         state: external.state.clone(),
         bypass: saved.bypass,
+        mix: saved.mix(),
         display_name: saved.display_name.clone(),
     };
     Ok(pending)
@@ -378,6 +393,7 @@ pub fn execute_install(
     }))?;
     let instance = prepared.instance;
     let bypass = pending.preset.bypass;
+    let mix = pending.preset.mix;
     let plugin = PluginInstance {
         registry_id: pending.registry_id,
         name: pending.descriptor.name.clone(),
@@ -389,6 +405,7 @@ pub fn execute_install(
             state: Some(prepared.state.clone()),
         }),
         display_name: pending.preset.display_name.take(),
+        mix: effect_mix_param(mix),
     };
 
     let mut replaced_generator = None;
@@ -475,7 +492,7 @@ pub fn execute_install(
             );
             (
                 InstalledPlugin::Effect(effect),
-                install.with_bypass(bypass),
+                install.with_bypass(bypass).with_mix(mix),
                 receipt,
             )
         }
@@ -1006,6 +1023,7 @@ pub struct PendingPluginRetry {
     track: Option<TrackId>,
     registry_id: u32,
     bypass: bool,
+    mix: NormalizedF32,
     descriptor: karbeat_host::PluginDescriptor,
     config: ProcessingConfig,
     state: Option<karbeat_host::PluginState>,
@@ -1059,6 +1077,7 @@ pub fn begin_retry(ctx: &DawContext, target: PluginTarget) -> anyhow::Result<Pen
         track,
         registry_id: plugin.registry_id,
         bypass: plugin.bypass,
+        mix: plugin.mix(),
         descriptor,
         config,
         state: external.state.clone(),
@@ -1081,8 +1100,12 @@ pub fn execute_retry(pending: PendingPluginRetry) -> anyhow::Result<CompletedPlu
         prepared.processor,
     );
     block_on(pending.handles.external_plugins.resume(instance))?;
-    let (command, mut control_retirement) =
-        karbeat_host::ControlTransfer::new(install.replacing_missing().with_bypass(pending.bypass));
+    let (command, mut control_retirement) = karbeat_host::ControlTransfer::new(
+        install
+            .replacing_missing()
+            .with_bypass(pending.bypass)
+            .with_mix(pending.mix),
+    );
     {
         let mut sender = pending.handles.command_sender.lock();
         sender

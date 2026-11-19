@@ -1,3 +1,4 @@
+use crate::engine::EffectMix;
 use crate::event::PluginTarget;
 use hashbrown::HashMap;
 use karbeat_core::core::project::{
@@ -14,7 +15,7 @@ use karbeat_host::{
     retire::{Owner, Retiree},
 };
 use karbeat_utils::math::is_power_of_two;
-use karbeat_utils::types::NormalizedF64;
+use karbeat_utils::types::{NormalizedF32, NormalizedF64};
 use slab::Slab;
 
 // =============================================================================
@@ -58,6 +59,8 @@ pub struct AudioEffectInstance {
     /// Whether the chain did not process this effect in the last block. A new instance starts
     /// parked; it settles its parameters when it processes again.
     pub parked: bool,
+    /// Host dry/wet blend of the slot.
+    pub mix: EffectMix,
 }
 
 impl AudioEffectInstance {
@@ -124,6 +127,8 @@ pub struct EffectPluginSnapshot {
     pub host_bypass: bool,
     /// Engine-level bypass applied to the effect slot during offline rendering.
     pub bypass: bool,
+    /// Host dry/wet mix the user set on the slot.
+    pub mix: NormalizedF32,
 }
 
 /// Audio thread's owned plugin instances - NO locks required for access
@@ -340,6 +345,7 @@ impl From<&AudioEffectInstance> for EffectPluginSnapshot {
             host_instance,
             host_bypass: hosted.is_some_and(HostedProcessor::is_bypassed),
             bypass: value.bypass,
+            mix: value.mix.value(),
         }
     }
 }
@@ -524,7 +530,7 @@ mod tests {
     use karbeat_utils::types::{BipolarF64, NormalizedF64};
 
     use super::{
-        AudioAutomationLane, AudioEffectInstance, AudioGraphState, AudioPluginState,
+        AudioAutomationLane, AudioEffectInstance, AudioGraphState, AudioPluginState, EffectMix,
         retiring_plugin,
     };
 
@@ -609,6 +615,7 @@ mod tests {
                         plugin: retiring_plugin(Box::new(CountingPlugin(Arc::clone(&retired)))),
                         bypass: false,
                         parked: false,
+                        mix: EffectMix::default(),
                     },
                 );
             }

@@ -39,6 +39,7 @@ const _compressor = UiEffectSummary(
   registryId: 1,
   name: 'Compressor',
   bypass: false,
+  mix: 1,
 );
 
 class _ProjectNotifier extends ProjectNotifier {

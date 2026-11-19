@@ -97,3 +97,6 @@ workspace-readout-signature = SIG
 workspace-readout-bar = BAR
 workspace-readout-beat = BEAT
 workspace-readout-time = TIME
+workspace-dock-switch-view = Switch view
+workspace-dock-pick-tool = Pick tool
+workspace-dock-more = Snap, follow, metronome and keyboard

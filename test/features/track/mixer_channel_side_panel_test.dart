@@ -74,6 +74,7 @@ class _ProjectNotifier extends ProjectNotifier {
               registryId: 1,
               name: 'Compressor',
               bypass: false,
+              mix: 1,
             ),
           ],
         ),

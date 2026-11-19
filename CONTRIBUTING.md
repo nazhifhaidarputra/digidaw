@@ -136,6 +136,8 @@ Run only the command that matches the source you changed.
 * Log with `tracing::{debug, info, warn, error}`. Library code never prints directly.
 * Keep serialization changes compatible with project load and save. Add round-trip tests when you change persisted project structs or file manager code.
 * Prefer composing small traits and helper types over deep abstraction layers.
+* **Encode invariants in types.** A value that must stay inside a range or satisfy a rule (a mix from 0.0 to 1.0, a normalized or bipolar amount, a non-zero count) is a newtype, not a raw primitive. Reuse the bounded types in `karbeat-utils/src/types.rs` (`NormalizedF32`, `BipolarF64`, …) or add one with the same macros. Convert raw numbers once at the boundary (FFI, file load) and pass the newtype everywhere else.
+* **Automatable parameters use `Param<T>`.** Anything automation or modulation can drive keeps its value in the built-in `Param<T>` (from `karbeat-plugin-types`), which carries its bounds, base value, automated value, and manual override. Don't track those by hand with raw fields.
 * If you want to make a complex finite state machine on your code, use the existing `typestate!` macro so that we can reduce boilerplate when making a state machine.
 
 ---

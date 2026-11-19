@@ -92,6 +92,7 @@ class _ProjectNotifier extends ProjectNotifier {
               registryId: 1,
               name: 'Sidechain Compressor Stereo',
               bypass: false,
+              mix: 1,
             ),
           ],
         ),

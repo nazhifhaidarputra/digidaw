@@ -25,8 +25,9 @@ use karbeat_core::{
             },
         },
         project::{
-            AutomationTarget, MasterAutomationTarget, MixerChannelParamTarget, RemovedModulations,
-            SidechainRoute, TrackAutomationTarget, TrackId,
+            AutomationTarget, EffectAutomationTarget, MasterAutomationTarget,
+            MixerChannelParamTarget, RemovedModulations, SidechainRoute, TrackAutomationTarget,
+            TrackId,
             mixer::{
                 BusMixerChannel, EffectInstance, MixerChannel, MixerChannelParams, MixerState,
                 RoutingConnection, RoutingNode, RoutingTap,
@@ -37,7 +38,7 @@ use karbeat_core::{
     shared::id::*,
 };
 use karbeat_plugin_types::ParameterSpec;
-use karbeat_utils::color::Color;
+use karbeat_utils::{color::Color, types::NormalizedF32};
 use std::{mem::take, path::Path};
 
 #[derive(Clone, Debug)]
@@ -261,7 +262,15 @@ fn mixer_automation_target(
         | MixerChannelParams::Solo(_)
         | MixerChannelParams::InvertedPhase(_) => return None,
     };
-    Some(match target {
+    Some(channel_automation_target(target, mix_target))
+}
+
+/// The automation target of `mix_target` on the channel `target`.
+fn channel_automation_target(
+    target: &MixerChannelTarget,
+    mix_target: MixerChannelParamTarget,
+) -> AutomationTarget {
+    match target {
         MixerChannelTarget::Track(track_id) => AutomationTarget::Track {
             track_id: *track_id,
             track_target: TrackAutomationTarget::MixerChannel(mix_target),
@@ -273,7 +282,7 @@ fn mixer_automation_target(
         MixerChannelTarget::Master => {
             AutomationTarget::Master(MasterAutomationTarget::MixerChannel(mix_target))
         }
-    })
+    }
 }
 
 /// Ask the audio thread to emit a full MixerChannelSnapshot for the given
@@ -445,6 +454,49 @@ pub fn set_effect_bypass(
     if let Some(previous) = previous_bypass {
         ctx.push_history(EffectBypassed::new(effect_target, effect_id, previous));
     }
+    Ok(())
+}
+
+/// Sets the host dry/wet mix of an effect slot, persisting it and publishing it to the audio
+/// thread. Works for every effect, including plugins without a mix control of their own.
+///
+/// Like the channel faders, a mix change is not an undo step: a knob drag sends many. The edit
+/// takes over from the slot's mix automation until the transport moves.
+pub fn set_effect_mix(
+    ctx: &mut DawContext,
+    mixer_channel_target: MixerChannelTarget,
+    effect_id: EffectId,
+    mix: NormalizedF32,
+) -> anyhow::Result<()> {
+    let effect_target = effect_target_from_mixer_target(&mixer_channel_target);
+    let exists = ctx
+        .app_state
+        .get_mixer_channel_from_target(mixer_channel_target.clone())
+        .and_then(|channel| channel.effects.get(effect_id))
+        .is_some();
+    anyhow::ensure!(exists, "Effect {effect_id:?} not found");
+
+    let mix_param = MixerChannelParamTarget::Plugin {
+        effect_id,
+        target: EffectAutomationTarget::Mix,
+    };
+    let _ = ctx.send_audio_command(AudioCommand::MarkParameterManual {
+        target: channel_automation_target(&mixer_channel_target, mix_param),
+    });
+    // Publish first so a rejected command leaves project state unchanged.
+    ctx.send_audio_command(AudioCommand::SetEffectMix {
+        target: effect_target,
+        effect_id,
+        mix,
+    })?;
+    if let Some(effect) = ctx
+        .app_state
+        .get_mixer_channel_from_target_mut(mixer_channel_target)
+        .and_then(|channel| channel.effects.get_mut(effect_id))
+    {
+        effect.instance.mix.set_base(mix.get());
+    }
+    ctx.mark_project_modified();
     Ok(())
 }
 

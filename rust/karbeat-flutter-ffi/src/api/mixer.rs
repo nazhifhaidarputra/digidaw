@@ -10,6 +10,7 @@ pub use karbeat_core::{
     core::project::TrackId,
     plugin_types::{ParameterSpec, ParameterValueType},
 };
+use karbeat_utils::types::NormalizedF32;
 
 use crate::api::jobs::run_job;
 use crate::api::{
@@ -142,6 +143,8 @@ pub struct UiEffectSummary {
     pub name: String,
     /// Whether the effect slot passes audio through untouched.
     pub bypass: bool,
+    /// Host dry/wet mix of the slot, from 0.0 (dry) to 1.0 (wet).
+    pub mix: f32,
 }
 
 impl From<&MixerChannel> for UiMixerChannel {
@@ -161,6 +164,7 @@ impl From<&MixerChannel> for UiMixerChannel {
                     registry_id: instance.instance.registry_id,
                     name: instance.instance.name.clone(),
                     bypass: instance.instance.bypass,
+                    mix: instance.instance.mix().get(),
                 })
                 .collect(),
         }
@@ -676,6 +680,24 @@ pub fn set_effect_bypass(
         MixerChannelTarget::from(&target),
         EffectId::from_u64(effect_instance_id),
         bypass,
+    )
+    .map_err(|error| error.to_string())
+}
+
+/// Sets the host dry/wet mix (0.0 dry to 1.0 wet) of an effect slot in a track, bus, or master
+/// chain. Works whether or not the plugin has a mix control of its own.
+pub fn set_effect_mix(
+    ctx: &DawContext,
+    target: UiMixerChannelTarget,
+    effect_instance_id: u64,
+    mix: f32,
+) -> Result<(), String> {
+    project_ctx!(ctx);
+    mixer_api::set_effect_mix(
+        ctx,
+        MixerChannelTarget::from(&target),
+        EffectId::from_u64(effect_instance_id),
+        NormalizedF32::new(mix),
     )
     .map_err(|error| error.to_string())
 }

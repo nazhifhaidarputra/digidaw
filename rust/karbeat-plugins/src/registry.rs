@@ -2,7 +2,7 @@
 use crate::{
     effect::{
         delay::DigidawDelay, parametric_eq::DigiParametricEQ, pitch_shifter::PitchShifter,
-        sidechain::DigidawSidechainCompressor,
+        sidechain::DigidawSidechainCompressor, stereo_shaper::DigidawStereoShaper,
     },
     generator::{karbeatzer_v2::KarbeatzerV2, my_retro::MyRetro},
 };
@@ -68,6 +68,11 @@ impl PluginRegistry {
                 DigidawSidechainCompressor
             ),
             ("effect_delay", "DigiDAW Delay", DigidawDelay),
+            (
+                "effect_stereo_shaper",
+                "DigiDAW Stereo Shaper",
+                DigidawStereoShaper
+            ),
         );
         registry
     }

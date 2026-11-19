@@ -20,7 +20,7 @@ UiMixerChannel _channel(List<UiEffectSummary> effects) => UiMixerChannel(
 );
 
 UiEffectSummary _effect(int id, String name) =>
-    UiEffectSummary(id: id, registryId: 0, name: name, bypass: false);
+    UiEffectSummary(id: id, registryId: 0, name: name, bypass: false, mix: 1);
 
 final _project = ApplicationDataStore(
   metadata: const UiProjectMetadata(

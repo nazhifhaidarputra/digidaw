@@ -1,4 +1,16 @@
+use karbeat_plugin_types::Param;
+use karbeat_utils::types::NormalizedF32;
 use serde::{Deserialize, Serialize};
+
+/// Parameter ID of the host mix every effect slot has.
+pub const EFFECT_MIX_PARAM_ID: u32 = 3;
+
+/// The host dry/wet mix of an effect slot, set to `mix`: 0.0 is dry, 1.0 is wet.
+pub fn effect_mix_param(mix: NormalizedF32) -> Param<f32> {
+    let mut param = Param::new_f32(EFFECT_MIX_PARAM_ID, "Mix", "Effect", 1.0, 0.0, 1.0, 0.01);
+    param.set_base(mix.get());
+    param
+}
 
 /// External identity and opaque native state survive missing installations and catalog ID changes.
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
@@ -21,7 +33,7 @@ pub struct ExternalPluginInstance {
 ///     parameters: indexmap::IndexMap::new(),
 /// };
 /// ```
-#[derive(Serialize, Deserialize, Clone, Debug, Default)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct PluginInstance {
     /// Registry ID for plugin lookup (stable identifier)
     pub registry_id: u32,
@@ -44,6 +56,21 @@ pub struct PluginInstance {
     /// Name the user gave this instance. `None` shows the plugin's own name.
     #[serde(default)]
     pub display_name: Option<String>,
+
+    /// Host dry/wet mix of an effect slot, from 0.0 (dry) to 1.0 (wet). Lets any effect be
+    /// blended, whether or not it has a mix control of its own. Generators ignore it.
+    #[serde(default = "full_mix")]
+    pub mix: Param<f32>,
+}
+
+fn full_mix() -> Param<f32> {
+    effect_mix_param(NormalizedF32::new(NormalizedF32::MAX))
+}
+
+impl Default for PluginInstance {
+    fn default() -> Self {
+        Self::new("")
+    }
 }
 
 impl PartialEq for PluginInstance {
@@ -54,6 +81,7 @@ impl PartialEq for PluginInstance {
             && self.plugin_state == other.plugin_state
             && self.external == other.external
             && self.display_name == other.display_name
+            && self.mix.get_base() == other.mix.get_base()
         // Note: We ignore parameter_specs for equality checks because they are just metadata
     }
 }
@@ -69,6 +97,7 @@ impl PluginInstance {
             plugin_state: Vec::new(),
             external: None,
             display_name: None,
+            mix: full_mix(),
         }
     }
 
@@ -82,7 +111,13 @@ impl PluginInstance {
             plugin_state: Vec::new(),
             external: None,
             display_name: None,
+            mix: full_mix(),
         }
+    }
+
+    /// Host dry/wet mix the user set on this effect slot.
+    pub fn mix(&self) -> NormalizedF32 {
+        NormalizedF32::new(self.mix.get_base())
     }
 
     /// Name to show for this instance: "Lead 1 (Vital)" when renamed, else "Vital".
@@ -134,6 +169,26 @@ mod tests {
         let restored: PluginInstance =
             serde_json::from_slice(&serde_json::to_vec(&plugin).unwrap()).unwrap();
         assert_eq!(restored, plugin);
+    }
+
+    #[test]
+    fn mix_defaults_to_full_wet_and_round_trips() {
+        let json = r#"{"registry_id":42,"name":"Delay","bypass":false}"#;
+        let mut plugin: PluginInstance = serde_json::from_str(json).unwrap();
+        assert_eq!(plugin.mix().get(), 1.0);
+        assert_eq!(PluginInstance::default().mix().get(), 1.0);
+
+        plugin.mix.set_base(0.25);
+        let restored: PluginInstance =
+            serde_json::from_slice(&serde_json::to_vec(&plugin).unwrap()).unwrap();
+        assert_eq!(restored.mix().get(), 0.25);
+        let restored: PluginInstance =
+            rmp_serde::from_slice(&rmp_serde::to_vec_named(&plugin).unwrap()).unwrap();
+        assert_eq!(restored.mix().get(), 0.25);
+
+        // Out-of-range edits are clamped by the parameter bounds.
+        plugin.mix.set_base(3.0);
+        assert_eq!(plugin.mix().get(), 1.0);
     }
 
     #[test]

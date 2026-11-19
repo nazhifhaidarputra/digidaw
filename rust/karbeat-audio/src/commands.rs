@@ -4,6 +4,7 @@ use karbeat_host::retire::{Owner, Retiree};
 use karbeat_plugin_api::types::MidiEvent;
 use karbeat_plugin_api::types::ZeroCopyBuffer;
 use karbeat_plugins::registry::PluginFactory;
+use karbeat_utils::types::NormalizedF32;
 
 use crate::{
     engine::{
@@ -242,6 +243,15 @@ pub enum AudioCommand {
         effect_id: EffectId,
         /// `true` passes audio through the slot untouched.
         bypass: bool,
+    },
+    /// Sets the host dry/wet mix of an effect slot.
+    SetEffectMix {
+        /// Effect chain containing the instance.
+        target: EffectTarget,
+        /// Effect whose mix changes.
+        effect_id: EffectId,
+        /// From 0.0 (dry input only) to 1.0 (plugin output only).
+        mix: NormalizedF32,
     },
 
     /// Request parameter feedback for a target effect (triggers EffectParameterSnapshot response)

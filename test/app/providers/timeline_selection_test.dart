@@ -5,6 +5,7 @@ import 'package:karbeat/app/providers/automation_provider.dart';
 import 'package:karbeat/app/providers/project_provider.dart';
 import 'package:karbeat/app/providers/range_select_state.dart';
 import 'package:karbeat/app/providers/track_list_state.dart';
+import 'package:karbeat/app/providers/workspace_state.dart';
 import 'package:karbeat/shared/models/grid.dart';
 import 'package:karbeat/src/rust/api/automation.dart';
 import 'package:karbeat/src/rust/api/mixer.dart';
@@ -243,6 +244,63 @@ void main() {
         ..finish();
 
       expect(container.read(trackListStateProvider).hasSelection, isFalse);
+    });
+
+    test('a ruler range stays as the time range until cleared', () {
+      final range = container.read(rangeSelectProvider.notifier)
+        ..startAllRows(4100)
+        ..update(3900)
+        ..finish();
+      expect(
+        container.read(rangeSelectProvider).timeRange,
+        TickSpan.between(3900, 4100),
+      );
+
+      // Deselecting the clips, drawing on a row, or Escape-style cancel
+      // leaves it alone.
+      container.read(trackListStateProvider.notifier).deselectAllClips();
+      range
+        ..start(const TimelineRow.track(2), 8000)
+        ..update(9000)
+        ..finish()
+        ..cancel();
+      final kept = container.read(rangeSelectProvider).timeRange;
+      expect(kept?.start, 3900);
+      expect(kept?.end, 4100);
+
+      range.clearTimeRange();
+      expect(container.read(rangeSelectProvider).timeRange, isNull);
+    });
+
+    test('a ruler click without a drag keeps no time range', () {
+      container.read(rangeSelectProvider.notifier)
+        ..startAllRows(500)
+        ..finish();
+      expect(container.read(rangeSelectProvider).timeRange, isNull);
+      expect(TickSpan.between(10, 10), isNull);
+      expect(TickSpan.between(-5, 10)?.start, 0);
+    });
+
+    test('follows the grid while snap to grid is on', () {
+      final workspace = container.read(workspaceStateProvider.notifier)
+        ..setGridSize(GridSize.quarter);
+      final range = container.read(rangeSelectProvider.notifier)
+        ..start(const TimelineRow.track(1), 100)
+        ..update(1500);
+      // Off: the range follows the pointer exactly.
+      expect(container.read(rangeSelectProvider).startTick, 100);
+      expect(container.read(rangeSelectProvider).endTick, 1500);
+      range.cancel();
+
+      workspace.toggleSnapToGrid();
+      range
+        ..start(const TimelineRow.track(1), 100)
+        ..update(1500);
+      final snapped = container.read(rangeSelectProvider);
+      expect(snapped.startTick, GridSize.quarter.snap(100));
+      expect(snapped.endTick, GridSize.quarter.snap(1500));
+      range.startAllRows(-50);
+      expect(container.read(rangeSelectProvider).startTick, 0);
     });
   });
 

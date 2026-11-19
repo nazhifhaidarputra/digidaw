@@ -26,6 +26,12 @@ impl DelayLine {
         }
     }
 
+    /// Silences the held samples, keeping the delay.
+    pub fn clear(&mut self) {
+        self.buffer.fill(0.0);
+        self.write_pos = 0;
+    }
+
     #[inline(always)]
     pub fn process_block(&mut self, buffer: &mut [f32], channels: usize) {
         if self.delay_samples == 0 {

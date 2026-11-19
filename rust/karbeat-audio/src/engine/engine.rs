@@ -6,6 +6,7 @@ use crate::{
     dsp_engine::{AudioWorkerPool, LevelJob, MAX_DSP_WORKERS},
     engine::{
         buffer::AudioBuffer,
+        effect_mix::EffectMix,
         helper::*,
         input::{InputCapture, InputSource, InputState},
         metronome::{ClickTiming, MetronomeState},
@@ -486,6 +487,7 @@ impl AudioEngine {
                     registry_id: effect.registry_id,
                     plugin: retiring_plugin(plugin),
                     bypass: effect.bypass,
+                    mix: EffectMix::new(effect.mix),
                 })
             })
             .collect()
@@ -1693,6 +1695,7 @@ impl AudioEngine {
             &self.plugin_state,
             self.config.num_channels as usize,
         );
+        self.sync_effect_mix_delays();
 
         // Offline renders compensate their own graph and leave the monitor reading alone.
         if matches!(self.processing_mode, ProcessingMode::Realtime) {
@@ -1703,6 +1706,22 @@ impl AudioEngine {
             "[PDC] Recalculated Latencies. Max System Latency: {} samples",
             max_system_latency
         );
+    }
+
+    /// Lines up the dry path of every blending effect slot with its plugin's latency, so the
+    /// host mix stays phase-aligned after a latency change.
+    fn sync_effect_mix_delays(&mut self) {
+        let channels = self.config.num_channels as usize;
+        let effects = itertools::chain!(
+            self.plugin_state.track_effects.iter_mut().flatten(),
+            self.plugin_state.bus_effects.iter_mut().flatten(),
+            self.plugin_state.master_effects.iter_mut(),
+        );
+        for effect in effects.filter(|effect| effect.mix.is_blending()) {
+            effect
+                .mix
+                .sync_delay(effect.plugin.latency_samples(), channels);
+        }
     }
 
     /// Drops modulation links that target `plugin`, together with the automation sources and

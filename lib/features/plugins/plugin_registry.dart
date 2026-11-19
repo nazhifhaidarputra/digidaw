@@ -28,6 +28,8 @@ class PluginRegistryFlutter {
         DigidawSidechainCompressor(target: target),
     DigidawDelaySpecs.id: (target, pluginId) =>
         DigidawDelay(target: target),
+    DigidawStereoShaperSpecs.id: (target, pluginId) =>
+        DigidawStereoShaper(target: target),
   };
 
   // ===========================================================================

@@ -121,11 +121,37 @@ final class PluginAutomationCandidate {
 AutomationTargetDto automationTargetForPluginParameter(
   plugin_api.UiPluginTarget target,
   int paramId,
-) {
+) => _pluginAutomationTarget(
+  target,
+  paramId: paramId,
+  effectTarget: EffectAutomationTargetDto.pluginParam(paramId: paramId),
+);
+
+/// The automation target of an effect slot's host mix. Generators have no
+/// slot mix and map to their parameter [EffectMixAutomation.paramId].
+AutomationTargetDto automationTargetForEffectMix(
+  plugin_api.UiPluginTarget target,
+) => _pluginAutomationTarget(
+  target,
+  paramId: EffectMixAutomation.paramId,
+  effectTarget: const EffectAutomationTargetDto.mix(),
+);
+
+/// Constants of the host mix every effect slot has.
+abstract final class EffectMixAutomation {
+  /// Mirrors `EFFECT_MIX_PARAM_ID` in `karbeat-core`.
+  static const int paramId = 3;
+}
+
+AutomationTargetDto _pluginAutomationTarget(
+  plugin_api.UiPluginTarget target, {
+  required int paramId,
+  required EffectAutomationTargetDto effectTarget,
+}) {
   MixerChannelParamTargetDto effectParam(int effectId) =>
       MixerChannelParamTargetDto.plugin(
         effectId: effectId,
-        target: EffectAutomationTargetDto.pluginParam(paramId: paramId),
+        target: effectTarget,
       );
 
   return switch (target) {
@@ -332,6 +358,22 @@ class AutomationNotifier extends Notifier<AutomationDataState> {
       target: automationTargetForPluginParameter(target, parameter.id),
       label: parameter.name,
       initialValue: parameter.value,
+    );
+    if (result.hasValue) _revealDrawerFor(target);
+    return result;
+  }
+
+  /// Creates automation for an effect slot's host mix, then reveals the
+  /// drawer that shows the new lane.
+  Future<AsyncValue<void>> handleAddEffectMixAutomation({
+    required plugin_api.UiPluginTarget target,
+    required String label,
+    required double mix,
+  }) async {
+    final result = await handleAddAutomationForTarget(
+      target: automationTargetForEffectMix(target),
+      label: label,
+      initialValue: mix,
     );
     if (result.hasValue) _revealDrawerFor(target);
     return result;

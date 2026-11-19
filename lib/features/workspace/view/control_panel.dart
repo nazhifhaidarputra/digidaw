@@ -11,217 +11,106 @@ import 'package:karbeat/app/providers/workspace_state.dart';
 import 'package:karbeat/core/l10n/localizer.dart';
 import 'package:karbeat/core/widgets/background_jobs_indicator.dart';
 import 'package:karbeat/core/widgets/fine_grained_input.dart';
-import 'package:karbeat/features/track/view/performance_monitor.dart';
 import 'package:karbeat/shared/enums/global.dart';
 import 'package:karbeat/src/rust/api/project.dart';
 import 'package:karbeat/src/rust/api/transport.dart';
 import 'package:karbeat/core/utils/formatter.dart';
 import 'package:karbeat/core/utils/logger.dart';
-import 'package:karbeat/core/utils/scroll_behavior.dart';
 
-class ControlPanel extends StatelessWidget {
-  final List<Widget> items;
-  final Color? backgroundColor;
-  final double height;
-  const ControlPanel({
-    super.key,
-    required this.items,
-    required this.height,
-    this.backgroundColor,
-  });
+/// How much of the control dock fits the width it is given.
+enum DockDensity {
+  /// Large screens: every control and readout field is shown with labels.
+  wide,
 
-  @override
-  Widget build(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
-    return Container(
-      width: double.infinity,
-      height: height,
-      decoration: BoxDecoration(
-        color: backgroundColor ?? colors.surfaceContainer,
-        border: Border(bottom: BorderSide(color: colors.outlineVariant)),
-        boxShadow: [
-          BoxShadow(
-            color: colors.shadow.withValues(alpha: 0.2),
-            blurRadius: 4,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      padding: const EdgeInsets.symmetric(horizontal: 8.0),
-      child: ScrollConfiguration(
-        behavior: DragScrollBehavior(),
-        child: SingleChildScrollView(
-          scrollDirection: Axis.horizontal,
-          physics: const AlwaysScrollableScrollPhysics(),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 8.0),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.center,
-              mainAxisSize: MainAxisSize.min,
-              children: items,
-            ),
-          ),
-        ),
-      ),
-    );
+  /// Tablets and large phones: segments show icons, the selected view keeps
+  /// its label, and the toggles sit behind "more".
+  compact,
+
+  /// Small phones: the views and tools collapse into one popover button each.
+  narrow;
+
+  /// Narrowest width that shows every control in line.
+  static const double wideMinWidth = 1180;
+
+  /// Narrowest width that fits both segments.
+  static const double compactMinWidth = 720;
+
+  static DockDensity forWidth(double width) {
+    if (width >= wideMinWidth) return DockDensity.wide;
+    if (width >= compactMinWidth) return DockDensity.compact;
+    return DockDensity.narrow;
   }
 }
 
-class ControlPanelBuilder {
-  final List<Widget> _items = [];
+/// Height of the control dock at the bottom of the workspace.
+const double kControlDockHeight = 58;
 
-  void addItem(Widget item) {
-    _items.add(item);
-  }
+/// One choice of a dock segment.
+class _DockChoice<T> {
+  const _DockChoice(this.value, this.icon, this.label, {this.color});
 
-  void addSpacer() {
-    _items.add(const SizedBox(width: 16));
-  }
-
-  void addDivider() {
-    _items.add(
-      const SizedBox(width: 17, height: 30, child: VerticalDivider(width: 1)),
-    );
-  }
-
-  void addWidget(Widget widget) {
-    _items.add(widget);
-  }
-
-  ControlPanel build({required double height}) {
-    return ControlPanel(items: _items, height: height);
-  }
-}
-
-class ControlPanelToolbarItem extends StatelessWidget {
-  final String name;
+  final T value;
   final IconData icon;
-  final Color color;
-  final VoidCallback? onTap;
-  final bool isActive;
+  final String label;
 
-  const ControlPanelToolbarItem({
-    super.key,
-    required this.name,
-    required this.icon,
-    required this.color,
-    this.onTap,
-    this.isActive = false,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
-    final isSmallScreen = MediaQuery.sizeOf(context).width < 600;
-    final double containerHeight = isSmallScreen ? 40.0 : 50.0;
-    final double hPadding = isSmallScreen ? 8.0 : 12.0;
-    final double iconSize = isSmallScreen ? 16.0 : 20.0;
-    final double fontSize = isSmallScreen ? 8.0 : 10.0;
-
-    return Tooltip(
-      message: name,
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(4),
-          child: Container(
-            height: containerHeight,
-            padding: EdgeInsets.symmetric(horizontal: hPadding),
-            decoration: isActive
-                ? BoxDecoration(
-                    color: colors.onSurface.withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(4),
-                    border: Border.all(color: color.withAlpha(25)),
-                  )
-                : null,
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(
-                  icon,
-                  color: isActive ? color : color.withAlpha(165),
-                  size: iconSize,
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  name,
-                  style: TextStyle(
-                    color: isActive ? color : color.withAlpha(165),
-                    fontSize: fontSize,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
+  /// Overrides the segment color, as the Delete tool does.
+  final Color? color;
 }
 
-class ControlPanelDropdown<T> extends StatelessWidget {
-  final String name;
-  final IconData icon;
-  final Color color;
-  final ValueChanged<T> onSelected;
-  final List<PopupMenuEntry<T>> items;
+List<_DockChoice<WorkspaceView>> _viewChoices() => [
+  _DockChoice(
+    WorkspaceView.trackList,
+    Icons.view_list,
+    tr('workspace-view-tracks'),
+  ),
+  _DockChoice(
+    WorkspaceView.pianoRoll,
+    Icons.piano,
+    tr('workspace-view-piano-roll'),
+  ),
+  _DockChoice(WorkspaceView.mixer, Icons.tune, tr('workspace-view-mixer')),
+  _DockChoice(
+    WorkspaceView.source,
+    Icons.group_work,
+    tr('workspace-view-source'),
+  ),
+];
 
-  const ControlPanelDropdown({
-    super.key,
-    required this.name,
-    required this.icon,
-    required this.color,
-    required this.onSelected,
-    required this.items,
-  });
+List<_DockChoice<ToolSelection>> _toolChoices(ColorScheme colors) => [
+  _DockChoice(
+    ToolSelection.panSelect,
+    Icons.pan_tool_alt,
+    tr('workspace-tool-pan-select'),
+  ),
+  _DockChoice(ToolSelection.slice, Icons.content_cut, tr('workspace-tool-cut')),
+  _DockChoice(ToolSelection.draw, Icons.edit, tr('workspace-tool-draw')),
+  _DockChoice(ToolSelection.move, Icons.open_with, tr('workspace-tool-move')),
+  _DockChoice(
+    ToolSelection.delete,
+    Icons.delete,
+    tr('workspace-tool-delete'),
+    color: colors.error,
+  ),
+  _DockChoice(
+    ToolSelection.select,
+    Icons.crop_free,
+    tr('workspace-tool-range-select'),
+  ),
+  _DockChoice(
+    ToolSelection.resize,
+    MdiIcons.arrowLeftRight,
+    tr('workspace-tool-resize'),
+  ),
+];
 
-  @override
-  Widget build(BuildContext context) {
-    final isSmallScreen = MediaQuery.sizeOf(context).width < 600;
-    final double containerHeight = isSmallScreen ? 40.0 : 50.0;
-    final double iconSize = isSmallScreen ? 16.0 : 20.0;
-    final double fontSize = isSmallScreen ? 8.0 : 10.0;
-    final double dropdownArrowSize = isSmallScreen ? 14 : 16;
-
-    return PopupMenuButton<T>(
-      tooltip: name,
-      elevation: 8,
-      position: PopupMenuPosition.under,
-      onSelected: onSelected,
-      itemBuilder: (context) => items,
-      child: Container(
-        height: containerHeight,
-        padding: const EdgeInsets.symmetric(horizontal: 8),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(icon, color: color, size: iconSize),
-                const SizedBox(height: 2),
-                Text(
-                  name,
-                  style: TextStyle(color: color, fontSize: fontSize),
-                ),
-              ],
-            ),
-            const SizedBox(width: 4),
-            Icon(
-              Icons.arrow_drop_down,
-              color: color.withAlpha(150),
-              size: dropdownArrowSize,
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class DefaultControlPanel extends ConsumerWidget {
-  const DefaultControlPanel({super.key});
+/// The workspace controls, docked along the bottom edge: views on the left,
+/// the transport in the middle, and the editing tools on the right, where the
+/// thumbs rest on a phone held sideways.
+///
+/// Every view and tool is one tap away. The layout follows the width it is
+/// given (see [DockDensity]).
+class WorkspaceControlDock extends ConsumerWidget {
+  const WorkspaceControlDock({super.key});
 
   void _navigateTo(WidgetRef ref, WorkspaceView view) {
     if (view != WorkspaceView.pianoRoll) {
@@ -254,378 +143,566 @@ class DefaultControlPanel extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final colors = Theme.of(context).colorScheme;
-    final transportState = ref.watch(transportProvider).value;
-    // Only the fields this panel shows, so other workspace changes do not rebuild it.
-    final workspaceState = ref.watch(
+    // Only the fields the dock shows, so other workspace changes do not rebuild it.
+    final workspace = ref.watch(
       workspaceStateProvider.select(
-        (state) => (
-          currentView: state.currentView,
-          snapToGrid: state.snapToGrid,
-          followPlayhead: state.followPlayhead,
-          showMidiKeyboard: state.floatingMidiKeyboardState.showed,
-          selectedTool: state.selectedTool,
+        (state) =>
+            (currentView: state.currentView, selectedTool: state.selectedTool),
+      ),
+    );
+    final toolChoices = _toolChoices(colors);
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final density = DockDensity.forWidth(constraints.maxWidth);
+        final Widget views;
+        final Widget tools;
+        if (density == DockDensity.narrow) {
+          views = _DockMenuButton<WorkspaceView>(
+            tooltip: tr('workspace-dock-switch-view'),
+            choices: _viewChoices(),
+            selected: workspace.currentView,
+            color: colors.primary,
+            onSelected: (view) => _navigateTo(ref, view),
+          );
+          tools = _DockMenuButton<ToolSelection>(
+            tooltip: tr('workspace-dock-pick-tool'),
+            choices: toolChoices,
+            selected: workspace.selectedTool,
+            color: colors.secondary,
+            onSelected: (tool) =>
+                ref.read(workspaceStateProvider.notifier).selectTool(tool),
+          );
+        } else {
+          views = _DockSegment<WorkspaceView>(
+            choices: _viewChoices(),
+            selected: workspace.currentView,
+            color: colors.primary,
+            labels: density == DockDensity.wide
+                ? _SegmentLabels.all
+                : _SegmentLabels.selected,
+            onSelected: (view) => _navigateTo(ref, view),
+          );
+          tools = _DockSegment<ToolSelection>(
+            choices: toolChoices,
+            selected: workspace.selectedTool,
+            color: colors.secondary,
+            labels: density == DockDensity.wide
+                ? _SegmentLabels.selected
+                : _SegmentLabels.none,
+            onSelected: (tool) =>
+                ref.read(workspaceStateProvider.notifier).selectTool(tool),
+          );
+        }
+
+        return Container(
+          height: kControlDockHeight,
+          decoration: BoxDecoration(
+            color: colors.surfaceContainer,
+            border: Border(top: BorderSide(color: colors.outlineVariant)),
+            boxShadow: [
+              BoxShadow(
+                color: colors.shadow.withValues(alpha: 0.2),
+                blurRadius: 4,
+                offset: const Offset(0, -2),
+              ),
+            ],
+          ),
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          child: Row(
+            children: [
+              views,
+              const SizedBox(width: 12),
+              Expanded(
+                // Shrinks rather than overflows when a translation runs long.
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: _DockTransport(density: density),
+                ),
+              ),
+              const SizedBox(width: 12),
+              tools,
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+
+enum _SegmentLabels { all, selected, none }
+
+/// A row of mutually exclusive choices in one rounded track.
+class _DockSegment<T> extends StatelessWidget {
+  const _DockSegment({
+    required this.choices,
+    required this.selected,
+    required this.color,
+    required this.labels,
+    required this.onSelected,
+  });
+
+  final List<_DockChoice<T>> choices;
+  final T selected;
+  final Color color;
+  final _SegmentLabels labels;
+  final ValueChanged<T> onSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    return Container(
+      padding: const EdgeInsets.all(3),
+      decoration: BoxDecoration(
+        color: colors.surface,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: colors.outlineVariant),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          for (final choice in choices)
+            _segmentButton(context, choice, choice.value == selected),
+        ],
+      ),
+    );
+  }
+
+  Widget _segmentButton(
+    BuildContext context,
+    _DockChoice<T> choice,
+    bool isSelected,
+  ) {
+    final colors = Theme.of(context).colorScheme;
+    final accent = choice.color ?? color;
+    final foreground = isSelected ? accent : colors.onSurfaceVariant;
+    final showLabel = switch (labels) {
+      _SegmentLabels.all => true,
+      _SegmentLabels.selected => isSelected,
+      _SegmentLabels.none => false,
+    };
+    return Tooltip(
+      message: choice.label,
+      child: Semantics(
+        selected: isSelected,
+        button: true,
+        label: choice.label,
+        child: InkWell(
+          onTap: () => onSelected(choice.value),
+          borderRadius: BorderRadius.circular(11),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 120),
+            height: 42,
+            constraints: const BoxConstraints(minWidth: 38),
+            padding: const EdgeInsets.symmetric(horizontal: 8),
+            decoration: BoxDecoration(
+              color: isSelected
+                  ? accent.withValues(alpha: 0.2)
+                  : Colors.transparent,
+              borderRadius: BorderRadius.circular(11),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(choice.icon, size: 20, color: foreground),
+                if (showLabel) ...[
+                  const SizedBox(width: 6),
+                  Text(
+                    choice.label,
+                    maxLines: 1,
+                    style: TextStyle(color: foreground, fontSize: 12),
+                  ),
+                ],
+              ],
+            ),
+          ),
         ),
       ),
     );
+  }
+}
 
-    // 2. Consume the FFI Stream natively via Riverpod (No StreamBuilder needed!)
-    // _TransportReadout shows the moving position; the panel only needs the play state.
+/// The current choice as one button that opens every choice above it. Used
+/// where a whole segment does not fit.
+class _DockMenuButton<T> extends StatelessWidget {
+  const _DockMenuButton({
+    required this.tooltip,
+    required this.choices,
+    required this.selected,
+    required this.color,
+    required this.onSelected,
+  });
+
+  final String tooltip;
+  final List<_DockChoice<T>> choices;
+  final T selected;
+  final Color color;
+  final ValueChanged<T> onSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    final current =
+        choices.where((choice) => choice.value == selected).firstOrNull ??
+        choices.first;
+    final accent = current.color ?? color;
+    return PopupMenuButton<T>(
+      tooltip: tooltip,
+      position: PopupMenuPosition.over,
+      onSelected: onSelected,
+      itemBuilder: (context) => [
+        for (final choice in choices)
+          PopupMenuItem<T>(
+            value: choice.value,
+            child: ListTile(
+              leading: Icon(choice.icon, color: choice.color ?? color),
+              title: Text(choice.label),
+              selected: choice.value == selected,
+              contentPadding: EdgeInsets.zero,
+            ),
+          ),
+      ],
+      child: Container(
+        height: 42,
+        padding: const EdgeInsets.symmetric(horizontal: 10),
+        decoration: BoxDecoration(
+          color: accent.withValues(alpha: 0.2),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(current.icon, size: 20, color: accent),
+            const SizedBox(width: 6),
+            ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 88),
+              child: Text(
+                current.label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(color: colors.onSurface, fontSize: 12),
+              ),
+            ),
+            Icon(Icons.arrow_drop_up, size: 18, color: colors.onSurfaceVariant),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// The middle of the dock: position readout, loop, play and stop, and the
+/// workspace toggles, which sit behind "more" unless the dock is wide.
+class _DockTransport extends ConsumerWidget {
+  const _DockTransport({required this.density});
+
+  final DockDensity density;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final colors = Theme.of(context).colorScheme;
+    final isLooping = ref.watch(
+      transportProvider.select((s) => s.value?.isLooping ?? false),
+    );
+    // _TransportReadout shows the moving position; the dock only needs the play state.
     final isSongPlaying = ref.watch(
       transportPositionStreamProvider.select((position) {
         final pos = position.value;
         return pos != null && pos.isPlaying && !pos.isPatternMode;
       }),
     );
-    final builder = ControlPanelBuilder();
+    final wide = density == DockDensity.wide;
 
-    // 0. Pre-calculate layout constraints for the entire panel
-    final isSmallScreen = MediaQuery.sizeOf(context).width < 600;
-    final double itemHeight = isSmallScreen ? 40.0 : 50.0;
-    final double panelHeight =
-        itemHeight + 12.0; // Panel height with 6px padding top/bottom
-
-    // 1. Screen Navigation Dropdown
-    builder.addItem(
-      ControlPanelDropdown<WorkspaceView>(
-        name: _getViewName(workspaceState.currentView),
-        icon: _getViewIcon(workspaceState.currentView),
-        color: colors.primary,
-        onSelected: (view) => _navigateTo(ref, view),
-        items: [
-          PopupMenuItem(
-            value: WorkspaceView.trackList,
-            child: ListTile(
-              leading: Icon(Icons.view_list, color: colors.primary),
-              title: Text(tr('workspace-view-tracks')),
-              contentPadding: EdgeInsets.zero,
-            ),
-          ),
-          PopupMenuItem(
-            value: WorkspaceView.pianoRoll,
-            child: ListTile(
-              leading: Icon(Icons.piano, color: colors.primary),
-              title: Text(tr('workspace-view-piano-roll')),
-              contentPadding: EdgeInsets.zero,
-            ),
-          ),
-          PopupMenuItem(
-            value: WorkspaceView.mixer,
-            child: ListTile(
-              leading: Icon(Icons.tune, color: colors.primary),
-              title: Text(tr('workspace-view-mixer')),
-              contentPadding: EdgeInsets.zero,
-            ),
-          ),
-          PopupMenuItem(
-            value: WorkspaceView.source,
-            child: ListTile(
-              leading: Icon(Icons.group_work, color: colors.primary),
-              title: Text(tr('workspace-view-source')),
-              contentPadding: EdgeInsets.zero,
-            ),
-          ),
-        ],
-      ),
-    );
-
-    builder.addDivider();
-
-    // 2. Transport Panel
-    builder.addWidget(
-      Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          ControlPanelToolbarItem(
-            name: isSongPlaying
-                ? tr('workspace-transport-pause')
-                : tr('workspace-transport-play'),
-            icon: isSongPlaying ? Icons.pause : Icons.play_arrow,
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        _DockReadout(full: wide),
+        const SizedBox(width: 10),
+        _RoundToggle(
+          tooltip: tr('workspace-transport-loop'),
+          icon: Icons.loop,
+          color: colors.tertiary,
+          isActive: isLooping,
+          onTap: () => ref.read(transportProvider.notifier).toggleLoop(),
+        ),
+        const SizedBox(width: 8),
+        Tooltip(
+          message: isSongPlaying
+              ? tr('workspace-transport-pause')
+              : tr('workspace-transport-play'),
+          child: Material(
             color: colors.primary,
-            isActive: isSongPlaying,
-            onTap: () {
-              try {
-                // Pass the context to the FFI call
-                final ctx = ref.read(projectProvider.notifier).dawContext;
-                togglePlaybackWithMode(
-                  ctx: ctx,
-                  playbackMode: const PlaybackModeDto.song(),
-                );
-              } catch (e) {
-                AppLogger.error("Failed to toggle playback: $e");
-                ref.read(notificationProvider.notifier).error(e);
-              }
-            },
+            shape: const CircleBorder(),
+            child: InkWell(
+              customBorder: const CircleBorder(),
+              onTap: () => _togglePlayback(ref),
+              child: SizedBox.square(
+                dimension: 46,
+                child: Icon(
+                  isSongPlaying ? Icons.pause : Icons.play_arrow,
+                  color: colors.onPrimary,
+                  size: 26,
+                ),
+              ),
+            ),
           ),
-          ControlPanelToolbarItem(
-            name: tr('workspace-transport-stop'),
-            icon: Icons.stop,
-            color: colors.error,
-            onTap: () => ref.read(transportProvider.notifier).stop(),
-          ),
-          ControlPanelToolbarItem(
-            name: tr('workspace-transport-loop'),
-            icon: Icons.loop,
-            color: colors.tertiary,
-            isActive: transportState?.isLooping ?? false,
-            onTap: () => ref.read(transportProvider.notifier).toggleLoop(),
-          ),
+        ),
+        const SizedBox(width: 8),
+        _RoundToggle(
+          tooltip: tr('workspace-transport-stop'),
+          icon: Icons.stop,
+          color: colors.error,
+          isActive: false,
+          onTap: () => ref.read(transportProvider.notifier).stop(),
+        ),
+        const SizedBox(width: 10),
+        if (wide)
+          const _WorkspaceToggles()
+        else ...[
+          const _WorkspaceTogglesMenu(),
+          // The info bar that shows background jobs is hidden below wide.
+          const BackgroundJobsIndicator(),
         ],
-      ),
+      ],
     );
-
-    builder.addWidget(
-      Row(
-        children: [
-          ControlPanelToolbarItem(
-            name: tr('workspace-snap-to-grid'),
-            icon: Icons.grid_on,
-            color: colors.secondary,
-            isActive: workspaceState.snapToGrid,
-            onTap: () =>
-                ref.read(workspaceStateProvider.notifier).toggleSnapToGrid(),
-          ),
-          const SizedBox(width: 8),
-          ControlPanelToolbarItem(
-            name: tr('workspace-follow-playhead'),
-            icon: Icons.keyboard_double_arrow_right,
-            color: colors.secondary,
-            isActive: workspaceState.followPlayhead,
-            onTap: () => ref
-                .read(workspaceStateProvider.notifier)
-                .toggleFollowPlayhead(),
-          ),
-          const SizedBox(width: 8),
-          ControlPanelToolbarItem(
-            name: tr('workspace-metronome'),
-            icon: MdiIcons.metronome,
-            color: colors.secondary,
-            isActive: transportState?.isMetronomeActive ?? false,
-            onTap: () =>
-                ref.read(transportProvider.notifier).toggleMetronomeActive(),
-          ),
-          const SizedBox(width: 8),
-          ControlPanelToolbarItem(
-            name: tr('workspace-midi-keyboard'),
-            icon: Icons.piano,
-            color: colors.primary,
-            isActive: workspaceState.showMidiKeyboard,
-            onTap: () => ref
-                .read(workspaceStateProvider.notifier)
-                .toggleFloatingMidiKeyboard(),
-          ),
-        ],
-      ),
-    );
-    builder.addDivider();
-
-    // 3. Info Display
-    builder.addWidget(_buildInfoDisplay(context));
-
-    builder.addDivider();
-
-    // The fixed height decides how many label rows fit per column.
-    builder.addWidget(
-      SizedBox(height: itemHeight, child: const DawPerformanceMonitor()),
-    );
-    builder.addWidget(
-      SizedBox(height: itemHeight, child: const BackgroundJobsIndicator()),
-    );
-
-    builder.addDivider();
-
-    // 4. Control Panel Tools Dropdown
-    builder.addItem(
-      ControlPanelDropdown<ToolSelection>(
-        name: _getToolName(workspaceState.selectedTool),
-        icon: _getToolIcon(workspaceState.selectedTool),
-        color: workspaceState.selectedTool == ToolSelection.delete
-            ? colors.error
-            : colors.secondary,
-        onSelected: (tool) =>
-            ref.read(workspaceStateProvider.notifier).selectTool(tool),
-        items: [
-          PopupMenuItem(
-            value: ToolSelection.panSelect,
-            child: ListTile(
-              leading: Icon(Icons.pan_tool_alt, color: colors.secondary),
-              title: Text(tr('workspace-tool-pan-select')),
-              contentPadding: EdgeInsets.zero,
-            ),
-          ),
-          PopupMenuItem(
-            value: ToolSelection.slice,
-            child: ListTile(
-              leading: Icon(Icons.content_cut, color: colors.secondary),
-              title: Text(tr('workspace-tool-slice')),
-              contentPadding: EdgeInsets.zero,
-            ),
-          ),
-          PopupMenuItem(
-            value: ToolSelection.draw,
-            child: ListTile(
-              leading: Icon(Icons.edit, color: colors.secondary),
-              title: Text(tr('workspace-tool-draw')),
-              contentPadding: EdgeInsets.zero,
-            ),
-          ),
-          PopupMenuItem(
-            value: ToolSelection.move,
-            child: ListTile(
-              leading: Icon(Icons.open_with, color: colors.secondary),
-              title: Text(tr('workspace-tool-move')),
-              contentPadding: EdgeInsets.zero,
-            ),
-          ),
-          PopupMenuItem(
-            value: ToolSelection.delete,
-            child: ListTile(
-              leading: Icon(Icons.delete, color: colors.error),
-              title: Text(tr('workspace-tool-delete')),
-              contentPadding: EdgeInsets.zero,
-            ),
-          ),
-          PopupMenuItem(
-            value: ToolSelection.select,
-            child: ListTile(
-              leading: Icon(Icons.crop_free, color: colors.secondary),
-              title: Text(tr('workspace-tool-range-select')),
-              contentPadding: EdgeInsets.zero,
-            ),
-          ),
-          PopupMenuItem(
-            value: ToolSelection.resize,
-            child: ListTile(
-              leading: Icon(MdiIcons.arrowLeftRight, color: colors.secondary),
-              title: Text(tr('workspace-tool-resize')),
-              contentPadding: EdgeInsets.zero,
-            ),
-          ),
-        ],
-      ),
-    );
-
-    // Build the panel utilizing the explicit height constraint
-    return builder.build(height: panelHeight);
   }
 
-  // Helpers to dynamically display the currently selected View
-  String _getViewName(WorkspaceView view) {
-    switch (view) {
-      case WorkspaceView.trackList:
-        return tr('workspace-view-tracks');
-      case WorkspaceView.pianoRoll:
-        return tr('workspace-view-piano-roll');
-      case WorkspaceView.mixer:
-        return tr('workspace-view-mixer');
-      case WorkspaceView.source:
-        return tr('workspace-view-source');
+  void _togglePlayback(WidgetRef ref) {
+    // The FFI call can throw; report it instead of crashing the gesture.
+    try {
+      final ctx = ref.read(projectProvider.notifier).dawContext;
+      togglePlaybackWithMode(
+        ctx: ctx,
+        playbackMode: const PlaybackModeDto.song(),
+      );
+    } catch (e) {
+      AppLogger.error("Failed to toggle playback: $e");
+      ref.read(notificationProvider.notifier).error(e);
     }
   }
+}
 
-  IconData _getViewIcon(WorkspaceView view) {
-    switch (view) {
-      case WorkspaceView.trackList:
-        return Icons.view_list;
-      case WorkspaceView.pianoRoll:
-        return Icons.piano;
-      case WorkspaceView.mixer:
-        return Icons.tune;
-      case WorkspaceView.source:
-        return Icons.group_work;
-    }
-  }
+/// A round transport or workspace toggle.
+class _RoundToggle extends StatelessWidget {
+  const _RoundToggle({
+    required this.tooltip,
+    required this.icon,
+    required this.color,
+    required this.isActive,
+    required this.onTap,
+  });
 
-  // Helpers to dynamically display the currently selected Tool
-  String _getToolName(ToolSelection tool) {
-    switch (tool) {
-      case ToolSelection.panSelect:
-        return tr('workspace-tool-pan-select');
-      case ToolSelection.slice:
-        return tr('workspace-tool-cut');
-      case ToolSelection.draw:
-        return tr('workspace-tool-draw');
-      case ToolSelection.move:
-        return tr('workspace-tool-move');
-      case ToolSelection.delete:
-        return tr('workspace-tool-delete');
-      case ToolSelection.select:
-        return tr('workspace-tool-select');
-      case ToolSelection.resize:
-        return tr('workspace-tool-resize');
-      default:
-        return tr('workspace-tool-pan-select');
-    }
-  }
+  final String tooltip;
+  final IconData icon;
+  final Color color;
+  final bool isActive;
+  final VoidCallback onTap;
 
-  IconData _getToolIcon(ToolSelection tool) {
-    switch (tool) {
-      case ToolSelection.panSelect:
-        return Icons.pan_tool_alt;
-      case ToolSelection.slice:
-        return Icons.content_cut;
-      case ToolSelection.draw:
-        return Icons.edit;
-      case ToolSelection.move:
-        return Icons.open_with;
-      case ToolSelection.delete:
-        return Icons.delete;
-      case ToolSelection.select:
-        return Icons.crop_free;
-      case ToolSelection.resize:
-        return MdiIcons.arrowLeftRight;
-      default:
-        return Icons.pan_tool_alt;
-    }
-  }
-
-  Widget _buildInfoDisplay(BuildContext context) {
+  @override
+  Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
-    final isSmallScreen = MediaQuery.sizeOf(context).width < 600;
-    final double dividerWidth = isSmallScreen ? 8.0 : 20.0;
-    final horizontalPadding = isSmallScreen ? 8.0 : 12.0;
-    final infoFieldWidth = isSmallScreen ? 28.0 : 36.0;
-    final timeFieldWidth = isSmallScreen ? 58.0 : 72.0;
-    final bpmFieldWidth = isSmallScreen ? 40.0 : 48.0;
-
-    return Container(
-      padding: EdgeInsets.symmetric(horizontal: horizontalPadding, vertical: 4),
-      decoration: BoxDecoration(
-        color: colors.surfaceContainerLowest,
-        borderRadius: BorderRadius.circular(4),
-        border: Border.all(color: colors.outlineVariant),
-      ),
-      child: IntrinsicHeight(
-        child: Row(
-          children: [
-            _TransportReadout(
-              isSmallScreen: isSmallScreen,
-              dividerWidth: dividerWidth,
-              infoFieldWidth: infoFieldWidth,
-              timeFieldWidth: timeFieldWidth,
+    return Tooltip(
+      message: tooltip,
+      child: Semantics(
+        toggled: isActive,
+        button: true,
+        child: Material(
+          color: isActive
+              ? color.withValues(alpha: 0.24)
+              : colors.surfaceContainerHighest,
+          shape: const CircleBorder(),
+          child: InkWell(
+            customBorder: const CircleBorder(),
+            onTap: onTap,
+            child: SizedBox.square(
+              dimension: 38,
+              child: Icon(
+                icon,
+                size: 20,
+                color: isActive ? color : colors.onSurfaceVariant,
+              ),
             ),
-            VerticalDivider(color: colors.outlineVariant, width: dividerWidth),
-            SizedBox(width: bpmFieldWidth, child: const BpmControl()),
-            VerticalDivider(color: colors.outlineVariant, width: dividerWidth),
-            _buildInfoText(
-              context,
-              tr('workspace-readout-signature'),
-              "4/4",
-              isSmallScreen,
-              width: infoFieldWidth,
-            ),
-          ],
+          ),
         ),
       ),
     );
   }
+}
 
-  static Widget _buildInfoText(
-    BuildContext context,
-    String label,
-    String value,
-    bool isSmallScreen, {
-    required double width,
-  }) {
+/// Snap, follow, metronome and keyboard state, and their toggles.
+typedef _ToggleSpec = ({
+  String label,
+  IconData icon,
+  bool isActive,
+  VoidCallback onToggle,
+});
+
+List<_ToggleSpec> _workspaceToggles(WidgetRef ref) {
+  final workspace = ref.watch(
+    workspaceStateProvider.select(
+      (state) => (
+        snapToGrid: state.snapToGrid,
+        followPlayhead: state.followPlayhead,
+        showMidiKeyboard: state.floatingMidiKeyboardState.showed,
+      ),
+    ),
+  );
+  final metronome = ref.watch(
+    transportProvider.select((s) => s.value?.isMetronomeActive ?? false),
+  );
+  final workspaceNotifier = ref.read(workspaceStateProvider.notifier);
+  return [
+    (
+      label: tr('workspace-snap-to-grid'),
+      icon: Icons.grid_on,
+      isActive: workspace.snapToGrid,
+      onToggle: workspaceNotifier.toggleSnapToGrid,
+    ),
+    (
+      label: tr('workspace-follow-playhead'),
+      icon: Icons.keyboard_double_arrow_right,
+      isActive: workspace.followPlayhead,
+      onToggle: workspaceNotifier.toggleFollowPlayhead,
+    ),
+    (
+      label: tr('workspace-metronome'),
+      icon: MdiIcons.metronome,
+      isActive: metronome,
+      onToggle: () =>
+          ref.read(transportProvider.notifier).toggleMetronomeActive(),
+    ),
+    (
+      label: tr('workspace-midi-keyboard'),
+      icon: Icons.piano,
+      isActive: workspace.showMidiKeyboard,
+      onToggle: workspaceNotifier.toggleFloatingMidiKeyboard,
+    ),
+  ];
+}
+
+/// The workspace toggles in line, for a wide dock.
+class _WorkspaceToggles extends ConsumerWidget {
+  const _WorkspaceToggles();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final colors = Theme.of(context).colorScheme;
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        for (final toggle in _workspaceToggles(ref)) ...[
+          const SizedBox(width: 6),
+          _RoundToggle(
+            tooltip: toggle.label,
+            icon: toggle.icon,
+            color: colors.secondary,
+            isActive: toggle.isActive,
+            onTap: toggle.onToggle,
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+/// The workspace toggles behind one "more" button, for compact docks.
+class _WorkspaceTogglesMenu extends ConsumerWidget {
+  const _WorkspaceTogglesMenu();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final colors = Theme.of(context).colorScheme;
+    final toggles = _workspaceToggles(ref);
+    final anyActive = toggles.any((toggle) => toggle.isActive);
+    return PopupMenuButton<int>(
+      tooltip: tr('workspace-dock-more'),
+      position: PopupMenuPosition.over,
+      onSelected: (index) => toggles[index].onToggle(),
+      itemBuilder: (context) => [
+        for (final (index, toggle) in toggles.indexed)
+          CheckedPopupMenuItem<int>(
+            value: index,
+            checked: toggle.isActive,
+            child: Row(
+              children: [
+                Icon(toggle.icon, size: 18, color: colors.secondary),
+                const SizedBox(width: 10),
+                Flexible(
+                  child: Text(
+                    toggle.label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ],
+            ),
+          ),
+      ],
+      child: SizedBox.square(
+        dimension: 38,
+        child: Icon(
+          Icons.more_horiz,
+          color: anyActive ? colors.secondary : colors.onSurfaceVariant,
+        ),
+      ),
+    );
+  }
+}
+
+/// Position and tempo. A full readout shows bar, beat, time, tempo and
+/// signature; a short one shows time and tempo.
+class _DockReadout extends StatelessWidget {
+  const _DockReadout({required this.full});
+
+  final bool full;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    final dividerWidth = full ? 20.0 : 10.0;
+    return Container(
+      height: 42,
+      padding: const EdgeInsets.symmetric(horizontal: 10),
+      decoration: BoxDecoration(
+        color: colors.surfaceContainerLowest,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: colors.outlineVariant),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _TransportReadout(full: full, dividerWidth: dividerWidth),
+          VerticalDivider(color: colors.outlineVariant, width: dividerWidth),
+          const SizedBox(width: 48, child: BpmControl()),
+          if (full) ...[
+            VerticalDivider(color: colors.outlineVariant, width: dividerWidth),
+            _ReadoutField(
+              label: tr('workspace-readout-signature'),
+              value: '4/4',
+              width: 36,
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+/// One labelled readout value.
+class _ReadoutField extends StatelessWidget {
+  const _ReadoutField({
+    required this.label,
+    required this.value,
+    required this.width,
+  });
+
+  final String label;
+  final String value;
+  final double width;
+
+  @override
+  Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
     return SizedBox(
       width: width,
@@ -641,7 +718,7 @@ class DefaultControlPanel extends ConsumerWidget {
             overflow: TextOverflow.fade,
             style: TextStyle(
               color: colors.onSurfaceVariant,
-              fontSize: isSmallScreen ? 6 : 8,
+              fontSize: 8,
               fontWeight: FontWeight.bold,
             ),
           ),
@@ -651,10 +728,7 @@ class DefaultControlPanel extends ConsumerWidget {
             child: Text(
               value,
               maxLines: 1,
-              style: TextStyle(
-                color: colors.primary,
-                fontSize: isSmallScreen ? 11 : 14,
-              ),
+              style: TextStyle(color: colors.primary, fontSize: 14),
             ),
           ),
         ],
@@ -664,19 +738,13 @@ class DefaultControlPanel extends ConsumerWidget {
 }
 
 /// The bar, beat, and time fields, which change on every position update. Kept in their own
-/// widget so playback rebuilds only these and not the whole control panel.
+/// widget so playback rebuilds only these and not the whole dock.
 class _TransportReadout extends ConsumerWidget {
-  const _TransportReadout({
-    required this.isSmallScreen,
-    required this.dividerWidth,
-    required this.infoFieldWidth,
-    required this.timeFieldWidth,
-  });
+  const _TransportReadout({required this.full, required this.dividerWidth});
 
-  final bool isSmallScreen;
+  /// Whether bar and beat are shown next to the time.
+  final bool full;
   final double dividerWidth;
-  final double infoFieldWidth;
-  final double timeFieldWidth;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -687,32 +755,28 @@ class _TransportReadout extends ConsumerWidget {
     final samples = pos?.samples ?? 0;
     final sampleRate = pos?.sampleRate ?? 44100;
 
+    final time = _ReadoutField(
+      label: tr('workspace-readout-time'),
+      value: formatTimeFromSamples(samples, sampleRate),
+      width: 72,
+    );
+    if (!full) return time;
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        DefaultControlPanel._buildInfoText(
-          context,
-          tr('workspace-readout-bar'),
-          bar.toString(),
-          isSmallScreen,
-          width: infoFieldWidth,
+        _ReadoutField(
+          label: tr('workspace-readout-bar'),
+          value: bar.toString(),
+          width: 36,
         ),
-        SizedBox(width: isSmallScreen ? 6 : 10),
-        DefaultControlPanel._buildInfoText(
-          context,
-          tr('workspace-readout-beat'),
-          beat.toString(),
-          isSmallScreen,
-          width: infoFieldWidth,
+        const SizedBox(width: 10),
+        _ReadoutField(
+          label: tr('workspace-readout-beat'),
+          value: beat.toString(),
+          width: 36,
         ),
         VerticalDivider(color: colors.outlineVariant, width: dividerWidth),
-        DefaultControlPanel._buildInfoText(
-          context,
-          tr('workspace-readout-time'),
-          formatTimeFromSamples(samples, sampleRate),
-          isSmallScreen,
-          width: timeFieldWidth,
-        ),
+        time,
       ],
     );
   }
@@ -843,17 +907,24 @@ class _BpmControlState extends ConsumerState<BpmControl> {
                 children: [
                   Text(
                     "BPM",
+                    maxLines: 1,
                     style: TextStyle(
                       color: colors.onSurfaceVariant,
                       fontSize: isSmallScreen ? 6 : 8,
                       fontWeight: FontWeight.bold,
                     ),
                   ),
-                  Text(
-                    bpm.toStringAsFixed(1),
-                    style: TextStyle(
-                      color: colors.tertiary,
-                      fontSize: isSmallScreen ? 11 : 14,
+                  // One line that shrinks, like the other readout fields.
+                  FittedBox(
+                    fit: BoxFit.scaleDown,
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      bpm.toStringAsFixed(1),
+                      maxLines: 1,
+                      style: TextStyle(
+                        color: colors.tertiary,
+                        fontSize: isSmallScreen ? 11 : 14,
+                      ),
                     ),
                   ),
                 ],

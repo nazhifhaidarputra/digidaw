@@ -7,6 +7,7 @@ import 'package:karbeat/app/providers/automation_provider.dart';
 import 'package:karbeat/app/providers/project_provider.dart';
 import 'package:karbeat/app/providers/track_list_state.dart';
 import 'package:karbeat/app/providers/transport_state.dart';
+import 'package:karbeat/app/providers/workspace_state.dart';
 import 'package:karbeat/core/utils/clip_time_utils.dart';
 import 'package:karbeat/features/track/services/automation_region_edit.dart';
 import 'package:karbeat/src/rust/api/automation.dart' show AutomationRegionDto;
@@ -66,6 +67,26 @@ final timelineRowsProvider = Provider<IList<TimelineRow>>((ref) {
   ].lock;
 });
 
+/// A span of the timeline in ticks, never empty: [start] is always before
+/// [end]. Build one with [TickSpan.between].
+@freezed
+abstract class TickSpan with _$TickSpan {
+  const TickSpan._();
+
+  const factory TickSpan._raw({required int start, required int end}) =
+      _TickSpan;
+
+  /// The span between two tick positions in either order, clamped at zero;
+  /// null when they enclose no time.
+  static TickSpan? between(double a, double b) {
+    final start = math.max(0, math.min(a, b).floor());
+    final end = math.max(a, b).ceil();
+    return end > start ? TickSpan._raw(start: start, end: end) : null;
+  }
+
+  bool contains(double tick) => tick >= start && tick <= end;
+}
+
 /// The range being painted with the Select tool, in tick space.
 ///
 /// The range covers every row from [anchorRow] to [focusRow] in
@@ -89,6 +110,11 @@ abstract class RangeSelectState with _$RangeSelectState {
 
     /// Current drag end in ticks.
     @Default(0) double endTick,
+
+    /// Time range kept highlighted on the ruler after a range drawn there
+    /// ends. It outlives the clip selection it made; a double click on it, or
+    /// Escape with nothing else selected, clears it.
+    TickSpan? timeRange,
   }) = _RangeSelectState;
 
   bool get coversAllRows => isSelecting && anchorRow == null;
@@ -113,25 +139,42 @@ class RangeSelectNotifier extends Notifier<RangeSelectState> {
   @override
   RangeSelectState build() => const RangeSelectState();
 
+  /// [tick] on the nearest grid line while snap to grid is on.
+  double _snap(double tick) {
+    final workspace = ref.read(workspaceStateProvider);
+    final clamped = math.max(0.0, tick);
+    if (!workspace.snapToGrid) return clamped;
+    return workspace.gridSize.snap(clamped.round()).toDouble();
+  }
+
   /// Starts a range on [row] at [tick].
   void start(TimelineRow row, double tick) {
+    final snapped = _snap(tick);
     state = RangeSelectState(
+      timeRange: state.timeRange,
       isSelecting: true,
       anchorRow: row,
       focusRow: row,
-      startTick: tick,
-      endTick: tick,
+      startTick: snapped,
+      endTick: snapped,
     );
   }
 
-  /// Starts a range on the ruler, covering every row.
+  /// Starts a range on the ruler, covering every row. It replaces the kept
+  /// time range once it ends.
   void startAllRows(double tick) {
-    state = RangeSelectState(isSelecting: true, startTick: tick, endTick: tick);
+    final snapped = _snap(tick);
+    state = RangeSelectState(
+      isSelecting: true,
+      startTick: snapped,
+      endTick: snapped,
+    );
   }
 
   /// Moves the end of the range to [tick] and, when given, to [row].
-  void update(double tick, {TimelineRow? row}) {
+  void update(double rawTick, {TimelineRow? row}) {
     if (!state.isSelecting) return;
+    final tick = _snap(rawTick);
     final focusRow = state.anchorRow == null ? null : row ?? state.focusRow;
     if (state.endTick == tick && state.focusRow == focusRow) return;
     state = state.copyWith(endTick: tick, focusRow: focusRow);
@@ -141,7 +184,11 @@ class RangeSelectNotifier extends Notifier<RangeSelectState> {
   /// the range. A range that touches nothing clears the selection.
   void finish() {
     final range = state;
-    state = const RangeSelectState();
+    state = RangeSelectState(
+      timeRange: range.coversAllRows
+          ? TickSpan.between(range.startTick, range.endTick)
+          : range.timeRange,
+    );
     if (!range.isSelecting) return;
 
     final project = ref.read(projectProvider).value;
@@ -184,8 +231,15 @@ class RangeSelectNotifier extends Notifier<RangeSelectState> {
         .selectTimelineItems(clips: clips.lock, regions: regions.lock);
   }
 
+  /// Ends the range being drawn, keeping the time range on the ruler.
   void cancel() {
-    state = const RangeSelectState();
+    state = RangeSelectState(timeRange: state.timeRange);
+  }
+
+  /// Removes the time range kept on the ruler.
+  void clearTimeRange() {
+    if (state.timeRange == null) return;
+    state = state.copyWith(timeRange: null);
   }
 }
 

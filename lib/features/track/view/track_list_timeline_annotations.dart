@@ -101,8 +101,12 @@ class _TimelineRulerBarState extends ConsumerState<_TimelineRulerBar> {
       });
       return;
     }
+    if (_isRangeSelectTool) return;
     widget.onSeekTicks(_tickAt(details.localPosition.dx));
   }
+
+  bool get _isRangeSelectTool =>
+      ref.read(workspaceStateProvider).selectedTool == ToolSelection.select;
 
   void _onPanUpdate(DragUpdateDetails details) {
     if (_rangeX != null) {
@@ -114,7 +118,7 @@ class _TimelineRulerBarState extends ConsumerState<_TimelineRulerBar> {
     final anchor = _drawAnchorTick;
     final tick = _tickAt(details.localPosition.dx);
     if (anchor == null) {
-      widget.onSeekTicks(tick);
+      if (!_isRangeSelectTool) widget.onSeekTicks(tick);
       return;
     }
     setState(
@@ -243,6 +247,11 @@ class _TimelineRulerBarState extends ConsumerState<_TimelineRulerBar> {
   Future<void> _showRulerMenu(double x) {
     final tick = _tickAt(x);
     final region = ref.read(loopRegionProvider);
+    // The kept time range, when the menu opens on it.
+    final timeRange = ref.read(rangeSelectProvider).timeRange;
+    final clickedRange = timeRange != null && timeRange.contains(x * _zoom)
+        ? timeRange
+        : null;
     final spans = ref.read(trackListStateProvider.notifier).selectionSpans();
     final selectionSpan = spans.isEmpty
         ? null
@@ -255,6 +264,13 @@ class _TimelineRulerBarState extends ConsumerState<_TimelineRulerBar> {
       context: context,
       title: tr('track-timeline'),
       actions: [
+        if (clickedRange != null)
+          DawContextAction(
+            title: tr('track-make-range-loop-region'),
+            icon: Icons.loop,
+            onTap: () =>
+                _timeline.setLoopRegion(clickedRange.start, clickedRange.end),
+          ),
         DawContextAction(
           title: tr('track-add-cue-marker-here'),
           icon: Icons.bookmark_add,
@@ -328,6 +344,7 @@ class _TimelineRulerBarState extends ConsumerState<_TimelineRulerBar> {
     );
     final savedRegion = ref.watch(loopRegionProvider);
     final markers = ref.watch(cueMarkersProvider);
+    final timeRange = ref.watch(rangeSelectProvider.select((s) => s.timeRange));
     final region =
         _draftRegion ??
         (savedRegion == null
@@ -350,8 +367,22 @@ class _TimelineRulerBarState extends ConsumerState<_TimelineRulerBar> {
             behavior: HitTestBehavior.opaque,
             onTapDown: (details) {
               if (HardwareKeyboard.instance.isShiftPressed) return;
+              // The Range Select tool uses the ruler to pick time, not to seek.
+              if (_isRangeSelectTool) return;
               widget.onSeekTicks(_tickAt(details.localPosition.dx));
             },
+            // A double click on the kept time range clears it.
+            onDoubleTapDown: (details) {
+              final timeRange = ref.read(rangeSelectProvider).timeRange;
+              if (timeRange == null ||
+                  !timeRange.contains(details.localPosition.dx * _zoom)) {
+                return;
+              }
+              ref.read(rangeSelectProvider.notifier).clearTimeRange();
+            },
+            // Touch screens open the ruler menu with a long press.
+            onLongPressStart: (details) =>
+                _showRulerMenu(details.localPosition.dx),
             onPanStart: _onPanStart,
             onPanCancel: () {
               if (_rangeX == null) return;
@@ -374,6 +405,16 @@ class _TimelineRulerBarState extends ConsumerState<_TimelineRulerBar> {
                         ref.read(transportProvider).value?.sampleRate ?? 48000,
                   ),
                 ),
+                if (timeRange != null)
+                  Positioned(
+                    left: xOf(timeRange.start),
+                    width: xOf(timeRange.end) - xOf(timeRange.start),
+                    top: 0,
+                    bottom: 0,
+                    child: IgnorePointer(
+                      child: _TimeRangeBand(color: colors.secondary),
+                    ),
+                  ),
                 if (region != null && region.$2 > region.$1) ...[
                   Positioned(
                     left: xOf(region.$1),
@@ -435,6 +476,28 @@ class _TimelineRulerBarState extends ConsumerState<_TimelineRulerBar> {
               ],
             ),
           ),
+        ),
+      ),
+    );
+  }
+}
+
+/// The time range kept by the Range Select tool: a tinted band with a bar
+/// along its bottom, so it reads apart from the loop region above it.
+class _TimeRangeBand extends StatelessWidget {
+  final Color color;
+
+  const _TimeRangeBand({required this.color});
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.22),
+        border: Border(
+          bottom: BorderSide(color: color, width: 3),
+          left: BorderSide(color: color.withValues(alpha: 0.8)),
+          right: BorderSide(color: color.withValues(alpha: 0.8)),
         ),
       ),
     );
@@ -543,7 +606,10 @@ class _TimelineAnnotationLines extends ConsumerWidget {
     );
     final region = ref.watch(loopRegionProvider);
     final markers = ref.watch(cueMarkersProvider);
-    if (region == null && markers.isEmpty) return const SizedBox.shrink();
+    final timeRange = ref.watch(rangeSelectProvider.select((s) => s.timeRange));
+    if (region == null && markers.isEmpty && timeRange == null) {
+      return const SizedBox.shrink();
+    }
 
     return IgnorePointer(
       child: RepaintBoundary(
@@ -553,6 +619,8 @@ class _TimelineAnnotationLines extends ConsumerWidget {
             scrollController: scrollController,
             zoom: zoom,
             region: region,
+            timeRange: timeRange,
+            timeRangeColor: colors.secondary,
             loopColor: colors.primary.withValues(alpha: isLooping ? 1 : 0.4),
             markers: [
               for (final marker in markers)
@@ -569,6 +637,8 @@ class _TimelineAnnotationPainter extends CustomPainter {
   final ScrollController scrollController;
   final double zoom;
   final UiLoopRegion? region;
+  final TickSpan? timeRange;
+  final Color timeRangeColor;
   final Color loopColor;
   final List<(int, Color)> markers;
 
@@ -576,6 +646,8 @@ class _TimelineAnnotationPainter extends CustomPainter {
     required this.scrollController,
     required this.zoom,
     required this.region,
+    required this.timeRange,
+    required this.timeRangeColor,
     required this.loopColor,
     required this.markers,
   }) : super(repaint: scrollController);
@@ -585,6 +657,14 @@ class _TimelineAnnotationPainter extends CustomPainter {
     if (zoom <= 0) return;
     final scroll = scrollController.hasClients ? scrollController.offset : 0.0;
     double xOf(int tick) => tick / zoom - scroll;
+
+    final timeRange = this.timeRange;
+    if (timeRange != null) {
+      canvas.drawRect(
+        Rect.fromLTRB(xOf(timeRange.start), 0, xOf(timeRange.end), size.height),
+        Paint()..color = timeRangeColor.withValues(alpha: 0.08),
+      );
+    }
 
     final region = this.region;
     if (region != null) {
@@ -618,6 +698,8 @@ class _TimelineAnnotationPainter extends CustomPainter {
   bool shouldRepaint(covariant _TimelineAnnotationPainter oldDelegate) {
     return oldDelegate.zoom != zoom ||
         oldDelegate.region != region ||
+        oldDelegate.timeRange != timeRange ||
+        oldDelegate.timeRangeColor != timeRangeColor ||
         oldDelegate.loopColor != loopColor ||
         !listEquals(oldDelegate.markers, markers) ||
         oldDelegate.scrollController != scrollController;

@@ -350,8 +350,13 @@ class MainScreen extends ConsumerWidget {
     );
   }
 
-  /// Clears every selection and ends a clip placement in progress.
+  /// Clears every selection and ends a clip placement in progress. With
+  /// nothing selected, a second Escape clears the time range kept on the ruler.
   void _cancelSelection(WidgetRef ref) {
+    final range = ref.read(rangeSelectProvider);
+    if (!ref.read(trackListStateProvider).hasSelection && !range.isSelecting) {
+      ref.read(rangeSelectProvider.notifier).clearTimeRange();
+    }
     ref.read(trackListStateProvider.notifier).deselectAllClips();
     ref.read(rangeSelectProvider.notifier).cancel();
     ref.read(clipPlacementProvider.notifier).cancelPlacement();

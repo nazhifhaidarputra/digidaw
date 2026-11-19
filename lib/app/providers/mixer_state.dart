@@ -806,6 +806,7 @@ extension MixerService on MixerNotifier {
                   registryId: effect.registryId,
                   name: effect.name,
                   bypass: bypass,
+                  mix: effect.mix,
                 )
               : effect,
       ]);
@@ -820,6 +821,56 @@ extension MixerService on MixerNotifier {
       if (result.hasError) {
         AppLogger.error(
           "MixerNotifier: failed to set effect bypass: ${result.error}",
+        );
+        _projectNotifier.updateMixer(originalMixer);
+        return notifyErrorResult(Exception(result.error.toString()));
+      }
+      return Result.ok(null);
+    });
+  }
+
+  /// Sets an effect slot's host dry/wet [mix] (0 dry to 1 wet), rolling
+  /// back if Rust rejects it.
+  Future<Result<void>> setEffectMix({
+    required mixer_api.UiMixerChannelTarget target,
+    required int effectId,
+    required double mix,
+  }) {
+    return _runBackendOperation(() async {
+      final originalMixer = _mixerState;
+      final originalEffects = originalMixer == null
+          ? null
+          : _effectsForTarget(originalMixer, target);
+      if (originalMixer == null || originalEffects == null) {
+        return notifyErrorResult(Exception("Mixer channel not found"));
+      }
+      if (!originalEffects.any((effect) => effect.id == effectId)) {
+        return notifyErrorResult(Exception("Effect not found"));
+      }
+
+      _replaceTargetEffects(originalMixer, target, [
+        for (final effect in originalEffects)
+          effect.id == effectId
+              ? mixer_api.UiEffectSummary(
+                  id: effect.id,
+                  registryId: effect.registryId,
+                  name: effect.name,
+                  bypass: effect.bypass,
+                  mix: mix,
+                )
+              : effect,
+      ]);
+      final result = await AsyncValue.guard(
+        () => mixer_api.setEffectMix(
+          ctx: _ctx,
+          target: target,
+          effectInstanceId: effectId,
+          mix: mix,
+        ),
+      );
+      if (result.hasError) {
+        AppLogger.error(
+          "MixerNotifier: failed to set effect mix: ${result.error}",
         );
         _projectNotifier.updateMixer(originalMixer);
         return notifyErrorResult(Exception(result.error.toString()));

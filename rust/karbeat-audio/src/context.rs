@@ -3,6 +3,7 @@
 //! This module replaces scattered lazy static globals with a single `KarbeatContext` struct
 //! for improved testability and explicit dependencies.
 
+use karbeat_utils::types::NormalizedF32;
 use std::{
     slice::from_ref,
     sync::{
@@ -503,6 +504,14 @@ impl DawContext {
                         target,
                         effect_id,
                         bypass: true,
+                    });
+                }
+                let mix = effect.instance.mix();
+                if mix.get() < NormalizedF32::MAX {
+                    let _ = self.send_audio_command(AudioCommand::SetEffectMix {
+                        target,
+                        effect_id,
+                        mix,
                     });
                 }
                 AudioCommand::MoveEffect {

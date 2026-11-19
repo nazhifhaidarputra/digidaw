@@ -12,7 +12,7 @@ import 'project.dart';
 part 'mixer.freezed.dart';
 
 // These functions are ignored because they are not marked as `pub`: `add_effect_to_bus_blocking`, `add_effect_to_master_bus_blocking`, `add_effect_to_mixer_channel_by_id_blocking`, `delete_bus_blocking`, `load_channel_template_blocking`, `remove_effect_from_master_bus_blocking`, `remove_effect_from_mixer_channel_blocking`, `remove_effect_from_target_mixer_channel_blocking`, `save_channel_template_blocking`
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`
 
 /// Set a single DSP parameter on a mixer channel.
 /// Routes through the audio thread ring buffer; AppState is only updated on save.
@@ -141,6 +141,20 @@ Future<void> setEffectBypass({
   target: target,
   effectInstanceId: effectInstanceId,
   bypass: bypass,
+);
+
+/// Sets the host dry/wet mix (0.0 dry to 1.0 wet) of an effect slot in a track, bus, or master
+/// chain. Works whether or not the plugin has a mix control of its own.
+Future<void> setEffectMix({
+  required DawContext ctx,
+  required UiMixerChannelTarget target,
+  required int effectInstanceId,
+  required double mix,
+}) => RustLib.instance.api.crateApiMixerSetEffectMix(
+  ctx: ctx,
+  target: target,
+  effectInstanceId: effectInstanceId,
+  mix: mix,
 );
 
 /// Saves a channel's effect chain, as it currently sounds, to a `.effch` template file.
@@ -279,7 +293,10 @@ Future<void> updateRouting({
   required UiRoutingConnection conn,
 }) => RustLib.instance.api.crateApiMixerUpdateRouting(ctx: ctx, conn: conn);
 
-/// Get the mixer snapshot telemetry. this uses a triple buffer last snapshot
+/// Get the latest mixer telemetry snapshot from the engine's triple buffer.
+///
+/// Reads the session's telemetry hub without the core lock, so it never waits for a project
+/// operation and is safe to call from the UI thread every frame.
 MixerTelemetrySnapshotDto getMixerTelemetrySync({required DawContext ctx}) =>
     RustLib.instance.api.crateApiMixerGetMixerTelemetrySync(ctx: ctx);
 
@@ -369,16 +386,24 @@ class UiEffectSummary {
   /// Whether the effect slot passes audio through untouched.
   final bool bypass;
 
+  /// Host dry/wet mix of the slot, from 0.0 (dry) to 1.0 (wet).
+  final double mix;
+
   const UiEffectSummary({
     required this.id,
     required this.registryId,
     required this.name,
     required this.bypass,
+    required this.mix,
   });
 
   @override
   int get hashCode =>
-      id.hashCode ^ registryId.hashCode ^ name.hashCode ^ bypass.hashCode;
+      id.hashCode ^
+      registryId.hashCode ^
+      name.hashCode ^
+      bypass.hashCode ^
+      mix.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -388,7 +413,8 @@ class UiEffectSummary {
           id == other.id &&
           registryId == other.registryId &&
           name == other.name &&
-          bypass == other.bypass;
+          bypass == other.bypass &&
+          mix == other.mix;
 }
 
 /// UI representation of a mixer channel.
