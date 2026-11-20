@@ -40,6 +40,7 @@ fn saved_preferences_load_back() {
             preferences.audio.output_device = Some("hw:1".into());
             preferences.appearance.theme_mode = ThemeMode::Light;
             preferences.appearance.color_theme = ColorThemeChoice::Source("/themes/a.json".into());
+            preferences.appearance.font = FontChoice::Bundled("Inter".into());
             preferences.shortcuts.overrides.insert(
                 "transport.play".into(),
                 ShortcutChord {
@@ -56,6 +57,40 @@ fn saved_preferences_load_back() {
     let (reopened, recovered) = open(&dir);
     assert!(recovered.is_empty());
     assert_eq!(reopened.preferences(), store.preferences());
+}
+
+#[test]
+fn every_font_choice_loads_back() {
+    for font in [
+        FontChoice::Default,
+        FontChoice::System,
+        FontChoice::Bundled("Fira Sans".into()),
+        FontChoice::File("/fonts/studio.otf".into()),
+    ] {
+        let dir = tempdir().unwrap();
+        let (mut store, _) = open(&dir);
+        store
+            .update_preferences(|preferences| preferences.appearance.font = font.clone())
+            .unwrap();
+
+        let (reopened, recovered) = open(&dir);
+        assert!(recovered.is_empty());
+        assert_eq!(reopened.preferences().appearance.font, font);
+    }
+}
+
+#[test]
+fn old_font_fields_fall_back_to_the_default_font() {
+    let dir = tempdir().unwrap();
+    write(
+        settings_file(&dir),
+        "[appearance]\nfont_path = \"/fonts/old.ttf\"\nfont_family = \"Old\"\n",
+    )
+    .unwrap();
+
+    let (store, recovered) = open(&dir);
+    assert!(recovered.is_empty());
+    assert_eq!(store.preferences().appearance.font, FontChoice::Default);
 }
 
 #[test]

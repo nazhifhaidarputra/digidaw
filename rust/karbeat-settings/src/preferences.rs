@@ -205,6 +205,21 @@ pub enum ColorThemeChoice {
     Source(String),
 }
 
+/// Which font the interface uses.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum FontChoice {
+    /// The app's default bundled font.
+    #[default]
+    Default,
+    /// The desktop's own interface font.
+    System,
+    /// Another font bundled with the app, by family name.
+    Bundled(String),
+    /// A TTF or OTF file the user loaded.
+    File(PathBuf),
+}
+
 /// Theme, colors, background and font.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
@@ -219,10 +234,8 @@ pub struct AppearanceSettings {
     pub background_fit: BackgroundFit,
     /// Opacity of the layer over the background image, within [`Self::OVERLAY_RANGE`].
     pub background_overlay: f64,
-    /// Font file; `None` uses the bundled font.
-    pub font_path: Option<PathBuf>,
-    /// Family name registered for the font file.
-    pub font_family: Option<String>,
+    /// Interface font.
+    pub font: FontChoice,
     /// Where the colors come from.
     pub color_theme: ColorThemeChoice,
     /// Color theme files the user loaded, offered in the theme list.
@@ -250,8 +263,7 @@ impl Default for AppearanceSettings {
             background_image: None,
             background_fit: BackgroundFit::default(),
             background_overlay: Self::DEFAULT_OVERLAY,
-            font_path: None,
-            font_family: None,
+            font: FontChoice::default(),
             color_theme: ColorThemeChoice::default(),
             custom_color_theme_paths: Vec::new(),
         }

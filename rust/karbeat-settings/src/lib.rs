@@ -36,8 +36,8 @@ pub use library::{
 };
 pub use preferences::{
     AppearanceSettings, AudioPreferences, BackgroundFit, ColorPalette, ColorThemeChoice,
-    GeneralSettings, LogLevel, LogSettings, PluginScanSettings, Preferences, ShortcutChord,
-    ShortcutSettings, ThemeMode,
+    FontChoice, GeneralSettings, LogLevel, LogSettings, PluginScanSettings, Preferences,
+    ShortcutChord, ShortcutSettings, ThemeMode,
 };
 
 /// Failure while reading, changing or writing settings.

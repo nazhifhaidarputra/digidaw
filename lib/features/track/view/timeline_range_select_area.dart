@@ -6,15 +6,20 @@ import 'package:karbeat/app/providers/workspace_state.dart';
 import 'package:karbeat/features/track/services/timeline_pointer.dart';
 import 'package:karbeat/shared/enums/global.dart';
 
-/// Lets the Select tool paint a range from any part of the timeline.
+/// Drives every range the Select tool paints on the timeline rows.
 ///
-/// Track rows and automation lanes start their own ranges. This catches a
-/// drag that starts where no row does: the master and bus title spacers, the
-/// automation expand bars, and the empty space below the last track. Such a
-/// drag anchors on the row nearest above the pointer.
+/// Track rows and automation lanes start a range on pointer down. This area
+/// sits above them and outside the vertical scroll view, so it adopts that
+/// range and moves its end for the rest of the drag. It keeps working when
+/// the row that started the range scrolls out of view and is disposed.
 ///
-/// [child] must fill the timeline's full scrollable width, so a local x is a
-/// timeline pixel.
+/// It also starts a range from a drag where no row is: the master and bus
+/// title spacers, the automation expand bars, and the empty space below the
+/// last track. Such a drag anchors on the row nearest above the pointer.
+///
+/// The range end is the pointer's absolute timeline position (see
+/// [timelineXOf]), recomputed on every move and every auto-scroll step, so
+/// the range stays where it was drawn while the view scrolls.
 class TimelineRangeSelectArea extends ConsumerStatefulWidget {
   const TimelineRangeSelectArea({
     super.key,
@@ -40,28 +45,22 @@ class _TimelineRangeSelectAreaState
   int? _pressedPointer;
   Offset _pressPosition = Offset.zero;
 
-  /// Pointer of the range this area started.
+  /// Pointer of the range being drawn.
   int? _rangePointer;
-  Offset? _lastPosition;
 
-  late final TimelineEdgeAutoScroller _autoScroller = TimelineEdgeAutoScroller(
-    onScrolled: (_) {
-      final position = _lastPosition;
-      if (position != null) _update(position);
-    },
+  late final TimelineDragTracker _tracker = TimelineDragTracker(
+    onMoved: (x, globalPosition) => ref
+        .read(rangeSelectProvider.notifier)
+        .update(
+          x * ref.read(workspaceStateProvider).horizontalZoomLevel,
+          row: timelineRowAt(context, globalPosition),
+        ),
   );
 
   @override
   void dispose() {
-    _autoScroller.stop();
+    _tracker.stop();
     super.dispose();
-  }
-
-  double _tickAt(Offset globalPosition) {
-    final box = context.findRenderObject();
-    if (box is! RenderBox) return 0;
-    final x = box.globalToLocal(globalPosition).dx;
-    return x * ref.read(workspaceStateProvider).horizontalZoomLevel;
   }
 
   void _onPointerDown(PointerDownEvent event) {
@@ -70,16 +69,19 @@ class _TimelineRangeSelectAreaState
     if (ref.read(workspaceStateProvider).selectedTool != ToolSelection.select) {
       return;
     }
-    // Rows under the pointer handle the event first; one that started a
-    // range owns it.
-    if (ref.read(rangeSelectProvider).isSelecting) return;
+    // Rows under the pointer handle the event first; adopt a range one of
+    // them started.
+    if (ref.read(rangeSelectProvider).isSelecting) {
+      _rangePointer = event.pointer;
+      return;
+    }
     _pressedPointer = event.pointer;
     _pressPosition = event.position;
   }
 
   void _onPointerMove(PointerMoveEvent event) {
     if (_rangePointer == event.pointer) {
-      _update(event.position);
+      _tracker.update(context, event.position);
       return;
     }
     if (_pressedPointer != event.pointer) return;
@@ -88,33 +90,31 @@ class _TimelineRangeSelectAreaState
     }
     _pressedPointer = null;
     final box = context.findRenderObject();
-    if (box is! RenderBox) return;
+    final pressX = timelineXOf(context, _pressPosition);
+    if (box is! RenderBox || pressX == null) return;
     final row =
         timelineRowAt(context, _pressPosition) ??
         widget.rowNear(box.globalToLocal(_pressPosition).dy);
     if (row == null) return;
     _rangePointer = event.pointer;
-    ref.read(rangeSelectProvider.notifier).start(row, _tickAt(_pressPosition));
-    _update(event.position);
-  }
-
-  void _update(Offset globalPosition) {
-    _lastPosition = globalPosition;
-    _autoScroller.update(context, globalPosition);
     ref
         .read(rangeSelectProvider.notifier)
-        .update(
-          _tickAt(globalPosition),
-          row: timelineRowAt(context, globalPosition),
+        .start(
+          row,
+          pressX * ref.read(workspaceStateProvider).horizontalZoomLevel,
         );
+    _tracker.update(context, event.position);
   }
 
   void _onPointerUp(PointerUpEvent event) {
     if (_pressedPointer == event.pointer) _pressedPointer = null;
     if (_rangePointer != event.pointer) return;
-    _update(event.position);
+    _tracker.update(context, event.position);
     _end();
-    ref.read(rangeSelectProvider.notifier).finish();
+    // The row that started the range may have ended it already, as a click.
+    if (ref.read(rangeSelectProvider).isSelecting) {
+      ref.read(rangeSelectProvider.notifier).finish();
+    }
   }
 
   void _onPointerCancel(PointerCancelEvent event) {
@@ -126,8 +126,7 @@ class _TimelineRangeSelectAreaState
 
   void _end() {
     _rangePointer = null;
-    _lastPosition = null;
-    _autoScroller.stop();
+    _tracker.stop();
   }
 
   @override

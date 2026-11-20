@@ -183,7 +183,6 @@ settings-appearance-overlay = Velatura scura: { $percent }%
 settings-appearance-font = Carattere dell’app
 settings-appearance-font-system = Carattere di sistema
 settings-appearance-font-choose = Scegli TTF o OTF
-settings-appearance-font-use-system = Usa il carattere di sistema
 settings-appearance-assets-help = Le risorse personalizzate restano nella posizione originale. Se un file viene spostato o eliminato, { -app-name } ripristina in sicurezza il valore predefinito.
 settings-appearance-theme = Tema
 settings-appearance-theme-remove = Rimuovi tema
@@ -214,7 +213,6 @@ settings-appearance-load-failed = Impossibile caricare le impostazioni dell’as
 settings-appearance-background-unavailable-title = Immagine di sfondo non disponibile
 settings-appearance-background-unavailable-message = L’immagine di sfondo salvata non è disponibile. Viene usato lo sfondo predefinito.
 settings-appearance-font-unavailable-title = Carattere personalizzato non disponibile
-settings-appearance-font-unavailable-message = Il carattere personalizzato salvato non è disponibile. Viene usato il carattere di sistema.
 settings-appearance-theme-unavailable-title = Tema colori non disponibile
 settings-appearance-theme-unavailable-message = { $count ->
     [one] Un file di tema colori salvato non è disponibile o non è più valido. È stato rimosso dal menu dei temi.

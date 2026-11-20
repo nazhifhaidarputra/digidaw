@@ -56,16 +56,34 @@ TimelineRow? timelineRowAt(BuildContext context, Offset globalPosition) {
   return null;
 }
 
-/// Scrolls the timeline while a drag holds the pointer near an edge of the
-/// visible track area, so an edit can reach clips outside the view.
+/// The absolute timeline pixel under [globalPosition]: the pointer's x in the
+/// visible part of the nearest horizontal scroll view, plus how far that view
+/// is scrolled. Null when [context] is not inside a horizontal scroll view.
 ///
-/// The timeline moves under a still pointer without any pointer event, so
-/// [onScrolled] reports each horizontal scroll step in pixels; the drag adds
-/// it to the distance it has travelled.
-class TimelineEdgeAutoScroller {
-  TimelineEdgeAutoScroller({required this.onScrolled});
+/// A drag must use this instead of a pointer event's local position. Flutter
+/// keeps the transform from the pointer-down hit test for the whole gesture,
+/// so once the timeline scrolls the local position is off by the scrolled
+/// distance.
+double? timelineXOf(BuildContext context, Offset globalPosition) {
+  final scrollable = Scrollable.maybeOf(context, axis: Axis.horizontal);
+  final box = scrollable?.context.findRenderObject();
+  if (scrollable == null || box is! RenderBox || !box.hasSize) return null;
+  return box.globalToLocal(globalPosition).dx + scrollable.position.pixels;
+}
 
-  final void Function(double dx) onScrolled;
+/// Follows a timeline drag in absolute timeline pixels and scrolls the
+/// timeline while the pointer is held near an edge of the visible track area,
+/// so an edit can reach items outside the view.
+///
+/// [onMoved] gets the pointer's absolute timeline x (see [timelineXOf]) and
+/// its global position on every [update], and again after each auto-scroll
+/// step, since the timeline then moves under a still pointer. A drag stores
+/// where it started in the same coordinates and derives its state from the
+/// two, so scrolling never shifts it.
+class TimelineDragTracker {
+  TimelineDragTracker({required this.onMoved});
+
+  final void Function(double timelineX, Offset globalPosition) onMoved;
 
   /// Width of the band along each edge that scrolls.
   static const double edgeSize = 40;
@@ -76,14 +94,19 @@ class TimelineEdgeAutoScroller {
   static const Duration _frame = Duration(milliseconds: 16);
 
   Timer? _timer;
+  BuildContext? _context;
+  Offset? _globalPosition;
   ScrollPosition? _horizontal;
   ScrollPosition? _vertical;
   double _stepX = 0;
   double _stepY = 0;
 
-  /// Updates the scroll speed for the pointer at [globalPosition]. [context]
-  /// is any widget inside the timeline's scroll views.
+  /// Moves the drag to the pointer at [globalPosition], reports it through
+  /// [onMoved], and sets the scroll speed. [context] is any widget inside the
+  /// timeline's scroll views.
   void update(BuildContext context, Offset globalPosition) {
+    _context = context;
+    _globalPosition = globalPosition;
     _horizontal = Scrollable.maybeOf(context, axis: Axis.horizontal)?.position;
     _vertical = Scrollable.maybeOf(context, axis: Axis.vertical)?.position;
     final horizontalRect = _viewportRect(context, Axis.horizontal);
@@ -96,10 +119,19 @@ class TimelineEdgeAutoScroller {
         : _step(globalPosition.dy, verticalRect.top, verticalRect.bottom);
 
     if (_stepX == 0 && _stepY == 0) {
-      stop();
+      _stopTimer();
     } else {
       _timer ??= Timer.periodic(_frame, (_) => _scroll());
     }
+    _emit();
+  }
+
+  void _emit() {
+    final context = _context;
+    final globalPosition = _globalPosition;
+    if (context == null || globalPosition == null || !context.mounted) return;
+    final x = timelineXOf(context, globalPosition);
+    if (x != null) onMoved(x, globalPosition);
   }
 
   double _step(double pointer, double start, double end) {
@@ -113,34 +145,36 @@ class TimelineEdgeAutoScroller {
   }
 
   void _scroll() {
-    final vertical = _vertical;
-    if (vertical != null && _stepY != 0 && vertical.hasContentDimensions) {
-      final target = (vertical.pixels + _stepY).clamp(
-        vertical.minScrollExtent,
-        vertical.maxScrollExtent,
-      );
-      if (target != vertical.pixels) vertical.jumpTo(target);
-    }
-
-    final horizontal = _horizontal;
-    if (horizontal == null || _stepX == 0 || !horizontal.hasContentDimensions) {
-      return;
-    }
-    final before = horizontal.pixels;
-    final target = (before + _stepX).clamp(
-      horizontal.minScrollExtent,
-      horizontal.maxScrollExtent,
-    );
-    if (target == before) return;
-    horizontal.jumpTo(target);
-    onScrolled(horizontal.pixels - before);
+    final scrolledY = _scrollBy(_vertical, _stepY);
+    final scrolledX = _scrollBy(_horizontal, _stepX);
+    if (scrolledX || scrolledY) _emit();
   }
 
-  /// Stops scrolling. Call when the drag ends.
-  void stop() {
+  /// Scrolls [position] by [step] within its extent; whether it moved.
+  static bool _scrollBy(ScrollPosition? position, double step) {
+    if (position == null || step == 0 || !position.hasContentDimensions) {
+      return false;
+    }
+    final target = (position.pixels + step).clamp(
+      position.minScrollExtent,
+      position.maxScrollExtent,
+    );
+    if (target == position.pixels) return false;
+    position.jumpTo(target);
+    return true;
+  }
+
+  void _stopTimer() {
     _timer?.cancel();
     _timer = null;
     _stepX = 0;
     _stepY = 0;
+  }
+
+  /// Ends the drag and stops scrolling.
+  void stop() {
+    _stopTimer();
+    _context = null;
+    _globalPosition = null;
   }
 }

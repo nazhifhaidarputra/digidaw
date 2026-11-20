@@ -123,6 +123,234 @@ flutter:
   # For details regarding fonts from package dependencies,
   # see https://flutter.dev/to/font-from-package
 
+  # The app's default font and the fonts offered beside it, each with its
+  # license file in its folder. Only the weights the UI uses are bundled.
+  fonts:
+    - family: IBM Plex Sans
+      fonts:
+        - asset: assets/fonts/ibm_plex_sans/IBMPlexSans-Regular.ttf
+        - asset: assets/fonts/ibm_plex_sans/IBMPlexSans-Italic.ttf
+          style: italic
+        - asset: assets/fonts/ibm_plex_sans/IBMPlexSans-Medium.ttf
+          weight: 500
+        - asset: assets/fonts/ibm_plex_sans/IBMPlexSans-SemiBold.ttf
+          weight: 600
+        - asset: assets/fonts/ibm_plex_sans/IBMPlexSans-Bold.ttf
+          weight: 700
+    # Fonts offered in Settings > Appearance; each folder holds its license.
+    - family: Roboto
+      fonts:
+        - asset: assets/fonts/roboto/Roboto-Regular.ttf
+        - asset: assets/fonts/roboto/Roboto-Italic.ttf
+          style: italic
+        - asset: assets/fonts/roboto/Roboto-Medium.ttf
+          weight: 500
+        - asset: assets/fonts/roboto/Roboto-SemiBold.ttf
+          weight: 600
+        - asset: assets/fonts/roboto/Roboto-Bold.ttf
+          weight: 700
+    - family: Open Sans
+      fonts:
+        - asset: assets/fonts/open_sans/OpenSans-Regular.ttf
+        - asset: assets/fonts/open_sans/OpenSans-Italic.ttf
+          style: italic
+        - asset: assets/fonts/open_sans/OpenSans-Medium.ttf
+          weight: 500
+        - asset: assets/fonts/open_sans/OpenSans-SemiBold.ttf
+          weight: 600
+        - asset: assets/fonts/open_sans/OpenSans-Bold.ttf
+          weight: 700
+    - family: Noto Sans
+      fonts:
+        - asset: assets/fonts/noto_sans/NotoSans-Regular.ttf
+        - asset: assets/fonts/noto_sans/NotoSans-Italic.ttf
+          style: italic
+        - asset: assets/fonts/noto_sans/NotoSans-Medium.ttf
+          weight: 500
+        - asset: assets/fonts/noto_sans/NotoSans-SemiBold.ttf
+          weight: 600
+        - asset: assets/fonts/noto_sans/NotoSans-Bold.ttf
+          weight: 700
+    - family: Montserrat
+      fonts:
+        - asset: assets/fonts/montserrat/Montserrat-Regular.ttf
+        - asset: assets/fonts/montserrat/Montserrat-Italic.ttf
+          style: italic
+        - asset: assets/fonts/montserrat/Montserrat-Medium.ttf
+          weight: 500
+        - asset: assets/fonts/montserrat/Montserrat-SemiBold.ttf
+          weight: 600
+        - asset: assets/fonts/montserrat/Montserrat-Bold.ttf
+          weight: 700
+    - family: Poppins
+      fonts:
+        - asset: assets/fonts/poppins/Poppins-Regular.ttf
+        - asset: assets/fonts/poppins/Poppins-Italic.ttf
+          style: italic
+        - asset: assets/fonts/poppins/Poppins-Medium.ttf
+          weight: 500
+        - asset: assets/fonts/poppins/Poppins-SemiBold.ttf
+          weight: 600
+        - asset: assets/fonts/poppins/Poppins-Bold.ttf
+          weight: 700
+    - family: Lato
+      fonts:
+        - asset: assets/fonts/lato/Lato-Regular.ttf
+        - asset: assets/fonts/lato/Lato-Italic.ttf
+          style: italic
+        - asset: assets/fonts/lato/Lato-Bold.ttf
+          weight: 700
+    - family: Inter
+      fonts:
+        - asset: assets/fonts/inter/Inter-Regular.ttf
+        - asset: assets/fonts/inter/Inter-Italic.ttf
+          style: italic
+        - asset: assets/fonts/inter/Inter-Medium.ttf
+          weight: 500
+        - asset: assets/fonts/inter/Inter-SemiBold.ttf
+          weight: 600
+        - asset: assets/fonts/inter/Inter-Bold.ttf
+          weight: 700
+    - family: Roboto Condensed
+      fonts:
+        - asset: assets/fonts/roboto_condensed/RobotoCondensed-Regular.ttf
+        - asset: assets/fonts/roboto_condensed/RobotoCondensed-Italic.ttf
+          style: italic
+        - asset: assets/fonts/roboto_condensed/RobotoCondensed-Medium.ttf
+          weight: 500
+        - asset: assets/fonts/roboto_condensed/RobotoCondensed-SemiBold.ttf
+          weight: 600
+        - asset: assets/fonts/roboto_condensed/RobotoCondensed-Bold.ttf
+          weight: 700
+    - family: Oswald
+      fonts:
+        - asset: assets/fonts/oswald/Oswald-Regular.ttf
+        - asset: assets/fonts/oswald/Oswald-Medium.ttf
+          weight: 500
+        - asset: assets/fonts/oswald/Oswald-SemiBold.ttf
+          weight: 600
+        - asset: assets/fonts/oswald/Oswald-Bold.ttf
+          weight: 700
+    - family: Raleway
+      fonts:
+        - asset: assets/fonts/raleway/Raleway-Regular.ttf
+        - asset: assets/fonts/raleway/Raleway-Italic.ttf
+          style: italic
+        - asset: assets/fonts/raleway/Raleway-Medium.ttf
+          weight: 500
+        - asset: assets/fonts/raleway/Raleway-SemiBold.ttf
+          weight: 600
+        - asset: assets/fonts/raleway/Raleway-Bold.ttf
+          weight: 700
+    - family: Nunito
+      fonts:
+        - asset: assets/fonts/nunito/Nunito-Regular.ttf
+        - asset: assets/fonts/nunito/Nunito-Italic.ttf
+          style: italic
+        - asset: assets/fonts/nunito/Nunito-Medium.ttf
+          weight: 500
+        - asset: assets/fonts/nunito/Nunito-SemiBold.ttf
+          weight: 600
+        - asset: assets/fonts/nunito/Nunito-Bold.ttf
+          weight: 700
+    - family: Roboto Mono
+      fonts:
+        - asset: assets/fonts/roboto_mono/RobotoMono-Regular.ttf
+        - asset: assets/fonts/roboto_mono/RobotoMono-Italic.ttf
+          style: italic
+        - asset: assets/fonts/roboto_mono/RobotoMono-Medium.ttf
+          weight: 500
+        - asset: assets/fonts/roboto_mono/RobotoMono-SemiBold.ttf
+          weight: 600
+        - asset: assets/fonts/roboto_mono/RobotoMono-Bold.ttf
+          weight: 700
+    - family: Ubuntu
+      fonts:
+        - asset: assets/fonts/ubuntu/Ubuntu-Regular.ttf
+        - asset: assets/fonts/ubuntu/Ubuntu-Italic.ttf
+          style: italic
+        - asset: assets/fonts/ubuntu/Ubuntu-Medium.ttf
+          weight: 500
+        - asset: assets/fonts/ubuntu/Ubuntu-Bold.ttf
+          weight: 700
+    - family: Rubik
+      fonts:
+        - asset: assets/fonts/rubik/Rubik-Regular.ttf
+        - asset: assets/fonts/rubik/Rubik-Italic.ttf
+          style: italic
+        - asset: assets/fonts/rubik/Rubik-Medium.ttf
+          weight: 500
+        - asset: assets/fonts/rubik/Rubik-SemiBold.ttf
+          weight: 600
+        - asset: assets/fonts/rubik/Rubik-Bold.ttf
+          weight: 700
+    - family: Work Sans
+      fonts:
+        - asset: assets/fonts/work_sans/WorkSans-Regular.ttf
+        - asset: assets/fonts/work_sans/WorkSans-Italic.ttf
+          style: italic
+        - asset: assets/fonts/work_sans/WorkSans-Medium.ttf
+          weight: 500
+        - asset: assets/fonts/work_sans/WorkSans-SemiBold.ttf
+          weight: 600
+        - asset: assets/fonts/work_sans/WorkSans-Bold.ttf
+          weight: 700
+    - family: Fira Sans
+      fonts:
+        - asset: assets/fonts/fira_sans/FiraSans-Regular.ttf
+        - asset: assets/fonts/fira_sans/FiraSans-Italic.ttf
+          style: italic
+        - asset: assets/fonts/fira_sans/FiraSans-Medium.ttf
+          weight: 500
+        - asset: assets/fonts/fira_sans/FiraSans-SemiBold.ttf
+          weight: 600
+        - asset: assets/fonts/fira_sans/FiraSans-Bold.ttf
+          weight: 700
+    - family: DM Sans
+      fonts:
+        - asset: assets/fonts/dm_sans/DMSans-Regular.ttf
+        - asset: assets/fonts/dm_sans/DMSans-Italic.ttf
+          style: italic
+        - asset: assets/fonts/dm_sans/DMSans-Medium.ttf
+          weight: 500
+        - asset: assets/fonts/dm_sans/DMSans-SemiBold.ttf
+          weight: 600
+        - asset: assets/fonts/dm_sans/DMSans-Bold.ttf
+          weight: 700
+    - family: Source Sans 3
+      fonts:
+        - asset: assets/fonts/source_sans_3/SourceSans3-Regular.ttf
+        - asset: assets/fonts/source_sans_3/SourceSans3-Italic.ttf
+          style: italic
+        - asset: assets/fonts/source_sans_3/SourceSans3-Medium.ttf
+          weight: 500
+        - asset: assets/fonts/source_sans_3/SourceSans3-SemiBold.ttf
+          weight: 600
+        - asset: assets/fonts/source_sans_3/SourceSans3-Bold.ttf
+          weight: 700
+    - family: Merriweather
+      fonts:
+        - asset: assets/fonts/merriweather/Merriweather-Regular.ttf
+        - asset: assets/fonts/merriweather/Merriweather-Italic.ttf
+          style: italic
+        - asset: assets/fonts/merriweather/Merriweather-Medium.ttf
+          weight: 500
+        - asset: assets/fonts/merriweather/Merriweather-SemiBold.ttf
+          weight: 600
+        - asset: assets/fonts/merriweather/Merriweather-Bold.ttf
+          weight: 700
+    - family: Playfair Display
+      fonts:
+        - asset: assets/fonts/playfair_display/PlayfairDisplay-Regular.ttf
+        - asset: assets/fonts/playfair_display/PlayfairDisplay-Italic.ttf
+          style: italic
+        - asset: assets/fonts/playfair_display/PlayfairDisplay-Medium.ttf
+          weight: 500
+        - asset: assets/fonts/playfair_display/PlayfairDisplay-SemiBold.ttf
+          weight: 600
+        - asset: assets/fonts/playfair_display/PlayfairDisplay-Bold.ttf
+          weight: 700
+
 # Application ID on every platform: `dart run package_rename`.
 # Display and executable names are left alone, so binaries stay `karbeat`.
 package_rename_config:

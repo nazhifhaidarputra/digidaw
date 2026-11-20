@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:karbeat/app/app_theme.dart';
 import 'package:karbeat/core/l10n/localizer.dart';
 import 'package:karbeat/features/setting/models/app_color_theme.dart';
+import 'package:karbeat/features/setting/models/app_fonts.dart';
 import 'package:karbeat/features/setting/models/appearance_settings_state.dart';
 import 'package:karbeat/features/setting/services/appearance_asset_service.dart';
 import 'package:karbeat/features/setting/services/appearance_settings_provider.dart';
@@ -22,7 +23,8 @@ class AppearanceSettingsPage extends ConsumerWidget {
           backgroundPath: state.backgroundImagePath,
           backgroundFit: state.backgroundFit,
           overlay: state.backgroundOverlayOpacity,
-          fontPath: state.customFontPath,
+          font: state.font,
+          fontFamily: state.fontFamily,
           colorThemes: state.colorThemes,
           colorThemeSource: state.colorThemeSource,
           customColorThemePaths: state.customColorThemePaths,
@@ -226,33 +228,17 @@ class AppearanceSettingsPage extends ConsumerWidget {
                 style: Theme.of(context).textTheme.titleMedium,
               ),
               const SizedBox(height: 8),
-              Text(
-                appearance.fontPath == null
-                    ? tr('settings-appearance-font-system')
-                    : _fileName(appearance.fontPath!),
-                key: const ValueKey('font-file-name'),
-                overflow: TextOverflow.ellipsis,
+              _FontMenu(
+                font: appearance.font,
+                fontFamily: appearance.fontFamily,
+                onSelected: (font) => unawaited(notifier.setFont(font)),
               ),
               const SizedBox(height: 8),
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: [
-                  FilledButton.tonalIcon(
-                    key: const ValueKey('choose-font'),
-                    onPressed: () => unawaited(notifier.chooseCustomFont()),
-                    icon: const Icon(Icons.font_download_outlined),
-                    label: Text(tr('settings-appearance-font-choose')),
-                  ),
-                  OutlinedButton.icon(
-                    key: const ValueKey('clear-font'),
-                    onPressed: appearance.fontPath == null
-                        ? null
-                        : () => unawaited(notifier.clearCustomFont()),
-                    icon: const Icon(Icons.restart_alt),
-                    label: Text(tr('settings-appearance-font-use-system')),
-                  ),
-                ],
+              FilledButton.tonalIcon(
+                key: const ValueKey('choose-font'),
+                onPressed: () => unawaited(notifier.chooseCustomFont()),
+                icon: const Icon(Icons.font_download_outlined),
+                label: Text(tr('settings-appearance-font-choose')),
               ),
               const SizedBox(height: 24),
               Card(
@@ -439,6 +425,94 @@ String _backgroundFitLabel(AppBackgroundFit fit) => switch (fit) {
   AppBackgroundFit.contain => tr('settings-appearance-fit-contain'),
   AppBackgroundFit.fill => tr('settings-appearance-fit-fill'),
 };
+
+/// A searchable, scrollable menu of the interface fonts: the system font,
+/// the bundled fonts, and the loaded font file when one is in use. Typing
+/// filters the list; each bundled font is shown in itself.
+class _FontMenu extends StatelessWidget {
+  const _FontMenu({
+    required this.font,
+    required this.fontFamily,
+    required this.onSelected,
+  });
+
+  /// The font in use.
+  final AppFontChoice font;
+
+  /// The family the theme uses for [font]; for the system font, the name
+  /// the desktop gave.
+  final String? fontFamily;
+
+  final ValueChanged<AppFontChoice> onSelected;
+
+  static const double _menuHeight = 360;
+
+  String _systemLabel() {
+    final family = fontFamily;
+    return font is SystemFontChoice && family != null
+        ? tr('settings-appearance-font-system-named', {'family': family})
+        : tr('settings-appearance-font-system');
+  }
+
+  DropdownMenuEntry<AppFontChoice> _entry(
+    AppFontChoice value,
+    String label, {
+    String? previewFamily,
+  }) {
+    return DropdownMenuEntry(
+      value: value,
+      label: label,
+      labelWidget: Text(
+        label,
+        key: ValueKey('font-entry-$label'),
+        overflow: TextOverflow.ellipsis,
+        style: TextStyle(fontFamily: previewFamily),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final current = font;
+    final entries = [
+      _entry(const AppFontChoice.system(), _systemLabel()),
+      for (final family in AppFonts.bundled)
+        _entry(
+          AppFontChoice.bundled(family),
+          family == AppFonts.defaultFamily
+              ? tr('settings-appearance-font-default', {'family': family})
+              : family,
+          previewFamily: family,
+        ),
+      if (current case FileFontChoice(:final path))
+        _entry(
+          current,
+          tr('settings-appearance-font-file', {'file': _fileName(path)}),
+          previewFamily: fontFamily,
+        ),
+    ];
+
+    return LayoutBuilder(
+      builder: (context, constraints) => DropdownMenu<AppFontChoice>(
+        // A new selection from outside, such as a loaded file, rebuilds the
+        // field with its label.
+        key: ValueKey(('font-menu', current)),
+        initialSelection: current,
+        dropdownMenuEntries: entries,
+        width: constraints.maxWidth,
+        menuHeight: _menuHeight,
+        enableFilter: true,
+        enableSearch: true,
+        requestFocusOnTap: true,
+        leadingIcon: const Icon(Icons.search),
+        hintText: tr('settings-appearance-font-search'),
+        onSelected: (choice) {
+          if (choice != null && choice != current) onSelected(choice);
+        },
+      ),
+    );
+  }
+}
 
 String _fileName(String path) {
   final segments = path.replaceAll('\\', '/').split('/');

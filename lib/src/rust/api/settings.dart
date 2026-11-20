@@ -11,7 +11,7 @@ import 'package:freezed_annotation/freezed_annotation.dart' hide protected;
 part 'settings.freezed.dart';
 
 // These functions are ignored because they are not marked as `pub`: `audio_preferences`, `auto_save_settings`, `automation_templates`, `curve_type_dto`, `curve_type`, `display_path`, `general_settings`, `history_limit_is_valid`, `metronome_folder`, `non_empty_path`, `not_open`, `optional_path_string`, `path_string`, `read`, `record_recent_project`, `remember_sample_folder`, `sample_folders`, `store_language`, `store_plugin_scan`, `stored_language`, `stored_plugin_scan`, `update_audio`, `write`
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`
 
 /// Loads the settings from `<support_dir>/settings`. Call once at startup, before any other
 /// settings function; later calls change nothing and report no recovered files.
@@ -147,8 +147,7 @@ sealed class UiAppearanceSettings with _$UiAppearanceSettings {
     String? backgroundImage,
     required UiBackgroundFit backgroundFit,
     required double backgroundOverlay,
-    String? fontPath,
-    String? fontFamily,
+    required UiFontChoice font,
     required UiColorThemeChoice colorTheme,
     required List<String> customColorThemePaths,
   }) = _UiAppearanceSettings;
@@ -233,6 +232,23 @@ sealed class UiColorThemeChoice with _$UiColorThemeChoice {
   /// A color theme, named by an asset or a file path.
   const factory UiColorThemeChoice.source(String field0) =
       UiColorThemeChoice_Source;
+}
+
+@freezed
+sealed class UiFontChoice with _$UiFontChoice {
+  const UiFontChoice._();
+
+  /// The app's default bundled font.
+  const factory UiFontChoice.default_() = UiFontChoice_Default;
+
+  /// The desktop's own interface font.
+  const factory UiFontChoice.system() = UiFontChoice_System;
+
+  /// Another font bundled with the app, by family name.
+  const factory UiFontChoice.bundled(String field0) = UiFontChoice_Bundled;
+
+  /// A TTF or OTF file the user loaded, by path.
+  const factory UiFontChoice.file(String field0) = UiFontChoice_File;
 }
 
 /// Undo history, auto save and default folders.

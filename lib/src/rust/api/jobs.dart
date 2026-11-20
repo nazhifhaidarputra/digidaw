@@ -10,7 +10,7 @@ part 'jobs.freezed.dart';
 
 // These functions are ignored because they are not marked as `pub`: `frb_runtime_handle`, `run_job`
 // These types are ignored because they are neither used by any `pub` functions nor (for structs and enums) marked `#[frb(unignore)]`: `StreamJobSink`
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `clone`, `clone`, `clone`, `clone`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `from`, `from`, `from`, `from`, `send`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `clone`, `clone`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `from`, `from`, `from`, `from`, `send`
 
 /// Streams lifecycle events of every background job. A new subscription replaces the old one.
 Stream<UiJobEvent> subscribeJobEvents() =>

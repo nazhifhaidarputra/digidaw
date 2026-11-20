@@ -243,7 +243,7 @@ class _KarbeatAppState extends ConsumerState<KarbeatApp> {
         (state) => (
           themeMode: state.themeMode,
           palette: state.colorPalette,
-          fontFamily: state.customFontFamily,
+          fontFamily: state.fontFamily,
           colorTheme: state.colorTheme,
         ),
       ),

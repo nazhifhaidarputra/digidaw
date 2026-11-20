@@ -86,7 +86,13 @@ typedef _RegionDrag = ({
   int leaderEnd,
 });
 
-class _AutomationLaneSlotState extends ConsumerState<AutomationLaneSlot> {
+class _AutomationLaneSlotState extends ConsumerState<AutomationLaneSlot>
+    with AutomaticKeepAliveClientMixin<AutomationLaneSlot> {
+  /// Keeps the lane alive while one of its drags runs, so the drag survives
+  /// the timeline auto-scrolling the lane out of view.
+  @override
+  bool get wantKeepAlive => _isInteracting;
+
   /// Minimum segment width in pixels before a tension handle is offered.
   static const double _minTensionSegmentWidth = 16.0;
 
@@ -108,14 +114,19 @@ class _AutomationLaneSlotState extends ConsumerState<AutomationLaneSlot> {
   int? _pressedRegionId;
   double? _pressX;
 
-  /// Scrolls the timeline while a region drag or range nears its edge.
-  late final TimelineEdgeAutoScroller _autoScroller = TimelineEdgeAutoScroller(
-    onScrolled: (_) => _replayLastPointer(),
+  /// Follows a region drag or delete swipe in absolute timeline pixels and
+  /// scrolls the timeline while it nears an edge. A range is driven by
+  /// [TimelineRangeSelectArea] instead.
+  late final TimelineDragTracker _dragTracker = TimelineDragTracker(
+    onMoved: (x, _) {
+      final regionDrag = _regionDrag;
+      if (regionDrag != null) {
+        _updateRegionDrag(regionDrag, x);
+      } else if (_isDeleteSwiping) {
+        _collectDeleteRegion(x);
+      }
+    },
   );
-
-  /// Last pointer event of the drag in progress, replayed when the timeline
-  /// scrolls under a still pointer.
-  PointerEvent? _lastDragEvent;
 
   // Optimistic UI state
   IList<AutomationPointDto>? _localPoints;
@@ -150,7 +161,7 @@ class _AutomationLaneSlotState extends ConsumerState<AutomationLaneSlot> {
 
   @override
   void dispose() {
-    _autoScroller.stop();
+    _dragTracker.stop();
     super.dispose();
   }
 
@@ -178,31 +189,30 @@ class _AutomationLaneSlotState extends ConsumerState<AutomationLaneSlot> {
     return null;
   }
 
-  /// Follows a drag with the edge auto-scroller.
-  void _trackDragPointer(PointerEvent event) {
-    _lastDragEvent = event;
-    _autoScroller.update(context, event.position);
-  }
-
-  void _endDragPointer() {
-    _lastDragEvent = null;
-    _autoScroller.stop();
-  }
-
-  /// Runs the active drag again for its last pointer position, which now lies
-  /// over another part of the scrolled timeline.
-  void _replayLastPointer() {
-    final last = _lastDragEvent;
-    final box = context.findRenderObject();
-    if (last == null || box is! RenderBox || !mounted) return;
-    _onPointerMove(
-      PointerMoveEvent(
-        pointer: last.pointer,
-        position: last.position,
-        buttons: last.buttons,
-        kind: last.kind,
-      ).transformed(Matrix4.tryInvert(box.getTransformTo(null))),
-    );
+  /// Follows the curve selection of a range drawn from this lane. The range
+  /// state is the single source: its end moves with the pointer and with
+  /// every auto-scroll step.
+  void _followRange(RangeSelectState range) {
+    if (!_isSelectingRange || !range.isSelecting) return;
+    final editor = ref.read(automationEditorProvider.notifier);
+    final tick = range.endTick.round();
+    final pressTick = _selectionPressTick;
+    if (pressTick != null) {
+      // The range has not moved off its start yet: still a click.
+      if (range.endTick == range.startTick) return;
+      editor.startSelection(laneId: widget.lane.id, tick: pressTick);
+      _selectionPressTick = null;
+    }
+    // A range reaching other rows selects items, not this lane's curve.
+    final row = range.focusRow;
+    if (row != null && row != TimelineRow.lane(_laneId)) {
+      editor.clearSelection();
+    } else if (ref.read(automationEditorProvider).selectionLaneId ==
+        widget.lane.id) {
+      editor.extendSelection(laneId: widget.lane.id, tick: tick);
+    } else {
+      editor.startSelection(laneId: widget.lane.id, tick: tick);
+    }
   }
 
   /// Starts moving or resizing the selected regions from [region]. A region
@@ -770,42 +780,13 @@ class _AutomationLaneSlotState extends ConsumerState<AutomationLaneSlot> {
   }
 
   void _onPointerMove(PointerMoveEvent event) {
-    final regionDrag = _regionDrag;
-    if (regionDrag != null) {
-      _trackDragPointer(event);
-      _updateRegionDrag(regionDrag, event.localPosition.dx);
+    if (_regionDrag != null || _isDeleteSwiping) {
+      _dragTracker.update(context, event.position);
       return;
     }
 
-    if (_isDeleteSwiping) {
-      _trackDragPointer(event);
-      _collectDeleteRegion(event.localPosition.dx);
-      return;
-    }
-
-    if (_isSelectingRange) {
-      _trackDragPointer(event);
-      final editor = ref.read(automationEditorProvider.notifier);
-      final tick = _tickAt(event.localPosition.dx);
-      final row = timelineRowAt(context, event.position);
-      ref.read(rangeSelectProvider.notifier).update(tick.toDouble(), row: row);
-      final pressTick = _selectionPressTick;
-      if (pressTick != null) {
-        if (tick == pressTick) return;
-        editor.startSelection(laneId: widget.lane.id, tick: pressTick);
-        _selectionPressTick = null;
-      }
-      // A range reaching other rows selects items, not this lane's curve.
-      if (row != null && row != TimelineRow.lane(_laneId)) {
-        editor.clearSelection();
-      } else if (ref.read(automationEditorProvider).selectionLaneId ==
-          widget.lane.id) {
-        editor.extendSelection(laneId: widget.lane.id, tick: tick);
-      } else {
-        editor.startSelection(laneId: widget.lane.id, tick: tick);
-      }
-      return;
-    }
+    // [TimelineRangeSelectArea] moves the range; [_followRange] tracks it.
+    if (_isSelectingRange) return;
 
     final bezierDrag = _bezierDrag;
     if (bezierDrag != null) {
@@ -841,7 +822,10 @@ class _AutomationLaneSlotState extends ConsumerState<AutomationLaneSlot> {
   }
 
   void _onPointerUp(PointerUpEvent event) {
-    _endDragPointer();
+    if (_regionDrag != null || _isDeleteSwiping) {
+      _dragTracker.update(context, event.position);
+    }
+    _dragTracker.stop();
 
     final regionDrag = _regionDrag;
     if (regionDrag != null) {
@@ -868,12 +852,10 @@ class _AutomationLaneSlotState extends ConsumerState<AutomationLaneSlot> {
     if (_isSelectingRange) {
       final pressTick = _selectionPressTick;
       final clickedRegionId = _pressedRegionId;
-      final rangeSelect = ref.read(rangeSelectProvider.notifier);
-      if (pressTick == null) {
-        // The pointer dragged: select what the range touched.
-        rangeSelect.finish();
-      } else {
-        rangeSelect.cancel();
+      // A dragged range is finished by [TimelineRangeSelectArea], which
+      // selects what it touched.
+      if (pressTick != null) {
+        ref.read(rangeSelectProvider.notifier).cancel();
         // A click without a drag clears the range, unless it landed inside
         // it. A click on a region selects the region.
         final range = ref
@@ -1015,7 +997,7 @@ class _AutomationLaneSlotState extends ConsumerState<AutomationLaneSlot> {
   }
 
   void _onPointerCancel() {
-    _endDragPointer();
+    _dragTracker.stop();
     if (_regionDrag != null) {
       ref.read(clipPlacementProvider.notifier).cancelBatchDrag();
     }
@@ -1285,6 +1267,9 @@ class _AutomationLaneSlotState extends ConsumerState<AutomationLaneSlot> {
 
   @override
   Widget build(BuildContext context) {
+    super.build(context);
+    // Every drag start and end rebuilds; this takes or releases the lane.
+    updateKeepAlive();
     final colors = Theme.of(context).colorScheme;
     // Select only what the lane draws with; the whole workspace and transport
     // stores change for unrelated reasons (playback, other panels).
@@ -1323,6 +1308,7 @@ class _AutomationLaneSlotState extends ConsumerState<AutomationLaneSlot> {
     final isPaintingRange = ref.watch(
       rangeSelectProvider.select((s) => s.isSelecting),
     );
+    ref.listen(rangeSelectProvider, (_, range) => _followRange(range));
     final isSelectTool = state.selectedTool == ToolSelection.select;
     final sampler = ref.watch(curveSamplerProvider);
     final selectedRegionIds = ref.watch(
@@ -1503,7 +1489,6 @@ class _AutomationLaneSlotState extends ConsumerState<AutomationLaneSlot> {
                 // 5. A range being painted across rows
                 TrackRangeSelectOverlay(
                   row: TimelineRow.lane(laneId),
-                  trackHeight: widget.height,
                   zoomLevel: zoomLevel,
                 ),
 

@@ -14,7 +14,7 @@ T _$identity<T>(T value) => value;
 /// @nodoc
 mixin _$UiAppearanceSettings {
 
- UiThemeMode get themeMode; UiColorPalette get colorPalette; String? get backgroundImage; UiBackgroundFit get backgroundFit; double get backgroundOverlay; String? get fontPath; String? get fontFamily; UiColorThemeChoice get colorTheme; List<String> get customColorThemePaths;
+ UiThemeMode get themeMode; UiColorPalette get colorPalette; String? get backgroundImage; UiBackgroundFit get backgroundFit; double get backgroundOverlay; UiFontChoice get font; UiColorThemeChoice get colorTheme; List<String> get customColorThemePaths;
 /// Create a copy of UiAppearanceSettings
 /// with the given fields replaced by the non-null parameter values.
 @JsonKey(includeFromJson: false, includeToJson: false)
@@ -25,16 +25,16 @@ $UiAppearanceSettingsCopyWith<UiAppearanceSettings> get copyWith => _$UiAppearan
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is UiAppearanceSettings&&(identical(other.themeMode, themeMode) || other.themeMode == themeMode)&&(identical(other.colorPalette, colorPalette) || other.colorPalette == colorPalette)&&(identical(other.backgroundImage, backgroundImage) || other.backgroundImage == backgroundImage)&&(identical(other.backgroundFit, backgroundFit) || other.backgroundFit == backgroundFit)&&(identical(other.backgroundOverlay, backgroundOverlay) || other.backgroundOverlay == backgroundOverlay)&&(identical(other.fontPath, fontPath) || other.fontPath == fontPath)&&(identical(other.fontFamily, fontFamily) || other.fontFamily == fontFamily)&&(identical(other.colorTheme, colorTheme) || other.colorTheme == colorTheme)&&const DeepCollectionEquality().equals(other.customColorThemePaths, customColorThemePaths));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is UiAppearanceSettings&&(identical(other.themeMode, themeMode) || other.themeMode == themeMode)&&(identical(other.colorPalette, colorPalette) || other.colorPalette == colorPalette)&&(identical(other.backgroundImage, backgroundImage) || other.backgroundImage == backgroundImage)&&(identical(other.backgroundFit, backgroundFit) || other.backgroundFit == backgroundFit)&&(identical(other.backgroundOverlay, backgroundOverlay) || other.backgroundOverlay == backgroundOverlay)&&(identical(other.font, font) || other.font == font)&&(identical(other.colorTheme, colorTheme) || other.colorTheme == colorTheme)&&const DeepCollectionEquality().equals(other.customColorThemePaths, customColorThemePaths));
 }
 
 
 @override
-int get hashCode => Object.hash(runtimeType,themeMode,colorPalette,backgroundImage,backgroundFit,backgroundOverlay,fontPath,fontFamily,colorTheme,const DeepCollectionEquality().hash(customColorThemePaths));
+int get hashCode => Object.hash(runtimeType,themeMode,colorPalette,backgroundImage,backgroundFit,backgroundOverlay,font,colorTheme,const DeepCollectionEquality().hash(customColorThemePaths));
 
 @override
 String toString() {
-  return 'UiAppearanceSettings(themeMode: $themeMode, colorPalette: $colorPalette, backgroundImage: $backgroundImage, backgroundFit: $backgroundFit, backgroundOverlay: $backgroundOverlay, fontPath: $fontPath, fontFamily: $fontFamily, colorTheme: $colorTheme, customColorThemePaths: $customColorThemePaths)';
+  return 'UiAppearanceSettings(themeMode: $themeMode, colorPalette: $colorPalette, backgroundImage: $backgroundImage, backgroundFit: $backgroundFit, backgroundOverlay: $backgroundOverlay, font: $font, colorTheme: $colorTheme, customColorThemePaths: $customColorThemePaths)';
 }
 
 
@@ -45,11 +45,11 @@ abstract mixin class $UiAppearanceSettingsCopyWith<$Res>  {
   factory $UiAppearanceSettingsCopyWith(UiAppearanceSettings value, $Res Function(UiAppearanceSettings) _then) = _$UiAppearanceSettingsCopyWithImpl;
 @useResult
 $Res call({
- UiThemeMode themeMode, UiColorPalette colorPalette, String? backgroundImage, UiBackgroundFit backgroundFit, double backgroundOverlay, String? fontPath, String? fontFamily, UiColorThemeChoice colorTheme, List<String> customColorThemePaths
+ UiThemeMode themeMode, UiColorPalette colorPalette, String? backgroundImage, UiBackgroundFit backgroundFit, double backgroundOverlay, UiFontChoice font, UiColorThemeChoice colorTheme, List<String> customColorThemePaths
 });
 
 
-$UiColorThemeChoiceCopyWith<$Res> get colorTheme;
+$UiFontChoiceCopyWith<$Res> get font;$UiColorThemeChoiceCopyWith<$Res> get colorTheme;
 
 }
 /// @nodoc
@@ -62,21 +62,29 @@ class _$UiAppearanceSettingsCopyWithImpl<$Res>
 
 /// Create a copy of UiAppearanceSettings
 /// with the given fields replaced by the non-null parameter values.
-@pragma('vm:prefer-inline') @override $Res call({Object? themeMode = null,Object? colorPalette = null,Object? backgroundImage = freezed,Object? backgroundFit = null,Object? backgroundOverlay = null,Object? fontPath = freezed,Object? fontFamily = freezed,Object? colorTheme = null,Object? customColorThemePaths = null,}) {
+@pragma('vm:prefer-inline') @override $Res call({Object? themeMode = null,Object? colorPalette = null,Object? backgroundImage = freezed,Object? backgroundFit = null,Object? backgroundOverlay = null,Object? font = null,Object? colorTheme = null,Object? customColorThemePaths = null,}) {
   return _then(_self.copyWith(
 themeMode: null == themeMode ? _self.themeMode : themeMode // ignore: cast_nullable_to_non_nullable
 as UiThemeMode,colorPalette: null == colorPalette ? _self.colorPalette : colorPalette // ignore: cast_nullable_to_non_nullable
 as UiColorPalette,backgroundImage: freezed == backgroundImage ? _self.backgroundImage : backgroundImage // ignore: cast_nullable_to_non_nullable
 as String?,backgroundFit: null == backgroundFit ? _self.backgroundFit : backgroundFit // ignore: cast_nullable_to_non_nullable
 as UiBackgroundFit,backgroundOverlay: null == backgroundOverlay ? _self.backgroundOverlay : backgroundOverlay // ignore: cast_nullable_to_non_nullable
-as double,fontPath: freezed == fontPath ? _self.fontPath : fontPath // ignore: cast_nullable_to_non_nullable
-as String?,fontFamily: freezed == fontFamily ? _self.fontFamily : fontFamily // ignore: cast_nullable_to_non_nullable
-as String?,colorTheme: null == colorTheme ? _self.colorTheme : colorTheme // ignore: cast_nullable_to_non_nullable
+as double,font: null == font ? _self.font : font // ignore: cast_nullable_to_non_nullable
+as UiFontChoice,colorTheme: null == colorTheme ? _self.colorTheme : colorTheme // ignore: cast_nullable_to_non_nullable
 as UiColorThemeChoice,customColorThemePaths: null == customColorThemePaths ? _self.customColorThemePaths : customColorThemePaths // ignore: cast_nullable_to_non_nullable
 as List<String>,
   ));
 }
 /// Create a copy of UiAppearanceSettings
+/// with the given fields replaced by the non-null parameter values.
+@override
+@pragma('vm:prefer-inline')
+$UiFontChoiceCopyWith<$Res> get font {
+  
+  return $UiFontChoiceCopyWith<$Res>(_self.font, (value) {
+    return _then(_self.copyWith(font: value));
+  });
+}/// Create a copy of UiAppearanceSettings
 /// with the given fields replaced by the non-null parameter values.
 @override
 @pragma('vm:prefer-inline')
@@ -164,10 +172,10 @@ return $default(_that);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( UiThemeMode themeMode,  UiColorPalette colorPalette,  String? backgroundImage,  UiBackgroundFit backgroundFit,  double backgroundOverlay,  String? fontPath,  String? fontFamily,  UiColorThemeChoice colorTheme,  List<String> customColorThemePaths)?  $default,{required TResult orElse(),}) {final _that = this;
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( UiThemeMode themeMode,  UiColorPalette colorPalette,  String? backgroundImage,  UiBackgroundFit backgroundFit,  double backgroundOverlay,  UiFontChoice font,  UiColorThemeChoice colorTheme,  List<String> customColorThemePaths)?  $default,{required TResult orElse(),}) {final _that = this;
 switch (_that) {
 case _UiAppearanceSettings() when $default != null:
-return $default(_that.themeMode,_that.colorPalette,_that.backgroundImage,_that.backgroundFit,_that.backgroundOverlay,_that.fontPath,_that.fontFamily,_that.colorTheme,_that.customColorThemePaths);case _:
+return $default(_that.themeMode,_that.colorPalette,_that.backgroundImage,_that.backgroundFit,_that.backgroundOverlay,_that.font,_that.colorTheme,_that.customColorThemePaths);case _:
   return orElse();
 
 }
@@ -185,10 +193,10 @@ return $default(_that.themeMode,_that.colorPalette,_that.backgroundImage,_that.b
 /// }
 /// ```
 
-@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( UiThemeMode themeMode,  UiColorPalette colorPalette,  String? backgroundImage,  UiBackgroundFit backgroundFit,  double backgroundOverlay,  String? fontPath,  String? fontFamily,  UiColorThemeChoice colorTheme,  List<String> customColorThemePaths)  $default,) {final _that = this;
+@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( UiThemeMode themeMode,  UiColorPalette colorPalette,  String? backgroundImage,  UiBackgroundFit backgroundFit,  double backgroundOverlay,  UiFontChoice font,  UiColorThemeChoice colorTheme,  List<String> customColorThemePaths)  $default,) {final _that = this;
 switch (_that) {
 case _UiAppearanceSettings():
-return $default(_that.themeMode,_that.colorPalette,_that.backgroundImage,_that.backgroundFit,_that.backgroundOverlay,_that.fontPath,_that.fontFamily,_that.colorTheme,_that.customColorThemePaths);}
+return $default(_that.themeMode,_that.colorPalette,_that.backgroundImage,_that.backgroundFit,_that.backgroundOverlay,_that.font,_that.colorTheme,_that.customColorThemePaths);}
 }
 /// A variant of `when` that fallback to returning `null`
 ///
@@ -202,10 +210,10 @@ return $default(_that.themeMode,_that.colorPalette,_that.backgroundImage,_that.b
 /// }
 /// ```
 
-@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( UiThemeMode themeMode,  UiColorPalette colorPalette,  String? backgroundImage,  UiBackgroundFit backgroundFit,  double backgroundOverlay,  String? fontPath,  String? fontFamily,  UiColorThemeChoice colorTheme,  List<String> customColorThemePaths)?  $default,) {final _that = this;
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( UiThemeMode themeMode,  UiColorPalette colorPalette,  String? backgroundImage,  UiBackgroundFit backgroundFit,  double backgroundOverlay,  UiFontChoice font,  UiColorThemeChoice colorTheme,  List<String> customColorThemePaths)?  $default,) {final _that = this;
 switch (_that) {
 case _UiAppearanceSettings() when $default != null:
-return $default(_that.themeMode,_that.colorPalette,_that.backgroundImage,_that.backgroundFit,_that.backgroundOverlay,_that.fontPath,_that.fontFamily,_that.colorTheme,_that.customColorThemePaths);case _:
+return $default(_that.themeMode,_that.colorPalette,_that.backgroundImage,_that.backgroundFit,_that.backgroundOverlay,_that.font,_that.colorTheme,_that.customColorThemePaths);case _:
   return null;
 
 }
@@ -217,7 +225,7 @@ return $default(_that.themeMode,_that.colorPalette,_that.backgroundImage,_that.b
 
 
 class _UiAppearanceSettings implements UiAppearanceSettings {
-  const _UiAppearanceSettings({required this.themeMode, required this.colorPalette, this.backgroundImage, required this.backgroundFit, required this.backgroundOverlay, this.fontPath, this.fontFamily, required this.colorTheme, required final  List<String> customColorThemePaths}): _customColorThemePaths = customColorThemePaths;
+  const _UiAppearanceSettings({required this.themeMode, required this.colorPalette, this.backgroundImage, required this.backgroundFit, required this.backgroundOverlay, required this.font, required this.colorTheme, required final  List<String> customColorThemePaths}): _customColorThemePaths = customColorThemePaths;
   
 
 @override final  UiThemeMode themeMode;
@@ -225,8 +233,7 @@ class _UiAppearanceSettings implements UiAppearanceSettings {
 @override final  String? backgroundImage;
 @override final  UiBackgroundFit backgroundFit;
 @override final  double backgroundOverlay;
-@override final  String? fontPath;
-@override final  String? fontFamily;
+@override final  UiFontChoice font;
 @override final  UiColorThemeChoice colorTheme;
  final  List<String> _customColorThemePaths;
 @override List<String> get customColorThemePaths {
@@ -246,16 +253,16 @@ _$UiAppearanceSettingsCopyWith<_UiAppearanceSettings> get copyWith => __$UiAppea
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is _UiAppearanceSettings&&(identical(other.themeMode, themeMode) || other.themeMode == themeMode)&&(identical(other.colorPalette, colorPalette) || other.colorPalette == colorPalette)&&(identical(other.backgroundImage, backgroundImage) || other.backgroundImage == backgroundImage)&&(identical(other.backgroundFit, backgroundFit) || other.backgroundFit == backgroundFit)&&(identical(other.backgroundOverlay, backgroundOverlay) || other.backgroundOverlay == backgroundOverlay)&&(identical(other.fontPath, fontPath) || other.fontPath == fontPath)&&(identical(other.fontFamily, fontFamily) || other.fontFamily == fontFamily)&&(identical(other.colorTheme, colorTheme) || other.colorTheme == colorTheme)&&const DeepCollectionEquality().equals(other._customColorThemePaths, _customColorThemePaths));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is _UiAppearanceSettings&&(identical(other.themeMode, themeMode) || other.themeMode == themeMode)&&(identical(other.colorPalette, colorPalette) || other.colorPalette == colorPalette)&&(identical(other.backgroundImage, backgroundImage) || other.backgroundImage == backgroundImage)&&(identical(other.backgroundFit, backgroundFit) || other.backgroundFit == backgroundFit)&&(identical(other.backgroundOverlay, backgroundOverlay) || other.backgroundOverlay == backgroundOverlay)&&(identical(other.font, font) || other.font == font)&&(identical(other.colorTheme, colorTheme) || other.colorTheme == colorTheme)&&const DeepCollectionEquality().equals(other._customColorThemePaths, _customColorThemePaths));
 }
 
 
 @override
-int get hashCode => Object.hash(runtimeType,themeMode,colorPalette,backgroundImage,backgroundFit,backgroundOverlay,fontPath,fontFamily,colorTheme,const DeepCollectionEquality().hash(_customColorThemePaths));
+int get hashCode => Object.hash(runtimeType,themeMode,colorPalette,backgroundImage,backgroundFit,backgroundOverlay,font,colorTheme,const DeepCollectionEquality().hash(_customColorThemePaths));
 
 @override
 String toString() {
-  return 'UiAppearanceSettings(themeMode: $themeMode, colorPalette: $colorPalette, backgroundImage: $backgroundImage, backgroundFit: $backgroundFit, backgroundOverlay: $backgroundOverlay, fontPath: $fontPath, fontFamily: $fontFamily, colorTheme: $colorTheme, customColorThemePaths: $customColorThemePaths)';
+  return 'UiAppearanceSettings(themeMode: $themeMode, colorPalette: $colorPalette, backgroundImage: $backgroundImage, backgroundFit: $backgroundFit, backgroundOverlay: $backgroundOverlay, font: $font, colorTheme: $colorTheme, customColorThemePaths: $customColorThemePaths)';
 }
 
 
@@ -266,11 +273,11 @@ abstract mixin class _$UiAppearanceSettingsCopyWith<$Res> implements $UiAppearan
   factory _$UiAppearanceSettingsCopyWith(_UiAppearanceSettings value, $Res Function(_UiAppearanceSettings) _then) = __$UiAppearanceSettingsCopyWithImpl;
 @override @useResult
 $Res call({
- UiThemeMode themeMode, UiColorPalette colorPalette, String? backgroundImage, UiBackgroundFit backgroundFit, double backgroundOverlay, String? fontPath, String? fontFamily, UiColorThemeChoice colorTheme, List<String> customColorThemePaths
+ UiThemeMode themeMode, UiColorPalette colorPalette, String? backgroundImage, UiBackgroundFit backgroundFit, double backgroundOverlay, UiFontChoice font, UiColorThemeChoice colorTheme, List<String> customColorThemePaths
 });
 
 
-@override $UiColorThemeChoiceCopyWith<$Res> get colorTheme;
+@override $UiFontChoiceCopyWith<$Res> get font;@override $UiColorThemeChoiceCopyWith<$Res> get colorTheme;
 
 }
 /// @nodoc
@@ -283,22 +290,30 @@ class __$UiAppearanceSettingsCopyWithImpl<$Res>
 
 /// Create a copy of UiAppearanceSettings
 /// with the given fields replaced by the non-null parameter values.
-@override @pragma('vm:prefer-inline') $Res call({Object? themeMode = null,Object? colorPalette = null,Object? backgroundImage = freezed,Object? backgroundFit = null,Object? backgroundOverlay = null,Object? fontPath = freezed,Object? fontFamily = freezed,Object? colorTheme = null,Object? customColorThemePaths = null,}) {
+@override @pragma('vm:prefer-inline') $Res call({Object? themeMode = null,Object? colorPalette = null,Object? backgroundImage = freezed,Object? backgroundFit = null,Object? backgroundOverlay = null,Object? font = null,Object? colorTheme = null,Object? customColorThemePaths = null,}) {
   return _then(_UiAppearanceSettings(
 themeMode: null == themeMode ? _self.themeMode : themeMode // ignore: cast_nullable_to_non_nullable
 as UiThemeMode,colorPalette: null == colorPalette ? _self.colorPalette : colorPalette // ignore: cast_nullable_to_non_nullable
 as UiColorPalette,backgroundImage: freezed == backgroundImage ? _self.backgroundImage : backgroundImage // ignore: cast_nullable_to_non_nullable
 as String?,backgroundFit: null == backgroundFit ? _self.backgroundFit : backgroundFit // ignore: cast_nullable_to_non_nullable
 as UiBackgroundFit,backgroundOverlay: null == backgroundOverlay ? _self.backgroundOverlay : backgroundOverlay // ignore: cast_nullable_to_non_nullable
-as double,fontPath: freezed == fontPath ? _self.fontPath : fontPath // ignore: cast_nullable_to_non_nullable
-as String?,fontFamily: freezed == fontFamily ? _self.fontFamily : fontFamily // ignore: cast_nullable_to_non_nullable
-as String?,colorTheme: null == colorTheme ? _self.colorTheme : colorTheme // ignore: cast_nullable_to_non_nullable
+as double,font: null == font ? _self.font : font // ignore: cast_nullable_to_non_nullable
+as UiFontChoice,colorTheme: null == colorTheme ? _self.colorTheme : colorTheme // ignore: cast_nullable_to_non_nullable
 as UiColorThemeChoice,customColorThemePaths: null == customColorThemePaths ? _self._customColorThemePaths : customColorThemePaths // ignore: cast_nullable_to_non_nullable
 as List<String>,
   ));
 }
 
 /// Create a copy of UiAppearanceSettings
+/// with the given fields replaced by the non-null parameter values.
+@override
+@pragma('vm:prefer-inline')
+$UiFontChoiceCopyWith<$Res> get font {
+  
+  return $UiFontChoiceCopyWith<$Res>(_self.font, (value) {
+    return _then(_self.copyWith(font: value));
+  });
+}/// Create a copy of UiAppearanceSettings
 /// with the given fields replaced by the non-null parameter values.
 @override
 @pragma('vm:prefer-inline')
@@ -867,6 +882,374 @@ class _$UiColorThemeChoice_SourceCopyWithImpl<$Res>
 /// with the given fields replaced by the non-null parameter values.
 @pragma('vm:prefer-inline') $Res call({Object? field0 = null,}) {
   return _then(UiColorThemeChoice_Source(
+null == field0 ? _self.field0 : field0 // ignore: cast_nullable_to_non_nullable
+as String,
+  ));
+}
+
+
+}
+
+/// @nodoc
+mixin _$UiFontChoice {
+
+
+
+
+
+@override
+bool operator ==(Object other) {
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is UiFontChoice);
+}
+
+
+@override
+int get hashCode => runtimeType.hashCode;
+
+@override
+String toString() {
+  return 'UiFontChoice()';
+}
+
+
+}
+
+/// @nodoc
+class $UiFontChoiceCopyWith<$Res>  {
+$UiFontChoiceCopyWith(UiFontChoice _, $Res Function(UiFontChoice) __);
+}
+
+
+/// Adds pattern-matching-related methods to [UiFontChoice].
+extension UiFontChoicePatterns on UiFontChoice {
+/// A variant of `map` that fallback to returning `orElse`.
+///
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case final Subclass value:
+///     return ...;
+///   case _:
+///     return orElse();
+/// }
+/// ```
+
+@optionalTypeArgs TResult maybeMap<TResult extends Object?>({TResult Function( UiFontChoice_Default value)?  default_,TResult Function( UiFontChoice_System value)?  system,TResult Function( UiFontChoice_Bundled value)?  bundled,TResult Function( UiFontChoice_File value)?  file,required TResult orElse(),}){
+final _that = this;
+switch (_that) {
+case UiFontChoice_Default() when default_ != null:
+return default_(_that);case UiFontChoice_System() when system != null:
+return system(_that);case UiFontChoice_Bundled() when bundled != null:
+return bundled(_that);case UiFontChoice_File() when file != null:
+return file(_that);case _:
+  return orElse();
+
+}
+}
+/// A `switch`-like method, using callbacks.
+///
+/// Callbacks receives the raw object, upcasted.
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case final Subclass value:
+///     return ...;
+///   case final Subclass2 value:
+///     return ...;
+/// }
+/// ```
+
+@optionalTypeArgs TResult map<TResult extends Object?>({required TResult Function( UiFontChoice_Default value)  default_,required TResult Function( UiFontChoice_System value)  system,required TResult Function( UiFontChoice_Bundled value)  bundled,required TResult Function( UiFontChoice_File value)  file,}){
+final _that = this;
+switch (_that) {
+case UiFontChoice_Default():
+return default_(_that);case UiFontChoice_System():
+return system(_that);case UiFontChoice_Bundled():
+return bundled(_that);case UiFontChoice_File():
+return file(_that);}
+}
+/// A variant of `map` that fallback to returning `null`.
+///
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case final Subclass value:
+///     return ...;
+///   case _:
+///     return null;
+/// }
+/// ```
+
+@optionalTypeArgs TResult? mapOrNull<TResult extends Object?>({TResult? Function( UiFontChoice_Default value)?  default_,TResult? Function( UiFontChoice_System value)?  system,TResult? Function( UiFontChoice_Bundled value)?  bundled,TResult? Function( UiFontChoice_File value)?  file,}){
+final _that = this;
+switch (_that) {
+case UiFontChoice_Default() when default_ != null:
+return default_(_that);case UiFontChoice_System() when system != null:
+return system(_that);case UiFontChoice_Bundled() when bundled != null:
+return bundled(_that);case UiFontChoice_File() when file != null:
+return file(_that);case _:
+  return null;
+
+}
+}
+/// A variant of `when` that fallback to an `orElse` callback.
+///
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case Subclass(:final field):
+///     return ...;
+///   case _:
+///     return orElse();
+/// }
+/// ```
+
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>({TResult Function()?  default_,TResult Function()?  system,TResult Function( String field0)?  bundled,TResult Function( String field0)?  file,required TResult orElse(),}) {final _that = this;
+switch (_that) {
+case UiFontChoice_Default() when default_ != null:
+return default_();case UiFontChoice_System() when system != null:
+return system();case UiFontChoice_Bundled() when bundled != null:
+return bundled(_that.field0);case UiFontChoice_File() when file != null:
+return file(_that.field0);case _:
+  return orElse();
+
+}
+}
+/// A `switch`-like method, using callbacks.
+///
+/// As opposed to `map`, this offers destructuring.
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case Subclass(:final field):
+///     return ...;
+///   case Subclass2(:final field2):
+///     return ...;
+/// }
+/// ```
+
+@optionalTypeArgs TResult when<TResult extends Object?>({required TResult Function()  default_,required TResult Function()  system,required TResult Function( String field0)  bundled,required TResult Function( String field0)  file,}) {final _that = this;
+switch (_that) {
+case UiFontChoice_Default():
+return default_();case UiFontChoice_System():
+return system();case UiFontChoice_Bundled():
+return bundled(_that.field0);case UiFontChoice_File():
+return file(_that.field0);}
+}
+/// A variant of `when` that fallback to returning `null`
+///
+/// It is equivalent to doing:
+/// ```dart
+/// switch (sealedClass) {
+///   case Subclass(:final field):
+///     return ...;
+///   case _:
+///     return null;
+/// }
+/// ```
+
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>({TResult? Function()?  default_,TResult? Function()?  system,TResult? Function( String field0)?  bundled,TResult? Function( String field0)?  file,}) {final _that = this;
+switch (_that) {
+case UiFontChoice_Default() when default_ != null:
+return default_();case UiFontChoice_System() when system != null:
+return system();case UiFontChoice_Bundled() when bundled != null:
+return bundled(_that.field0);case UiFontChoice_File() when file != null:
+return file(_that.field0);case _:
+  return null;
+
+}
+}
+
+}
+
+/// @nodoc
+
+
+class UiFontChoice_Default extends UiFontChoice {
+  const UiFontChoice_Default(): super._();
+  
+
+
+
+
+
+
+@override
+bool operator ==(Object other) {
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is UiFontChoice_Default);
+}
+
+
+@override
+int get hashCode => runtimeType.hashCode;
+
+@override
+String toString() {
+  return 'UiFontChoice.default_()';
+}
+
+
+}
+
+
+
+
+/// @nodoc
+
+
+class UiFontChoice_System extends UiFontChoice {
+  const UiFontChoice_System(): super._();
+  
+
+
+
+
+
+
+@override
+bool operator ==(Object other) {
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is UiFontChoice_System);
+}
+
+
+@override
+int get hashCode => runtimeType.hashCode;
+
+@override
+String toString() {
+  return 'UiFontChoice.system()';
+}
+
+
+}
+
+
+
+
+/// @nodoc
+
+
+class UiFontChoice_Bundled extends UiFontChoice {
+  const UiFontChoice_Bundled(this.field0): super._();
+  
+
+ final  String field0;
+
+/// Create a copy of UiFontChoice
+/// with the given fields replaced by the non-null parameter values.
+@JsonKey(includeFromJson: false, includeToJson: false)
+@pragma('vm:prefer-inline')
+$UiFontChoice_BundledCopyWith<UiFontChoice_Bundled> get copyWith => _$UiFontChoice_BundledCopyWithImpl<UiFontChoice_Bundled>(this, _$identity);
+
+
+
+@override
+bool operator ==(Object other) {
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is UiFontChoice_Bundled&&(identical(other.field0, field0) || other.field0 == field0));
+}
+
+
+@override
+int get hashCode => Object.hash(runtimeType,field0);
+
+@override
+String toString() {
+  return 'UiFontChoice.bundled(field0: $field0)';
+}
+
+
+}
+
+/// @nodoc
+abstract mixin class $UiFontChoice_BundledCopyWith<$Res> implements $UiFontChoiceCopyWith<$Res> {
+  factory $UiFontChoice_BundledCopyWith(UiFontChoice_Bundled value, $Res Function(UiFontChoice_Bundled) _then) = _$UiFontChoice_BundledCopyWithImpl;
+@useResult
+$Res call({
+ String field0
+});
+
+
+
+
+}
+/// @nodoc
+class _$UiFontChoice_BundledCopyWithImpl<$Res>
+    implements $UiFontChoice_BundledCopyWith<$Res> {
+  _$UiFontChoice_BundledCopyWithImpl(this._self, this._then);
+
+  final UiFontChoice_Bundled _self;
+  final $Res Function(UiFontChoice_Bundled) _then;
+
+/// Create a copy of UiFontChoice
+/// with the given fields replaced by the non-null parameter values.
+@pragma('vm:prefer-inline') $Res call({Object? field0 = null,}) {
+  return _then(UiFontChoice_Bundled(
+null == field0 ? _self.field0 : field0 // ignore: cast_nullable_to_non_nullable
+as String,
+  ));
+}
+
+
+}
+
+/// @nodoc
+
+
+class UiFontChoice_File extends UiFontChoice {
+  const UiFontChoice_File(this.field0): super._();
+  
+
+ final  String field0;
+
+/// Create a copy of UiFontChoice
+/// with the given fields replaced by the non-null parameter values.
+@JsonKey(includeFromJson: false, includeToJson: false)
+@pragma('vm:prefer-inline')
+$UiFontChoice_FileCopyWith<UiFontChoice_File> get copyWith => _$UiFontChoice_FileCopyWithImpl<UiFontChoice_File>(this, _$identity);
+
+
+
+@override
+bool operator ==(Object other) {
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is UiFontChoice_File&&(identical(other.field0, field0) || other.field0 == field0));
+}
+
+
+@override
+int get hashCode => Object.hash(runtimeType,field0);
+
+@override
+String toString() {
+  return 'UiFontChoice.file(field0: $field0)';
+}
+
+
+}
+
+/// @nodoc
+abstract mixin class $UiFontChoice_FileCopyWith<$Res> implements $UiFontChoiceCopyWith<$Res> {
+  factory $UiFontChoice_FileCopyWith(UiFontChoice_File value, $Res Function(UiFontChoice_File) _then) = _$UiFontChoice_FileCopyWithImpl;
+@useResult
+$Res call({
+ String field0
+});
+
+
+
+
+}
+/// @nodoc
+class _$UiFontChoice_FileCopyWithImpl<$Res>
+    implements $UiFontChoice_FileCopyWith<$Res> {
+  _$UiFontChoice_FileCopyWithImpl(this._self, this._then);
+
+  final UiFontChoice_File _self;
+  final $Res Function(UiFontChoice_File) _then;
+
+/// Create a copy of UiFontChoice
+/// with the given fields replaced by the non-null parameter values.
+@pragma('vm:prefer-inline') $Res call({Object? field0 = null,}) {
+  return _then(UiFontChoice_File(
 null == field0 ? _self.field0 : field0 // ignore: cast_nullable_to_non_nullable
 as String,
   ));

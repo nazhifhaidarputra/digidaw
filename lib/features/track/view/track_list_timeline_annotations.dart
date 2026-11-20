@@ -57,37 +57,34 @@ class _TimelineRulerBarState extends ConsumerState<_TimelineRulerBar> {
   // Ruler gestures: seek, or draw a loop region with shift held
   // --------------------------------------------------------------------------
 
-  /// Pointer position, in ruler coordinates, of a range drawn with the
-  /// Select tool; null while no such range is being drawn.
-  double? _rangeX;
+  /// Whether the Select tool is drawing a range on the ruler.
+  bool _isDrawingRange = false;
 
-  /// Scrolls the timeline while a range drawn on the ruler nears its edge.
-  late final TimelineEdgeAutoScroller _autoScroller = TimelineEdgeAutoScroller(
-    onScrolled: (dx) {
-      final x = _rangeX;
-      if (x == null) return;
-      _rangeX = x + dx;
-      _updateRulerRange();
+  /// Moves the end of a range drawn on the ruler to the pointer's absolute
+  /// timeline position, and scrolls the timeline while it nears an edge.
+  late final TimelineDragTracker _rangeTracker = TimelineDragTracker(
+    onMoved: (x, _) {
+      if (!_isDrawingRange) return;
+      ref.read(rangeSelectProvider.notifier).update(math.max(0.0, x) * _zoom);
     },
   );
 
   @override
   void dispose() {
-    _autoScroller.stop();
+    _rangeTracker.stop();
     super.dispose();
   }
 
-  void _updateRulerRange() {
-    final x = _rangeX;
-    if (x == null) return;
-    ref.read(rangeSelectProvider.notifier).update(math.max(0.0, x) * _zoom);
+  void _endRulerRange() {
+    _isDrawingRange = false;
+    _rangeTracker.stop();
   }
 
   void _onPanStart(DragStartDetails details) {
     // With the Select tool the ruler selects a time range on every row.
     if (ref.read(workspaceStateProvider).selectedTool == ToolSelection.select &&
         !HardwareKeyboard.instance.isShiftPressed) {
-      _rangeX = details.localPosition.dx;
+      _isDrawingRange = true;
       ref
           .read(rangeSelectProvider.notifier)
           .startAllRows(math.max(0.0, details.localPosition.dx) * _zoom);
@@ -109,10 +106,8 @@ class _TimelineRulerBarState extends ConsumerState<_TimelineRulerBar> {
       ref.read(workspaceStateProvider).selectedTool == ToolSelection.select;
 
   void _onPanUpdate(DragUpdateDetails details) {
-    if (_rangeX != null) {
-      _rangeX = details.localPosition.dx;
-      _updateRulerRange();
-      _autoScroller.update(context, details.globalPosition);
+    if (_isDrawingRange) {
+      _rangeTracker.update(context, details.globalPosition);
       return;
     }
     final anchor = _drawAnchorTick;
@@ -127,9 +122,8 @@ class _TimelineRulerBarState extends ConsumerState<_TimelineRulerBar> {
   }
 
   void _onPanEnd(DragEndDetails _) {
-    if (_rangeX != null) {
-      _rangeX = null;
-      _autoScroller.stop();
+    if (_isDrawingRange) {
+      _endRulerRange();
       ref.read(rangeSelectProvider.notifier).finish();
       return;
     }
@@ -385,9 +379,8 @@ class _TimelineRulerBarState extends ConsumerState<_TimelineRulerBar> {
                 _showRulerMenu(details.localPosition.dx),
             onPanStart: _onPanStart,
             onPanCancel: () {
-              if (_rangeX == null) return;
-              _rangeX = null;
-              _autoScroller.stop();
+              if (!_isDrawingRange) return;
+              _endRulerRange();
               ref.read(rangeSelectProvider.notifier).cancel();
             },
             // Throttled by the TransportNotifier's seekTo queue implementation

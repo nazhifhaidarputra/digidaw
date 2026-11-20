@@ -183,7 +183,6 @@ settings-appearance-overlay = Donkere laag: { $percent }%
 settings-appearance-font = Lettertype van de app
 settings-appearance-font-system = Systeemlettertype
 settings-appearance-font-choose = TTF of OTF kiezen
-settings-appearance-font-use-system = Systeemlettertype gebruiken
 settings-appearance-assets-help = Eigen bestanden blijven op hun oorspronkelijke locatie. Als een bestand wordt verplaatst of verwijderd, zet { -app-name } veilig de standaard terug.
 settings-appearance-theme = Thema
 settings-appearance-theme-remove = Thema verwijderen
@@ -214,7 +213,6 @@ settings-appearance-load-failed = Kan instellingen voor uiterlijk niet laden
 settings-appearance-background-unavailable-title = Achtergrondafbeelding niet beschikbaar
 settings-appearance-background-unavailable-message = De opgeslagen achtergrondafbeelding is niet beschikbaar. De standaardachtergrond wordt gebruikt.
 settings-appearance-font-unavailable-title = Eigen lettertype niet beschikbaar
-settings-appearance-font-unavailable-message = Het opgeslagen eigen lettertype is niet beschikbaar. Het systeemlettertype wordt gebruikt.
 settings-appearance-theme-unavailable-title = Kleurenthema niet beschikbaar
 settings-appearance-theme-unavailable-message = { $count ->
     [one] Een opgeslagen kleurenthemabestand is niet beschikbaar of niet meer geldig. Het is uit het themamenu verwijderd.

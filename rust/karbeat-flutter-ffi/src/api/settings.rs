@@ -19,7 +19,7 @@ use karbeat_core::core::{history::MAX_HISTORY_LIMIT, mitigation::AutoSaveSetting
 use karbeat_core_api::audio_settings_api::validate_dsp_config;
 use karbeat_settings::{
     AppearanceSettings, AudioPreferences, AutomationTemplate, AutomationTemplates, BackgroundFit,
-    ColorPalette, ColorThemeChoice, CurveType, GeneralSettings, LogLevel, LogSettings,
+    ColorPalette, ColorThemeChoice, CurveType, FontChoice, GeneralSettings, LogLevel, LogSettings,
     PluginFavorites, PluginScanSettings, RecentProjects, Recovered, SettingsError, SettingsStore,
     ShortcutChord, TemplatePoint, ThemeMode,
 };
@@ -368,6 +368,19 @@ pub enum UiColorThemeChoice {
     Source(String),
 }
 
+/// Which font the interface uses.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum UiFontChoice {
+    /// The app's default bundled font.
+    Default,
+    /// The desktop's own interface font.
+    System,
+    /// Another font bundled with the app, by family name.
+    Bundled(String),
+    /// A TTF or OTF file the user loaded, by path.
+    File(String),
+}
+
 /// Theme, colors, background and font.
 #[derive(Clone, Debug)]
 #[frb(dart_metadata=("freezed"))]
@@ -378,8 +391,7 @@ pub struct UiAppearanceSettings {
     pub background_fit: UiBackgroundFit,
     /// Opacity of the layer over the background image, from 0.0 to 0.9.
     pub background_overlay: f64,
-    pub font_path: Option<String>,
-    pub font_family: Option<String>,
+    pub font: UiFontChoice,
     pub color_theme: UiColorThemeChoice,
     pub custom_color_theme_paths: Vec<String>,
 }
@@ -484,6 +496,30 @@ impl From<UiColorThemeChoice> for ColorThemeChoice {
     }
 }
 
+impl From<FontChoice> for UiFontChoice {
+    fn from(choice: FontChoice) -> Self {
+        match choice {
+            FontChoice::Default => Self::Default,
+            FontChoice::System => Self::System,
+            FontChoice::Bundled(family) => Self::Bundled(family),
+            FontChoice::File(path) => Self::File(path_string(&path)),
+        }
+    }
+}
+
+/// An empty family or path is not a font, so it falls back to the default.
+impl From<UiFontChoice> for FontChoice {
+    fn from(choice: UiFontChoice) -> Self {
+        match choice {
+            UiFontChoice::Default => Self::Default,
+            UiFontChoice::System => Self::System,
+            UiFontChoice::Bundled(family) if !family.is_empty() => Self::Bundled(family),
+            UiFontChoice::File(path) if !path.is_empty() => Self::File(PathBuf::from(path)),
+            UiFontChoice::Bundled(_) | UiFontChoice::File(_) => Self::Default,
+        }
+    }
+}
+
 /// Empty strings mean "not set", as they did when the UI stored these values itself.
 fn non_empty_path(path: Option<String>) -> Option<PathBuf> {
     path.filter(|path| !path.is_empty()).map(PathBuf::from)
@@ -497,8 +533,7 @@ impl From<AppearanceSettings> for UiAppearanceSettings {
             background_image: optional_path_string(settings.background_image.as_ref()),
             background_fit: settings.background_fit.into(),
             background_overlay: settings.background_overlay,
-            font_path: optional_path_string(settings.font_path.as_ref()),
-            font_family: settings.font_family,
+            font: settings.font.into(),
             color_theme: settings.color_theme.into(),
             custom_color_theme_paths: settings
                 .custom_color_theme_paths
@@ -517,8 +552,7 @@ impl From<UiAppearanceSettings> for AppearanceSettings {
             background_image: non_empty_path(settings.background_image),
             background_fit: settings.background_fit.into(),
             background_overlay: settings.background_overlay,
-            font_path: non_empty_path(settings.font_path),
-            font_family: settings.font_family.filter(|family| !family.is_empty()),
+            font: settings.font.into(),
             color_theme: settings.color_theme.into(),
             custom_color_theme_paths: settings
                 .custom_color_theme_paths

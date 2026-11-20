@@ -9,10 +9,12 @@ import 'package:karbeat/core/l10n/localizer.dart';
 import 'package:karbeat/core/utils/logger.dart';
 import 'package:karbeat/core/utils/result_type.dart';
 import 'package:karbeat/features/setting/models/app_color_theme.dart';
+import 'package:karbeat/features/setting/models/app_fonts.dart';
 import 'package:karbeat/features/setting/models/appearance_settings_state.dart';
 import 'package:karbeat/features/setting/services/appearance_asset_service.dart';
 import 'package:karbeat/features/setting/services/appearance_preferences_service.dart';
 import 'package:karbeat/features/setting/services/color_theme_parser.dart';
+import 'package:karbeat/features/setting/services/system_font_service.dart';
 
 /// Pixel size to decode a background image at so it stays sharp when the
 /// window fills [displaySize], without decoding more than is ever shown.
@@ -132,24 +134,21 @@ class AppearanceSettingsNotifier extends Notifier<AppearanceSettingsState> {
       }
     }
 
-    var fontPath = appearance.customFontPath;
-    var fontFamily = appearance.customFontFamily;
-    if (fontPath != null && fontFamily != null) {
-      final loadedFont = await assets.loadFont(fontPath, fontFamily);
-      if (loadedFont.isErr()) {
-        ref
-            .read(notificationProvider.notifier)
-            .warn(
-              tr('settings-appearance-font-unavailable-message'),
-              title: tr('settings-appearance-font-unavailable-title'),
-            );
-        fontPath = null;
-        fontFamily = null;
-      }
-    } else {
-      fontPath = null;
-      fontFamily = null;
+    var font = appearance.font;
+    final resolvedFont = await _resolveFont(font);
+    if (resolvedFont case Error<String?>(:final error)) {
+      AppLogger.warn('Saved font $font is unavailable: $error');
+      ref
+          .read(notificationProvider.notifier)
+          .warn(
+            tr('settings-appearance-font-unavailable-default-message'),
+            title: tr('settings-appearance-font-unavailable-title'),
+          );
+      font = AppFontChoice.defaultFont;
     }
+    final fontFamily = resolvedFont.isOk()
+        ? resolvedFont.ok()
+        : AppFonts.defaultFamily;
 
     var colorThemes = const IMap<String, AppColorTheme>.empty();
     for (final asset in AppearanceAssetService.bundledColorThemes) {
@@ -193,15 +192,15 @@ class AppearanceSettingsNotifier extends Notifier<AppearanceSettingsState> {
       backgroundImagePath: backgroundPath,
       backgroundFit: appearance.backgroundFit,
       backgroundOverlayOpacity: appearance.backgroundOverlayOpacity,
-      customFontPath: fontPath,
-      customFontFamily: fontFamily,
+      font: font,
+      fontFamily: fontFamily,
       colorThemes: colorThemes,
       colorThemeSource: themeSource,
       customColorThemePaths: customThemePaths,
       isInitialized: true,
     );
     if (backgroundPath != appearance.backgroundImagePath ||
-        fontPath != appearance.customFontPath ||
+        font != appearance.font ||
         themeSource != appearance.colorThemeSource ||
         unavailableThemes > 0) {
       await _persist(state);
@@ -318,9 +317,24 @@ class AppearanceSettingsNotifier extends Notifier<AppearanceSettingsState> {
     return _persist(state.copyWith(backgroundImagePath: null));
   }
 
+  /// Switches the interface to [font]. A font that cannot be loaded leaves
+  /// the current one in place.
+  Future<Result<void>> setFont(AppFontChoice font) async {
+    final resolved = await _resolveFont(font);
+    if (resolved case Error<String?>(:final error)) {
+      return ref.notifyErrorResult(
+        error,
+        title: tr('settings-appearance-font-load-failed'),
+      );
+    }
+    return _persist(state.copyWith(font: font, fontFamily: resolved.ok()));
+  }
+
+  /// Loads a TTF or OTF file picked by the user and switches to it.
   Future<Result<void>> chooseCustomFont() async {
-    final assets = ref.read(appearanceAssetServiceProvider);
-    final picked = await assets.pickFontFile();
+    final picked = await ref
+        .read(appearanceAssetServiceProvider)
+        .pickFontFile();
     if (picked case Error<String?>(error: final error)) {
       return ref.notifyErrorResult(
         error,
@@ -329,23 +343,33 @@ class AppearanceSettingsNotifier extends Notifier<AppearanceSettingsState> {
     }
     final path = picked.ok();
     if (path == null) return Result.ok(null);
-    final family = 'DigiDAWCustomFont${DateTime.now().microsecondsSinceEpoch}';
-    final loaded = await assets.loadFont(path, family);
-    if (loaded case Error<void>(error: final error)) {
-      return ref.notifyErrorResult(
-        error,
-        title: tr('settings-appearance-font-load-failed'),
-      );
-    }
-    return _persist(
-      state.copyWith(customFontPath: path, customFontFamily: family),
-    );
+    return setFont(AppFontChoice.file(path));
   }
 
-  Future<Result<void>> clearCustomFont() {
-    return _persist(
-      state.copyWith(customFontPath: null, customFontFamily: null),
-    );
+  /// The family the theme uses for [font], loading a font file first. Null
+  /// keeps the platform's default font.
+  ///
+  /// A bundled family the app no longer ships falls back to the default.
+  Future<Result<String?>> _resolveFont(AppFontChoice font) async {
+    switch (font) {
+      case SystemFontChoice():
+        return Result.ok(
+          await ref.read(systemFontServiceProvider).interfaceFontFamily(),
+        );
+      case BundledFontChoice(:final family):
+        return Result.ok(
+          AppFonts.bundled.contains(family) ? family : AppFonts.defaultFamily,
+        );
+      case FileFontChoice(:final path):
+        // Each load gets its own family, so a file never mixes with one
+        // loaded earlier.
+        final family =
+            'DigiDAWCustomFont${DateTime.now().microsecondsSinceEpoch}';
+        final loaded = await ref
+            .read(appearanceAssetServiceProvider)
+            .loadFont(path, family);
+        return loaded.map<String?>((_) => family);
+    }
   }
 
   Future<Result<void>> _persist(AppearanceSettingsState nextState) async {
@@ -356,8 +380,7 @@ class AppearanceSettingsNotifier extends Notifier<AppearanceSettingsState> {
       backgroundImagePath: state.backgroundImagePath,
       backgroundFit: state.backgroundFit,
       backgroundOverlayOpacity: state.backgroundOverlayOpacity,
-      customFontPath: state.customFontPath,
-      customFontFamily: state.customFontFamily,
+      font: state.font,
       colorThemeSource: state.colorThemeSource,
       customColorThemePaths: state.customColorThemePaths.unlock,
     ));

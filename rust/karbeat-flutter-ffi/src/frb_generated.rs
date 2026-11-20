@@ -22144,8 +22144,7 @@ impl SseDecode for crate::api::settings::UiAppearanceSettings {
         let mut var_backgroundFit =
             <crate::api::settings::UiBackgroundFit>::sse_decode(deserializer);
         let mut var_backgroundOverlay = <f64>::sse_decode(deserializer);
-        let mut var_fontPath = <Option<String>>::sse_decode(deserializer);
-        let mut var_fontFamily = <Option<String>>::sse_decode(deserializer);
+        let mut var_font = <crate::api::settings::UiFontChoice>::sse_decode(deserializer);
         let mut var_colorTheme =
             <crate::api::settings::UiColorThemeChoice>::sse_decode(deserializer);
         let mut var_customColorThemePaths = <Vec<String>>::sse_decode(deserializer);
@@ -22155,8 +22154,7 @@ impl SseDecode for crate::api::settings::UiAppearanceSettings {
             background_image: var_backgroundImage,
             background_fit: var_backgroundFit,
             background_overlay: var_backgroundOverlay,
-            font_path: var_fontPath,
-            font_family: var_fontFamily,
+            font: var_font,
             color_theme: var_colorTheme,
             custom_color_theme_paths: var_customColorThemePaths,
         };
@@ -22865,6 +22863,32 @@ impl SseDecode for crate::api::mitigation::UiFlutterCrashKind {
             1 => crate::api::mitigation::UiFlutterCrashKind::UncaughtAsync,
             _ => unreachable!("Invalid variant for UiFlutterCrashKind: {}", inner),
         };
+    }
+}
+
+impl SseDecode for crate::api::settings::UiFontChoice {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut tag_ = <i32>::sse_decode(deserializer);
+        match tag_ {
+            0 => {
+                return crate::api::settings::UiFontChoice::Default;
+            }
+            1 => {
+                return crate::api::settings::UiFontChoice::System;
+            }
+            2 => {
+                let mut var_field0 = <String>::sse_decode(deserializer);
+                return crate::api::settings::UiFontChoice::Bundled(var_field0);
+            }
+            3 => {
+                let mut var_field0 = <String>::sse_decode(deserializer);
+                return crate::api::settings::UiFontChoice::File(var_field0);
+            }
+            _ => {
+                unimplemented!("");
+            }
+        }
     }
 }
 
@@ -26351,8 +26375,7 @@ impl flutter_rust_bridge::IntoDart for crate::api::settings::UiAppearanceSetting
             self.background_image.into_into_dart().into_dart(),
             self.background_fit.into_into_dart().into_dart(),
             self.background_overlay.into_into_dart().into_dart(),
-            self.font_path.into_into_dart().into_dart(),
-            self.font_family.into_into_dart().into_dart(),
+            self.font.into_into_dart().into_dart(),
             self.color_theme.into_into_dart().into_dart(),
             self.custom_color_theme_paths.into_into_dart().into_dart(),
         ]
@@ -27255,6 +27278,35 @@ impl flutter_rust_bridge::IntoIntoDart<crate::api::mitigation::UiFlutterCrashKin
     for crate::api::mitigation::UiFlutterCrashKind
 {
     fn into_into_dart(self) -> crate::api::mitigation::UiFlutterCrashKind {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::api::settings::UiFontChoice {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        match self {
+            crate::api::settings::UiFontChoice::Default => [0.into_dart()].into_dart(),
+            crate::api::settings::UiFontChoice::System => [1.into_dart()].into_dart(),
+            crate::api::settings::UiFontChoice::Bundled(field0) => {
+                [2.into_dart(), field0.into_into_dart().into_dart()].into_dart()
+            }
+            crate::api::settings::UiFontChoice::File(field0) => {
+                [3.into_dart(), field0.into_into_dart().into_dart()].into_dart()
+            }
+            _ => {
+                unimplemented!("");
+            }
+        }
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for crate::api::settings::UiFontChoice
+{
+}
+impl flutter_rust_bridge::IntoIntoDart<crate::api::settings::UiFontChoice>
+    for crate::api::settings::UiFontChoice
+{
+    fn into_into_dart(self) -> crate::api::settings::UiFontChoice {
         self
     }
 }
@@ -31009,8 +31061,7 @@ impl SseEncode for crate::api::settings::UiAppearanceSettings {
         <Option<String>>::sse_encode(self.background_image, serializer);
         <crate::api::settings::UiBackgroundFit>::sse_encode(self.background_fit, serializer);
         <f64>::sse_encode(self.background_overlay, serializer);
-        <Option<String>>::sse_encode(self.font_path, serializer);
-        <Option<String>>::sse_encode(self.font_family, serializer);
+        <crate::api::settings::UiFontChoice>::sse_encode(self.font, serializer);
         <crate::api::settings::UiColorThemeChoice>::sse_encode(self.color_theme, serializer);
         <Vec<String>>::sse_encode(self.custom_color_theme_paths, serializer);
     }
@@ -31583,6 +31634,31 @@ impl SseEncode for crate::api::mitigation::UiFlutterCrashKind {
             },
             serializer,
         );
+    }
+}
+
+impl SseEncode for crate::api::settings::UiFontChoice {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        match self {
+            crate::api::settings::UiFontChoice::Default => {
+                <i32>::sse_encode(0, serializer);
+            }
+            crate::api::settings::UiFontChoice::System => {
+                <i32>::sse_encode(1, serializer);
+            }
+            crate::api::settings::UiFontChoice::Bundled(field0) => {
+                <i32>::sse_encode(2, serializer);
+                <String>::sse_encode(field0, serializer);
+            }
+            crate::api::settings::UiFontChoice::File(field0) => {
+                <i32>::sse_encode(3, serializer);
+                <String>::sse_encode(field0, serializer);
+            }
+            _ => {
+                unimplemented!("");
+            }
+        }
     }
 }
 

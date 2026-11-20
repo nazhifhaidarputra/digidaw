@@ -1,8 +1,27 @@
 import 'package:fast_immutable_collections/fast_immutable_collections.dart';
 import 'package:freezed_annotation/freezed_annotation.dart';
 import 'package:karbeat/features/setting/models/app_color_theme.dart';
+import 'package:karbeat/features/setting/models/app_fonts.dart';
 
 part 'appearance_settings_state.freezed.dart';
+
+/// Which font the interface uses.
+@freezed
+sealed class AppFontChoice with _$AppFontChoice {
+  /// The desktop's own interface font.
+  const factory AppFontChoice.system() = SystemFontChoice;
+
+  /// A font bundled with the app, one of [AppFonts.bundled].
+  const factory AppFontChoice.bundled(String family) = BundledFontChoice;
+
+  /// A TTF or OTF file the user loaded.
+  const factory AppFontChoice.file(String path) = FileFontChoice;
+
+  /// The font used until the user picks another one.
+  static const AppFontChoice defaultFont = AppFontChoice.bundled(
+    AppFonts.defaultFamily,
+  );
+}
 
 enum AppThemeMode { system, light, dark }
 
@@ -35,8 +54,11 @@ abstract class AppearanceSettingsState with _$AppearanceSettingsState {
     String? backgroundImagePath,
     @Default(AppBackgroundFit.cover) AppBackgroundFit backgroundFit,
     @Default(0.35) double backgroundOverlayOpacity,
-    String? customFontPath,
-    String? customFontFamily,
+    @Default(AppFontChoice.defaultFont) AppFontChoice font,
+
+    /// Family the theme uses for [font]; null leaves the platform's default
+    /// font, as [AppFontChoice.system] does when the desktop names none.
+    @Default(AppFonts.defaultFamily) String? fontFamily,
 
     /// Loaded colour themes by source: a bundled asset key or a file path.
     @Default(IMapConst({})) IMap<String, AppColorTheme> colorThemes,

@@ -432,8 +432,9 @@ pub fn module_fingerprint(path: &Path) -> Result<u64, HostError> {
         let metadata = fs::metadata(path)?;
         metadata.len().hash(hash);
         metadata
-            .modified()?
-            .duration_since(UNIX_EPOCH)
+            .modified()
+            .ok()
+            .and_then(|t| t.duration_since(UNIX_EPOCH).ok())
             .unwrap_or_default()
             .as_nanos()
             .hash(hash);

@@ -183,7 +183,6 @@ settings-appearance-overlay = Dunkle Überlagerung: { $percent } %
 settings-appearance-font = Schrift der App
 settings-appearance-font-system = Systemschrift
 settings-appearance-font-choose = TTF oder OTF wählen
-settings-appearance-font-use-system = Systemschrift verwenden
 settings-appearance-assets-help = Eigene Dateien bleiben an ihrem ursprünglichen Speicherort. Wird eine Datei verschoben oder gelöscht, stellt { -app-name } sicher den Standard wieder her.
 settings-appearance-theme = Farbschema
 settings-appearance-theme-remove = Farbschema entfernen
@@ -214,7 +213,6 @@ settings-appearance-load-failed = Darstellungseinstellungen konnten nicht gelade
 settings-appearance-background-unavailable-title = Hintergrundbild nicht verfügbar
 settings-appearance-background-unavailable-message = Das gespeicherte Hintergrundbild ist nicht verfügbar. Der Standardhintergrund wird verwendet.
 settings-appearance-font-unavailable-title = Eigene Schrift nicht verfügbar
-settings-appearance-font-unavailable-message = Die gespeicherte eigene Schrift ist nicht verfügbar. Die Systemschrift wird verwendet.
 settings-appearance-theme-unavailable-title = Farbschema nicht verfügbar
 settings-appearance-theme-unavailable-message = { $count ->
     [one] Eine gespeicherte Farbschema-Datei ist nicht verfügbar oder nicht mehr gültig. Sie wurde aus dem Farbschema-Menü entfernt.

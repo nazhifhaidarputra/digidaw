@@ -18974,18 +18974,17 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   UiAppearanceSettings dco_decode_ui_appearance_settings(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 9)
-      throw Exception('unexpected arr length: expect 9 but see ${arr.length}');
+    if (arr.length != 8)
+      throw Exception('unexpected arr length: expect 8 but see ${arr.length}');
     return UiAppearanceSettings(
       themeMode: dco_decode_ui_theme_mode(arr[0]),
       colorPalette: dco_decode_ui_color_palette(arr[1]),
       backgroundImage: dco_decode_opt_String(arr[2]),
       backgroundFit: dco_decode_ui_background_fit(arr[3]),
       backgroundOverlay: dco_decode_f_64(arr[4]),
-      fontPath: dco_decode_opt_String(arr[5]),
-      fontFamily: dco_decode_opt_String(arr[6]),
-      colorTheme: dco_decode_ui_color_theme_choice(arr[7]),
-      customColorThemePaths: dco_decode_list_String(arr[8]),
+      font: dco_decode_ui_font_choice(arr[5]),
+      colorTheme: dco_decode_ui_color_theme_choice(arr[6]),
+      customColorThemePaths: dco_decode_list_String(arr[7]),
     );
   }
 
@@ -19493,6 +19492,23 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   UiFlutterCrashKind dco_decode_ui_flutter_crash_kind(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return UiFlutterCrashKind.values[raw as int];
+  }
+
+  @protected
+  UiFontChoice dco_decode_ui_font_choice(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    switch (raw[0]) {
+      case 0:
+        return UiFontChoice_Default();
+      case 1:
+        return UiFontChoice_System();
+      case 2:
+        return UiFontChoice_Bundled(dco_decode_String(raw[1]));
+      case 3:
+        return UiFontChoice_File(dco_decode_String(raw[1]));
+      default:
+        throw Exception("unreachable");
+    }
   }
 
   @protected
@@ -23565,8 +23581,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_backgroundImage = sse_decode_opt_String(deserializer);
     var var_backgroundFit = sse_decode_ui_background_fit(deserializer);
     var var_backgroundOverlay = sse_decode_f_64(deserializer);
-    var var_fontPath = sse_decode_opt_String(deserializer);
-    var var_fontFamily = sse_decode_opt_String(deserializer);
+    var var_font = sse_decode_ui_font_choice(deserializer);
     var var_colorTheme = sse_decode_ui_color_theme_choice(deserializer);
     var var_customColorThemePaths = sse_decode_list_String(deserializer);
     return UiAppearanceSettings(
@@ -23575,8 +23590,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       backgroundImage: var_backgroundImage,
       backgroundFit: var_backgroundFit,
       backgroundOverlay: var_backgroundOverlay,
-      fontPath: var_fontPath,
-      fontFamily: var_fontFamily,
+      font: var_font,
       colorTheme: var_colorTheme,
       customColorThemePaths: var_customColorThemePaths,
     );
@@ -24214,6 +24228,27 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     // Codec=Sse (Serialization based), see doc to use other codecs
     var inner = sse_decode_i_32(deserializer);
     return UiFlutterCrashKind.values[inner];
+  }
+
+  @protected
+  UiFontChoice sse_decode_ui_font_choice(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    var tag_ = sse_decode_i_32(deserializer);
+    switch (tag_) {
+      case 0:
+        return UiFontChoice_Default();
+      case 1:
+        return UiFontChoice_System();
+      case 2:
+        var var_field0 = sse_decode_String(deserializer);
+        return UiFontChoice_Bundled(var_field0);
+      case 3:
+        var var_field0 = sse_decode_String(deserializer);
+        return UiFontChoice_File(var_field0);
+      default:
+        throw UnimplementedError('');
+    }
   }
 
   @protected
@@ -28327,8 +28362,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_opt_String(self.backgroundImage, serializer);
     sse_encode_ui_background_fit(self.backgroundFit, serializer);
     sse_encode_f_64(self.backgroundOverlay, serializer);
-    sse_encode_opt_String(self.fontPath, serializer);
-    sse_encode_opt_String(self.fontFamily, serializer);
+    sse_encode_ui_font_choice(self.font, serializer);
     sse_encode_ui_color_theme_choice(self.colorTheme, serializer);
     sse_encode_list_String(self.customColorThemePaths, serializer);
   }
@@ -28825,6 +28859,23 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   ) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_i_32(self.index, serializer);
+  }
+
+  @protected
+  void sse_encode_ui_font_choice(UiFontChoice self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    switch (self) {
+      case UiFontChoice_Default():
+        sse_encode_i_32(0, serializer);
+      case UiFontChoice_System():
+        sse_encode_i_32(1, serializer);
+      case UiFontChoice_Bundled(field0: final field0):
+        sse_encode_i_32(2, serializer);
+        sse_encode_String(field0, serializer);
+      case UiFontChoice_File(field0: final field0):
+        sse_encode_i_32(3, serializer);
+        sse_encode_String(field0, serializer);
+    }
   }
 
   @protected

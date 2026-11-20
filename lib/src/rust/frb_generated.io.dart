@@ -1171,6 +1171,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   UiFlutterCrashKind dco_decode_ui_flutter_crash_kind(dynamic raw);
 
   @protected
+  UiFontChoice dco_decode_ui_font_choice(dynamic raw);
+
+  @protected
   UiGainEnvelope dco_decode_ui_gain_envelope(dynamic raw);
 
   @protected
@@ -2747,6 +2750,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   UiFlutterCrashKind sse_decode_ui_flutter_crash_kind(
     SseDeserializer deserializer,
   );
+
+  @protected
+  UiFontChoice sse_decode_ui_font_choice(SseDeserializer deserializer);
 
   @protected
   UiGainEnvelope sse_decode_ui_gain_envelope(SseDeserializer deserializer);
@@ -4651,6 +4657,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
     UiFlutterCrashKind self,
     SseSerializer serializer,
   );
+
+  @protected
+  void sse_encode_ui_font_choice(UiFontChoice self, SseSerializer serializer);
 
   @protected
   void sse_encode_ui_gain_envelope(

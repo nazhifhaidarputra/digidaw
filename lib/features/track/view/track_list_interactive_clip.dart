@@ -38,7 +38,13 @@ class _InteractiveClip extends ConsumerStatefulWidget {
 
 enum _DragAction { none, resizeLeft, resizeRight, move }
 
-class _InteractiveClipState extends ConsumerState<_InteractiveClip> {
+class _InteractiveClipState extends ConsumerState<_InteractiveClip>
+    with AutomaticKeepAliveClientMixin<_InteractiveClip> {
+  /// Keeps the clip's row alive while it is moved or resized, so the drag
+  /// survives the timeline auto-scrolling that row out of view.
+  @override
+  bool get wantKeepAlive => _currentAction != _DragAction.none;
+
   // Local state for smooth UI updates during drag
   late int _visualStartTime;
   late int _visualLoopLength;
@@ -47,7 +53,10 @@ class _InteractiveClipState extends ConsumerState<_InteractiveClip> {
   _DragAction _currentAction = _DragAction.none;
 
   // Drag Math Tracking
-  double _accumulatedDeltaTicks = 0.0;
+  /// Absolute timeline x of the press that started the drag. The drag's
+  /// distance is the pointer's absolute x minus this, so scrolling the
+  /// timeline under the pointer counts as travel by itself.
+  double _dragOriginX = 0.0;
   int _previousSnappedDelta = 0;
   int _leaderBaseStartTime = 0;
   int _leaderBaseLoopLength = 0;
@@ -64,20 +73,26 @@ class _InteractiveClipState extends ConsumerState<_InteractiveClip> {
   /// or lanes. Such a drag keeps every item on its own row.
   bool _isSelectionDrag = false;
 
-  /// Scrolls the timeline while a move or resize nears its edge; the scrolled
-  /// distance counts as pointer travel.
-  late final TimelineEdgeAutoScroller _autoScroller = TimelineEdgeAutoScroller(
-    onScrolled: (dx) {
+  /// Follows a move or resize in absolute timeline pixels and scrolls the
+  /// timeline while it nears an edge.
+  late final TimelineDragTracker _dragTracker = TimelineDragTracker(
+    onMoved: (x, _) {
+      final deltaTicks = (x - _dragOriginX) * widget.zoomLevel;
       switch (_currentAction) {
         case _DragAction.move:
-          _moveBy(dx);
+          _moveTo(deltaTicks);
         case _DragAction.resizeLeft || _DragAction.resizeRight:
-          _resizeBy(dx);
+          _resizeTo(deltaTicks);
         case _DragAction.none:
           break;
       }
     },
   );
+
+  /// Records where a press lands, as the origin of the drag it may start.
+  void _recordPress(PointerDownEvent event) {
+    _dragOriginX = timelineXOf(context, event.position) ?? 0.0;
+  }
 
   @override
   void initState() {
@@ -88,7 +103,7 @@ class _InteractiveClipState extends ConsumerState<_InteractiveClip> {
   @override
   void dispose() {
     _doubleClickWindow?.cancel();
-    _autoScroller.stop();
+    _dragTracker.stop();
     super.dispose();
   }
 
@@ -100,11 +115,10 @@ class _InteractiveClipState extends ConsumerState<_InteractiveClip> {
     return spans.reduce((a, b) => a.$1 <= b.$1 ? a : b);
   }
 
-  /// Adds [dx] pixels to a move drag and publishes the snapped move.
-  void _moveBy(double dx) {
+  /// Publishes the snapped move for a drag of [deltaTicks] from its press.
+  void _moveTo(double deltaTicks) {
     if (_currentAction != _DragAction.move) return;
-    _accumulatedDeltaTicks += dx * widget.zoomLevel;
-    final rawStart = _leaderBaseStartTime + _accumulatedDeltaTicks.round();
+    final rawStart = _leaderBaseStartTime + deltaTicks.round();
     var snappedTotalDelta =
         _snapTick(rawStart, ref.read(workspaceStateProvider)) -
         _leaderBaseStartTime;
@@ -131,15 +145,14 @@ class _InteractiveClipState extends ConsumerState<_InteractiveClip> {
         );
   }
 
-  /// Adds [dx] pixels to a resize drag and publishes the snapped resize.
-  void _resizeBy(double dx) {
+  /// Publishes the snapped resize for a drag of [deltaTicks] from its press.
+  void _resizeTo(double deltaTicks) {
     if (_currentAction != _DragAction.resizeLeft &&
         _currentAction != _DragAction.resizeRight) {
       return;
     }
     final isRight = _currentAction == _DragAction.resizeRight;
-    _accumulatedDeltaTicks += dx * widget.zoomLevel;
-    int rawTotalDelta = _accumulatedDeltaTicks.round();
+    int rawTotalDelta = deltaTicks.round();
 
     const minTicks = 10;
     if (!_isSelectionDrag) {
@@ -258,6 +271,9 @@ class _InteractiveClipState extends ConsumerState<_InteractiveClip> {
 
   @override
   Widget build(BuildContext context) {
+    super.build(context);
+    // Every drag start and end rebuilds; this takes or releases the row.
+    updateKeepAlive();
     // Coordinate Mapping (Pixels)
     final double left = _visualStartTime / widget.zoomLevel;
     final double width = _visualLoopLength / widget.zoomLevel;
@@ -445,7 +461,6 @@ class _InteractiveClipState extends ConsumerState<_InteractiveClip> {
       },
       onPanStart: (widget.selectedTool == ToolSelection.resize)
           ? (details) {
-              _accumulatedDeltaTicks = 0.0;
               _previousSnappedDelta = 0;
 
               final x = details.localPosition.dx;
@@ -490,14 +505,13 @@ class _InteractiveClipState extends ConsumerState<_InteractiveClip> {
       onPanUpdate: (widget.selectedTool == ToolSelection.resize)
           ? (details) {
               if (_currentAction == _DragAction.none) return;
-              _resizeBy(details.delta.dx);
-              _autoScroller.update(context, details.globalPosition);
+              _dragTracker.update(context, details.globalPosition);
             }
           : null,
       onPanEnd: (widget.selectedTool == ToolSelection.resize)
           ? (_) {
               if (_currentAction == _DragAction.none) return;
-              _autoScroller.stop();
+              _dragTracker.stop();
 
               final currentSelectedIds = ref
                   .read(trackListStateProvider)
@@ -539,12 +553,15 @@ class _InteractiveClipState extends ConsumerState<_InteractiveClip> {
 
     // Rebuilds the menu when the envelope view it shows a check for changes.
     ref.watch(workspaceStateProvider.select((s) => s.clipEnvelopeView));
-    final interactiveChild = Builder(
-      builder: (context) => GestureDetector(
-        behavior: HitTestBehavior.opaque,
-        onLongPress: () => _showContextMenu(context),
-        onSecondaryTap: () => _showContextMenu(context),
-        child: gestureDetector,
+    final interactiveChild = Listener(
+      onPointerDown: _recordPress,
+      child: Builder(
+        builder: (context) => GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onLongPress: () => _showContextMenu(context),
+          onSecondaryTap: () => _showContextMenu(context),
+          child: gestureDetector,
+        ),
       ),
     );
 
@@ -557,7 +574,6 @@ class _InteractiveClipState extends ConsumerState<_InteractiveClip> {
         childWhenDragging: interactiveChild,
         onDragStarted: () {
           setState(() => _currentAction = _DragAction.move);
-          _accumulatedDeltaTicks = 0.0;
           _previousSnappedDelta = 0;
 
           final trackState = ref.read(trackListStateProvider.notifier);
@@ -587,12 +603,11 @@ class _InteractiveClipState extends ConsumerState<_InteractiveClip> {
         },
         onDragUpdate: (details) {
           if (_currentAction != _DragAction.move) return;
-          _moveBy(details.delta.dx);
-          _autoScroller.update(context, details.globalPosition);
+          _dragTracker.update(context, details.globalPosition);
         },
         onDragEnd: (details) {
           if (_currentAction != _DragAction.move) return;
-          _autoScroller.stop();
+          _dragTracker.stop();
 
           final trackList = ref.read(trackListStateProvider.notifier);
           if (_isSelectionDrag) {

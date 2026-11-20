@@ -5,11 +5,13 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:karbeat/app/app_theme.dart';
 import 'package:karbeat/core/utils/result_type.dart';
+import 'package:karbeat/features/setting/models/app_fonts.dart';
 import 'package:karbeat/features/setting/models/appearance_settings_state.dart';
 import 'package:karbeat/features/setting/services/appearance_asset_service.dart';
 import 'package:karbeat/features/setting/services/appearance_preferences_service.dart';
 import 'package:karbeat/features/setting/services/appearance_settings_provider.dart';
 import 'package:karbeat/features/setting/services/color_theme_parser.dart';
+import 'package:karbeat/features/setting/services/system_font_service.dart';
 import 'package:karbeat/features/setting/view/appearance_settings_page.dart';
 import 'package:karbeat/src/rust/api/settings.dart';
 
@@ -20,8 +22,7 @@ class _FakeAppearanceService extends AppearancePreferencesService {
     backgroundImagePath: null,
     backgroundFit: AppBackgroundFit.cover,
     backgroundOverlayOpacity: 0.35,
-    customFontPath: null,
-    customFontFamily: null,
+    font: AppFontChoice.defaultFont,
     colorThemeSource: AppearanceAssetService.defaultColorThemeSource,
     customColorThemePaths: const [],
   );
@@ -82,6 +83,15 @@ class _FakeAssetService extends AppearanceAssetService {
       fontLoads ? Result.ok(null) : Result.error(Exception('font missing'));
 }
 
+class _FakeSystemFontService extends SystemFontService {
+  _FakeSystemFontService(this.family);
+
+  final String? family;
+
+  @override
+  Future<String?> interfaceFontFamily() async => family;
+}
+
 String _themeJson(String name, {String primary = '#cba6f7'}) => jsonEncode({
   'name': name,
   'brightness': 'dark',
@@ -133,8 +143,7 @@ void main() {
         backgroundImagePath: null,
         backgroundFit: AppBackgroundFit.cover,
         backgroundOverlayOpacity: 0.35,
-        customFontPath: null,
-        customFontFamily: null,
+        font: AppFontChoice.defaultFont,
         colorThemeSource: null,
         customColorThemePaths: const [],
       );
@@ -296,21 +305,28 @@ void main() {
       0.6,
     );
     expect(
-      container.read(appearanceSettingsProvider).customFontPath,
-      '/tmp/studio.ttf',
+      container.read(appearanceSettingsProvider).font,
+      const AppFontChoice.file('/tmp/studio.ttf'),
     );
     expect(
-      container.read(appearanceSettingsProvider).customFontFamily,
-      isNotNull,
+      container.read(appearanceSettingsProvider).fontFamily,
+      startsWith('DigiDAWCustomFont'),
+    );
+    expect(
+      preferences.saved?.font,
+      const AppFontChoice.file('/tmp/studio.ttf'),
     );
 
     await notifier.clearBackgroundImage();
-    await notifier.clearCustomFont();
+    await notifier.setFont(AppFontChoice.defaultFont);
     expect(
       container.read(appearanceSettingsProvider).backgroundImagePath,
       isNull,
     );
-    expect(container.read(appearanceSettingsProvider).customFontPath, isNull);
+    expect(
+      container.read(appearanceSettingsProvider).fontFamily,
+      AppFonts.defaultFamily,
+    );
   });
 
   test('missing restored assets safely fall back and are cleared', () async {
@@ -321,8 +337,7 @@ void main() {
         backgroundImagePath: '/gone/background.png',
         backgroundFit: AppBackgroundFit.fill,
         backgroundOverlayOpacity: 0.5,
-        customFontPath: '/gone/font.ttf',
-        customFontFamily: 'DigiDAWCustomFont1',
+        font: const AppFontChoice.file('/gone/font.ttf'),
         colorThemeSource: null,
         customColorThemePaths: const [],
       );
@@ -346,9 +361,183 @@ void main() {
       container.read(appearanceSettingsProvider).backgroundImagePath,
       isNull,
     );
-    expect(container.read(appearanceSettingsProvider).customFontPath, isNull);
+    expect(
+      container.read(appearanceSettingsProvider).font,
+      AppFontChoice.defaultFont,
+    );
+    expect(
+      container.read(appearanceSettingsProvider).fontFamily,
+      AppFonts.defaultFamily,
+    );
     expect(preferences.saved?.backgroundImagePath, isNull);
-    expect(preferences.saved?.customFontPath, isNull);
+    expect(preferences.saved?.font, AppFontChoice.defaultFont);
+  });
+
+  group('fonts', () {
+    ProviderContainer containerWith(
+      _FakeAppearanceService preferences, {
+      String? systemFamily,
+    }) {
+      final container = ProviderContainer(
+        overrides: [
+          appearancePreferencesServiceProvider.overrideWithValue(preferences),
+          appearanceAssetServiceProvider.overrideWithValue(_FakeAssetService()),
+          systemFontServiceProvider.overrideWithValue(
+            _FakeSystemFontService(systemFamily),
+          ),
+        ],
+      );
+      addTearDown(container.dispose);
+      return container;
+    }
+
+    test(
+      'the default font is IBM Plex Sans before and after loading',
+      () async {
+        final container = containerWith(_FakeAppearanceService());
+        expect(
+          container.read(appearanceSettingsProvider).fontFamily,
+          AppFonts.defaultFamily,
+        );
+        await container.read(appearanceSettingsProvider.notifier).initialize();
+        expect(
+          container.read(appearanceSettingsProvider).fontFamily,
+          AppFonts.defaultFamily,
+        );
+      },
+    );
+
+    test('the system font uses the family the desktop names', () async {
+      final preferences = _FakeAppearanceService();
+      final container = containerWith(
+        preferences,
+        systemFamily: 'JetBrains Mono',
+      );
+      final notifier = container.read(appearanceSettingsProvider.notifier);
+      await notifier.initialize();
+
+      await notifier.setFont(const AppFontChoice.system());
+      final state = container.read(appearanceSettingsProvider);
+      expect(state.font, const AppFontChoice.system());
+      expect(state.fontFamily, 'JetBrains Mono');
+      expect(preferences.saved?.font, const AppFontChoice.system());
+    });
+
+    test('a desktop without a named font keeps the platform font', () async {
+      final container = containerWith(_FakeAppearanceService());
+      final notifier = container.read(appearanceSettingsProvider.notifier);
+      await notifier.initialize();
+      await notifier.setFont(const AppFontChoice.system());
+      expect(container.read(appearanceSettingsProvider).fontFamily, isNull);
+    });
+
+    test('a bundled font is applied, and an unknown one falls back', () async {
+      final preferences = _FakeAppearanceService()
+        ..loaded = (
+          themeMode: AppThemeMode.dark,
+          colorPalette: AppColorPalette.purple,
+          backgroundImagePath: null,
+          backgroundFit: AppBackgroundFit.cover,
+          backgroundOverlayOpacity: 0.35,
+          font: const AppFontChoice.bundled('Gone Sans'),
+          colorThemeSource: null,
+          customColorThemePaths: const [],
+        );
+      final container = containerWith(preferences);
+      final notifier = container.read(appearanceSettingsProvider.notifier);
+      await notifier.initialize();
+      expect(
+        container.read(appearanceSettingsProvider).fontFamily,
+        AppFonts.defaultFamily,
+      );
+
+      await notifier.setFont(const AppFontChoice.bundled('Inter'));
+      expect(container.read(appearanceSettingsProvider).fontFamily, 'Inter');
+    });
+
+    test('the default font is stored as the default', () {
+      expect(
+        AppearancePreferencesService.fontToStored(AppFontChoice.defaultFont),
+        const UiFontChoice.default_(),
+      );
+      expect(
+        AppearancePreferencesService.fontFromStored(
+          const UiFontChoice.default_(),
+        ),
+        AppFontChoice.defaultFont,
+      );
+      for (final font in const [
+        AppFontChoice.system(),
+        AppFontChoice.bundled('Inter'),
+        AppFontChoice.file('/fonts/studio.otf'),
+      ]) {
+        expect(
+          AppearancePreferencesService.fontFromStored(
+            AppearancePreferencesService.fontToStored(font),
+          ),
+          font,
+        );
+      }
+    });
+
+    test('desktop font settings name their family', () {
+      expect(pangoFontFamily("'JetBrains Mono  10'"), 'JetBrains Mono');
+      expect(pangoFontFamily('JetBrains Mono,  10'), 'JetBrains Mono');
+      expect(pangoFontFamily('Noto Sans Bold Italic 11'), 'Noto Sans');
+      expect(pangoFontFamily('Cantarell, Sans 11'), 'Cantarell');
+      expect(pangoFontFamily("''"), isNull);
+      expect(
+        kdeFontFamily(
+          '[KDE]\nfont=Wrong\n[General]\nColorScheme=Breeze\n'
+          'font=JetBrains Mono,10,-1,5,400,0,0,0,0,0\n',
+        ),
+        'JetBrains Mono',
+      );
+      expect(kdeFontFamily('[General]\nColorScheme=Breeze\n'), isNull);
+    });
+
+    testWidgets('the font menu filters by typed text and applies a pick', (
+      tester,
+    ) async {
+      final container = containerWith(_FakeAppearanceService());
+      await container.read(appearanceSettingsProvider.notifier).initialize();
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container,
+          child: const MaterialApp(
+            home: Scaffold(body: AppearanceSettingsPage()),
+          ),
+        ),
+      );
+
+      final field = find.descendant(
+        of: find.byType(DropdownMenu<AppFontChoice>),
+        matching: find.byType(TextField),
+      );
+      await tester.ensureVisible(field);
+      await tester.tap(field);
+      await tester.pumpAndSettle();
+      // The menu also builds a hidden copy of its entries to size itself;
+      // only the shown ones can be hit.
+      final fira = find
+          .byKey(const ValueKey('font-entry-Fira Sans'))
+          .hitTestable();
+      final roboto = find
+          .byKey(const ValueKey('font-entry-Roboto'))
+          .hitTestable();
+      await tester.enterText(field, 'fira');
+      await tester.pumpAndSettle();
+
+      expect(fira, findsOneWidget);
+      expect(roboto, findsNothing);
+
+      await tester.tap(fira);
+      await tester.pumpAndSettle();
+      expect(
+        container.read(appearanceSettingsProvider).font,
+        const AppFontChoice.bundled('Fira Sans'),
+      );
+    });
   });
 
   group('color themes', () {
@@ -550,8 +739,7 @@ void main() {
           backgroundImagePath: null,
           backgroundFit: AppBackgroundFit.cover,
           backgroundOverlayOpacity: 0.35,
-          customFontPath: null,
-          customFontFamily: null,
+          font: AppFontChoice.defaultFont,
           colorThemeSource: '/themes/mine.json',
           customColorThemePaths: const ['/themes/mine.json'],
         );
@@ -613,8 +801,7 @@ void main() {
           backgroundImagePath: null,
           backgroundFit: AppBackgroundFit.cover,
           backgroundOverlayOpacity: 0.35,
-          customFontPath: null,
-          customFontFamily: null,
+          font: AppFontChoice.defaultFont,
           colorThemeSource: '/themes/mine.json',
           customColorThemePaths: const ['/themes/mine.json'],
         );

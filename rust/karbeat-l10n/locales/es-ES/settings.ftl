@@ -183,7 +183,6 @@ settings-appearance-overlay = Capa oscura: { $percent } %
 settings-appearance-font = Fuente de la aplicación
 settings-appearance-font-system = Fuente del sistema
 settings-appearance-font-choose = Elegir TTF u OTF
-settings-appearance-font-use-system = Usar la fuente del sistema
 settings-appearance-assets-help = Los recursos personalizados se quedan en su ubicación original. Si un archivo se mueve o se elimina, { -app-name } vuelve de forma segura al predeterminado.
 settings-appearance-theme = Tema
 settings-appearance-theme-remove = Quitar tema
@@ -214,7 +213,6 @@ settings-appearance-load-failed = No se han podido cargar los ajustes de aparien
 settings-appearance-background-unavailable-title = Imagen de fondo no disponible
 settings-appearance-background-unavailable-message = La imagen de fondo guardada no está disponible. Se está usando el fondo predeterminado.
 settings-appearance-font-unavailable-title = Fuente personalizada no disponible
-settings-appearance-font-unavailable-message = La fuente personalizada guardada no está disponible. Se está usando la fuente del sistema.
 settings-appearance-theme-unavailable-title = Tema de color no disponible
 settings-appearance-theme-unavailable-message = { $count ->
     [one] Un archivo de tema de color guardado no está disponible o ya no es válido. Se ha quitado del menú de temas.

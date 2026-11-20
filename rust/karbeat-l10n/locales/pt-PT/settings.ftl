@@ -183,7 +183,6 @@ settings-appearance-overlay = Camada escura: { $percent }%
 settings-appearance-font = Tipo de letra da aplicação
 settings-appearance-font-system = Tipo de letra do sistema
 settings-appearance-font-choose = Escolher TTF ou OTF
-settings-appearance-font-use-system = Usar o tipo de letra do sistema
 settings-appearance-assets-help = Os recursos personalizados ficam na localização original do ficheiro. Se um ficheiro for movido ou eliminado, o { -app-name } volta em segurança à predefinição.
 settings-appearance-theme = Tema
 settings-appearance-theme-remove = Remover tema
@@ -214,7 +213,6 @@ settings-appearance-load-failed = Não foi possível carregar as definições de
 settings-appearance-background-unavailable-title = Imagem de fundo indisponível
 settings-appearance-background-unavailable-message = A imagem de fundo guardada não está disponível. Está a ser usado o fundo predefinido.
 settings-appearance-font-unavailable-title = Tipo de letra personalizado indisponível
-settings-appearance-font-unavailable-message = O tipo de letra personalizado guardado não está disponível. Está a ser usado o tipo de letra do sistema.
 settings-appearance-theme-unavailable-title = Tema de cores indisponível
 settings-appearance-theme-unavailable-message = { $count ->
     [one] Um ficheiro de tema de cores guardado está indisponível ou deixou de ser válido. Foi removido do menu de temas.

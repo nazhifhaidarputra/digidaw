@@ -183,7 +183,6 @@ settings-appearance-overlay = Voile sombre : { $percent } %
 settings-appearance-font = Police de l’application
 settings-appearance-font-system = Police du système
 settings-appearance-font-choose = Choisir un fichier TTF ou OTF
-settings-appearance-font-use-system = Utiliser la police du système
 settings-appearance-assets-help = Les ressources personnalisées restent à leur emplacement d’origine. Si un fichier est déplacé ou supprimé, { -app-name } revient sans risque au réglage par défaut.
 settings-appearance-theme = Thème
 settings-appearance-theme-remove = Retirer le thème
@@ -214,7 +213,6 @@ settings-appearance-load-failed = Impossible de charger les paramètres d’appa
 settings-appearance-background-unavailable-title = Image d’arrière-plan indisponible
 settings-appearance-background-unavailable-message = L’image d’arrière-plan enregistrée n’est pas disponible. L’arrière-plan par défaut est utilisé.
 settings-appearance-font-unavailable-title = Police personnalisée indisponible
-settings-appearance-font-unavailable-message = La police personnalisée enregistrée n’est pas disponible. La police du système est utilisée.
 settings-appearance-theme-unavailable-title = Thème de couleurs indisponible
 settings-appearance-theme-unavailable-message = { $count ->
     [one] Un fichier de thème de couleurs enregistré est indisponible ou n’est plus valide. Il a été retiré du menu des thèmes.

@@ -90,7 +90,9 @@ class SourceListPanel extends ConsumerWidget {
     );
     final audioSourcesAsync = ref.watch(audioSourcesProvider);
 
-    return ColoredBox(
+    // A Material, not a ColoredBox: the tiles paint their hover and splash
+    // effects on the nearest Material, which a ColoredBox would cover.
+    return Material(
       color: colors.surfaceContainerLow,
       child: Scrollbar(
         controller: scrollController,
